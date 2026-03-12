@@ -66,6 +66,7 @@ export async function POST(request: NextRequest) {
       start_lng: coordinates[0][1],
       gpx_filename: null,
       coordinates: JSON.stringify(coordinates),
+      created_by: null,
     });
 
     return NextResponse.json(route, { status: 201 });

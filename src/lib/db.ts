@@ -7,6 +7,10 @@ export async function initDb() {
       id TEXT PRIMARY KEY,
       email TEXT NOT NULL UNIQUE,
       name TEXT,
+      role TEXT NOT NULL DEFAULT 'user',
+      bio TEXT,
+      avatar_url TEXT,
+      location TEXT,
       session_token TEXT UNIQUE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
@@ -27,6 +31,7 @@ export async function initDb() {
       start_lng REAL NOT NULL,
       gpx_filename TEXT,
       coordinates TEXT NOT NULL,
+      created_by TEXT REFERENCES users(id),
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `;
@@ -73,6 +78,28 @@ export async function initDb() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS magic_links (
+      id TEXT PRIMARY KEY,
+      email TEXT NOT NULL,
+      token TEXT NOT NULL UNIQUE,
+      expires_at TIMESTAMPTZ NOT NULL,
+      used BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS follows (
+      id TEXT PRIMARY KEY,
+      follower_id TEXT NOT NULL REFERENCES users(id),
+      following_id TEXT NOT NULL REFERENCES users(id),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(follower_id, following_id),
+      CHECK(follower_id != following_id)
+    )
+  `;
 }
 
 // ──── Types ────
@@ -90,6 +117,7 @@ export interface Route {
   start_lng: number;
   gpx_filename: string | null;
   coordinates: string;
+  created_by: string | null;
   created_at: string;
 }
 
@@ -103,6 +131,71 @@ export interface RouteFilters {
   sort?: string;
   verified?: boolean;
 }
+
+export interface User {
+  id: string;
+  email: string;
+  name: string | null;
+  role: "user" | "admin" | "banned";
+  bio: string | null;
+  avatar_url: string | null;
+  location: string | null;
+  session_token: string | null;
+  created_at: string;
+}
+
+export interface Rating {
+  id: string;
+  route_id: string;
+  user_id: string;
+  score: number;
+  created_at: string;
+}
+
+export interface Comment {
+  id: string;
+  route_id: string;
+  user_id: string;
+  user_name: string | null;
+  user_email: string;
+  body: string;
+  created_at: string;
+}
+
+export interface Photo {
+  id: string;
+  route_id: string;
+  user_id: string;
+  user_name: string | null;
+  filename: string;
+  caption: string | null;
+  created_at: string;
+}
+
+export interface Condition {
+  id: string;
+  route_id: string;
+  user_id: string;
+  user_name: string | null;
+  status: "good" | "fair" | "poor" | "closed";
+  note: string;
+  created_at: string;
+}
+
+export interface UserStats {
+  routesRated: number;
+  commentsPosted: number;
+  conditionsReported: number;
+  photosUploaded: number;
+}
+
+export type ActivityItem = {
+  type: "rating" | "comment" | "condition" | "photo";
+  route_id: string;
+  route_name: string;
+  detail: string;
+  created_at: string;
+};
 
 // ──── Routes ────
 export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
@@ -177,28 +270,20 @@ export async function getRoute(id: string): Promise<(Route & { is_verified?: num
 
 export async function insertRoute(route: Omit<Route, "created_at">): Promise<Route> {
   await sql`
-    INSERT INTO routes (id, name, description, difficulty, distance_km, elevation_gain_m, elevation_loss_m, surface_type, county, start_lat, start_lng, gpx_filename, coordinates)
-    VALUES (${route.id}, ${route.name}, ${route.description}, ${route.difficulty}, ${route.distance_km}, ${route.elevation_gain_m}, ${route.elevation_loss_m}, ${route.surface_type}, ${route.county}, ${route.start_lat}, ${route.start_lng}, ${route.gpx_filename}, ${route.coordinates})
+    INSERT INTO routes (id, name, description, difficulty, distance_km, elevation_gain_m, elevation_loss_m, surface_type, county, start_lat, start_lng, gpx_filename, coordinates, created_by)
+    VALUES (${route.id}, ${route.name}, ${route.description}, ${route.difficulty}, ${route.distance_km}, ${route.elevation_gain_m}, ${route.elevation_loss_m}, ${route.surface_type}, ${route.county}, ${route.start_lat}, ${route.start_lng}, ${route.gpx_filename}, ${route.coordinates}, ${route.created_by})
   `;
   return (await getRoute(route.id))!;
 }
 
 // ──── Users ────
-export interface User {
-  id: string;
-  email: string;
-  name: string | null;
-  session_token: string | null;
-  created_at: string;
-}
-
 export async function getUserByEmail(email: string): Promise<User | undefined> {
   const { rows } = await sql`SELECT * FROM users WHERE email = ${email}`;
   return rows[0] as User | undefined;
 }
 
 export async function getUserBySession(token: string): Promise<User | undefined> {
-  const { rows } = await sql`SELECT * FROM users WHERE session_token = ${token}`;
+  const { rows } = await sql`SELECT * FROM users WHERE session_token = ${token} AND role != 'banned'`;
   return rows[0] as User | undefined;
 }
 
@@ -212,15 +297,143 @@ export async function upsertUser(id: string, email: string, name: string | null,
   return (await getUserByEmail(email))!;
 }
 
-// ──── Ratings ────
-export interface Rating {
-  id: string;
-  route_id: string;
-  user_id: string;
-  score: number;
-  created_at: string;
+export async function getUserById(id: string): Promise<User | undefined> {
+  const { rows } = await sql`SELECT * FROM users WHERE id = ${id}`;
+  return rows[0] as User | undefined;
 }
 
+export async function updateUserProfile(
+  id: string,
+  data: { name?: string; bio?: string; location?: string }
+): Promise<User | undefined> {
+  await sql`
+    UPDATE users
+    SET name = COALESCE(${data.name ?? null}, name),
+        bio = COALESCE(${data.bio ?? null}, bio),
+        location = COALESCE(${data.location ?? null}, location)
+    WHERE id = ${id}
+  `;
+  return getUserById(id);
+}
+
+// ──── Magic links ────
+export async function createMagicLink(id: string, email: string, token: string, expiresAt: Date): Promise<void> {
+  await sql`
+    INSERT INTO magic_links (id, email, token, expires_at)
+    VALUES (${id}, ${email}, ${token}, ${expiresAt.toISOString()})
+  `;
+}
+
+export async function validateMagicLink(token: string): Promise<{ email: string } | null> {
+  const { rows } = await sql`
+    SELECT * FROM magic_links
+    WHERE token = ${token} AND used = FALSE AND expires_at > NOW()
+  `;
+  if (rows.length === 0) return null;
+  await sql`UPDATE magic_links SET used = TRUE WHERE token = ${token}`;
+  return { email: rows[0].email };
+}
+
+// ──── Follows ────
+export async function followUser(id: string, followerId: string, followingId: string): Promise<void> {
+  await sql`
+    INSERT INTO follows (id, follower_id, following_id)
+    VALUES (${id}, ${followerId}, ${followingId})
+    ON CONFLICT (follower_id, following_id) DO NOTHING
+  `;
+}
+
+export async function unfollowUser(followerId: string, followingId: string): Promise<void> {
+  await sql`DELETE FROM follows WHERE follower_id = ${followerId} AND following_id = ${followingId}`;
+}
+
+export async function isFollowing(followerId: string, followingId: string): Promise<boolean> {
+  const { rows } = await sql`
+    SELECT 1 FROM follows WHERE follower_id = ${followerId} AND following_id = ${followingId}
+  `;
+  return rows.length > 0;
+}
+
+export async function getFollowerCount(userId: string): Promise<number> {
+  const { rows } = await sql`SELECT COUNT(*) as c FROM follows WHERE following_id = ${userId}`;
+  return Number(rows[0].c);
+}
+
+export async function getFollowingCount(userId: string): Promise<number> {
+  const { rows } = await sql`SELECT COUNT(*) as c FROM follows WHERE follower_id = ${userId}`;
+  return Number(rows[0].c);
+}
+
+export async function getFollowers(userId: string): Promise<User[]> {
+  const { rows } = await sql`
+    SELECT u.* FROM users u
+    JOIN follows f ON f.follower_id = u.id
+    WHERE f.following_id = ${userId}
+    ORDER BY f.created_at DESC
+  `;
+  return rows as User[];
+}
+
+export async function getFollowing(userId: string): Promise<User[]> {
+  const { rows } = await sql`
+    SELECT u.* FROM users u
+    JOIN follows f ON f.following_id = u.id
+    WHERE f.follower_id = ${userId}
+    ORDER BY f.created_at DESC
+  `;
+  return rows as User[];
+}
+
+// ──── Activity feed ────
+export async function getUserActivityFeed(userId: string, page = 1, limit = 20): Promise<ActivityItem[]> {
+  const offset = (page - 1) * limit;
+  const { rows } = await sql.query(
+    `
+    SELECT * FROM (
+      SELECT 'rating' as type, rt.route_id, r.name as route_name,
+        CAST(rt.score AS TEXT) as detail, rt.created_at
+      FROM ratings rt JOIN routes r ON r.id = rt.route_id
+      WHERE rt.user_id = $1
+
+      UNION ALL
+
+      SELECT 'comment' as type, c.route_id, r.name as route_name,
+        LEFT(c.body, 80) as detail, c.created_at
+      FROM comments c JOIN routes r ON r.id = c.route_id
+      WHERE c.user_id = $1
+
+      UNION ALL
+
+      SELECT 'condition' as type, co.route_id, r.name as route_name,
+        co.status as detail, co.created_at
+      FROM conditions co JOIN routes r ON r.id = co.route_id
+      WHERE co.user_id = $1
+
+      UNION ALL
+
+      SELECT 'photo' as type, p.route_id, r.name as route_name,
+        COALESCE(p.caption, 'Photo') as detail, p.created_at
+      FROM photos p JOIN routes r ON r.id = p.route_id
+      WHERE p.user_id = $1
+    ) activity
+    ORDER BY created_at DESC
+    LIMIT $2 OFFSET $3
+    `,
+    [userId, limit, offset]
+  );
+  return rows as ActivityItem[];
+}
+
+export async function getUserTotalKm(userId: string): Promise<number> {
+  const { rows } = await sql`
+    SELECT COALESCE(SUM(r.distance_km), 0) as total
+    FROM routes r
+    WHERE r.id IN (SELECT route_id FROM ratings WHERE user_id = ${userId})
+  `;
+  return Math.round(Number(rows[0].total));
+}
+
+// ──── Ratings ────
 export async function getRouteRating(routeId: string): Promise<{ average: number; count: number }> {
   const { rows } = await sql`
     SELECT COALESCE(AVG(score), 0) as average, COUNT(*) as count FROM ratings WHERE route_id = ${routeId}
@@ -246,16 +459,6 @@ export async function upsertRating(id: string, routeId: string, userId: string, 
 }
 
 // ──── Comments ────
-export interface Comment {
-  id: string;
-  route_id: string;
-  user_id: string;
-  user_name: string | null;
-  user_email: string;
-  body: string;
-  created_at: string;
-}
-
 export async function getRouteComments(routeId: string): Promise<Comment[]> {
   const { rows } = await sql`
     SELECT c.id, c.route_id, c.user_id, u.name as user_name, u.email as user_email, c.body, c.created_at
@@ -272,16 +475,6 @@ export async function insertComment(id: string, routeId: string, userId: string,
 }
 
 // ──── Photos ────
-export interface Photo {
-  id: string;
-  route_id: string;
-  user_id: string;
-  user_name: string | null;
-  filename: string;
-  caption: string | null;
-  created_at: string;
-}
-
 export async function getRoutePhotos(routeId: string): Promise<Photo[]> {
   const { rows } = await sql`
     SELECT p.id, p.route_id, p.user_id, u.name as user_name, p.filename, p.caption, p.created_at
@@ -298,16 +491,6 @@ export async function insertPhoto(id: string, routeId: string, userId: string, f
 }
 
 // ──── Conditions ────
-export interface Condition {
-  id: string;
-  route_id: string;
-  user_id: string;
-  user_name: string | null;
-  status: "good" | "fair" | "poor" | "closed";
-  note: string;
-  created_at: string;
-}
-
 export async function getRouteConditions(routeId: string): Promise<Condition[]> {
   const { rows } = await sql`
     SELECT c.id, c.route_id, c.user_id, u.name as user_name, c.status, c.note, c.created_at
@@ -337,11 +520,6 @@ export async function insertCondition(id: string, routeId: string, userId: strin
 }
 
 // ──── User profiles ────
-export async function getUserById(id: string): Promise<User | undefined> {
-  const { rows } = await sql`SELECT * FROM users WHERE id = ${id}`;
-  return rows[0] as User | undefined;
-}
-
 export async function getUserRoutes(userId: string): Promise<Route[]> {
   const { rows } = await sql`
     SELECT * FROM routes WHERE id IN (
@@ -351,13 +529,6 @@ export async function getUserRoutes(userId: string): Promise<Route[]> {
     ) ORDER BY name
   `;
   return rows as Route[];
-}
-
-export interface UserStats {
-  routesRated: number;
-  commentsPosted: number;
-  conditionsReported: number;
-  photosUploaded: number;
 }
 
 export async function getUserStats(userId: string): Promise<UserStats> {
@@ -378,4 +549,84 @@ export async function getUserStats(userId: string): Promise<UserStats> {
 export async function getCounties(): Promise<string[]> {
   const { rows } = await sql`SELECT DISTINCT county FROM routes ORDER BY county`;
   return rows.map((r) => r.county);
+}
+
+// ──── Admin ────
+export async function deleteRoute(id: string): Promise<void> {
+  await sql`DELETE FROM ratings WHERE route_id = ${id}`;
+  await sql`DELETE FROM comments WHERE route_id = ${id}`;
+  await sql`DELETE FROM photos WHERE route_id = ${id}`;
+  await sql`DELETE FROM conditions WHERE route_id = ${id}`;
+  await sql`DELETE FROM routes WHERE id = ${id}`;
+}
+
+export async function deleteComment(id: string): Promise<void> {
+  await sql`DELETE FROM comments WHERE id = ${id}`;
+}
+
+export async function deletePhoto(id: string): Promise<void> {
+  await sql`DELETE FROM photos WHERE id = ${id}`;
+}
+
+export async function banUser(id: string): Promise<void> {
+  await sql`UPDATE users SET role = 'banned', session_token = NULL WHERE id = ${id}`;
+}
+
+export async function unbanUser(id: string): Promise<void> {
+  await sql`UPDATE users SET role = 'user' WHERE id = ${id}`;
+}
+
+export async function getAllUsers(page = 1, limit = 50): Promise<{ users: User[]; total: number }> {
+  const offset = (page - 1) * limit;
+  const [data, count] = await Promise.all([
+    sql.query(`SELECT * FROM users ORDER BY created_at DESC LIMIT $1 OFFSET $2`, [limit, offset]),
+    sql`SELECT COUNT(*) as c FROM users`,
+  ]);
+  return { users: data.rows as User[], total: Number(count.rows[0].c) };
+}
+
+export async function getAllComments(page = 1, limit = 50): Promise<{ comments: (Comment & { route_name: string })[]; total: number }> {
+  const offset = (page - 1) * limit;
+  const [data, count] = await Promise.all([
+    sql.query(
+      `SELECT c.id, c.route_id, c.user_id, u.name as user_name, u.email as user_email, c.body, c.created_at, r.name as route_name
+       FROM comments c
+       JOIN users u ON c.user_id = u.id
+       JOIN routes r ON c.route_id = r.id
+       ORDER BY c.created_at DESC
+       LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    ),
+    sql`SELECT COUNT(*) as c FROM comments`,
+  ]);
+  return { comments: data.rows as (Comment & { route_name: string })[], total: Number(count.rows[0].c) };
+}
+
+export async function getAllRoutes(page = 1, limit = 50): Promise<{ routes: Route[]; total: number }> {
+  const offset = (page - 1) * limit;
+  const [data, count] = await Promise.all([
+    sql.query(`SELECT * FROM routes ORDER BY created_at DESC LIMIT $1 OFFSET $2`, [limit, offset]),
+    sql`SELECT COUNT(*) as c FROM routes`,
+  ]);
+  return { routes: data.rows as Route[], total: Number(count.rows[0].c) };
+}
+
+export async function getAdminStats(): Promise<{
+  totalUsers: number;
+  totalRoutes: number;
+  totalComments: number;
+  bannedUsers: number;
+}> {
+  const [users, routes, comments, banned] = await Promise.all([
+    sql`SELECT COUNT(*) as c FROM users`,
+    sql`SELECT COUNT(*) as c FROM routes`,
+    sql`SELECT COUNT(*) as c FROM comments`,
+    sql`SELECT COUNT(*) as c FROM users WHERE role = 'banned'`,
+  ]);
+  return {
+    totalUsers: Number(users.rows[0].c),
+    totalRoutes: Number(routes.rows[0].c),
+    totalComments: Number(comments.rows[0].c),
+    bannedUsers: Number(banned.rows[0].c),
+  };
 }

@@ -135,9 +135,22 @@ export default function Home() {
                   </svg>
                   <span className="hidden sm:inline">Share Loop</span>
                 </Link>
-                <span className="text-xs hidden md:inline px-2" style={{ color: "var(--text-muted)" }}>
+                {user.role === "admin" && (
+                  <Link
+                    href="/admin"
+                    className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded hidden sm:inline-block hover:opacity-80"
+                    style={{ background: "rgba(255, 51, 85, 0.15)", color: "#ff3355" }}
+                  >
+                    Admin
+                  </Link>
+                )}
+                <Link
+                  href={`/profile/${user.id}`}
+                  className="text-xs hidden md:inline px-2 hover:opacity-80 font-medium"
+                  style={{ color: "var(--text-muted)" }}
+                >
                   {user.name || user.email}
-                </span>
+                </Link>
                 <button
                   onClick={logout}
                   className="text-xs font-medium hidden sm:block hover:opacity-80"

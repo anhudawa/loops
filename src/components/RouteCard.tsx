@@ -12,11 +12,16 @@ interface RouteCardProps {
     elevation_gain_m: number;
     surface_type: string;
     county: string;
+    country?: string;
+    region?: string | null;
+    discipline?: string;
     cover_photo?: string | null;
     is_verified?: number;
+    distance_km_away?: number;
   };
   isSelected?: boolean;
   onHover?: (id: string | null) => void;
+  showDistance?: boolean;
 }
 
 const DIFFICULTY_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
@@ -26,8 +31,17 @@ const DIFFICULTY_CONFIG: Record<string, { label: string; color: string; bg: stri
   expert: { label: "Expert", color: "#bb44ff", bg: "rgba(187, 68, 255, 0.1)" },
 };
 
-export default function RouteCard({ route, isSelected, onHover }: RouteCardProps) {
+const DISCIPLINE_ICONS: Record<string, string> = {
+  road: "🚲",
+  gravel: "🪨",
+  mtb: "🏔️",
+};
+
+export default function RouteCard({ route, isSelected, onHover, showDistance }: RouteCardProps) {
   const diff = DIFFICULTY_CONFIG[route.difficulty] || DIFFICULTY_CONFIG.easy;
+  const disciplineIcon = route.discipline ? DISCIPLINE_ICONS[route.discipline] : null;
+  const locationText = route.region || route.county;
+  const countryText = route.country ? `, ${route.country}` : "";
 
   return (
     <Link href={`/routes/${route.id}`}>
@@ -49,13 +63,32 @@ export default function RouteCard({ route, isSelected, onHover }: RouteCardProps
             className="w-full h-full object-cover"
             loading="lazy"
           />
-          {/* Difficulty badge overlaid on image */}
-          <span
-            className="absolute top-3 right-3 text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded neon-badge"
-            style={{ color: diff.color, background: diff.bg, backdropFilter: "blur(8px)" }}
-          >
-            {diff.label}
-          </span>
+          {/* Badges overlaid on image */}
+          <div className="absolute top-3 right-3 flex items-center gap-1.5">
+            {disciplineIcon && (
+              <span
+                className="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded neon-badge"
+                style={{ color: "var(--text)", background: "rgba(0,0,0,0.6)", backdropFilter: "blur(8px)" }}
+              >
+                {disciplineIcon} {route.discipline === "mtb" ? "MTB" : route.discipline}
+              </span>
+            )}
+            <span
+              className="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded neon-badge"
+              style={{ color: diff.color, background: diff.bg, backdropFilter: "blur(8px)" }}
+            >
+              {diff.label}
+            </span>
+          </div>
+          {/* Distance badge when Near Me active */}
+          {showDistance && route.distance_km_away !== undefined && (
+            <span
+              className="absolute top-3 left-3 text-[11px] font-bold px-2 py-0.5 rounded"
+              style={{ color: "var(--accent)", background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)" }}
+            >
+              📍 {Math.round(route.distance_km_away)} km away
+            </span>
+          )}
         </div>
 
         {/* Content */}
@@ -87,7 +120,7 @@ export default function RouteCard({ route, isSelected, onHover }: RouteCardProps
             <span style={{ color: "var(--border-light)" }}>|</span>
             <span className="capitalize">{route.surface_type}</span>
             <span style={{ color: "var(--border-light)" }}>|</span>
-            <span>{route.county}</span>
+            <span>{locationText}{countryText}</span>
           </div>
         </div>
       </div>

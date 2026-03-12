@@ -5,12 +5,12 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import Link from "next/link";
 
-const COUNTIES = [
-  "Carlow", "Cavan", "Clare", "Cork", "Derry", "Donegal", "Down", "Dublin",
-  "Fermanagh", "Galway", "Kerry", "Kildare", "Kilkenny", "Laois", "Leitrim",
-  "Limerick", "Longford", "Louth", "Mayo", "Meath", "Monaghan", "Offaly",
-  "Roscommon", "Sligo", "Tipperary", "Tyrone", "Waterford", "Westmeath",
-  "Wexford", "Wicklow", "Antrim", "Armagh",
+const COUNTRIES = ["Ireland", "UK", "USA", "Spain"];
+
+const DISCIPLINE_OPTIONS = [
+  { value: "gravel", label: "Gravel", icon: "🪨" },
+  { value: "road", label: "Road", icon: "🚲" },
+  { value: "mtb", label: "MTB", icon: "🏔️" },
 ];
 
 export default function UploadPage() {
@@ -18,12 +18,15 @@ export default function UploadPage() {
   const { user, loading } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
+  const [regions, setRegions] = useState<string[]>([]);
   const [form, setForm] = useState({
     name: "",
     description: "",
     difficulty: "moderate",
     surface_type: "gravel",
-    county: "",
+    country: "Ireland",
+    region: "",
+    discipline: "gravel",
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -33,6 +36,15 @@ export default function UploadPage() {
       router.push("/login");
     }
   }, [user, loading, router]);
+
+  // Fetch regions when country changes
+  useEffect(() => {
+    fetch(`/api/routes?regions=true&country=${encodeURIComponent(form.country)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        setRegions(Array.isArray(data) ? data : []);
+      });
+  }, [form.country]);
 
   if (loading || !user) {
     return (
@@ -51,7 +63,7 @@ export default function UploadPage() {
       setError("Please select a GPX file");
       return;
     }
-    if (!form.name || !form.county) {
+    if (!form.name || !form.region) {
       setError("Please fill in all required fields");
       return;
     }
@@ -65,7 +77,10 @@ export default function UploadPage() {
     formData.append("description", form.description);
     formData.append("difficulty", form.difficulty);
     formData.append("surface_type", form.surface_type);
-    formData.append("county", form.county);
+    formData.append("county", form.region);
+    formData.append("country", form.country);
+    formData.append("region", form.region);
+    formData.append("discipline", form.discipline);
 
     try {
       const res = await fetch("/api/routes", { method: "POST", body: formData });
@@ -178,8 +193,72 @@ export default function UploadPage() {
             />
           </div>
 
+          {/* Discipline pills */}
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>
+              Discipline <span style={{ color: "#ff3355" }}>*</span>
+            </label>
+            <div className="flex gap-2">
+              {DISCIPLINE_OPTIONS.map((d) => (
+                <button
+                  key={d.value}
+                  type="button"
+                  onClick={() => setForm((prev) => ({ ...prev, discipline: d.value }))}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all"
+                  style={{
+                    background: form.discipline === d.value ? "var(--accent-glow)" : "var(--bg-card)",
+                    border: form.discipline === d.value ? "1px solid var(--accent)" : "1px solid var(--border)",
+                    color: form.discipline === d.value ? "var(--accent)" : "var(--text-secondary)",
+                  }}
+                >
+                  <span>{d.icon}</span>
+                  {d.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Country + Region row */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>
+                Country <span style={{ color: "#ff3355" }}>*</span>
+              </label>
+              <select
+                value={form.country}
+                onChange={(e) => setForm((prev) => ({ ...prev, country: e.target.value, region: "" }))}
+                className="w-full rounded-lg px-4 py-2.5 text-sm cursor-pointer"
+                style={inputStyle}
+              >
+                {COUNTRIES.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>
+                Region <span style={{ color: "#ff3355" }}>*</span>
+              </label>
+              <input
+                type="text"
+                value={form.region}
+                onChange={(e) => setForm((prev) => ({ ...prev, region: e.target.value }))}
+                placeholder={form.country === "Ireland" ? "e.g. Cork" : form.country === "UK" ? "e.g. Yorkshire" : form.country === "USA" ? "e.g. Colorado" : "e.g. Girona"}
+                list="region-suggestions"
+                className="w-full rounded-lg px-4 py-2.5 text-sm"
+                style={inputStyle}
+              />
+              <datalist id="region-suggestions">
+                {regions.map((r) => (
+                  <option key={r} value={r} />
+                ))}
+              </datalist>
+            </div>
+          </div>
+
           {/* Grid fields */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>
                 Difficulty <span style={{ color: "#ff3355" }}>*</span>
@@ -211,23 +290,8 @@ export default function UploadPage() {
                 <option value="mixed">Mixed</option>
                 <option value="trail">Trail</option>
                 <option value="road">Road</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>
-                County <span style={{ color: "#ff3355" }}>*</span>
-              </label>
-              <select
-                value={form.county}
-                onChange={(e) => setForm((prev) => ({ ...prev, county: e.target.value }))}
-                className="w-full rounded-lg px-4 py-2.5 text-sm cursor-pointer"
-                style={inputStyle}
-              >
-                <option value="">Select county...</option>
-                {COUNTIES.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
+                <option value="singletrack">Singletrack</option>
+                <option value="technical">Technical</option>
               </select>
             </div>
           </div>

@@ -19,7 +19,7 @@ export async function sendMagicLink(email: string, token: string) {
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
         <div style="text-align: center; margin-bottom: 32px;">
           <h1 style="font-size: 32px; font-weight: 900; letter-spacing: -1px; color: #c8ff00; margin: 0;">LOOPS</h1>
-          <p style="color: #888; font-size: 14px; margin-top: 4px;">Gravel Routes Ireland</p>
+          <p style="color: #888; font-size: 14px; margin-top: 4px;">Cycling Routes Worldwide</p>
         </div>
         <div style="background: #111; border: 1px solid #222; border-radius: 16px; padding: 32px; text-align: center;">
           <p style="color: #ccc; font-size: 16px; margin: 0 0 24px;">Click the button below to sign in to your account. This link expires in 15 minutes.</p>

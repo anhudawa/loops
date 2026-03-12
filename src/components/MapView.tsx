@@ -10,6 +10,8 @@ interface Route {
   difficulty: string;
   distance_km: number;
   county: string;
+  country?: string;
+  region?: string | null;
   start_lat: number;
   start_lng: number;
   coordinates: string;
@@ -92,7 +94,7 @@ export default function MapView({
           <strong style="font-size: 14px; letter-spacing: -0.02em;">${route.name}</strong><br/>
           <span style="color: ${color}; font-weight: 700; text-transform: uppercase; font-size: 11px; letter-spacing: 0.05em;">${route.difficulty}</span>
           &middot; <span style="color: #c8ff00; font-weight: 700;">${route.distance_km} km</span><br/>
-          <span style="color: #666;">${route.county}</span><br/>
+          <span style="color: #666;">${route.region || route.county}${route.country ? `, ${route.country}` : ""}</span><br/>
           <a href="/routes/${route.id}" style="color: #c8ff00; text-decoration: none; font-size: 13px; font-weight: 600;">View details &rarr;</a>
         </div>
       `);

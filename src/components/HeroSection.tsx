@@ -6,7 +6,8 @@ import Link from "next/link";
 interface Stats {
   routes: number;
   totalKm: number;
-  counties: number;
+  regions: number;
+  countries: number;
 }
 
 function AnimatedNumber({ target, duration = 1500 }: { target: number; duration?: number }) {
@@ -80,13 +81,13 @@ export default function HeroSection({ onExplore }: { onExplore: () => void }) {
             color: "var(--text)",
           }}
         >
-          Find Your Gravel
+          Find Your Loop
         </h1>
         <p
           className="text-base md:text-lg mb-10 max-w-md mx-auto"
           style={{ color: "var(--text-muted)" }}
         >
-          Discover and share the best gravel cycling loops across Ireland. Built by riders, for riders.
+          Discover and share the best road, gravel, and MTB loops worldwide. Built by riders, for riders.
         </p>
 
         {/* CTAs */}
@@ -115,7 +116,7 @@ export default function HeroSection({ onExplore }: { onExplore: () => void }) {
             {[
               { value: stats.routes, label: "Routes" },
               { value: stats.totalKm, label: "Km Mapped" },
-              { value: stats.counties, label: "Counties" },
+              { value: stats.countries, label: "Countries" },
             ].map((stat) => (
               <div key={stat.label} className="text-center">
                 <p

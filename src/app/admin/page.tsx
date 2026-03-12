@@ -24,6 +24,9 @@ interface RouteRow {
   id: string;
   name: string;
   county: string;
+  country?: string;
+  region?: string | null;
+  discipline?: string;
   distance_km: number;
   difficulty: string;
   created_at: string;
@@ -272,7 +275,7 @@ export default function AdminPage() {
                       <td className="p-3 font-bold" style={{ color: "var(--text)" }}>
                         <Link href={`/routes/${r.id}`} className="hover:underline">{r.name}</Link>
                       </td>
-                      <td className="p-3" style={{ color: "var(--text-muted)" }}>{r.county}</td>
+                      <td className="p-3" style={{ color: "var(--text-muted)" }}>{r.region || r.county}{r.country ? `, ${r.country}` : ""}</td>
                       <td className="p-3" style={{ color: "var(--text-muted)" }}>{r.distance_km} km</td>
                       <td className="p-3 capitalize" style={{ color: "var(--text-muted)" }}>{r.difficulty}</td>
                       <td className="p-3 text-right">

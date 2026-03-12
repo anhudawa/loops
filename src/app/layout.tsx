@@ -3,18 +3,18 @@ import { AuthProvider } from "@/components/AuthProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "LOOPS - Discover Gravel Routes in Ireland",
-  description: "Find and share the best gravel cycling loops across Ireland. Upload GPX files, rate routes, and explore gravel rides across every county.",
+  title: "LOOPS - Discover Cycling Routes",
+  description: "Find and share the best road, gravel, and MTB loops. Upload GPX files, rate routes, and explore rides worldwide.",
   openGraph: {
-    title: "LOOPS - Discover Gravel Routes in Ireland",
-    description: "Find and share the best gravel cycling loops across Ireland",
+    title: "LOOPS - Discover Cycling Routes",
+    description: "Find and share the best road, gravel, and MTB loops worldwide",
     siteName: "LOOPS",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
     title: "LOOPS",
-    description: "Discover gravel cycling loops across Ireland",
+    description: "Discover cycling loops worldwide — road, gravel, and MTB",
   },
 };
 

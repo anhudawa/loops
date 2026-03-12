@@ -20,11 +20,15 @@ interface Route {
   elevation_loss_m: number;
   surface_type: string;
   county: string;
+  country: string;
+  region: string | null;
+  discipline: string;
   start_lat: number;
   start_lng: number;
   coordinates: string;
   cover_photo: string | null;
   is_verified: number;
+  distance_km_away?: number;
 }
 
 const DEFAULT_FILTERS = {
@@ -35,22 +39,47 @@ const DEFAULT_FILTERS = {
   surface_type: "",
   search: "",
   verified: "",
+  country: "",
+  discipline: "",
 };
 
 export default function Home() {
   const { user, logout } = useAuth();
   const contentRef = useRef<HTMLDivElement>(null);
   const [routes, setRoutes] = useState<Route[]>([]);
-  const [counties, setCounties] = useState<string[]>([]);
+  const [regions, setRegions] = useState<string[]>([]);
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [sortBy, setSortBy] = useState("name");
+  const [sortBy, setSortBy] = useState("newest");
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+
+  // Auto-request geolocation on mount
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setSortBy("nearby");
+      },
+      () => {
+        // Permission denied or error — stay on "newest"
+      }
+    );
+  }, []);
 
   const activeFilterCount = Object.entries(filters).filter(
     ([k, v]) => v !== "" && k !== "search"
   ).length;
+
+  // Fetch regions when country filter changes
+  useEffect(() => {
+    const countryParam = filters.country ? `&country=${encodeURIComponent(filters.country)}` : "";
+    fetch(`/api/routes?regions=true${countryParam}`)
+      .then((r) => r.json())
+      .then((data) => setRegions(Array.isArray(data) ? data : []));
+  }, [filters.country]);
 
   const fetchRoutes = useCallback(async () => {
     const params = new URLSearchParams();
@@ -58,28 +87,33 @@ export default function Home() {
     if (filters.minDistance) params.set("minDistance", filters.minDistance);
     if (filters.maxDistance) params.set("maxDistance", filters.maxDistance);
     if (filters.county) params.set("county", filters.county);
+    if (filters.country) params.set("country", filters.country);
+    if (filters.discipline) params.set("discipline", filters.discipline);
     if (filters.surface_type) params.set("surface_type", filters.surface_type);
     if (filters.search) params.set("search", filters.search);
     if (filters.verified) params.set("verified", "true");
     if (sortBy) params.set("sort", sortBy);
+    if (userLocation) {
+      params.set("lat", String(userLocation.lat));
+      params.set("lng", String(userLocation.lng));
+    }
 
     const res = await fetch(`/api/routes?${params}`);
     const data = await res.json();
     setRoutes(data);
     setLoading(false);
-  }, [filters, sortBy]);
+  }, [filters, sortBy, userLocation]);
 
   useEffect(() => {
     fetchRoutes();
   }, [fetchRoutes]);
 
-  useEffect(() => {
-    fetch("/api/routes?counties=true")
-      .then((r) => r.json())
-      .then(setCounties);
-  }, []);
-
   const handleFilterChange = (key: string, value: string) => {
+    // Reset region when country changes
+    if (key === "country") {
+      setFilters((prev) => ({ ...prev, country: value, county: "" }));
+      return;
+    }
     setFilters((prev) => ({ ...prev, [key]: value }));
   };
 
@@ -93,6 +127,21 @@ export default function Home() {
   const scrollToContent = () => {
     contentRef.current?.scrollIntoView({ behavior: "smooth" });
   };
+
+  // Dynamic subtitle based on active filters
+  const subtitle = useMemo(() => {
+    const parts: string[] = [];
+    if (filters.discipline) {
+      const map: Record<string, string> = { road: "road", gravel: "gravel", mtb: "MTB" };
+      parts.push(map[filters.discipline] || filters.discipline);
+    }
+    if (filters.country) {
+      parts.push(`in ${filters.country}`);
+    }
+    if (parts.length === 0) return `${stats.totalKm} km of routes worldwide`;
+    if (parts.length === 1 && filters.country) return `${stats.totalKm} km of routes ${parts[0]}`;
+    return `${stats.totalKm} km of ${parts.join(" ")}`;
+  }, [stats.totalKm, filters.discipline, filters.country]);
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)" }}>
@@ -116,7 +165,7 @@ export default function Home() {
                 type="text"
                 value={filters.search}
                 onChange={(e) => handleFilterChange("search", e.target.value)}
-                placeholder="Search routes, counties..."
+                placeholder="Search routes, regions..."
                 className="w-full rounded-lg pl-9 pr-3 py-2 text-sm"
                 style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
               />
@@ -188,7 +237,7 @@ export default function Home() {
               type="text"
               value={filters.search}
               onChange={(e) => handleFilterChange("search", e.target.value)}
-              placeholder="Search routes, counties..."
+              placeholder="Search routes, regions..."
               className="w-full rounded-lg pl-9 pr-3 py-2 text-sm"
               style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
             />
@@ -202,9 +251,12 @@ export default function Home() {
         <aside className="hidden md:block w-72 shrink-0 border-r p-5 overflow-y-auto" style={{ background: "var(--bg-raised)", borderColor: "var(--border)" }}>
           <FilterSidebar
             filters={filters}
-            counties={counties}
+            regions={regions}
             onChange={handleFilterChange}
-            onClear={() => setFilters(DEFAULT_FILTERS)}
+            onClear={() => {
+              setFilters(DEFAULT_FILTERS);
+              if (sortBy !== "nearby") setSortBy(userLocation ? "nearby" : "newest");
+            }}
           />
         </aside>
 
@@ -228,9 +280,13 @@ export default function Home() {
               <div className="p-5">
                 <FilterSidebar
                   filters={filters}
-                  counties={counties}
+                  regions={regions}
                   onChange={handleFilterChange}
-                  onClear={() => setFilters(DEFAULT_FILTERS)}
+                  onClear={() => {
+                    setFilters(DEFAULT_FILTERS);
+                    setUserLocation(null);
+                    if (sortBy === "nearby") setSortBy("name");
+                  }}
                 />
               </div>
               <div className="sticky bottom-0 border-t p-4" style={{ background: "var(--bg-raised)", borderColor: "var(--border)" }}>
@@ -263,7 +319,7 @@ export default function Home() {
                 <h2 className="text-base font-extrabold tracking-tight uppercase" style={{ color: "var(--text)" }}>
                   {stats.total} loop{stats.total !== 1 ? "s" : ""}
                 </h2>
-                <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>{stats.totalKm} km of gravel across Ireland</p>
+                <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>{subtitle}</p>
               </div>
               <div className="flex items-center gap-2">
                 <select
@@ -279,7 +335,7 @@ export default function Home() {
                     backgroundPosition: 'right 6px center',
                   }}
                 >
-                  <option value="name">A-Z</option>
+                  {userLocation && <option value="nearby">Nearest</option>}
                   <option value="rating">Top Rated</option>
                   <option value="distance">Longest</option>
                   <option value="newest">Newest</option>
@@ -329,7 +385,10 @@ export default function Home() {
                 </div>
                 <p className="text-sm" style={{ color: "var(--text-muted)" }}>No loops match your filters</p>
                 <button
-                  onClick={() => setFilters(DEFAULT_FILTERS)}
+                  onClick={() => {
+                    setFilters(DEFAULT_FILTERS);
+                    if (sortBy !== "nearby") setSortBy(userLocation ? "nearby" : "newest");
+                  }}
                   className="mt-2 text-sm font-bold hover:opacity-80"
                   style={{ color: "var(--accent)" }}
                 >
@@ -344,6 +403,7 @@ export default function Home() {
                     route={route}
                     isSelected={route.id === selectedRouteId}
                     onHover={(id) => setSelectedRouteId(id)}
+                    showDistance={!!userLocation}
                   />
                 ))}
               </div>

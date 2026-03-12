@@ -1,5 +1,13 @@
 "use client";
 
+const COUNTRIES = ["Ireland", "UK", "USA", "Spain"];
+const DISCIPLINES = [
+  { value: "", label: "All" },
+  { value: "road", label: "Road", icon: "🚲" },
+  { value: "gravel", label: "Gravel", icon: "🪨" },
+  { value: "mtb", label: "MTB", icon: "🏔️" },
+];
+
 interface FilterSidebarProps {
   filters: {
     difficulty: string;
@@ -8,13 +16,15 @@ interface FilterSidebarProps {
     county: string;
     surface_type: string;
     verified: string;
+    country: string;
+    discipline: string;
   };
-  counties: string[];
+  regions: string[];
   onChange: (key: string, value: string) => void;
   onClear: () => void;
 }
 
-export default function FilterSidebar({ filters, counties, onChange, onClear }: FilterSidebarProps) {
+export default function FilterSidebar({ filters, regions, onChange, onClear }: FilterSidebarProps) {
   const hasFilters = Object.values(filters).some((v) => v !== "");
 
   const selectStyle = {
@@ -38,6 +48,38 @@ export default function FilterSidebar({ filters, counties, onChange, onClear }: 
             Clear all
           </button>
         )}
+      </div>
+
+      {/* Country */}
+      <div>
+        <label className="block text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>Country</label>
+        <select value={filters.country} onChange={(e) => onChange("country", e.target.value)} className="w-full rounded-lg px-3 py-2 text-sm cursor-pointer" style={selectStyle}>
+          <option value="">All countries</option>
+          {COUNTRIES.map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Discipline pills */}
+      <div>
+        <label className="block text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>Discipline</label>
+        <div className="flex gap-1.5">
+          {DISCIPLINES.map((d) => (
+            <button
+              key={d.value}
+              onClick={() => onChange("discipline", d.value)}
+              className="flex-1 px-2 py-1.5 rounded-lg text-xs font-bold transition-all text-center"
+              style={{
+                background: filters.discipline === d.value ? "var(--accent-glow)" : "var(--bg-card)",
+                border: filters.discipline === d.value ? "1px solid var(--accent)" : "1px solid var(--border)",
+                color: filters.discipline === d.value ? "var(--accent)" : "var(--text-secondary)",
+              }}
+            >
+              {d.icon ? `${d.icon} ` : ""}{d.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Verified toggle */}
@@ -71,6 +113,16 @@ export default function FilterSidebar({ filters, counties, onChange, onClear }: 
           />
         </div>
       </button>
+
+      <div>
+        <label className="block text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>Region</label>
+        <select value={filters.county} onChange={(e) => onChange("county", e.target.value)} className="w-full rounded-lg px-3 py-2 text-sm cursor-pointer" style={selectStyle}>
+          <option value="">All regions</option>
+          {regions.map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
+      </div>
 
       <div>
         <label className="block text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>Difficulty</label>
@@ -107,16 +159,6 @@ export default function FilterSidebar({ filters, counties, onChange, onClear }: 
       </div>
 
       <div>
-        <label className="block text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>County</label>
-        <select value={filters.county} onChange={(e) => onChange("county", e.target.value)} className="w-full rounded-lg px-3 py-2 text-sm cursor-pointer" style={selectStyle}>
-          <option value="">All counties</option>
-          {counties.map((c) => (
-            <option key={c} value={c}>{c}</option>
-          ))}
-        </select>
-      </div>
-
-      <div>
         <label className="block text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>Surface</label>
         <select value={filters.surface_type} onChange={(e) => onChange("surface_type", e.target.value)} className="w-full rounded-lg px-3 py-2 text-sm cursor-pointer" style={selectStyle}>
           <option value="">All surfaces</option>
@@ -124,6 +166,8 @@ export default function FilterSidebar({ filters, counties, onChange, onClear }: 
           <option value="mixed">Mixed</option>
           <option value="trail">Trail</option>
           <option value="road">Road</option>
+          <option value="singletrack">Singletrack</option>
+          <option value="technical">Technical</option>
         </select>
       </div>
 

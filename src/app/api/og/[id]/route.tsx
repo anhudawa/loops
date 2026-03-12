@@ -159,7 +159,7 @@ export async function GET(
           {/* Bottom: County */}
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <span style={{ fontSize: "16px", color: "#666666" }}>
-              {route.county}, Ireland
+              {route.region || route.county}, {route.country || "Ireland"}
             </span>
           </div>
         </div>

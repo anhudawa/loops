@@ -11,6 +11,8 @@ interface ShareRideProps {
     difficulty: string;
     surface_type: string;
     county: string;
+    country?: string;
+    region?: string | null;
   };
 }
 
@@ -62,7 +64,7 @@ export default function ShareRide({ route }: ShareRideProps) {
       `🕐 *Start time:* ${formatTime(startTime)}`,
       "",
       `📊 ${route.distance_km} km · ${route.elevation_gain_m}m elev · ${difficulty} · ${surface}`,
-      `📌 ${route.county}, Ireland`,
+      `📌 ${route.region || route.county}, ${route.country || "Ireland"}`,
       "",
       `🔗 ${routeUrl}`,
     ].join("\n");
@@ -113,7 +115,7 @@ export default function ShareRide({ route }: ShareRideProps) {
                   </div>
                   <div>
                     <h3 className="text-lg font-extrabold tracking-tight" style={{ color: "var(--text)" }}>Invite to Ride</h3>
-                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>{route.name} · {route.county}</p>
+                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>{route.name} · {route.region || route.county}</p>
                   </div>
                 </div>
                 <button onClick={() => setOpen(false)} className="hover:opacity-70 p-1" style={{ color: "var(--text-muted)" }}>

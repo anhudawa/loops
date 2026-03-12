@@ -25,6 +25,9 @@ interface Route {
   elevation_loss_m: number;
   surface_type: string;
   county: string;
+  country: string;
+  region: string | null;
+  discipline: string;
   start_lat: number;
   start_lng: number;
   gpx_filename: string | null;
@@ -127,9 +130,9 @@ export default function RouteDetail() {
           <div className="flex items-start justify-between gap-3 mb-3">
             <div>
               <div className="flex items-center gap-2 mb-1 text-[10px] uppercase tracking-wider font-bold" style={{ color: "var(--text-muted)" }}>
-                <span>{route.county}</span>
+                <span>{route.region || route.county}</span>
                 <span>·</span>
-                <span>Ireland</span>
+                <span>{route.country || "Ireland"}</span>
               </div>
               <div className="flex items-center gap-2">
                 <h1 className="text-xl md:text-2xl font-extrabold tracking-tight" style={{ color: "var(--text)" }}>{route.name}</h1>

@@ -33,6 +33,8 @@ interface UserProfile {
     difficulty: string;
     distance_km: number;
     county: string;
+    country?: string;
+    region?: string | null;
   }[];
   totalKm: number;
   followers: number;
@@ -310,7 +312,7 @@ export default function ProfilePage() {
                     >
                       <div>
                         <p className="font-bold tracking-tight" style={{ color: "var(--text)" }}>{route.name}</p>
-                        <p className="text-xs" style={{ color: "var(--text-muted)" }}>{route.county} — {route.distance_km} km</p>
+                        <p className="text-xs" style={{ color: "var(--text-muted)" }}>{route.region || route.county}{route.country ? `, ${route.country}` : ""} — {route.distance_km} km</p>
                       </div>
                       <span
                         className="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-lg capitalize neon-badge"

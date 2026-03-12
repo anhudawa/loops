@@ -111,8 +111,11 @@ export interface Route {
   distance_km: number;
   elevation_gain_m: number;
   elevation_loss_m: number;
-  surface_type: "gravel" | "mixed" | "trail" | "road";
+  surface_type: "gravel" | "mixed" | "trail" | "road" | "singletrack" | "technical";
   county: string;
+  country: string;
+  region: string | null;
+  discipline: "road" | "gravel" | "mtb";
   start_lat: number;
   start_lng: number;
   gpx_filename: string | null;
@@ -126,10 +129,14 @@ export interface RouteFilters {
   minDistance?: number;
   maxDistance?: number;
   county?: string;
+  country?: string;
+  discipline?: string;
   surface_type?: string;
   search?: string;
   sort?: string;
   verified?: boolean;
+  lat?: number;
+  lng?: number;
 }
 
 export interface User {
@@ -219,25 +226,50 @@ export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
     conditions.push(`r.county = $${idx++}`);
     params.push(filters.county);
   }
+  if (filters.country) {
+    conditions.push(`r.country = $${idx++}`);
+    params.push(filters.country);
+  }
+  if (filters.discipline) {
+    conditions.push(`r.discipline = $${idx++}`);
+    params.push(filters.discipline);
+  }
   if (filters.surface_type) {
     conditions.push(`r.surface_type = $${idx++}`);
     params.push(filters.surface_type);
   }
   if (filters.search) {
-    conditions.push(`(r.name ILIKE $${idx} OR r.description ILIKE $${idx} OR r.county ILIKE $${idx})`);
+    conditions.push(`(r.name ILIKE $${idx} OR r.description ILIKE $${idx} OR r.county ILIKE $${idx} OR r.region ILIKE $${idx})`);
     params.push(`%${filters.search}%`);
     idx++;
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
+  // Haversine distance calculation for "Near Me"
+  const hasLocation = filters.lat !== undefined && filters.lng !== undefined;
+  const distanceSelect = hasLocation
+    ? `, (6371 * acos(
+        cos(radians($${idx})) * cos(radians(r.start_lat)) *
+        cos(radians(r.start_lng) - radians($${idx + 1})) +
+        sin(radians($${idx})) * sin(radians(r.start_lat))
+      )) as distance_km_away`
+    : "";
+
+  if (hasLocation) {
+    params.push(filters.lat!, filters.lng!);
+    idx += 2;
+  }
+
   const sortMap: Record<string, string> = {
-    name: "r.name ASC",
     newest: "r.created_at DESC",
     distance: "r.distance_km DESC",
     rating: "avg_score DESC, rating_count DESC",
+    nearby: hasLocation ? "distance_km_away ASC" : "r.created_at DESC",
   };
-  const orderBy = sortMap[filters.sort || ""] || "r.name ASC";
+  const orderBy = hasLocation && !filters.sort
+    ? "distance_km_away ASC"
+    : sortMap[filters.sort || ""] || "r.created_at DESC";
 
   const having = filters.verified ? "HAVING COUNT(rt.id) >= 3 AND COALESCE(AVG(rt.score), 0) >= 3.0" : "";
 
@@ -245,6 +277,7 @@ export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
     SELECT r.*, COALESCE(AVG(rt.score), 0) as avg_score, COUNT(rt.id) as rating_count,
       (SELECT p.filename FROM photos p WHERE p.route_id = r.id ORDER BY p.created_at LIMIT 1) as cover_photo,
       CASE WHEN COUNT(rt.id) >= 3 AND COALESCE(AVG(rt.score), 0) >= 3.0 THEN 1 ELSE 0 END as is_verified
+      ${distanceSelect}
     FROM routes r
     LEFT JOIN ratings rt ON rt.route_id = r.id
     ${where}
@@ -270,8 +303,8 @@ export async function getRoute(id: string): Promise<(Route & { is_verified?: num
 
 export async function insertRoute(route: Omit<Route, "created_at">): Promise<Route> {
   await sql`
-    INSERT INTO routes (id, name, description, difficulty, distance_km, elevation_gain_m, elevation_loss_m, surface_type, county, start_lat, start_lng, gpx_filename, coordinates, created_by)
-    VALUES (${route.id}, ${route.name}, ${route.description}, ${route.difficulty}, ${route.distance_km}, ${route.elevation_gain_m}, ${route.elevation_loss_m}, ${route.surface_type}, ${route.county}, ${route.start_lat}, ${route.start_lng}, ${route.gpx_filename}, ${route.coordinates}, ${route.created_by})
+    INSERT INTO routes (id, name, description, difficulty, distance_km, elevation_gain_m, elevation_loss_m, surface_type, county, country, region, discipline, start_lat, start_lng, gpx_filename, coordinates, created_by)
+    VALUES (${route.id}, ${route.name}, ${route.description}, ${route.difficulty}, ${route.distance_km}, ${route.elevation_gain_m}, ${route.elevation_loss_m}, ${route.surface_type}, ${route.county}, ${route.country}, ${route.region}, ${route.discipline}, ${route.start_lat}, ${route.start_lng}, ${route.gpx_filename}, ${route.coordinates}, ${route.created_by})
   `;
   return (await getRoute(route.id))!;
 }
@@ -549,6 +582,20 @@ export async function getUserStats(userId: string): Promise<UserStats> {
 export async function getCounties(): Promise<string[]> {
   const { rows } = await sql`SELECT DISTINCT county FROM routes ORDER BY county`;
   return rows.map((r) => r.county);
+}
+
+export async function getRegions(country?: string): Promise<string[]> {
+  if (country) {
+    const { rows } = await sql`SELECT DISTINCT region FROM routes WHERE country = ${country} AND region IS NOT NULL ORDER BY region`;
+    return rows.map((r) => r.region);
+  }
+  const { rows } = await sql`SELECT DISTINCT region FROM routes WHERE region IS NOT NULL ORDER BY region`;
+  return rows.map((r) => r.region);
+}
+
+export async function getCountries(): Promise<string[]> {
+  const { rows } = await sql`SELECT DISTINCT country FROM routes ORDER BY country`;
+  return rows.map((r) => r.country);
 }
 
 // ──── Admin ────

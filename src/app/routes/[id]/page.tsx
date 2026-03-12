@@ -176,10 +176,14 @@ export default function RouteDetail() {
           <PhotoGallery routeId={route.id} />
         </div>
 
-        {/* Ride Actions */}
-        <div className="mb-6 flex flex-wrap items-center gap-3">
-          <RideActions routeId={route.id} routeName={route.name} />
+        {/* Share Ride — prominent CTA */}
+        <div className="mb-4">
           <ShareRide route={route} />
+        </div>
+
+        {/* Ride Actions */}
+        <div className="mb-6">
+          <RideActions routeId={route.id} routeName={route.name} />
         </div>
 
         {/* Description & Elevation */}

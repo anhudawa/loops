@@ -12,7 +12,7 @@ export async function sendMagicLink(email: string, token: string) {
   const link = `${baseUrl}/api/auth/verify?token=${token}`;
 
   await resend.emails.send({
-    from: "LOOPS <onboarding@resend.dev>",
+    from: "LOOPS <hello@loops.ie>",
     to: email,
     subject: "Sign in to LOOPS",
     html: `

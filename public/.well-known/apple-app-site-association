@@ -1,0 +1,11 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appIDs": ["TEAM_ID.ie.loops.app"],
+        "paths": ["/api/auth/strava/callback*", "/routes/*"]
+      }
+    ]
+  }
+}

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, DragEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
+import { useToast } from "@/components/Toast";
 import Link from "next/link";
 
 const COUNTRIES = ["Ireland", "UK", "USA", "Spain"];
@@ -16,8 +17,10 @@ const DISCIPLINE_OPTIONS = [
 export default function UploadPage() {
   const router = useRouter();
   const { user, loading } = useAuth();
+  const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
+  const [dragging, setDragging] = useState(false);
   const [regions, setRegions] = useState<string[]>([]);
   const [form, setForm] = useState({
     name: "",
@@ -89,6 +92,7 @@ export default function UploadPage() {
         throw new Error(data.error || "Failed to upload route");
       }
       const route = await res.json();
+      toast("Route uploaded successfully!", "success");
       router.push(`/routes/${route.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -126,10 +130,23 @@ export default function UploadPage() {
           <div
             className="border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all"
             style={{
-              borderColor: file ? "var(--accent)" : "var(--border)",
-              background: file ? "var(--accent-glow)" : "transparent",
+              borderColor: dragging ? "var(--accent)" : file ? "var(--accent)" : "var(--border)",
+              background: dragging ? "var(--accent-glow-strong)" : file ? "var(--accent-glow)" : "transparent",
             }}
             onClick={() => fileInputRef.current?.click()}
+            onDragOver={(e: DragEvent) => { e.preventDefault(); setDragging(true); }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(e: DragEvent) => {
+              e.preventDefault();
+              setDragging(false);
+              const f = e.dataTransfer.files?.[0];
+              if (f && f.name.endsWith(".gpx")) {
+                setFile(f);
+                if (!form.name) setForm((prev) => ({ ...prev, name: f.name.replace(".gpx", "") }));
+              } else {
+                setError("Please drop a .gpx file");
+              }
+            }}
           >
             <input
               ref={fileInputRef}
@@ -168,7 +185,7 @@ export default function UploadPage() {
           {/* Route Name */}
           <div>
             <label className="block text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>
-              Route Name <span style={{ color: "#ff3355" }}>*</span>
+              Route Name <span style={{ color: "var(--danger)" }}>*</span>
             </label>
             <input
               type="text"
@@ -196,7 +213,7 @@ export default function UploadPage() {
           {/* Discipline pills */}
           <div>
             <label className="block text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>
-              Discipline <span style={{ color: "#ff3355" }}>*</span>
+              Discipline <span style={{ color: "var(--danger)" }}>*</span>
             </label>
             <div className="flex gap-2">
               {DISCIPLINE_OPTIONS.map((d) => (
@@ -222,7 +239,7 @@ export default function UploadPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>
-                Country <span style={{ color: "#ff3355" }}>*</span>
+                Country <span style={{ color: "var(--danger)" }}>*</span>
               </label>
               <select
                 value={form.country}
@@ -238,7 +255,7 @@ export default function UploadPage() {
 
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>
-                Region <span style={{ color: "#ff3355" }}>*</span>
+                Region <span style={{ color: "var(--danger)" }}>*</span>
               </label>
               <input
                 type="text"
@@ -261,7 +278,7 @@ export default function UploadPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>
-                Difficulty <span style={{ color: "#ff3355" }}>*</span>
+                Difficulty <span style={{ color: "var(--danger)" }}>*</span>
               </label>
               <select
                 value={form.difficulty}
@@ -278,7 +295,7 @@ export default function UploadPage() {
 
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>
-                Surface <span style={{ color: "#ff3355" }}>*</span>
+                Surface <span style={{ color: "var(--danger)" }}>*</span>
               </label>
               <select
                 value={form.surface_type}
@@ -297,7 +314,7 @@ export default function UploadPage() {
           </div>
 
           {error && (
-            <div className="px-4 py-3 rounded-lg text-sm" style={{ background: "rgba(255, 51, 85, 0.1)", border: "1px solid rgba(255, 51, 85, 0.3)", color: "#ff3355" }}>
+            <div className="alert-error" role="alert">
               {error}
             </div>
           )}

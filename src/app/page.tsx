@@ -96,6 +96,10 @@ export default function Home() {
     if (userLocation) {
       params.set("lat", String(userLocation.lat));
       params.set("lng", String(userLocation.lng));
+      // Only show nearby routes unless user explicitly picks a country
+      if (!filters.country) {
+        params.set("maxRadius", "500");
+      }
     }
 
     const res = await fetch(`/api/routes?${params}`);
@@ -138,7 +142,7 @@ export default function Home() {
     if (filters.country) {
       parts.push(`in ${filters.country}`);
     }
-    if (parts.length === 0) return `${stats.totalKm} km of routes worldwide`;
+    if (parts.length === 0) return userLocation && !filters.country ? `${stats.totalKm} km of routes near you` : `${stats.totalKm} km of routes worldwide`;
     if (parts.length === 1 && filters.country) return `${stats.totalKm} km of routes ${parts[0]}`;
     return `${stats.totalKm} km of ${parts.join(" ")}`;
   }, [stats.totalKm, filters.discipline, filters.country]);
@@ -188,17 +192,31 @@ export default function Home() {
                   <Link
                     href="/admin"
                     className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded hidden sm:inline-block hover:opacity-80"
-                    style={{ background: "rgba(255, 51, 85, 0.15)", color: "#ff3355" }}
+                    style={{ background: "rgba(255, 51, 85, 0.15)", color: "var(--danger)" }}
                   >
                     Admin
                   </Link>
                 )}
                 <Link
-                  href={`/profile/${user.id}`}
-                  className="text-xs hidden md:inline px-2 hover:opacity-80 font-medium"
+                  href="/messages"
+                  className="relative p-1.5 rounded-lg hover:opacity-80 transition-opacity"
                   style={{ color: "var(--text-muted)" }}
+                  aria-label="Messages"
                 >
-                  {user.name || user.email}
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                </Link>
+                <Link
+                  href={`/profile/${user.id}`}
+                  className="shrink-0 hover:opacity-80 transition-opacity"
+                >
+                  <img
+                    src={user.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || user.email)}&background=1a1a1a&color=c8ff00&size=32&bold=true`}
+                    alt={user.name || user.email}
+                    className="w-7 h-7 rounded-full object-cover"
+                    style={{ border: "1.5px solid var(--border)" }}
+                  />
                 </Link>
                 <button
                   onClick={logout}
@@ -263,14 +281,15 @@ export default function Home() {
         {/* Mobile Filter Drawer */}
         {filtersOpen && (
           <div className="fixed inset-0 z-50 md:hidden">
-            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setFiltersOpen(false)} />
-            <div className="absolute bottom-0 left-0 right-0 rounded-t-2xl max-h-[80vh] overflow-y-auto animate-slide-up" style={{ background: "var(--bg-raised)" }}>
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setFiltersOpen(false)} aria-hidden="true" />
+            <div role="dialog" aria-modal="true" aria-label="Route filters" className="absolute bottom-0 left-0 right-0 rounded-t-2xl max-h-[80vh] overflow-y-auto animate-slide-up" style={{ background: "var(--bg-raised)" }}>
               <div className="sticky top-0 px-5 pt-3 pb-2 flex items-center justify-end" style={{ background: "var(--bg-raised)" }}>
                 <div className="w-10 h-1 rounded-full absolute left-1/2 -translate-x-1/2 top-2" style={{ background: "var(--border-light)" }} />
                 <button
                   onClick={() => setFiltersOpen(false)}
                   className="w-8 h-8 flex items-center justify-center rounded-full"
                   style={{ color: "var(--text-muted)" }}
+                  aria-label="Close filters"
                 >
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -284,8 +303,7 @@ export default function Home() {
                   onChange={handleFilterChange}
                   onClear={() => {
                     setFilters(DEFAULT_FILTERS);
-                    setUserLocation(null);
-                    if (sortBy === "nearby") setSortBy("name");
+                    if (sortBy !== "nearby") setSortBy(userLocation ? "nearby" : "newest");
                   }}
                 />
               </div>
@@ -383,7 +401,8 @@ export default function Home() {
                     <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                   </svg>
                 </div>
-                <p className="text-sm" style={{ color: "var(--text-muted)" }}>No loops match your filters</p>
+                <p className="text-sm font-medium mb-1" style={{ color: "var(--text-secondary)" }}>No loops match your filters</p>
+                <p className="text-xs" style={{ color: "var(--text-muted)" }}>Try broadening your search or exploring a different area</p>
                 <button
                   onClick={() => {
                     setFilters(DEFAULT_FILTERS);

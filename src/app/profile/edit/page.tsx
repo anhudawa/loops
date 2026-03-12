@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
@@ -8,9 +8,12 @@ import { useAuth } from "@/components/AuthProvider";
 export default function EditProfilePage() {
   const { user, loading, refresh } = useAuth();
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState("");
   const [bio, setBio] = useState("");
   const [location, setLocation] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [loadingProfile, setLoadingProfile] = useState(true);
@@ -30,11 +33,53 @@ export default function EditProfilePage() {
             setName(data.name || "");
             setBio(data.bio || "");
             setLocation(data.location || "");
+            setAvatarUrl(data.avatar_url || null);
           }
           setLoadingProfile(false);
         });
     }
   }, [user]);
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setError("Please select an image file");
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      setError("Image must be under 2MB");
+      return;
+    }
+
+    setUploadingAvatar(true);
+    setError("");
+
+    try {
+      const formData = new FormData();
+      formData.append("avatar", file);
+
+      const res = await fetch("/api/profile/avatar", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to upload");
+      }
+
+      setAvatarUrl(data.avatar_url);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,6 +114,9 @@ export default function EditProfilePage() {
     );
   }
 
+  const displayName = name || user?.email?.split("@")[0] || "User";
+  const currentAvatar = avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=1a1a1a&color=c8ff00&size=120&bold=true`;
+
   const inputStyle = {
     background: "var(--bg-card)",
     border: "1px solid var(--border)",
@@ -90,6 +138,46 @@ export default function EditProfilePage() {
 
       <div className="max-w-lg mx-auto px-4 md:px-6 py-8">
         <form onSubmit={handleSave} className="space-y-5">
+          {/* Avatar Upload */}
+          <div className="flex flex-col items-center gap-3 mb-2">
+            <div className="relative">
+              <img
+                src={currentAvatar}
+                alt={displayName}
+                className="w-24 h-24 rounded-full object-cover"
+                style={{ border: "2px solid var(--border)" }}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingAvatar}
+                className="absolute bottom-0 right-0 w-8 h-8 rounded-full flex items-center justify-center transition-opacity hover:opacity-80"
+                style={{ background: "var(--accent)", color: "#000" }}
+              >
+                {uploadingAvatar ? (
+                  <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                    <path d="M12 2v4m0 12v4m-7.07-3.93l2.83-2.83m8.49-8.49l2.83-2.83M2 12h4m12 0h4m-3.93 7.07l-2.83-2.83M7.76 7.76L4.93 4.93" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                )}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarUpload}
+                className="hidden"
+              />
+            </div>
+            <p className="text-[10px] uppercase tracking-wider font-bold" style={{ color: "var(--text-muted)" }}>
+              {uploadingAvatar ? "Uploading..." : "Tap to change photo"}
+            </p>
+          </div>
+
           <div>
             <label className="block text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>
               Display Name
@@ -135,7 +223,7 @@ export default function EditProfilePage() {
           </div>
 
           {error && (
-            <div className="px-4 py-3 rounded-lg text-sm" style={{ background: "rgba(255, 51, 85, 0.1)", border: "1px solid rgba(255, 51, 85, 0.3)", color: "#ff3355" }}>
+            <div className="px-4 py-3 rounded-lg text-sm" style={{ background: "rgba(255, 51, 85, 0.1)", border: "1px solid rgba(255, 51, 85, 0.3)", color: "var(--danger)" }}>
               {error}
             </div>
           )}

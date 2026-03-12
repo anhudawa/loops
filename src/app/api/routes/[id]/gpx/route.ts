@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getRoute } from "@/lib/db";
+import { getRoute, getUserBySession, trackDownload, migrateDb } from "@/lib/db";
+import { v4 as uuidv4 } from "uuid";
 
 export async function GET(
   request: NextRequest,
@@ -10,6 +11,20 @@ export async function GET(
 
   if (!route) {
     return NextResponse.json({ error: "Route not found" }, { status: 404 });
+  }
+
+  // Track download if user is authenticated
+  const sessionToken = request.cookies.get("session")?.value;
+  if (sessionToken) {
+    const user = await getUserBySession(sessionToken);
+    if (user) {
+      try {
+        await migrateDb(); // ensure downloads table exists
+        await trackDownload(uuidv4(), id, user.id);
+      } catch {
+        // Don't block the download if tracking fails
+      }
+    }
   }
 
   // Generate GPX from stored coordinates

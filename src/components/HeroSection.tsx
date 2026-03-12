@@ -81,7 +81,7 @@ export default function HeroSection({ onExplore }: { onExplore: () => void }) {
             color: "var(--text)",
           }}
         >
-          Find Your Loop
+          Stop Riding The Same Loop
         </h1>
         <p
           className="text-base md:text-lg mb-10 max-w-md mx-auto"

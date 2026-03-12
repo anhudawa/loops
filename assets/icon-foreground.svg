@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <rect width="1024" height="1024" fill="#0a0a0a"/>
+  <circle cx="512" cy="512" r="350" fill="none" stroke="rgba(200,255,0,0.06)" stroke-width="80"/>
+  <text x="512" y="530" font-family="Arial Black, Impact, sans-serif" font-weight="900" font-size="220" fill="#c8ff00" text-anchor="middle" dominant-baseline="middle" letter-spacing="8">LOOPS</text>
+</svg>

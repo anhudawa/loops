@@ -150,7 +150,7 @@ export default function AdminPage() {
             <Link href="/">
               <span className="logo-mark text-xl" style={{ color: "var(--text)" }}>LOOPS</span>
             </Link>
-            <span className="text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded" style={{ background: "rgba(255, 51, 85, 0.15)", color: "#ff3355" }}>
+            <span className="text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded" style={{ background: "rgba(255, 51, 85, 0.15)", color: "var(--danger)" }}>
               Admin
             </span>
           </div>
@@ -166,9 +166,9 @@ export default function AdminPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
             {[
               { label: "Users", value: stats.totalUsers, color: "var(--accent)" },
-              { label: "Routes", value: stats.totalRoutes, color: "#00ff88" },
-              { label: "Comments", value: stats.totalComments, color: "#ffbb00" },
-              { label: "Banned", value: stats.bannedUsers, color: "#ff3355" },
+              { label: "Routes", value: stats.totalRoutes, color: "var(--success)" },
+              { label: "Comments", value: stats.totalComments, color: "var(--warning)" },
+              { label: "Banned", value: stats.bannedUsers, color: "var(--danger)" },
             ].map((s) => (
               <div key={s.label} className="rounded-xl p-4 text-center" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
                 <p className="text-2xl font-extrabold" style={{ color: s.color }}>{s.value}</p>
@@ -219,7 +219,7 @@ export default function AdminPage() {
                         <span
                           className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded"
                           style={{
-                            color: u.role === "admin" ? "#c8ff00" : u.role === "banned" ? "#ff3355" : "var(--text-muted)",
+                            color: u.role === "admin" ? "#c8ff00" : u.role === "banned" ? "var(--danger)" : "var(--text-muted)",
                             background: u.role === "admin" ? "rgba(200, 255, 0, 0.1)" : u.role === "banned" ? "rgba(255, 51, 85, 0.1)" : "var(--bg)",
                           }}
                         >
@@ -235,7 +235,7 @@ export default function AdminPage() {
                             <button
                               onClick={() => handleUnban(u.id)}
                               className="text-xs font-bold hover:opacity-80"
-                              style={{ color: "#00ff88" }}
+                              style={{ color: "var(--success)" }}
                             >
                               Unban
                             </button>
@@ -243,7 +243,7 @@ export default function AdminPage() {
                             <button
                               onClick={() => setConfirm({ type: "ban", id: u.id, label: u.name || u.email })}
                               className="text-xs font-bold hover:opacity-80"
-                              style={{ color: "#ff3355" }}
+                              style={{ color: "var(--danger)" }}
                             >
                               Ban
                             </button>
@@ -282,7 +282,7 @@ export default function AdminPage() {
                         <button
                           onClick={() => setConfirm({ type: "deleteRoute", id: r.id, label: r.name })}
                           className="text-xs font-bold hover:opacity-80"
-                          style={{ color: "#ff3355" }}
+                          style={{ color: "var(--danger)" }}
                         >
                           Delete
                         </button>
@@ -319,7 +319,7 @@ export default function AdminPage() {
                         <button
                           onClick={() => setConfirm({ type: "deleteComment", id: c.id, label: c.body.slice(0, 40) })}
                           className="text-xs font-bold hover:opacity-80"
-                          style={{ color: "#ff3355" }}
+                          style={{ color: "var(--danger)" }}
                         >
                           Delete
                         </button>
@@ -360,7 +360,7 @@ export default function AdminPage() {
                   else if (confirm.type === "deleteComment") handleDeleteComment(confirm.id);
                 }}
                 className="flex-1 py-2 rounded-xl text-sm font-bold"
-                style={{ background: "rgba(255, 51, 85, 0.15)", color: "#ff3355" }}
+                style={{ background: "rgba(255, 51, 85, 0.15)", color: "var(--danger)" }}
               >
                 {confirm.type === "ban" ? "Ban" : "Delete"}
               </button>

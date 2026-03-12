@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getRoutes, insertRoute, getCounties, getRegions, getCountries } from "@/lib/db";
+import { getRoutes, insertRoute, getCounties, getRegions, getCountries, getUserBySession } from "@/lib/db";
 import { parseGpx } from "@/lib/gpx";
 import { v4 as uuidv4 } from "uuid";
 
@@ -35,6 +35,7 @@ export async function GET(request: NextRequest) {
     verified: searchParams.get("verified") === "true" ? true : undefined,
     lat: searchParams.get("lat") ? Number(searchParams.get("lat")) : undefined,
     lng: searchParams.get("lng") ? Number(searchParams.get("lng")) : undefined,
+    maxRadius: searchParams.get("maxRadius") ? Number(searchParams.get("maxRadius")) : undefined,
   };
 
   const routes = await getRoutes(filters);
@@ -42,6 +43,10 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  // Get authenticated user from session cookie
+  const sessionToken = request.cookies.get("session")?.value;
+  const currentUser = sessionToken ? await getUserBySession(sessionToken) : null;
+
   const formData = await request.formData();
   const gpxFile = formData.get("gpx") as File | null;
   const name = formData.get("name") as string;
@@ -88,7 +93,7 @@ export async function POST(request: NextRequest) {
       start_lng: coordinates[0][1],
       gpx_filename: null,
       coordinates: JSON.stringify(coordinates),
-      created_by: null,
+      created_by: currentUser?.id || null,
     });
 
     return NextResponse.json(route, { status: 201 });

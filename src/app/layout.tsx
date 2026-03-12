@@ -1,5 +1,7 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { AuthProvider } from "@/components/AuthProvider";
+import { ToastProvider } from "@/components/Toast";
+import { CapacitorProvider } from "@/components/CapacitorProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -18,6 +20,13 @@ export const metadata: Metadata = {
   },
 };
 
+export const viewport: Viewport = {
+  themeColor: "#0a0a0a",
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -31,7 +40,11 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
       </head>
       <body className="antialiased">
-        <AuthProvider>{children}</AuthProvider>
+        <ToastProvider>
+          <CapacitorProvider>
+            <AuthProvider>{children}</AuthProvider>
+          </CapacitorProvider>
+        </ToastProvider>
       </body>
     </html>
   );

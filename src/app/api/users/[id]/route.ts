@@ -9,6 +9,10 @@ import {
   isFollowing,
   getUserBySession,
   getUserActivityFeed,
+  getUserUploadedRoutes,
+  getUserDownloads,
+  getCommunityScore,
+  migrateDb,
 } from "@/lib/db";
 
 export async function GET(
@@ -22,13 +26,18 @@ export async function GET(
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  const [stats, routes, totalKm, followers, following, activity] = await Promise.all([
+  await migrateDb();
+
+  const [stats, routes, totalKm, followers, following, activity, uploadedRoutes, downloadedRoutes, communityScore] = await Promise.all([
     getUserStats(id),
     getUserRoutes(id),
     getUserTotalKm(id),
     getFollowerCount(id),
     getFollowingCount(id),
     getUserActivityFeed(id, 1, 20),
+    getUserUploadedRoutes(id),
+    getUserDownloads(id),
+    getCommunityScore(id),
   ]);
 
   // Check if current viewer is following this user
@@ -57,5 +66,8 @@ export async function GET(
     following,
     activity,
     viewerFollowing,
+    uploadedRoutes,
+    downloadedRoutes,
+    communityScore,
   });
 }

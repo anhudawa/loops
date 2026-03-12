@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import Link from "next/link";
 
 interface RideActionsProps {
   routeId: string;
@@ -9,25 +10,73 @@ interface RideActionsProps {
 
 export default function RideActions({ routeId, routeName }: RideActionsProps) {
   const [copied, setCopied] = useState(false);
+  const [canShareFiles, setCanShareFiles] = useState(false);
   const downloadRef = useRef<HTMLAnchorElement>(null);
 
   const gpxUrl = `/api/routes/${routeId}/gpx`;
+
+  // Detect Web Share API file sharing support (mobile)
+  useEffect(() => {
+    try {
+      if (typeof navigator.canShare === "function" && typeof navigator.share === "function") {
+        const testFile = new File(["test"], "test.gpx", { type: "application/gpx+xml" });
+        setCanShareFiles(navigator.canShare({ files: [testFile] }));
+      }
+    } catch {
+      setCanShareFiles(false);
+    }
+  }, []);
 
   const triggerDownload = () => {
     downloadRef.current?.click();
   };
 
+  const shareGpxToApp = async () => {
+    try {
+      const res = await fetch(gpxUrl);
+      const blob = await res.blob();
+      const file = new File([blob], `${routeName}.gpx`, { type: "application/gpx+xml" });
+      await navigator.share({ files: [file], title: `${routeName} - GPX Route` });
+    } catch {
+      // User cancelled share or error — fall back to download
+      triggerDownload();
+    }
+  };
+
   const openStrava = () => {
-    triggerDownload();
-    window.open("https://www.strava.com/upload/select", "_blank");
+    if (canShareFiles) {
+      shareGpxToApp();
+    } else {
+      triggerDownload();
+      window.open("https://www.strava.com/upload/select", "_blank");
+    }
   };
 
   const openKomoot = () => {
-    triggerDownload();
-    window.open("https://www.komoot.com/plan", "_blank");
+    if (canShareFiles) {
+      shareGpxToApp();
+    } else {
+      triggerDownload();
+      window.open("https://www.komoot.com/plan", "_blank");
+    }
   };
 
   const copyLink = async () => {
+    // Use native share sheet in Capacitor app
+    try {
+      const { Capacitor } = await import("@capacitor/core");
+      if (Capacitor.isNativePlatform()) {
+        const { Share } = await import("@capacitor/share");
+        await Share.share({
+          title: routeName,
+          text: `Check out this route: ${routeName}`,
+          url: window.location.href,
+        });
+        return;
+      }
+    } catch {
+      // Fall through to clipboard copy
+    }
     await navigator.clipboard.writeText(window.location.href);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -57,10 +106,10 @@ export default function RideActions({ routeId, routeName }: RideActionsProps) {
           className="flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl text-xs font-bold transition-all hover:border-[rgba(200,255,0,0.3)]"
           style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
         >
-          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" style={{ color: "#FC4C02" }}>
+          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" style={{ color: "var(--strava)" }}>
             <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169" />
           </svg>
-          Strava
+          {canShareFiles ? "Open in Strava" : "Strava"}
         </button>
 
         <button
@@ -72,7 +121,7 @@ export default function RideActions({ routeId, routeName }: RideActionsProps) {
             <circle cx="12" cy="12" r="10" />
             <polygon points="12,2 14.5,9.5 22,12 14.5,14.5 12,22 9.5,14.5 2,12 9.5,9.5" fill="currentColor" stroke="none" />
           </svg>
-          Komoot
+          {canShareFiles ? "Open in Komoot" : "Komoot"}
         </button>
 
         <button
@@ -96,6 +145,14 @@ export default function RideActions({ routeId, routeName }: RideActionsProps) {
           {copied ? "Copied!" : "Copy Link"}
         </button>
       </div>
+
+      {/* Good looper nudge */}
+      <p className="text-xs text-center pt-2" style={{ color: "var(--text-muted)" }}>
+        Be a good looper — if you download a route,{" "}
+        <Link href="/upload" className="font-bold hover:opacity-80" style={{ color: "var(--accent)" }}>
+          upload a route you love
+        </Link>
+      </p>
     </div>
   );
 }

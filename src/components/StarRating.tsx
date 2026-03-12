@@ -54,7 +54,7 @@ export default function StarRating({ routeId }: { routeId: string }) {
           >
             <svg
               className="w-6 h-6"
-              style={{ color: star <= displayScore ? "#ffbb00" : "var(--border-light)" }}
+              style={{ color: star <= displayScore ? "var(--warning)" : "var(--border-light)" }}
               fill="currentColor"
               viewBox="0 0 24 24"
             >

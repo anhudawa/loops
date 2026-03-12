@@ -7,6 +7,7 @@ interface User {
   email: string;
   name: string | null;
   role: "user" | "admin" | "banned";
+  avatar_url?: string | null;
 }
 
 interface AuthContextType {

@@ -175,10 +175,10 @@ export default function FilterSidebar({ filters, regions, onChange, onClear }: F
         <h3 className="block text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>Legend</h3>
         <div className="space-y-2">
           {[
-            { label: "Easy", color: "#00ff88", desc: "Flat, maintained" },
-            { label: "Moderate", color: "#ffbb00", desc: "Some hills" },
-            { label: "Hard", color: "#ff3355", desc: "Hilly, rough" },
-            { label: "Expert", color: "#bb44ff", desc: "Technical" },
+            { label: "Easy", color: "var(--success)", desc: "Flat, maintained" },
+            { label: "Moderate", color: "var(--warning)", desc: "Some hills" },
+            { label: "Hard", color: "var(--danger)", desc: "Hilly, rough" },
+            { label: "Expert", color: "var(--purple)", desc: "Technical" },
           ].map((d) => (
             <div key={d.label} className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full shrink-0" style={{ background: d.color, boxShadow: `0 0 6px ${d.color}40` }} />

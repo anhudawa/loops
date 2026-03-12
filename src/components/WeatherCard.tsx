@@ -140,7 +140,7 @@ export default function WeatherCard({ routeId, windOverlayEnabled, onWindToggle,
             onClick={() => onWindToggle(!windOverlayEnabled)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all"
             style={{
-              color: windOverlayEnabled ? "#ff3355" : "var(--text-muted)",
+              color: windOverlayEnabled ? "var(--danger)" : "var(--text-muted)",
               background: windOverlayEnabled ? "rgba(255, 51, 85, 0.15)" : "var(--bg)",
               border: windOverlayEnabled ? "1px solid rgba(255, 51, 85, 0.4)" : "1px solid var(--border)",
             }}
@@ -203,18 +203,18 @@ export default function WeatherCard({ routeId, windOverlayEnabled, onWindToggle,
             <p className="text-[10px] uppercase tracking-wider font-bold mb-2" style={{ color: "var(--text-muted)" }}>Wind impact</p>
             <div className="grid grid-cols-3 gap-2">
               <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: "#ff3355" }} />
-                <span className="text-sm font-bold" style={{ color: "#ff3355" }}>{breakdown.headwind}%</span>
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: "var(--danger)" }} />
+                <span className="text-sm font-bold" style={{ color: "var(--danger)" }}>{breakdown.headwind}%</span>
                 <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>head</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: "#00ff88" }} />
-                <span className="text-sm font-bold" style={{ color: "#00ff88" }}>{breakdown.tailwind}%</span>
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: "var(--success)" }} />
+                <span className="text-sm font-bold" style={{ color: "var(--success)" }}>{breakdown.tailwind}%</span>
                 <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>tail</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: "#ffbb00" }} />
-                <span className="text-sm font-bold" style={{ color: "#ffbb00" }}>{breakdown.crosswind}%</span>
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: "var(--warning)" }} />
+                <span className="text-sm font-bold" style={{ color: "var(--warning)" }}>{breakdown.crosswind}%</span>
                 <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>cross</span>
               </div>
             </div>

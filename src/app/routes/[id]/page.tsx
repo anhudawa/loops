@@ -37,10 +37,10 @@ interface Route {
 }
 
 const DIFF: Record<string, { label: string; color: string; bg: string }> = {
-  easy: { label: "Easy", color: "#00ff88", bg: "rgba(0, 255, 136, 0.1)" },
-  moderate: { label: "Moderate", color: "#ffbb00", bg: "rgba(255, 187, 0, 0.1)" },
-  hard: { label: "Hard", color: "#ff3355", bg: "rgba(255, 51, 85, 0.1)" },
-  expert: { label: "Expert", color: "#bb44ff", bg: "rgba(187, 68, 255, 0.1)" },
+  easy: { label: "Easy", color: "var(--success)", bg: "rgba(0, 255, 136, 0.1)" },
+  moderate: { label: "Moderate", color: "var(--warning)", bg: "rgba(255, 187, 0, 0.1)" },
+  hard: { label: "Hard", color: "var(--danger)", bg: "rgba(255, 51, 85, 0.1)" },
+  expert: { label: "Expert", color: "var(--purple)", bg: "rgba(187, 68, 255, 0.1)" },
 };
 
 export default function RouteDetail() {
@@ -137,7 +137,7 @@ export default function RouteDetail() {
               <div className="flex items-center gap-2">
                 <h1 className="text-xl md:text-2xl font-extrabold tracking-tight" style={{ color: "var(--text)" }}>{route.name}</h1>
                 {route.is_verified === 1 && (
-                  <span className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-lg shrink-0" style={{ color: "#00ff88", background: "rgba(0, 255, 136, 0.1)" }}>
+                  <span className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-lg shrink-0" style={{ color: "var(--success)", background: "rgba(0, 255, 136, 0.1)" }}>
                     <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                     </svg>

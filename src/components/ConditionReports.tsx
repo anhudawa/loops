@@ -13,9 +13,9 @@ interface Condition {
 }
 
 const STATUS_STYLES: Record<string, { color: string; bg: string; label: string }> = {
-  good: { color: "#00ff88", bg: "rgba(0, 255, 136, 0.1)", label: "Good" },
-  fair: { color: "#ffbb00", bg: "rgba(255, 187, 0, 0.1)", label: "Fair" },
-  poor: { color: "#ff3355", bg: "rgba(255, 51, 85, 0.1)", label: "Poor" },
+  good: { color: "var(--success)", bg: "rgba(0, 255, 136, 0.1)", label: "Good" },
+  fair: { color: "var(--warning)", bg: "rgba(255, 187, 0, 0.1)", label: "Fair" },
+  poor: { color: "var(--danger)", bg: "rgba(255, 51, 85, 0.1)", label: "Poor" },
   closed: { color: "#666", bg: "rgba(102, 102, 102, 0.15)", label: "Closed" },
 };
 

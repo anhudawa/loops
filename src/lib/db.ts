@@ -102,6 +102,62 @@ export async function initDb() {
   `;
 }
 
+// ──── Migrations ────
+export async function migrateDb() {
+  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS strava_id TEXT UNIQUE`;
+  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id TEXT UNIQUE`;
+
+  // Downloads tracking
+  await sql`
+    CREATE TABLE IF NOT EXISTS downloads (
+      id TEXT PRIMARY KEY,
+      route_id TEXT NOT NULL REFERENCES routes(id),
+      user_id TEXT REFERENCES users(id),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(route_id, user_id)
+    )
+  `;
+
+  // Push tokens
+  await sql`
+    CREATE TABLE IF NOT EXISTS push_tokens (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id),
+      token TEXT NOT NULL,
+      platform TEXT NOT NULL CHECK(platform IN ('ios', 'android')),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(user_id, token)
+    )
+  `;
+
+  // Conversations
+  await sql`
+    CREATE TABLE IF NOT EXISTS conversations (
+      id TEXT PRIMARY KEY,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS conversation_participants (
+      conversation_id TEXT NOT NULL REFERENCES conversations(id),
+      user_id TEXT NOT NULL REFERENCES users(id),
+      last_read_at TIMESTAMPTZ DEFAULT NOW(),
+      PRIMARY KEY (conversation_id, user_id)
+    )
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS messages (
+      id TEXT PRIMARY KEY,
+      conversation_id TEXT NOT NULL REFERENCES conversations(id),
+      sender_id TEXT NOT NULL REFERENCES users(id),
+      body TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+}
+
 // ──── Types ────
 export interface Route {
   id: string;
@@ -137,6 +193,7 @@ export interface RouteFilters {
   verified?: boolean;
   lat?: number;
   lng?: number;
+  maxRadius?: number;
 }
 
 export interface User {
@@ -271,7 +328,21 @@ export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
     ? "distance_km_away ASC"
     : sortMap[filters.sort || ""] || "r.created_at DESC";
 
-  const having = filters.verified ? "HAVING COUNT(rt.id) >= 3 AND COALESCE(AVG(rt.score), 0) >= 3.0" : "";
+  // Build HAVING clauses
+  const havingClauses: string[] = [];
+  if (filters.verified) {
+    havingClauses.push("COUNT(rt.id) >= 3 AND COALESCE(AVG(rt.score), 0) >= 3.0");
+  }
+  if (hasLocation && filters.maxRadius !== undefined) {
+    havingClauses.push(`(6371 * acos(
+      cos(radians($${idx - 2})) * cos(radians(r.start_lat)) *
+      cos(radians(r.start_lng) - radians($${idx - 1})) +
+      sin(radians($${idx - 2})) * sin(radians(r.start_lat))
+    )) <= $${idx}`);
+    params.push(filters.maxRadius);
+    idx++;
+  }
+  const having = havingClauses.length > 0 ? `HAVING ${havingClauses.join(" AND ")}` : "";
 
   const query = `
     SELECT r.*, COALESCE(AVG(rt.score), 0) as avg_score, COUNT(rt.id) as rating_count,
@@ -333,6 +404,82 @@ export async function upsertUser(id: string, email: string, name: string | null,
 export async function getUserById(id: string): Promise<User | undefined> {
   const { rows } = await sql`SELECT * FROM users WHERE id = ${id}`;
   return rows[0] as User | undefined;
+}
+
+export async function getUserByStravaId(stravaId: string): Promise<User | undefined> {
+  const { rows } = await sql`SELECT * FROM users WHERE strava_id = ${stravaId}`;
+  return rows[0] as User | undefined;
+}
+
+export async function upsertStravaUser(
+  id: string,
+  stravaId: string,
+  name: string,
+  avatarUrl: string | null,
+  sessionToken: string
+): Promise<User> {
+  const existing = await getUserByStravaId(stravaId);
+  if (existing) {
+    await sql`
+      UPDATE users
+      SET session_token = ${sessionToken},
+          name = COALESCE(${name}, name),
+          avatar_url = COALESCE(${avatarUrl}, avatar_url)
+      WHERE strava_id = ${stravaId}
+    `;
+    return (await getUserByStravaId(stravaId))!;
+  }
+  const placeholderEmail = `strava_${stravaId}@strava.user`;
+  await sql`
+    INSERT INTO users (id, email, name, avatar_url, strava_id, session_token)
+    VALUES (${id}, ${placeholderEmail}, ${name}, ${avatarUrl}, ${stravaId}, ${sessionToken})
+  `;
+  return (await getUserByStravaId(stravaId))!;
+}
+
+export async function getUserByGoogleId(googleId: string): Promise<User | undefined> {
+  const { rows } = await sql`SELECT * FROM users WHERE google_id = ${googleId}`;
+  return rows[0] as User | undefined;
+}
+
+export async function upsertGoogleUser(
+  id: string,
+  googleId: string,
+  email: string,
+  name: string,
+  avatarUrl: string | null,
+  sessionToken: string
+): Promise<User> {
+  const existing = await getUserByGoogleId(googleId);
+  if (existing) {
+    await sql`
+      UPDATE users
+      SET session_token = ${sessionToken},
+          name = COALESCE(${name}, name),
+          avatar_url = COALESCE(${avatarUrl}, avatar_url),
+          email = COALESCE(${email}, email)
+      WHERE google_id = ${googleId}
+    `;
+    return (await getUserByGoogleId(googleId))!;
+  }
+  // Check if a user with this email already exists (e.g. from magic link)
+  const existingByEmail = await getUserByEmail(email);
+  if (existingByEmail) {
+    await sql`
+      UPDATE users
+      SET session_token = ${sessionToken},
+          google_id = ${googleId},
+          name = COALESCE(${name}, name),
+          avatar_url = COALESCE(${avatarUrl}, avatar_url)
+      WHERE email = ${email}
+    `;
+    return (await getUserByGoogleId(googleId))!;
+  }
+  await sql`
+    INSERT INTO users (id, email, name, avatar_url, google_id, session_token)
+    VALUES (${id}, ${email}, ${name}, ${avatarUrl}, ${googleId}, ${sessionToken})
+  `;
+  return (await getUserByGoogleId(googleId))!;
 }
 
 export async function updateUserProfile(
@@ -658,6 +805,204 @@ export async function getAllRoutes(page = 1, limit = 50): Promise<{ routes: Rout
   return { routes: data.rows as Route[], total: Number(count.rows[0].c) };
 }
 
+// ──── Downloads ────
+export async function trackDownload(id: string, routeId: string, userId: string): Promise<void> {
+  await sql`
+    INSERT INTO downloads (id, route_id, user_id)
+    VALUES (${id}, ${routeId}, ${userId})
+    ON CONFLICT (route_id, user_id) DO NOTHING
+  `;
+}
+
+export async function getUserDownloads(userId: string): Promise<Route[]> {
+  const { rows } = await sql`
+    SELECT r.* FROM routes r
+    JOIN downloads d ON d.route_id = r.id
+    WHERE d.user_id = ${userId}
+    ORDER BY d.created_at DESC
+  `;
+  return rows as Route[];
+}
+
+export async function getDownloadCount(routeId: string): Promise<number> {
+  const { rows } = await sql`SELECT COUNT(*) as c FROM downloads WHERE route_id = ${routeId}`;
+  return Number(rows[0].c);
+}
+
+// ──── Community Score ────
+export async function getCommunityScore(userId: string): Promise<{ score: number; tier: string }> {
+  const { rows } = await sql.query(
+    `
+    SELECT
+      COALESCE((SELECT COUNT(*) FROM routes WHERE created_by = $1), 0) as routes_uploaded,
+      COALESCE((SELECT COUNT(*) FROM ratings WHERE user_id = $1), 0) as ratings_given,
+      COALESCE((SELECT COUNT(*) FROM comments WHERE user_id = $1), 0) as comments_posted,
+      COALESCE((SELECT COUNT(*) FROM photos WHERE user_id = $1), 0) as photos_uploaded,
+      COALESCE((SELECT COUNT(*) FROM follows WHERE following_id = $1), 0) as followers,
+      COALESCE((
+        SELECT SUM(avg_score * 5)
+        FROM (
+          SELECT AVG(rt.score) as avg_score
+          FROM routes r
+          JOIN ratings rt ON rt.route_id = r.id
+          WHERE r.created_by = $1
+          GROUP BY r.id
+          HAVING COUNT(rt.id) >= 3
+        ) rated_routes
+      ), 0) as quality_bonus
+    `,
+    [userId]
+  );
+
+  const r = rows[0];
+  const base =
+    Number(r.routes_uploaded) * 10 +
+    Number(r.ratings_given) * 2 +
+    Number(r.comments_posted) * 3 +
+    Number(r.photos_uploaded) * 5 +
+    Number(r.followers) * 1;
+  const score = Math.round(base + Number(r.quality_bonus));
+
+  let tier = "Explorer";
+  if (score > 250) tier = "Legend";
+  else if (score > 100) tier = "Trailblazer";
+  else if (score > 25) tier = "Pathfinder";
+
+  return { score, tier };
+}
+
+// ──── Uploaded Routes ────
+export async function getUserUploadedRoutes(userId: string): Promise<Route[]> {
+  const { rows } = await sql`
+    SELECT r.*, COALESCE(AVG(rt.score), 0) as avg_score, COUNT(rt.id) as rating_count
+    FROM routes r
+    LEFT JOIN ratings rt ON rt.route_id = r.id
+    WHERE r.created_by = ${userId}
+    GROUP BY r.id
+    ORDER BY r.created_at DESC
+  `;
+  return rows as Route[];
+}
+
+// ──── Messages ────
+export interface Conversation {
+  id: string;
+  other_user_id: string;
+  other_user_name: string | null;
+  other_user_avatar: string | null;
+  last_message: string;
+  last_message_at: string;
+  unread: boolean;
+}
+
+export interface Message {
+  id: string;
+  conversation_id: string;
+  sender_id: string;
+  body: string;
+  created_at: string;
+}
+
+export async function getConversations(userId: string): Promise<Conversation[]> {
+  const { rows } = await sql.query(
+    `
+    SELECT
+      c.id,
+      other_p.user_id as other_user_id,
+      u.name as other_user_name,
+      u.avatar_url as other_user_avatar,
+      last_msg.body as last_message,
+      last_msg.created_at as last_message_at,
+      CASE WHEN last_msg.created_at > my_p.last_read_at THEN true ELSE false END as unread
+    FROM conversations c
+    JOIN conversation_participants my_p ON my_p.conversation_id = c.id AND my_p.user_id = $1
+    JOIN conversation_participants other_p ON other_p.conversation_id = c.id AND other_p.user_id != $1
+    JOIN users u ON u.id = other_p.user_id
+    LEFT JOIN LATERAL (
+      SELECT body, created_at FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1
+    ) last_msg ON true
+    WHERE last_msg.body IS NOT NULL
+    ORDER BY last_msg.created_at DESC
+    `,
+    [userId]
+  );
+  return rows as Conversation[];
+}
+
+export async function getOrCreateConversation(userId: string, otherUserId: string): Promise<string> {
+  // Check for existing conversation between these two users
+  const { rows: existing } = await sql.query(
+    `
+    SELECT c.id FROM conversations c
+    JOIN conversation_participants p1 ON p1.conversation_id = c.id AND p1.user_id = $1
+    JOIN conversation_participants p2 ON p2.conversation_id = c.id AND p2.user_id = $2
+    LIMIT 1
+    `,
+    [userId, otherUserId]
+  );
+
+  if (existing.length > 0) return existing[0].id;
+
+  // Create new conversation
+  const convId = require("uuid").v4();
+  await sql`INSERT INTO conversations (id) VALUES (${convId})`;
+  await sql`INSERT INTO conversation_participants (conversation_id, user_id) VALUES (${convId}, ${userId})`;
+  await sql`INSERT INTO conversation_participants (conversation_id, user_id) VALUES (${convId}, ${otherUserId})`;
+  return convId;
+}
+
+export async function getMessages(conversationId: string, userId: string, page = 1, limit = 50): Promise<Message[]> {
+  const offset = (page - 1) * limit;
+
+  // Mark as read
+  await sql`
+    UPDATE conversation_participants SET last_read_at = NOW()
+    WHERE conversation_id = ${conversationId} AND user_id = ${userId}
+  `;
+
+  const { rows } = await sql.query(
+    `SELECT * FROM messages WHERE conversation_id = $1 ORDER BY created_at ASC LIMIT $2 OFFSET $3`,
+    [conversationId, limit, offset]
+  );
+  return rows as Message[];
+}
+
+export async function sendMessage(id: string, conversationId: string, senderId: string, body: string): Promise<Message> {
+  await sql`
+    INSERT INTO messages (id, conversation_id, sender_id, body)
+    VALUES (${id}, ${conversationId}, ${senderId}, ${body})
+  `;
+
+  // Update sender's last_read_at
+  await sql`
+    UPDATE conversation_participants SET last_read_at = NOW()
+    WHERE conversation_id = ${conversationId} AND user_id = ${senderId}
+  `;
+
+  const { rows } = await sql`SELECT * FROM messages WHERE id = ${id}`;
+  return rows[0] as Message;
+}
+
+export async function isConversationParticipant(conversationId: string, userId: string): Promise<boolean> {
+  const { rows } = await sql`
+    SELECT 1 FROM conversation_participants WHERE conversation_id = ${conversationId} AND user_id = ${userId}
+  `;
+  return rows.length > 0;
+}
+
+export async function getUnreadCount(userId: string): Promise<number> {
+  const { rows } = await sql.query(
+    `
+    SELECT COUNT(DISTINCT c.id) as c
+    FROM conversations c
+    JOIN conversation_participants my_p ON my_p.conversation_id = c.id AND my_p.user_id = $1
+    JOIN messages m ON m.conversation_id = c.id AND m.created_at > my_p.last_read_at AND m.sender_id != $1
+    `,
+    [userId]
+  );
+  return Number(rows[0].c);
+}
+
 export async function getAdminStats(): Promise<{
   totalUsers: number;
   totalRoutes: number;
@@ -676,4 +1021,18 @@ export async function getAdminStats(): Promise<{
     totalComments: Number(comments.rows[0].c),
     bannedUsers: Number(banned.rows[0].c),
   };
+}
+
+// ──── Push Tokens ────
+export async function savePushToken(id: string, userId: string, token: string, platform: string) {
+  await sql`
+    INSERT INTO push_tokens (id, user_id, token, platform)
+    VALUES (${id}, ${userId}, ${token}, ${platform})
+    ON CONFLICT (user_id, token) DO NOTHING
+  `;
+}
+
+export async function getPushTokensForUser(userId: string) {
+  const result = await sql`SELECT token, platform FROM push_tokens WHERE user_id = ${userId}`;
+  return result.rows as { token: string; platform: string }[];
 }

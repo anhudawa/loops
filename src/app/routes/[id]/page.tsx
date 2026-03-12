@@ -10,6 +10,7 @@ import Comments from "@/components/Comments";
 import PhotoGallery from "@/components/PhotoGallery";
 import ConditionReports from "@/components/ConditionReports";
 import RideActions from "@/components/RideActions";
+import ShareRide from "@/components/ShareRide";
 import WeatherCard from "@/components/WeatherCard";
 
 const MapView = dynamic(() => import("@/components/MapView"), { ssr: false });
@@ -176,8 +177,9 @@ export default function RouteDetail() {
         </div>
 
         {/* Ride Actions */}
-        <div className="mb-6">
+        <div className="mb-6 flex flex-wrap items-center gap-3">
           <RideActions routeId={route.id} routeName={route.name} />
+          <ShareRide route={route} />
         </div>
 
         {/* Description & Elevation */}

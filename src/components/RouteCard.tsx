@@ -43,20 +43,12 @@ export default function RouteCard({ route, isSelected, onHover }: RouteCardProps
       >
         {/* Cover image or gradient placeholder */}
         <div className="aspect-[21/9] relative overflow-hidden">
-          {route.cover_photo ? (
-            <img
-              src={`/photos/${route.cover_photo}`}
-              alt={route.name}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div
-              className="w-full h-full flex items-center justify-center"
-              style={{ background: `linear-gradient(135deg, ${diff.bg}, var(--bg-card))` }}
-            >
-              <span className="logo-mark text-3xl opacity-[0.06]" style={{ color: diff.color }}>LOOPS</span>
-            </div>
-          )}
+          <img
+            src={route.cover_photo ? `/photos/${route.cover_photo}` : `/api/og/${route.id}`}
+            alt={route.name}
+            className="w-full h-full object-cover"
+            loading="lazy"
+          />
           {/* Difficulty badge overlaid on image */}
           <span
             className="absolute top-3 right-3 text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded neon-badge"

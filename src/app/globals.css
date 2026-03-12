@@ -1,0 +1,156 @@
+@import "tailwindcss";
+
+.wind-arrow-icon {
+  background: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+:root {
+  --bg: #0a0a0a;
+  --bg-raised: #141414;
+  --bg-card: #1a1a1a;
+  --bg-card-hover: #222222;
+  --border: #2a2a2a;
+  --border-light: #333333;
+  --text: #f5f5f5;
+  --text-secondary: #a0a0a0;
+  --text-muted: #666666;
+  --accent: #c8ff00;
+  --accent-dim: #a3cc00;
+  --accent-glow: rgba(200, 255, 0, 0.15);
+  --accent-glow-strong: rgba(200, 255, 0, 0.25);
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Outfit", system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Leaflet overrides for dark theme */
+.leaflet-container {
+  font-family: "Outfit", system-ui, -apple-system, sans-serif;
+  z-index: 0;
+}
+
+.leaflet-popup-content-wrapper {
+  border-radius: 12px;
+  background: var(--bg-card);
+  color: var(--text);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+  border: 1px solid var(--border);
+}
+
+.leaflet-popup-tip {
+  background: var(--bg-card);
+}
+
+/* Hero scroll indicator bounce */
+@keyframes hero-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(8px); }
+}
+.hero-bounce {
+  animation: hero-bounce 2s ease-in-out infinite;
+}
+
+/* Mobile filter drawer animation */
+@keyframes slide-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* Card hover lift */
+.card-hover {
+  transition: transform 0.2s cubic-bezier(0.32, 0.72, 0, 1), box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(200, 255, 0, 0.08), 0 0 0 1px rgba(200, 255, 0, 0.15);
+  border-color: rgba(200, 255, 0, 0.3) !important;
+}
+
+/* Subtle map border glow */
+.map-container {
+  position: relative;
+}
+.map-container::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background: linear-gradient(to top, var(--bg), transparent);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Difficulty stripe on cards - neon colours */
+.difficulty-stripe-easy { border-left: 3px solid #00ff88; }
+.difficulty-stripe-moderate { border-left: 3px solid #ffbb00; }
+.difficulty-stripe-hard { border-left: 3px solid #ff3355; }
+.difficulty-stripe-expert { border-left: 3px solid #bb44ff; }
+
+/* Neon glow badge */
+.neon-badge {
+  text-shadow: 0 0 8px currentColor;
+}
+
+/* Smooth focus - neon glow */
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-glow), 0 0 12px var(--accent-glow);
+  border-color: var(--accent) !important;
+}
+
+/* Accent button glow */
+.btn-accent {
+  background: var(--accent);
+  color: #0a0a0a;
+  font-weight: 700;
+  transition: all 0.2s ease;
+}
+.btn-accent:hover {
+  box-shadow: 0 0 20px var(--accent-glow-strong), 0 0 40px rgba(200, 255, 0, 0.1);
+  background: #d4ff33;
+}
+
+/* Map tiles - keep natural light colours for visibility */
+
+/* Custom scrollbar - dark */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* Gradient text utility */
+.text-gradient {
+  background: linear-gradient(135deg, var(--accent), #00ff88);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* LOOPS logo wordmark */
+.logo-mark {
+  font-family: "Outfit", system-ui, sans-serif;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  text-transform: uppercase;
+}

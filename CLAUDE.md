@@ -30,6 +30,7 @@ src/
   components/    # React components (15 files)
   lib/           # Utilities (db.ts, gpx.ts, email.ts, admin.ts, capacitor.ts)
 middleware.ts    # Auth middleware - session cookie check
+tests/           # Playwright test suite
 ```
 
 ## Database Schema (Vercel Postgres)
@@ -38,60 +39,75 @@ middleware.ts    # Auth middleware - session cookie check
 Routes have: name, description, difficulty (easy/moderate/hard/expert), distance_km, elevation_gain_m, surface_type, country, county, discipline (road/gravel/mtb), coordinates (JSON), cover_photo_url, verified flag
 
 ## Current State
-- 11 commits, built rapidly
 - Routes manually seeded by admin (no user-submitted routes yet)
-- Core features working: route discovery, filtering, maps, elevation profiles, comments, ratings, condition reports, photo galleries, ride sharing via WhatsApp, messaging, favorites, user profiles
-- Discipline filtering exists (road/gravel/mtb) but single-category per route
+- Core features built: route discovery, filtering, maps, elevation profiles, comments, ratings, condition reports, photo galleries, ride sharing via WhatsApp, messaging, favorites, user profiles
+- Discipline filtering exists but IS BROKEN (see Phase 1 below)
+- Mobile layout IS BROKEN (see Phase 1 below)
 - Countries hardcoded to Ireland/UK/USA/Spain
 - Map center hardcoded to Ireland
 
 ---
 
-## Launch Plan (Approach A: Launch-First)
+## Launch Plan
 
-### Phase 1: Technical Audit & Critical Fixes (DO FIRST)
+Full design spec: `docs/superpowers/specs/2026-03-13-loops-launch-plan-design.md`
 
-**Must Fix (blocking launch):**
-1. Error handling - API routes return generic errors, no React error boundaries. Users see white screen on failure.
-2. Input validation - GPX uploads have no file size limits or schema validation. Malformed files could crash server.
-3. Rate limiting - No protection on API endpoints. Comments/conditions can be spammed.
-4. Pagination - Comments, conditions, route lists not paginated. Breaks with real data.
+### Phase 1: Critical User-Facing Bugs (DO FIRST)
 
-**Should Fix:**
-5. Console.log cleanup - Debug logging left in FilterSidebar.tsx
-6. Hardcoded values - Countries array, map center coordinates, message polling interval (30s), input limits
-7. Optimistic UI updates - Comments/favorites require page refresh to reflect changes
-8. Error boundaries - Add React error boundary components for graceful failure
+1. **Discipline filters broken** — Clicking Road/Gravel/MTB doesn't filter routes. All 19 still show. Debug FilterSidebar.tsx + page.tsx state management.
+2. **Mobile layout broken** — At 375px, filter sidebar + map are side-by-side causing horizontal overflow. Need responsive breakpoints, collapsible filter drawer, full-width map.
+3. **Nav shows "Sign out" for logged-out users** — Check auth state in nav, conditionally render Sign in vs Sign out.
 
-**Can Wait (post-launch):**
-- Real-time features (WebSockets for messages instead of 30s polling)
-- Performance (caching, fix N+1 queries in comment/photo fetches)
-- Comprehensive test suite
-- Dark mode toggle (currently forced dark)
+### Phase 2: High Priority UX Fixes
 
-### Phase 2: Launch Polish
-- Polish existing flows (login, route browsing, route detail)
-- Mobile UX pass
-- Verify all auth flows work end-to-end (Google OAuth, magic links)
-- Admin tools for managing routes/users
+4. Route-not-found page has no branding/nav — wrap in standard layout
+5. /profile returns 404 — create the route with auth redirect
+6. Login page has ~2x viewport of empty black space below fold — CSS fix
+7. Inconsistent branding/taglines across pages — standardize
+8. Duplicate search inputs both always in DOM — hide one properly
+9. Route cards show redundant "LOOPS" text — remove or replace with useful content
 
-### Phase 3: Post-Launch Feature Roadmap (based on user feedback)
-- User-submitted routes via GPX upload (flow exists but needs polish)
-- Multi-discipline tagging (route can be both road and gravel)
-- Ride coordination (group rides, meeting points)
-- Strava integration
-- Performance & caching
+### Phase 3: Technical Hardening
+
+10. Error handling — error boundaries, standardized API errors, try/catch
+11. Input validation — GPX file size/schema, server-side comment/condition validation
+12. Rate limiting — protect API endpoints from spam
+13. Pagination — route lists, comments, conditions
+14. Code cleanup — remove console.logs, extract hardcoded values to config
+15. Optimistic UI updates — instant feedback on comments/ratings/favorites
+
+### Phase 4: Launch Polish
+
+16. Verify auth flows end-to-end (Google OAuth, magic links)
+17. Accessibility — aria-labels, form labels, map container role
+18. Footer, loading states, skeleton cards
+19. Mobile UX pass — touch targets, map interactions
+20. Admin tools — route management, moderation, stats
+
+### Phase 5: Post-Launch (based on user feedback)
+- User-submitted routes (GPX upload polish + approval workflow)
+- Multi-discipline tagging (route can be road AND gravel)
+- Search by name/region
+- Ride coordination, activity feed, Strava integration
+- Public route pages for SEO, performance, i18n
 
 ---
+
+## Test Suite
+
+62-test Playwright suite at `tests/loops-comprehensive.spec.ts`. Tests prefixed with `BUG:` are expected to fail until fixed.
+
+```bash
+npx playwright test tests/loops-comprehensive.spec.ts --project=chromium
+```
 
 ## Known Technical Debt
 - No CSRF tokens visible
 - Session management is cookie-only, no refresh token mechanism
 - No file type validation beyond extension (should check MIME type)
 - Some N+1 query patterns (comment/photo fetches)
-- No database indexes documented for filtered queries (county, difficulty + distance)
+- No database indexes documented for filtered queries
 - Locale hardcoded to "en-IE"
-- Wind overlay arrows may not render on complex polylines
 
 ## Conventions
 - App Router (not Pages Router)
@@ -99,3 +115,5 @@ Routes have: name, description, difficulty (easy/moderate/hard/expert), distance
 - API routes in src/app/api/
 - Database queries in src/lib/db.ts
 - All components in src/components/ (flat structure)
+- Config/constants should go in src/config/constants.ts
+- API responses: `{ data: T } | { error: string, code: string }`

@@ -23,6 +23,19 @@ export default function StarRating({ routeId }: { routeId: string }) {
   const handleRate = async (score: number) => {
     if (!user) return;
 
+    // Optimistic: update rating immediately
+    const prevAverage = average;
+    const prevCount = count;
+    const prevUserRating = userRating;
+    const isNew = userRating === null;
+    const newCount = isNew ? count + 1 : count;
+    const newAverage = isNew
+      ? (average * count + score) / newCount
+      : (average * count - (userRating ?? 0) + score) / count;
+    setAverage(newAverage);
+    setCount(newCount);
+    setUserRating(score);
+
     const res = await fetch(`/api/routes/${routeId}/ratings`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -34,6 +47,11 @@ export default function StarRating({ routeId }: { routeId: string }) {
       setAverage(data.average);
       setCount(data.count);
       setUserRating(data.userRating);
+    } else {
+      // Revert on failure
+      setAverage(prevAverage);
+      setCount(prevCount);
+      setUserRating(prevUserRating);
     }
   };
 

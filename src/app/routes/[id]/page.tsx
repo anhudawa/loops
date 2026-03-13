@@ -97,17 +97,27 @@ export default function RouteDetail() {
 
   const handleFollowCreator = async () => {
     if (!route?.created_by || followLoading) return;
+    // Optimistic: toggle immediately
+    const wasFollowing = isFollowingCreator;
+    setIsFollowingCreator(!wasFollowing);
     setFollowLoading(true);
     try {
-      const method = isFollowingCreator ? "DELETE" : "POST";
+      const method = wasFollowing ? "DELETE" : "POST";
       const res = await fetch(`/api/users/${route.created_by}/follow`, { method });
-      if (res.ok) setIsFollowingCreator(!isFollowingCreator);
-    } catch { /* ignore */ }
+      if (!res.ok) setIsFollowingCreator(wasFollowing);
+    } catch {
+      setIsFollowingCreator(wasFollowing);
+    }
     setFollowLoading(false);
   };
 
   const handleFavourite = async () => {
     if (favLoading || !user) return;
+    // Optimistic: toggle immediately
+    const wasFavourited = isFavourited;
+    const prevCount = favCount;
+    setIsFavourited(!wasFavourited);
+    setFavCount(wasFavourited ? prevCount - 1 : prevCount + 1);
     setFavLoading(true);
     try {
       const res = await fetch(`/api/routes/${params.id}/favourite`, { method: "POST" });
@@ -115,8 +125,14 @@ export default function RouteDetail() {
         const data = await res.json();
         setIsFavourited(data.favourited);
         setFavCount(data.count);
+      } else {
+        setIsFavourited(wasFavourited);
+        setFavCount(prevCount);
       }
-    } catch { /* ignore */ }
+    } catch {
+      setIsFavourited(wasFavourited);
+      setFavCount(prevCount);
+    }
     setFavLoading(false);
   };
 

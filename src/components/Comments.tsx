@@ -66,13 +66,28 @@ export default function Comments({ routeId }: { routeId: string }) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!body.trim()) return;
+    if (!body.trim() || !user) return;
 
+    // Optimistic: show comment immediately
+    const optimisticComment: Comment = {
+      id: `optimistic-${Date.now()}`,
+      user_id: user.id,
+      user_name: user.name,
+      user_email: user.email,
+      user_avatar: user.avatar_url ?? null,
+      body: body.trim(),
+      created_at: new Date().toISOString().replace("Z", ""),
+    };
+    const prevComments = comments;
+    const submittedBody = body.trim();
+    setComments([optimisticComment, ...comments]);
+    setBody("");
     setSubmitting(true);
+
     const res = await fetch(`/api/routes/${routeId}/comments`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ body }),
+      body: JSON.stringify({ body: submittedBody }),
     });
 
     if (res.ok) {
@@ -80,13 +95,19 @@ export default function Comments({ routeId }: { routeId: string }) {
       setComments(json.data ?? json);
       setHasMore(json.hasMore ?? false);
       setPage(1);
-      setBody("");
+    } else {
+      setComments(prevComments);
+      setBody(submittedBody);
     }
     setSubmitting(false);
   };
 
   const handleDelete = async (commentId: string) => {
+    // Optimistic: remove immediately
+    const prevComments = comments;
+    setComments(comments.filter((c) => c.id !== commentId));
     setDeletingId(commentId);
+
     const res = await fetch(`/api/routes/${routeId}/comments`, {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
@@ -98,6 +119,8 @@ export default function Comments({ routeId }: { routeId: string }) {
       setComments(json.data ?? json);
       setHasMore(json.hasMore ?? false);
       setPage(1);
+    } else {
+      setComments(prevComments);
     }
     setDeletingId(null);
   };

@@ -29,15 +29,20 @@ export default function ConditionReports({ routeId }: { routeId: string }) {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     fetch(`/api/routes/${routeId}/conditions`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error();
+        return r.json();
+      })
       .then((json) => {
         setConditions(json.data ?? json);
         setHasMore(json.hasMore ?? false);
         setPage(1);
-      });
+      })
+      .catch(() => setError(true));
   }, [routeId]);
 
   const loadMore = async () => {
@@ -162,13 +167,17 @@ export default function ConditionReports({ routeId }: { routeId: string }) {
         </form>
       )}
 
-      {!user && conditions.length === 0 && (
+      {error && (
+        <p className="text-sm text-center py-4" style={{ color: "var(--text-muted)" }}>Could not load condition reports</p>
+      )}
+
+      {!error && !user && conditions.length === 0 && (
         <p className="text-sm text-center py-4" style={{ color: "var(--text-muted)" }}>
           <Link href="/login" className="font-bold hover:opacity-80" style={{ color: "var(--accent)" }}>Sign in</Link> to report trail conditions
         </p>
       )}
 
-      {conditions.length === 0 && user && !showForm && (
+      {!error && conditions.length === 0 && user && !showForm && (
         <p className="text-sm text-center py-4" style={{ color: "var(--text-muted)" }}>No condition reports yet</p>
       )}
 

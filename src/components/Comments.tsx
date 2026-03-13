@@ -42,15 +42,20 @@ export default function Comments({ routeId }: { routeId: string }) {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     fetch(`/api/routes/${routeId}/comments`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error();
+        return r.json();
+      })
       .then((json) => {
         setComments(json.data ?? json);
         setHasMore(json.hasMore ?? false);
         setPage(1);
-      });
+      })
+      .catch(() => setError(true));
   }, [routeId]);
 
   const loadMore = async () => {
@@ -209,7 +214,9 @@ export default function Comments({ routeId }: { routeId: string }) {
       )}
 
       {/* Comments list */}
-      {comments.length === 0 ? (
+      {error ? (
+        <p className="text-sm text-center py-6" style={{ color: "var(--text-muted)" }}>Could not load comments</p>
+      ) : comments.length === 0 ? (
         <p className="text-sm text-center py-6" style={{ color: "var(--text-muted)" }}>
           No comments yet. Be the first to share your experience!
         </p>

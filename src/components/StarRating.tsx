@@ -15,14 +15,20 @@ export default function StarRating({ routeId }: { routeId: string }) {
     setIsTouchDevice("ontouchstart" in window);
   }, []);
 
+  const [error, setError] = useState(false);
+
   useEffect(() => {
     fetch(`/api/routes/${routeId}/ratings`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error();
+        return r.json();
+      })
       .then((data) => {
         setAverage(data.average);
         setCount(data.count);
         setUserRating(data.userRating);
-      });
+      })
+      .catch(() => setError(true));
   }, [routeId]);
 
   const handleRate = async (score: number) => {
@@ -61,6 +67,14 @@ export default function StarRating({ routeId }: { routeId: string }) {
   };
 
   const displayScore = hovered ?? userRating ?? 0;
+
+  if (error) {
+    return (
+      <div className="flex items-center gap-2">
+        <span className="text-sm" style={{ color: "var(--text-muted)" }}>Ratings unavailable</span>
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center gap-4">

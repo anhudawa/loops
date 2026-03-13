@@ -18,11 +18,16 @@ export default function PhotoGallery({ routeId }: { routeId: string }) {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [uploading, setUploading] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     fetch(`/api/routes/${routeId}/photos`)
-      .then((r) => r.json())
-      .then(setPhotos);
+      .then((r) => {
+        if (!r.ok) throw new Error();
+        return r.json();
+      })
+      .then(setPhotos)
+      .catch(() => setError(true));
   }, [routeId]);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -80,13 +85,17 @@ export default function PhotoGallery({ routeId }: { routeId: string }) {
         )}
       </div>
 
-      {!user && photos.length === 0 && (
+      {error && (
+        <p className="text-sm text-center py-4" style={{ color: "var(--text-muted)" }}>Could not load photos</p>
+      )}
+
+      {!error && !user && photos.length === 0 && (
         <p className="text-sm text-center py-4" style={{ color: "var(--text-muted)" }}>
           <Link href="/login" className="font-bold hover:opacity-80" style={{ color: "var(--accent)" }}>Sign in</Link> to add photos
         </p>
       )}
 
-      {photos.length === 0 && user && (
+      {!error && photos.length === 0 && user && (
         <p className="text-sm text-center py-4" style={{ color: "var(--text-muted)" }}>No photos yet. Be the first to share one!</p>
       )}
 

@@ -118,6 +118,20 @@ export async function migrateDb() {
     )
   `;
 
+  // Verified column on routes
+  await sql`ALTER TABLE routes ADD COLUMN IF NOT EXISTS verified BOOLEAN NOT NULL DEFAULT FALSE`;
+
+  // Favourites
+  await sql`
+    CREATE TABLE IF NOT EXISTS favourites (
+      id TEXT PRIMARY KEY,
+      route_id TEXT NOT NULL REFERENCES routes(id),
+      user_id TEXT NOT NULL REFERENCES users(id),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(route_id, user_id)
+    )
+  `;
+
   // Push tokens
   await sql`
     CREATE TABLE IF NOT EXISTS push_tokens (
@@ -155,6 +169,15 @@ export async function migrateDb() {
       body TEXT NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
+  `;
+
+  // Backfill orphaned routes — assign to first user (site creator)
+  await sql`
+    UPDATE routes SET created_by = (
+      SELECT id FROM users ORDER BY created_at ASC LIMIT 1
+    )
+    WHERE created_by IS NULL
+    AND EXISTS (SELECT 1 FROM users)
   `;
 }
 
@@ -222,6 +245,7 @@ export interface Comment {
   user_id: string;
   user_name: string | null;
   user_email: string;
+  user_avatar: string | null;
   body: string;
   created_at: string;
 }
@@ -331,7 +355,7 @@ export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
   // Build HAVING clauses
   const havingClauses: string[] = [];
   if (filters.verified) {
-    havingClauses.push("COUNT(rt.id) >= 3 AND COALESCE(AVG(rt.score), 0) >= 3.0");
+    havingClauses.push("(bool_or(r.verified) = true OR (COUNT(rt.id) >= 3 AND COALESCE(AVG(rt.score), 0) >= 3.0))");
   }
   if (hasLocation && filters.maxRadius !== undefined) {
     havingClauses.push(`(6371 * acos(
@@ -347,12 +371,17 @@ export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
   const query = `
     SELECT r.*, COALESCE(AVG(rt.score), 0) as avg_score, COUNT(rt.id) as rating_count,
       (SELECT p.filename FROM photos p WHERE p.route_id = r.id ORDER BY p.created_at LIMIT 1) as cover_photo,
-      CASE WHEN COUNT(rt.id) >= 3 AND COALESCE(AVG(rt.score), 0) >= 3.0 THEN 1 ELSE 0 END as is_verified
+      CASE WHEN r.verified = true OR (COUNT(rt.id) >= 3 AND COALESCE(AVG(rt.score), 0) >= 3.0) THEN 1 ELSE 0 END as is_verified,
+      u.name as creator_name, u.avatar_url as creator_avatar,
+      COALESCE((SELECT AVG(rt2.score) FROM routes r2 JOIN ratings rt2 ON rt2.route_id = r2.id WHERE r2.created_by = r.created_by), 0) as creator_rating,
+      COALESCE((SELECT COUNT(rt2.id) FROM routes r2 JOIN ratings rt2 ON rt2.route_id = r2.id WHERE r2.created_by = r.created_by), 0) as creator_rating_count,
+      (SELECT COUNT(*) FROM comments cm WHERE cm.route_id = r.id) as comment_count
       ${distanceSelect}
     FROM routes r
     LEFT JOIN ratings rt ON rt.route_id = r.id
+    LEFT JOIN users u ON u.id = r.created_by
     ${where}
-    GROUP BY r.id
+    GROUP BY r.id, u.name, u.avatar_url
     ${having}
     ORDER BY ${orderBy}
   `;
@@ -361,15 +390,21 @@ export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
   return rows as Route[];
 }
 
-export async function getRoute(id: string): Promise<(Route & { is_verified?: number }) | undefined> {
+export async function getRoute(id: string): Promise<(Route & { is_verified?: number; creator_name?: string | null; creator_avatar?: string | null; creator_rating?: number; creator_rating_count?: number }) | undefined> {
   const { rows } = await sql`
     SELECT r.*,
-      CASE WHEN (SELECT COUNT(*) FROM ratings WHERE route_id = r.id) >= 3
-        AND (SELECT COALESCE(AVG(score), 0) FROM ratings WHERE route_id = r.id) >= 3.0
-        THEN 1 ELSE 0 END as is_verified
-    FROM routes r WHERE r.id = ${id}
+      CASE WHEN r.verified = true
+        OR ((SELECT COUNT(*) FROM ratings WHERE route_id = r.id) >= 3
+            AND (SELECT COALESCE(AVG(score), 0) FROM ratings WHERE route_id = r.id) >= 3.0)
+        THEN 1 ELSE 0 END as is_verified,
+      u.name as creator_name, u.avatar_url as creator_avatar,
+      COALESCE((SELECT AVG(rt2.score) FROM routes r2 JOIN ratings rt2 ON rt2.route_id = r2.id WHERE r2.created_by = r.created_by), 0) as creator_rating,
+      COALESCE((SELECT COUNT(rt2.id) FROM routes r2 JOIN ratings rt2 ON rt2.route_id = r2.id WHERE r2.created_by = r.created_by), 0) as creator_rating_count
+    FROM routes r
+    LEFT JOIN users u ON u.id = r.created_by
+    WHERE r.id = ${id}
   `;
-  return rows[0] as (Route & { is_verified?: number }) | undefined;
+  return rows[0] as (Route & { is_verified?: number; creator_name?: string | null; creator_avatar?: string | null; creator_rating?: number; creator_rating_count?: number }) | undefined;
 }
 
 export async function insertRoute(route: Omit<Route, "created_at">): Promise<Route> {
@@ -641,7 +676,7 @@ export async function upsertRating(id: string, routeId: string, userId: string, 
 // ──── Comments ────
 export async function getRouteComments(routeId: string): Promise<Comment[]> {
   const { rows } = await sql`
-    SELECT c.id, c.route_id, c.user_id, u.name as user_name, u.email as user_email, c.body, c.created_at
+    SELECT c.id, c.route_id, c.user_id, u.name as user_name, u.email as user_email, u.avatar_url as user_avatar, c.body, c.created_at
     FROM comments c
     JOIN users u ON c.user_id = u.id
     WHERE c.route_id = ${routeId}
@@ -652,6 +687,16 @@ export async function getRouteComments(routeId: string): Promise<Comment[]> {
 
 export async function insertComment(id: string, routeId: string, userId: string, body: string): Promise<void> {
   await sql`INSERT INTO comments (id, route_id, user_id, body) VALUES (${id}, ${routeId}, ${userId}, ${body})`;
+}
+
+export async function deleteOwnComment(commentId: string, userId: string): Promise<boolean> {
+  const { rowCount } = await sql`DELETE FROM comments WHERE id = ${commentId} AND user_id = ${userId}`;
+  return (rowCount ?? 0) > 0;
+}
+
+export async function getCommentCount(routeId: string): Promise<number> {
+  const { rows } = await sql`SELECT COUNT(*) as c FROM comments WHERE route_id = ${routeId}`;
+  return Number(rows[0].c);
 }
 
 // ──── Photos ────
@@ -829,6 +874,44 @@ export async function getDownloadCount(routeId: string): Promise<number> {
   return Number(rows[0].c);
 }
 
+// ──── Favourites ────
+export async function addFavourite(id: string, routeId: string, userId: string): Promise<void> {
+  await sql`
+    INSERT INTO favourites (id, route_id, user_id)
+    VALUES (${id}, ${routeId}, ${userId})
+    ON CONFLICT (route_id, user_id) DO NOTHING
+  `;
+}
+
+export async function removeFavourite(routeId: string, userId: string): Promise<boolean> {
+  const { rowCount } = await sql`
+    DELETE FROM favourites WHERE route_id = ${routeId} AND user_id = ${userId}
+  `;
+  return (rowCount ?? 0) > 0;
+}
+
+export async function getUserFavourites(userId: string): Promise<Route[]> {
+  const { rows } = await sql`
+    SELECT r.* FROM routes r
+    JOIN favourites f ON f.route_id = r.id
+    WHERE f.user_id = ${userId}
+    ORDER BY f.created_at DESC
+  `;
+  return rows as Route[];
+}
+
+export async function isFavourited(routeId: string, userId: string): Promise<boolean> {
+  const { rows } = await sql`
+    SELECT 1 FROM favourites WHERE route_id = ${routeId} AND user_id = ${userId}
+  `;
+  return rows.length > 0;
+}
+
+export async function getFavouriteCount(routeId: string): Promise<number> {
+  const { rows } = await sql`SELECT COUNT(*) as c FROM favourites WHERE route_id = ${routeId}`;
+  return Number(rows[0].c);
+}
+
 // ──── Community Score ────
 export async function getCommunityScore(userId: string): Promise<{ score: number; tier: string }> {
   const { rows } = await sql.query(
@@ -869,6 +952,27 @@ export async function getCommunityScore(userId: string): Promise<{ score: number
   else if (score > 25) tier = "Pathfinder";
 
   return { score, tier };
+}
+
+// ──── User Loop Rating (Airbnb-style) ────
+export async function getUserLoopRating(userId: string): Promise<{ average: number; totalRatings: number; routesRated: number }> {
+  const { rows } = await sql.query(
+    `
+    SELECT
+      COALESCE(AVG(rt.score), 0) as average,
+      COUNT(rt.id) as total_ratings,
+      COUNT(DISTINCT r.id) as routes_rated
+    FROM routes r
+    JOIN ratings rt ON rt.route_id = r.id
+    WHERE r.created_by = $1
+    `,
+    [userId]
+  );
+  return {
+    average: Math.round(Number(rows[0].average) * 10) / 10,
+    totalRatings: Number(rows[0].total_ratings),
+    routesRated: Number(rows[0].routes_rated),
+  };
 }
 
 // ──── Uploaded Routes ────

@@ -44,7 +44,7 @@ const DEFAULT_FILTERS = {
 };
 
 export default function Home() {
-  const { user, logout } = useAuth();
+  const { user, logout, unreadCount } = useAuth();
   const contentRef = useRef<HTMLDivElement>(null);
   const [routes, setRoutes] = useState<Route[]>([]);
   const [regions, setRegions] = useState<string[]>([]);
@@ -177,71 +177,62 @@ export default function Home() {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {user ? (
-              <>
-                <Link
-                  href="/upload"
-                  className="btn-accent px-3 py-1.5 rounded-lg text-sm font-bold flex items-center gap-1.5"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                  </svg>
-                  <span className="hidden sm:inline">Share Loop</span>
-                </Link>
-                {user.role === "admin" && (
-                  <Link
-                    href="/admin"
-                    className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded hidden sm:inline-block hover:opacity-80"
-                    style={{ background: "rgba(255, 51, 85, 0.15)", color: "var(--danger)" }}
-                  >
-                    Admin
-                  </Link>
-                )}
-                <Link
-                  href="/messages"
-                  className="relative p-1.5 rounded-lg hover:opacity-80 transition-opacity"
-                  style={{ color: "var(--text-muted)" }}
-                  aria-label="Messages"
-                >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                  </svg>
-                </Link>
-                <Link
-                  href={`/profile/${user.id}`}
-                  className="shrink-0 hover:opacity-80 transition-opacity"
-                >
-                  <img
-                    src={user.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || user.email)}&background=1a1a1a&color=c8ff00&size=32&bold=true`}
-                    alt={user.name || user.email}
-                    className="w-7 h-7 rounded-full object-cover"
-                    style={{ border: "1.5px solid var(--border)" }}
-                  />
-                </Link>
-                <button
-                  onClick={logout}
-                  className="text-xs font-medium hidden sm:block hover:opacity-80"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  Sign out
-                </button>
-              </>
-            ) : (
-              <>
-                <Link href="/login" className="text-sm font-medium transition-colors hover:opacity-80" style={{ color: "var(--text-secondary)" }}>
-                  Sign in
-                </Link>
-                <Link
-                  href="/login"
-                  className="btn-accent px-3 py-1.5 rounded-lg text-sm font-bold flex items-center gap-1.5"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                  </svg>
-                  <span className="hidden sm:inline">Share Loop</span>
-                </Link>
-              </>
+            <Link
+              href="/upload"
+              className="btn-accent px-3 py-1.5 rounded-lg text-sm font-bold flex items-center gap-1.5"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+              <span className="hidden sm:inline">Share Loop</span>
+            </Link>
+            {user?.role === "admin" && (
+              <Link
+                href="/admin"
+                className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded hidden sm:inline-block hover:opacity-80"
+                style={{ background: "rgba(255, 51, 85, 0.15)", color: "var(--danger)" }}
+              >
+                Admin
+              </Link>
             )}
+            <Link
+              href="/messages"
+              className="relative p-1.5 rounded-lg hover:opacity-80 transition-opacity"
+              style={{ color: "var(--text-muted)" }}
+              aria-label="Messages"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+              {unreadCount > 0 && (
+                <span
+                  className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 flex items-center justify-center rounded-full text-[10px] font-bold px-1"
+                  style={{ background: "var(--danger)", color: "#fff" }}
+                >
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              )}
+            </Link>
+            {user && (
+              <Link
+                href={`/profile/${user.id}`}
+                className="shrink-0 hover:opacity-80 transition-opacity"
+              >
+                <img
+                  src={user.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || user.email)}&background=1a1a1a&color=c8ff00&size=32&bold=true`}
+                  alt={user.name || user.email}
+                  className="w-7 h-7 rounded-full object-cover"
+                  style={{ border: "1.5px solid var(--border)" }}
+                />
+              </Link>
+            )}
+            <button
+              onClick={logout}
+              className="text-xs font-medium hidden sm:block hover:opacity-80"
+              style={{ color: "var(--text-muted)" }}
+            >
+              Sign out
+            </button>
           </div>
         </div>
 
@@ -322,7 +313,7 @@ export default function Home() {
         {/* Content */}
         <div className="flex-1 flex flex-col min-w-0">
           {/* Map */}
-          <div className="h-[35vh] md:h-[45vh] map-container">
+          <div className="h-[25vh] md:h-[45vh] map-container">
             <MapView
               routes={routes}
               selectedRouteId={selectedRouteId || undefined}
@@ -331,7 +322,7 @@ export default function Home() {
           </div>
 
           {/* Route List */}
-          <div className="flex-1 overflow-y-auto p-4 md:p-5">
+          <div className="flex-1 overflow-y-auto p-3 md:p-5">
             <div className="flex items-center justify-between mb-4 gap-2">
               <div>
                 <h2 className="text-base font-extrabold tracking-tight uppercase" style={{ color: "var(--text)" }}>
@@ -415,7 +406,7 @@ export default function Home() {
                 </button>
               </div>
             ) : (
-              <div className="space-y-2.5">
+              <div className="space-y-2 md:space-y-2.5">
                 {routes.map((route) => (
                   <RouteCard
                     key={route.id}

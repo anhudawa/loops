@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getRouteComments, insertComment, getUserBySession } from "@/lib/db";
+import { getRouteComments, insertComment, deleteOwnComment, getUserBySession } from "@/lib/db";
 import { v4 as uuidv4 } from "uuid";
 
 export async function GET(
@@ -37,6 +37,36 @@ export async function POST(
   }
 
   await insertComment(uuidv4(), id, user.id, body.trim());
+  const comments = await getRouteComments(id);
+  return NextResponse.json(comments);
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const sessionToken = request.cookies.get("session")?.value;
+
+  if (!sessionToken) {
+    return NextResponse.json({ error: "Sign in required" }, { status: 401 });
+  }
+
+  const user = await getUserBySession(sessionToken);
+  if (!user) {
+    return NextResponse.json({ error: "Invalid session" }, { status: 401 });
+  }
+
+  const { commentId } = await request.json();
+  if (!commentId) {
+    return NextResponse.json({ error: "Missing commentId" }, { status: 400 });
+  }
+
+  const deleted = await deleteOwnComment(commentId, user.id);
+  if (!deleted) {
+    return NextResponse.json({ error: "Comment not found or not yours" }, { status: 403 });
+  }
+
   const comments = await getRouteComments(id);
   return NextResponse.json(comments);
 }

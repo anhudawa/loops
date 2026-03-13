@@ -27,8 +27,8 @@ export async function GET(
     }
   }
 
-  // Generate GPX from stored coordinates
-  const coordinates: [number, number][] = JSON.parse(route.coordinates);
+  // Generate GPX from stored coordinates (may be [lat,lng] or [lat,lng,ele])
+  const coordinates: number[][] = JSON.parse(route.coordinates);
   const gpx = generateGpx(route.name, route.description, coordinates);
 
   return new NextResponse(gpx, {
@@ -42,21 +42,25 @@ export async function GET(
 function generateGpx(
   name: string,
   description: string | null,
-  coordinates: [number, number][]
+  coordinates: number[][]
 ): string {
   const trkpts = coordinates
-    .map(([lat, lng]) => `      <trkpt lat="${lat}" lon="${lng}"></trkpt>`)
+    .map((coord) => {
+      const [lat, lng, ele] = coord;
+      const eleTag = ele != null ? `<ele>${ele}</ele>` : "";
+      return `      <trkpt lat="${lat}" lon="${lng}">${eleTag}</trkpt>`;
+    })
     .join("\n");
 
   return `<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="Gravel Ireland"
+<gpx version="1.1" creator="LOOPS"
   xmlns="http://www.topografix.com/GPX/1/1"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">
   <metadata>
     <name>${escapeXml(name)}</name>
-${description ? `    <desc>${escapeXml(description)}</desc>\n` : ""}    <link href="https://gravelireland.ie">
-      <text>Gravel Ireland</text>
+${description ? `    <desc>${escapeXml(description)}</desc>\n` : ""}    <link href="https://loops.ie">
+      <text>LOOPS</text>
     </link>
   </metadata>
   <trk>

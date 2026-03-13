@@ -42,6 +42,7 @@ interface UserProfile {
   routes: RouteItem[];
   uploadedRoutes: RouteItem[];
   downloadedRoutes: RouteItem[];
+  favouritedRoutes: RouteItem[];
   totalKm: number;
   followers: number;
   following: number;
@@ -50,6 +51,11 @@ interface UserProfile {
   communityScore: {
     score: number;
     tier: string;
+  };
+  loopRating: {
+    average: number;
+    totalRatings: number;
+    routesRated: number;
   };
 }
 
@@ -89,7 +95,8 @@ function timeAgo(dateStr: string): string {
   return `${months}mo ago`;
 }
 
-type Tab = "routes" | "saved" | "activity";
+type Tab = "loops" | "activity";
+type LoopFilter = "all" | "uploaded" | "downloaded" | "favourited";
 
 export default function ProfilePage() {
   const params = useParams();
@@ -99,10 +106,15 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [isFollowing, setIsFollowing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<Tab>("routes");
+  const [activeTab, setActiveTab] = useState<Tab>("loops");
+  const [loopFilter, setLoopFilter] = useState<LoopFilter>("all");
   const [activityPage, setActivityPage] = useState(1);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+  const [socialModal, setSocialModal] = useState<"followers" | "following" | null>(null);
+  const [socialList, setSocialList] = useState<{ id: string; name: string | null; avatar_url: string | null }[]>([]);
+  const [socialLoading, setSocialLoading] = useState(false);
+  const [shareToast, setShareToast] = useState(false);
 
   const isOwnProfile = currentUser?.id === params.id;
 
@@ -153,6 +165,35 @@ export default function ProfilePage() {
     } catch {
       // silently fail
     }
+  };
+
+  const openSocialList = async (type: "followers" | "following") => {
+    setSocialModal(type);
+    setSocialLoading(true);
+    setSocialList([]);
+    try {
+      const res = await fetch(`/api/users/${params.id}?include=${type}`);
+      const data = await res.json();
+      setSocialList(data.users || []);
+    } catch {
+      // ignore
+    }
+    setSocialLoading(false);
+  };
+
+  const handleShare = async () => {
+    const url = window.location.href;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: `${displayName} on LOOPS`, url });
+        return;
+      } catch {
+        // fallback to clipboard
+      }
+    }
+    await navigator.clipboard.writeText(url);
+    setShareToast(true);
+    setTimeout(() => setShareToast(false), 2000);
   };
 
   const loadMoreActivity = async () => {
@@ -215,13 +256,50 @@ export default function ProfilePage() {
 
   const displayName = profile.name || profile.email.split("@")[0];
   const avatarUrl = profile.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=1a1a1a&color=c8ff00&size=120&bold=true`;
-  const joinDate = new Date(profile.created_at + "Z").toLocaleDateString("en-IE", { month: "long", year: "numeric" });
+  const joinDate = new Date(profile.created_at).toLocaleDateString("en-IE", { month: "long", year: "numeric" });
   const tierStyle = TIER_STYLES[profile.communityScore?.tier] || TIER_STYLES.Explorer;
 
+  // Merge all loops into a deduplicated list
+  const uploaded = profile.uploadedRoutes || [];
+  const downloaded = profile.downloadedRoutes || [];
+  const favourited = profile.favouritedRoutes || [];
+
+  const allLoopsMap = new Map<string, RouteItem & { sources: Set<string> }>();
+  uploaded.forEach((r) => {
+    const existing = allLoopsMap.get(r.id);
+    if (existing) existing.sources.add("uploaded");
+    else allLoopsMap.set(r.id, { ...r, sources: new Set(["uploaded"]) });
+  });
+  downloaded.forEach((r) => {
+    const existing = allLoopsMap.get(r.id);
+    if (existing) existing.sources.add("downloaded");
+    else allLoopsMap.set(r.id, { ...r, sources: new Set(["downloaded"]) });
+  });
+  favourited.forEach((r) => {
+    const existing = allLoopsMap.get(r.id);
+    if (existing) existing.sources.add("favourited");
+    else allLoopsMap.set(r.id, { ...r, sources: new Set(["favourited"]) });
+  });
+  const allLoops = Array.from(allLoopsMap.values());
+
+  const totalLoopsCount = allLoops.length;
+
+  const filteredLoops =
+    loopFilter === "all" ? allLoops
+    : loopFilter === "uploaded" ? allLoops.filter((r) => r.sources.has("uploaded"))
+    : loopFilter === "downloaded" ? allLoops.filter((r) => r.sources.has("downloaded"))
+    : allLoops.filter((r) => r.sources.has("favourited"));
+
   const tabs: { key: Tab; label: string; count: number }[] = [
-    { key: "routes", label: "Routes", count: profile.uploadedRoutes?.length || 0 },
-    { key: "saved", label: "Saved", count: profile.downloadedRoutes?.length || 0 },
+    { key: "loops", label: "My Loops", count: totalLoopsCount },
     { key: "activity", label: "Activity", count: profile.activity?.length || 0 },
+  ];
+
+  const loopFilters: { key: LoopFilter; label: string; count: number }[] = [
+    { key: "all", label: "All", count: allLoops.length },
+    { key: "uploaded", label: "Uploaded", count: uploaded.length },
+    { key: "downloaded", label: "Downloaded", count: downloaded.length },
+    { key: "favourited", label: "Favourited", count: favourited.length },
   ];
 
   return (
@@ -260,6 +338,20 @@ export default function ProfilePage() {
                   style={{ color: tierStyle.color, background: tierStyle.bg }}
                 >
                   {tierStyle.icon} {profile.communityScore.score} · {profile.communityScore.tier}
+                </span>
+              )}
+
+              {/* Loop Rating */}
+              {profile.loopRating && profile.loopRating.average > 0 && (
+                <span
+                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold"
+                  style={{ color: "var(--warning)", background: "rgba(255, 187, 0, 0.1)" }}
+                >
+                  <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                  </svg>
+                  {profile.loopRating.average.toFixed(1)} Loop Rating
+                  <span style={{ opacity: 0.6 }}>({profile.loopRating.totalRatings})</span>
                 </span>
               )}
             </div>
@@ -321,6 +413,16 @@ export default function ProfilePage() {
                   </button>
                 </>
               )}
+              <button
+                onClick={handleShare}
+                className="p-1.5 rounded-full hover:opacity-80 transition-opacity"
+                style={{ border: "1px solid var(--border)", color: "var(--text-muted)" }}
+                aria-label="Share profile"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                </svg>
+              </button>
             </div>
           </div>
         </div>
@@ -332,10 +434,15 @@ export default function ProfilePage() {
             { label: "Rated", value: profile.stats.routesRated, color: "var(--warning)" },
             { label: "Reports", value: profile.stats.conditionsReported, color: "var(--success)" },
             { label: "Photos", value: profile.stats.photosUploaded, color: "var(--purple)" },
-            { label: "Followers", value: profile.followers, color: "var(--text)" },
-            { label: "Following", value: profile.following, color: "var(--text)" },
+            { label: "Followers", value: profile.followers, color: "var(--text)", action: () => openSocialList("followers") },
+            { label: "Following", value: profile.following, color: "var(--text)", action: () => openSocialList("following") },
           ].map((stat) => (
-            <div key={stat.label} className="rounded-xl p-3 text-center" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+            <div
+              key={stat.label}
+              className={`rounded-xl p-3 text-center${("action" in stat) ? " cursor-pointer hover:opacity-80 transition-opacity" : ""}`}
+              style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+              onClick={"action" in stat ? (stat as { action: () => void }).action : undefined}
+            >
               <p className="text-lg font-extrabold" style={{ color: stat.color }}>{stat.value}</p>
               <p className="text-[9px] uppercase tracking-wider font-bold mt-0.5" style={{ color: "var(--text-muted)" }}>{stat.label}</p>
             </div>
@@ -362,80 +469,68 @@ export default function ProfilePage() {
 
         {/* Tab Content */}
         <div className="rounded-2xl p-5 md:p-6" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-          {/* Routes tab (uploaded) */}
-          {activeTab === "routes" && (
+          {/* My Loops tab */}
+          {activeTab === "loops" && (
             <>
-              <h2 className="text-xs font-extrabold uppercase tracking-wider mb-4" style={{ color: "var(--text-secondary)" }}>
-                {isOwnProfile ? "My Routes" : "Uploaded Routes"}
-              </h2>
-              {(!profile.uploadedRoutes || profile.uploadedRoutes.length === 0) ? (
-                <div className="text-center py-8">
-                  <p className="text-sm mb-2" style={{ color: "var(--text-muted)" }}>No routes uploaded yet</p>
-                  {isOwnProfile && (
-                    <Link href="/upload" className="text-xs font-bold hover:opacity-80" style={{ color: "var(--accent)" }}>
-                      Upload your first route →
-                    </Link>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-1">
-                  {profile.uploadedRoutes.map((route) => {
-                    const diff = DIFFICULTY_STYLES[route.difficulty] || DIFFICULTY_STYLES.easy;
-                    return (
-                      <Link key={route.id} href={`/routes/${route.id}`}>
-                        <div className="flex items-center justify-between p-3 rounded-xl hover-row">
-                          <div>
-                            <p className="font-bold tracking-tight" style={{ color: "var(--text)" }}>{route.name}</p>
-                            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                              {route.region || route.county}{route.country ? `, ${route.country}` : ""} — {route.distance_km} km
-                              {route.avg_score ? ` · ★ ${Number(route.avg_score).toFixed(1)}` : ""}
-                            </p>
-                          </div>
-                          <span
-                            className="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-lg capitalize neon-badge"
-                            style={{ color: diff.color, background: diff.bg }}
-                          >
-                            {route.difficulty}
-                          </span>
-                        </div>
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </>
-          )}
+              {/* Filter pills */}
+              <div className="flex gap-2 mb-4 flex-wrap">
+                {loopFilters.map((f) => (
+                  <button
+                    key={f.key}
+                    onClick={() => setLoopFilter(f.key)}
+                    className="px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all"
+                    style={{
+                      background: loopFilter === f.key ? "var(--accent-glow)" : "transparent",
+                      color: loopFilter === f.key ? "var(--accent)" : "var(--text-muted)",
+                      border: loopFilter === f.key ? "1px solid rgba(200, 255, 0, 0.2)" : "1px solid var(--border)",
+                    }}
+                  >
+                    {f.label} <span style={{ opacity: 0.6 }}>({f.count})</span>
+                  </button>
+                ))}
+              </div>
 
-          {/* Saved tab (downloaded) */}
-          {activeTab === "saved" && (
-            <>
-              <h2 className="text-xs font-extrabold uppercase tracking-wider mb-4" style={{ color: "var(--text-secondary)" }}>
-                {isOwnProfile ? "Saved Routes" : "Downloaded Routes"}
-              </h2>
-              {(!profile.downloadedRoutes || profile.downloadedRoutes.length === 0) ? (
+              {filteredLoops.length === 0 ? (
                 <div className="text-center py-8">
-                  <p className="text-sm mb-2" style={{ color: "var(--text-muted)" }}>No routes saved yet</p>
-                  {isOwnProfile && (
-                    <Link href="/" className="text-xs font-bold hover:opacity-80" style={{ color: "var(--accent)" }}>
-                      Browse routes →
+                  <p className="text-sm mb-2" style={{ color: "var(--text-muted)" }}>
+                    {loopFilter === "all" ? "No loops yet" : `No ${loopFilter} loops`}
+                  </p>
+                  {isOwnProfile && loopFilter === "all" && (
+                    <Link href="/upload" className="text-xs font-bold hover:opacity-80" style={{ color: "var(--accent)" }}>
+                      Upload your first loop →
                     </Link>
                   )}
                 </div>
               ) : (
                 <div className="space-y-1">
-                  {profile.downloadedRoutes.map((route) => {
+                  {filteredLoops.map((route) => {
                     const diff = DIFFICULTY_STYLES[route.difficulty] || DIFFICULTY_STYLES.easy;
                     return (
                       <Link key={route.id} href={`/routes/${route.id}`}>
                         <div className="flex items-center justify-between p-3 rounded-xl hover-row">
-                          <div>
-                            <p className="font-bold tracking-tight" style={{ color: "var(--text)" }}>{route.name}</p>
-                            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                              {route.region || route.county}{route.country ? `, ${route.country}` : ""} — {route.distance_km} km
-                            </p>
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            {/* Source icons */}
+                            <div className="flex gap-0.5 shrink-0">
+                              {route.sources.has("uploaded") && (
+                                <span title="Uploaded" className="text-[11px]" style={{ color: "var(--accent)" }}>↑</span>
+                              )}
+                              {route.sources.has("downloaded") && (
+                                <span title="Downloaded" className="text-[11px]" style={{ color: "var(--success)" }}>↓</span>
+                              )}
+                              {route.sources.has("favourited") && (
+                                <span title="Favourited" className="text-[11px]" style={{ color: "var(--danger)" }}>♥</span>
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-bold tracking-tight truncate" style={{ color: "var(--text)" }}>{route.name}</p>
+                              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                                {route.region || route.county}{route.country ? `, ${route.country}` : ""} — {route.distance_km} km
+                                {Number(route.avg_score) > 0 ? ` · ★ ${Number(route.avg_score).toFixed(1)}` : ""}
+                              </p>
+                            </div>
                           </div>
                           <span
-                            className="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-lg capitalize neon-badge"
+                            className="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-lg capitalize neon-badge shrink-0 ml-2"
                             style={{ color: diff.color, background: diff.bg }}
                           >
                             {route.difficulty}
@@ -500,6 +595,79 @@ export default function ProfilePage() {
           )}
         </div>
       </div>
+
+      {/* Followers/Following Modal */}
+      {socialModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setSocialModal(null)} aria-hidden="true" />
+          <div
+            className="relative w-full max-w-sm mx-4 rounded-2xl max-h-[70vh] flex flex-col"
+            style={{ background: "var(--bg-raised)", border: "1px solid var(--border)" }}
+          >
+            <div className="flex items-center justify-between p-4 border-b" style={{ borderColor: "var(--border)" }}>
+              <h3 className="text-sm font-extrabold uppercase tracking-wider" style={{ color: "var(--text)" }}>
+                {socialModal === "followers" ? "Followers" : "Following"}
+              </h3>
+              <button
+                onClick={() => setSocialModal(null)}
+                className="p-1 rounded-full hover:opacity-80"
+                style={{ color: "var(--text-muted)" }}
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="overflow-y-auto p-4">
+              {socialLoading ? (
+                <div className="space-y-3">
+                  {[...Array(3)].map((_, i) => (
+                    <div key={i} className="flex items-center gap-3 animate-pulse">
+                      <div className="w-10 h-10 rounded-full skeleton" />
+                      <div className="h-4 w-28 skeleton rounded" />
+                    </div>
+                  ))}
+                </div>
+              ) : socialList.length === 0 ? (
+                <p className="text-center text-sm py-6" style={{ color: "var(--text-muted)" }}>
+                  {socialModal === "followers" ? "No followers yet" : "Not following anyone"}
+                </p>
+              ) : (
+                <div className="space-y-1">
+                  {socialList.map((u) => (
+                    <Link
+                      key={u.id}
+                      href={`/profile/${u.id}`}
+                      onClick={() => setSocialModal(null)}
+                      className="flex items-center gap-3 p-2.5 rounded-xl hover-row"
+                    >
+                      <img
+                        src={u.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name || "User")}&background=1a1a1a&color=c8ff00&size=40&bold=true`}
+                        alt={u.name || "User"}
+                        className="w-10 h-10 rounded-full object-cover"
+                        style={{ border: "1.5px solid var(--border)" }}
+                      />
+                      <span className="font-bold text-sm" style={{ color: "var(--text)" }}>
+                        {u.name || "Anonymous"}
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Share toast */}
+      {shareToast && (
+        <div
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-xl text-sm font-bold shadow-lg"
+          style={{ background: "var(--accent)", color: "#000" }}
+        >
+          Link copied!
+        </div>
+      )}
     </div>
   );
 }

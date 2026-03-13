@@ -43,9 +43,15 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  // Get authenticated user from session cookie
+  // Require authenticated user
   const sessionToken = request.cookies.get("session")?.value;
-  const currentUser = sessionToken ? await getUserBySession(sessionToken) : null;
+  if (!sessionToken) {
+    return NextResponse.json({ error: "Sign in to upload routes" }, { status: 401 });
+  }
+  const currentUser = await getUserBySession(sessionToken);
+  if (!currentUser) {
+    return NextResponse.json({ error: "Sign in to upload routes" }, { status: 401 });
+  }
 
   const formData = await request.formData();
   const gpxFile = formData.get("gpx") as File | null;
@@ -65,14 +71,17 @@ export async function POST(request: NextRequest) {
   if (gpxFile) {
     const gpxText = await gpxFile.text();
     const parsed = parseGpx(gpxText);
-    const coordinates = parsed.coordinates;
-    const distance_km = parsed.distance_km;
-    const elevation_gain_m = parsed.elevation_gain_m;
-    const elevation_loss_m = parsed.elevation_loss_m;
+    const { coordinates, elevations, distance_km, elevation_gain_m, elevation_loss_m } = parsed;
 
     if (coordinates.length === 0) {
       return NextResponse.json({ error: "Could not parse GPX file - no track points found" }, { status: 400 });
     }
+
+    // Store coordinates with elevations: [lat, lng, elevation]
+    const coordsWithElevation = coordinates.map((coord, i) => {
+      const ele = elevations[i] ?? 0;
+      return [coord[0], coord[1], Math.round(ele * 10) / 10];
+    });
 
     const id = uuidv4();
 
@@ -92,8 +101,8 @@ export async function POST(request: NextRequest) {
       start_lat: coordinates[0][0],
       start_lng: coordinates[0][1],
       gpx_filename: null,
-      coordinates: JSON.stringify(coordinates),
-      created_by: currentUser?.id || null,
+      coordinates: JSON.stringify(coordsWithElevation),
+      created_by: currentUser.id,
     });
 
     return NextResponse.json(route, { status: 201 });

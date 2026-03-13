@@ -39,7 +39,7 @@ export function CapacitorProvider({ children }: { children: ReactNode }) {
       try {
         const { App } = await import("@capacitor/app");
         App.addListener("appUrlOpen", ({ url }) => {
-          if (url.includes("/api/auth/strava/callback") || url.includes("/routes/")) {
+          if (url.includes("/api/auth/google/callback") || url.includes("/routes/")) {
             // Extract the path and navigate within the webview
             const urlObj = new URL(url);
             window.location.href = urlObj.pathname + urlObj.search;

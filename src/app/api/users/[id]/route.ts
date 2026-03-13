@@ -6,12 +6,16 @@ import {
   getUserTotalKm,
   getFollowerCount,
   getFollowingCount,
+  getFollowers,
+  getFollowing,
   isFollowing,
   getUserBySession,
   getUserActivityFeed,
   getUserUploadedRoutes,
   getUserDownloads,
+  getUserFavourites,
   getCommunityScore,
+  getUserLoopRating,
   migrateDb,
 } from "@/lib/db";
 
@@ -28,7 +32,18 @@ export async function GET(
 
   await migrateDb();
 
-  const [stats, routes, totalKm, followers, following, activity, uploadedRoutes, downloadedRoutes, communityScore] = await Promise.all([
+  // Optional: return followers/following lists
+  const include = request.nextUrl.searchParams.get("include");
+  if (include === "followers") {
+    const list = await getFollowers(id);
+    return NextResponse.json({ users: list.map((u) => ({ id: u.id, name: u.name, avatar_url: u.avatar_url })) });
+  }
+  if (include === "following") {
+    const list = await getFollowing(id);
+    return NextResponse.json({ users: list.map((u) => ({ id: u.id, name: u.name, avatar_url: u.avatar_url })) });
+  }
+
+  const [stats, routes, totalKm, followers, following, activity, uploadedRoutes, downloadedRoutes, favouritedRoutes, communityScore, loopRating] = await Promise.all([
     getUserStats(id),
     getUserRoutes(id),
     getUserTotalKm(id),
@@ -37,7 +52,9 @@ export async function GET(
     getUserActivityFeed(id, 1, 20),
     getUserUploadedRoutes(id),
     getUserDownloads(id),
+    getUserFavourites(id),
     getCommunityScore(id),
+    getUserLoopRating(id),
   ]);
 
   // Check if current viewer is following this user
@@ -68,6 +85,8 @@ export async function GET(
     viewerFollowing,
     uploadedRoutes,
     downloadedRoutes,
+    favouritedRoutes,
     communityScore,
+    loopRating,
   });
 }

@@ -5,18 +5,21 @@ import { CapacitorProvider } from "@/components/CapacitorProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "LOOPS - Discover Cycling Routes",
-  description: "Find and share the best road, gravel, and MTB loops. Upload GPX files, rate routes, and explore rides worldwide.",
+  title: "LOOPS - Discover & Share Cycling Routes",
+  description: "Find and share the best road, gravel, and MTB loops worldwide. Upload GPX files, rate routes, and discover new rides near you. Built by riders, for riders.",
+  keywords: ["cycling routes", "gravel cycling", "GPX", "bike routes", "MTB trails", "road cycling", "route sharing", "cycling community"],
   openGraph: {
-    title: "LOOPS - Discover Cycling Routes",
-    description: "Find and share the best road, gravel, and MTB loops worldwide",
+    title: "LOOPS - Stop Riding The Same Loop",
+    description: "Discover and share the best gravel, road & MTB loops worldwide. Built by riders, for riders.",
     siteName: "LOOPS",
     type: "website",
+    images: [{ url: "/api/og", width: 1200, height: 630, alt: "LOOPS — Discover cycling routes worldwide" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "LOOPS",
-    description: "Discover cycling loops worldwide — road, gravel, and MTB",
+    title: "LOOPS - Stop Riding The Same Loop",
+    description: "Discover and share the best gravel, road & MTB loops worldwide. Built by riders, for riders.",
+    images: ["/api/og"],
   },
 };
 

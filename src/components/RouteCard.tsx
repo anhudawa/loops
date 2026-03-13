@@ -19,6 +19,12 @@ interface RouteCardProps {
     cover_photo?: string | null;
     is_verified?: number;
     distance_km_away?: number;
+    created_by?: string | null;
+    creator_name?: string | null;
+    creator_avatar?: string | null;
+    creator_rating?: number;
+    creator_rating_count?: number;
+    comment_count?: number;
   };
   isSelected?: boolean;
   onHover?: (id: string | null) => void;
@@ -61,7 +67,7 @@ export default function RouteCard({ route, isSelected, onHover, showDistance }: 
         onMouseLeave={() => onHover?.(null)}
       >
         {/* Cover image */}
-        <div className="aspect-[21/9] relative overflow-hidden" style={{ background: "var(--bg-raised)" }}>
+        <div className="aspect-[3/1] md:aspect-[21/9] relative overflow-hidden" style={{ background: "var(--bg-raised)" }}>
           {!imgError ? (
             <img
               src={route.cover_photo ? `/photos/${route.cover_photo}` : `/api/og/${route.id}`}
@@ -78,8 +84,8 @@ export default function RouteCard({ route, isSelected, onHover, showDistance }: 
             </div>
           )}
 
-          {/* Badges */}
-          <div className="absolute top-3 right-3 flex items-center gap-1.5">
+          {/* Badges — only on desktop, OG image already has them */}
+          <div className="absolute top-3 right-3 hidden md:flex items-center gap-1.5">
             {discipline && (
               <span
                 className="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded neon-badge"
@@ -109,36 +115,112 @@ export default function RouteCard({ route, isSelected, onHover, showDistance }: 
           )}
         </div>
 
-        {/* Content */}
-        <div className="p-4">
-          <div className="flex items-center gap-1.5 mb-1">
-            <h3 className="font-bold tracking-tight" style={{ color: "var(--text)" }}>{route.name}</h3>
-            {route.is_verified === 1 && (
-              <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="var(--success)" aria-label="Verified route">
-                <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-              </svg>
-            )}
+        {/* Content — compact on mobile (OG image has name/stats), full on desktop */}
+        <div className="p-2.5 md:p-4">
+          {/* Mobile: just location + creator row (OG image already shows name, stats, badges) */}
+          <div className="md:hidden">
+            <div className="flex items-center justify-between">
+              <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                {locationText}{countryText}
+              </span>
+              {route.creator_name && (
+                <span className="flex items-center gap-1.5">
+                  {route.creator_avatar ? (
+                    <img src={route.creator_avatar} alt="" className="w-4 h-4 rounded-full object-cover" />
+                  ) : (
+                    <span
+                      className="w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold"
+                      style={{ background: "var(--bg-raised)", color: "var(--text-muted)" }}
+                    >
+                      {route.creator_name.charAt(0).toUpperCase()}
+                    </span>
+                  )}
+                  <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>{route.creator_name}</span>
+                  {route.creator_rating !== undefined && Number(route.creator_rating) > 0 && (
+                    <span className="flex items-center gap-0.5 text-[11px]" style={{ color: "var(--text-muted)" }}>
+                      <svg className="w-3 h-3" viewBox="0 0 24 24" fill="var(--warning)" aria-hidden="true">
+                        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                      </svg>
+                      {(Math.round(Number(route.creator_rating) * 10) / 10).toFixed(1)}
+                    </span>
+                  )}
+                </span>
+              )}
+            </div>
           </div>
 
-          {route.description && (
-            <p className="text-[13px] mb-3 line-clamp-2 leading-relaxed" style={{ color: "var(--text-muted)" }}>{route.description}</p>
-          )}
+          {/* Desktop: full content */}
+          <div className="hidden md:block">
+            <div className="flex items-center gap-1.5 mb-1">
+              <h3 className="font-bold tracking-tight" style={{ color: "var(--text)" }}>{route.name}</h3>
+              {route.is_verified === 1 && (
+                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="var(--success)" aria-label="Verified route">
+                  <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+              )}
+            </div>
 
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" style={{ color: "var(--text-muted)" }}>
-            <span className="flex items-center gap-1 font-bold" style={{ color: "var(--accent)" }}>
-              {route.distance_km} km
-            </span>
-            <span style={{ color: "var(--border-light)" }} aria-hidden="true">|</span>
-            <span className="flex items-center gap-1">
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" />
-              </svg>
-              {route.elevation_gain_m}m
-            </span>
-            <span style={{ color: "var(--border-light)" }} aria-hidden="true">|</span>
-            <span className="capitalize">{route.surface_type}</span>
-            <span style={{ color: "var(--border-light)" }} aria-hidden="true">|</span>
-            <span>{locationText}{countryText}</span>
+            {route.description && (
+              <p className="text-[13px] mb-3 line-clamp-2 leading-relaxed" style={{ color: "var(--text-muted)" }}>{route.description}</p>
+            )}
+
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" style={{ color: "var(--text-muted)" }}>
+              <span className="flex items-center gap-1 font-bold" style={{ color: "var(--accent)" }}>
+                {route.distance_km} km
+              </span>
+              <span style={{ color: "var(--border-light)" }} aria-hidden="true">|</span>
+              <span className="flex items-center gap-1">
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                </svg>
+                {route.elevation_gain_m}m
+              </span>
+              <span style={{ color: "var(--border-light)" }} aria-hidden="true">|</span>
+              <span className="capitalize">{route.surface_type}</span>
+              <span style={{ color: "var(--border-light)" }} aria-hidden="true">|</span>
+              <span>{locationText}{countryText}</span>
+            </div>
+
+            {/* Creator */}
+            {route.creator_name && (
+              <div className="flex items-center gap-2 mt-3 pt-3" style={{ borderTop: "1px solid var(--border)" }}>
+                {route.creator_avatar ? (
+                  <img
+                    src={route.creator_avatar}
+                    alt=""
+                    className="w-5 h-5 rounded-full object-cover"
+                  />
+                ) : (
+                  <div
+                    className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold"
+                    style={{ background: "var(--bg-raised)", color: "var(--text-muted)" }}
+                  >
+                    {route.creator_name.charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <span className="text-[11px] truncate flex-1" style={{ color: "var(--text-muted)" }}>
+                  {route.creator_name}
+                </span>
+                <span className="flex items-center gap-2 shrink-0 ml-auto">
+                  {route.comment_count !== undefined && Number(route.comment_count) > 0 && (
+                    <span className="flex items-center gap-0.5 text-[11px]" style={{ color: "var(--text-muted)" }}>
+                      <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                      </svg>
+                      {route.comment_count}
+                    </span>
+                  )}
+                  {route.creator_rating !== undefined && Number(route.creator_rating) > 0 && (
+                    <span className="flex items-center gap-0.5 text-[11px]" style={{ color: "var(--text-muted)" }}>
+                      <svg className="w-3 h-3" viewBox="0 0 24 24" fill="var(--warning)" aria-hidden="true">
+                        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                      </svg>
+                      {(Math.round(Number(route.creator_rating) * 10) / 10).toFixed(1)}
+                    </span>
+                  )}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </div>

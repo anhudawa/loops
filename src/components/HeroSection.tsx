@@ -43,7 +43,7 @@ export default function HeroSection({ onExplore }: { onExplore: () => void }) {
 
   return (
     <section
-      className="min-h-[85vh] flex flex-col items-center justify-center relative overflow-hidden px-4"
+      className="min-h-[60vh] md:min-h-[85vh] flex flex-col items-center justify-center relative overflow-hidden px-4"
       style={{ background: "var(--bg)" }}
     >
       {/* Background effects */}
@@ -84,14 +84,14 @@ export default function HeroSection({ onExplore }: { onExplore: () => void }) {
           Stop Riding The Same Loop
         </h1>
         <p
-          className="text-base md:text-lg mb-10 max-w-md mx-auto"
+          className="text-sm md:text-lg mb-6 md:mb-10 max-w-md mx-auto"
           style={{ color: "var(--text-muted)" }}
         >
           Discover and share the best road, gravel, and MTB loops worldwide. Built by riders, for riders.
         </p>
 
         {/* CTAs */}
-        <div className="flex items-center justify-center gap-3 mb-14">
+        <div className="flex items-center justify-center gap-3 mb-8 md:mb-14">
           <button
             onClick={onExplore}
             className="btn-accent px-8 py-3.5 rounded-xl font-bold text-sm uppercase tracking-wider"

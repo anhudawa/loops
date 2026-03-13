@@ -534,8 +534,10 @@ function LoginPage() {
               <span className="text-xs" style={{ color: "var(--text-muted)" }}>Built by riders, for riders</span>
             </div>
             <div className="flex items-center gap-5 text-xs" style={{ color: "var(--text-muted)" }}>
-              <a href="mailto:hello@loops.ie" className="hover:opacity-80 transition-opacity">Contact</a>
+              <a href="/about" className="hover:opacity-80 transition-opacity">About</a>
               <a href="/privacy" className="hover:opacity-80 transition-opacity">Privacy</a>
+              <a href="/terms" className="hover:opacity-80 transition-opacity">Terms</a>
+              <a href="mailto:hello@loops.ie" className="hover:opacity-80 transition-opacity">Contact</a>
             </div>
           </div>
           <div className="flex flex-col md:flex-row items-center justify-between gap-2 mt-6 pt-6 border-t" style={{ borderColor: "var(--border)" }}>

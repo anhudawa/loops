@@ -94,13 +94,13 @@ export default function HeroSection({ onExplore }: { onExplore: () => void }) {
         <div className="flex items-center justify-center gap-3 mb-8 md:mb-14">
           <button
             onClick={onExplore}
-            className="btn-accent px-8 py-3.5 rounded-xl font-bold text-sm uppercase tracking-wider"
+            className="btn-accent px-5 md:px-8 py-3 md:py-3.5 rounded-xl font-bold text-xs md:text-sm uppercase tracking-wider whitespace-nowrap"
           >
             Explore Loops
           </button>
           <Link
             href="/upload"
-            className="px-8 py-3.5 rounded-xl font-bold text-sm uppercase tracking-wider transition-all hover:border-[rgba(200,255,0,0.5)]"
+            className="px-5 md:px-8 py-3 md:py-3.5 rounded-xl font-bold text-xs md:text-sm uppercase tracking-wider transition-all hover:border-[rgba(200,255,0,0.5)] whitespace-nowrap"
             style={{
               border: "1px solid var(--border-light)",
               color: "var(--text-secondary)",

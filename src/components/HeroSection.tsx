@@ -10,12 +10,15 @@ interface Stats {
   countries: number;
 }
 
+const STATS_ANIMATED_KEY = "stats-animated";
+
 function AnimatedNumber({ target, duration = 1500 }: { target: number; duration?: number }) {
-  const [current, setCurrent] = useState(0);
+  const shouldSkip = target < 5 || (typeof window !== "undefined" && sessionStorage.getItem(STATS_ANIMATED_KEY) === "1");
+  const [current, setCurrent] = useState(shouldSkip ? target : 0);
   const startTime = useRef<number | null>(null);
 
   useEffect(() => {
-    if (target === 0) return;
+    if (target === 0 || shouldSkip) return;
     startTime.current = null;
 
     const animate = (timestamp: number) => {
@@ -23,11 +26,15 @@ function AnimatedNumber({ target, duration = 1500 }: { target: number; duration?
       const progress = Math.min((timestamp - startTime.current) / duration, 1);
       const eased = 1 - Math.pow(1 - progress, 3);
       setCurrent(Math.round(eased * target));
-      if (progress < 1) requestAnimationFrame(animate);
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        sessionStorage.setItem(STATS_ANIMATED_KEY, "1");
+      }
     };
 
     requestAnimationFrame(animate);
-  }, [target, duration]);
+  }, [target, duration, shouldSkip]);
 
   return <>{current.toLocaleString()}</>;
 }
@@ -142,6 +149,7 @@ export default function HeroSection({ onExplore }: { onExplore: () => void }) {
         onClick={onExplore}
         className="absolute bottom-8 left-1/2 -translate-x-1/2 hero-bounce"
         style={{ color: "var(--text-muted)" }}
+        aria-label="Scroll to routes"
       >
         <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />

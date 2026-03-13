@@ -24,11 +24,28 @@ src/
     api/         # API routes (auth, routes, messages, profile, stats, push)
     login/       # Login page (landing)
     messages/    # User messaging
-    profile/     # User profiles & favorites
+    profile/     # User profile redirect (→ /profile/[id] or /login)
     routes/[id]/ # Route detail pages
-    upload/      # GPX upload
-  components/    # React components (15 files)
-  lib/           # Utilities (db.ts, gpx.ts, email.ts, admin.ts, capacitor.ts)
+    upload/      # Route upload (GPX, FIT, TCX, RideWithGPS URL)
+  components/    # React components
+    Footer.tsx         # Site-wide footer
+    SkeletonCard.tsx   # Loading skeleton for route cards
+    FilterSidebar.tsx  # Discipline/country/distance filters with mobile drawer
+    RouteCard.tsx      # Route card display
+    MapView.tsx        # Leaflet map with route markers
+    HeroSection.tsx    # Landing hero with CTAs
+    + 10 more components
+  lib/           # Utilities
+    db.ts              # All database queries (single source of truth)
+    gpx.ts             # GPX file parsing
+    fit.ts             # FIT file parsing
+    tcx.ts             # TCX file parsing
+    ridewithgps.ts     # RideWithGPS URL import
+    route-parser.ts    # Unified route file parser (dispatches to gpx/fit/tcx)
+    geo-utils.ts       # Geospatial utilities
+    email.ts           # Resend email
+    admin.ts           # Admin functions
+    capacitor.ts       # Mobile bridge
 middleware.ts    # Auth middleware - session cookie check
 tests/           # Playwright test suite
 ```
@@ -38,13 +55,16 @@ tests/           # Playwright test suite
 
 Routes have: name, description, difficulty (easy/moderate/hard/expert), distance_km, elevation_gain_m, surface_type, country, county, discipline (road/gravel/mtb), coordinates (JSON), cover_photo_url, verified flag
 
-## Current State
-- Routes manually seeded by admin (no user-submitted routes yet)
-- Core features built: route discovery, filtering, maps, elevation profiles, comments, ratings, condition reports, photo galleries, ride sharing via WhatsApp, messaging, favorites, user profiles
-- Discipline filtering exists but IS BROKEN (see Phase 1 below)
-- Mobile layout IS BROKEN (see Phase 1 below)
-- Countries hardcoded to Ireland/UK/USA/Spain
-- Map center hardcoded to Ireland
+## Current State (dev branch)
+- All 18 items from site audit fixed (commit c41112a)
+- Discipline filters working (15 road, 4 gravel routes)
+- Mobile layout working (filter drawer, responsive stacking, full-width map)
+- Nav auth state correct (Sign in vs Sign out)
+- Profile redirect working (/profile → /profile/[id] or /login)
+- Footer, skeleton loading cards, accessibility labels added
+- Upload expanded: GPX, FIT, TCX files + RideWithGPS URL import
+- Consistent branding and titles across pages
+- Canonical URLs and SEO meta tags
 
 ---
 
@@ -52,40 +72,26 @@ Routes have: name, description, difficulty (easy/moderate/hard/expert), distance
 
 Full design spec: `docs/superpowers/specs/2026-03-13-loops-launch-plan-design.md`
 
-### Phase 1: Critical User-Facing Bugs (DO FIRST)
+### Completed (Phase 1 & 2)
+All critical bugs and high-priority UX fixes from the site audit are done on `dev`.
 
-1. **Discipline filters broken** — Clicking Road/Gravel/MTB doesn't filter routes. All 19 still show. Debug FilterSidebar.tsx + page.tsx state management.
-2. **Mobile layout broken** — At 375px, filter sidebar + map are side-by-side causing horizontal overflow. Need responsive breakpoints, collapsible filter drawer, full-width map.
-3. **Nav shows "Sign out" for logged-out users** — Check auth state in nav, conditionally render Sign in vs Sign out.
+### Phase 3: Technical Hardening (NEXT)
 
-### Phase 2: High Priority UX Fixes
-
-4. Route-not-found page has no branding/nav — wrap in standard layout
-5. /profile returns 404 — create the route with auth redirect
-6. Login page has ~2x viewport of empty black space below fold — CSS fix
-7. Inconsistent branding/taglines across pages — standardize
-8. Duplicate search inputs both always in DOM — hide one properly
-9. Route cards show redundant "LOOPS" text — remove or replace with useful content
-
-### Phase 3: Technical Hardening
-
-10. Error handling — error boundaries, standardized API errors, try/catch
-11. Input validation — GPX file size/schema, server-side comment/condition validation
-12. Rate limiting — protect API endpoints from spam
-13. Pagination — route lists, comments, conditions
-14. Code cleanup — remove console.logs, extract hardcoded values to config
-15. Optimistic UI updates — instant feedback on comments/ratings/favorites
+1. **Error handling** — Error boundaries, standardized API errors, try/catch in all handlers
+2. **Input validation** — File size limits, GPX/FIT/TCX schema validation, server-side comment/condition validation, MIME type checks
+3. **Rate limiting** — Protect API endpoints (auth 5/min, writes 10/min, reads 60/min, uploads 3/min)
+4. **Pagination** — Route lists (20/page), comments (10/page), conditions (10/page)
+5. **Code cleanup** — Remove console.logs, extract hardcoded values to config/constants.ts
+6. **Optimistic UI updates** — Instant feedback on comments/ratings/favorites
 
 ### Phase 4: Launch Polish
 
-16. Verify auth flows end-to-end (Google OAuth, magic links)
-17. Accessibility — aria-labels, form labels, map container role
-18. Footer, loading states, skeleton cards
-19. Mobile UX pass — touch targets, map interactions
-20. Admin tools — route management, moderation, stats
+7. Verify auth flows end-to-end (Google OAuth, magic links)
+8. Mobile UX pass (touch targets, map interactions)
+9. Admin tools (route management, moderation, stats)
 
 ### Phase 5: Post-Launch (based on user feedback)
-- User-submitted routes (GPX upload polish + approval workflow)
+- User-submitted routes (approval workflow)
 - Multi-discipline tagging (route can be road AND gravel)
 - Search by name/region
 - Ride coordination, activity feed, Strava integration
@@ -95,16 +101,15 @@ Full design spec: `docs/superpowers/specs/2026-03-13-loops-launch-plan-design.md
 
 ## Test Suite
 
-62-test Playwright suite at `tests/loops-comprehensive.spec.ts`. Tests prefixed with `BUG:` are expected to fail until fixed.
+62-test Playwright suite at `tests/loops-comprehensive.spec.ts`.
 
 ```bash
 npx playwright test tests/loops-comprehensive.spec.ts --project=chromium
 ```
 
 ## Known Technical Debt
-- No CSRF tokens visible
-- Session management is cookie-only, no refresh token mechanism
-- No file type validation beyond extension (should check MIME type)
+- No CSRF tokens
+- Session management is cookie-only, no refresh tokens
 - Some N+1 query patterns (comment/photo fetches)
 - No database indexes documented for filtered queries
 - Locale hardcoded to "en-IE"
@@ -113,7 +118,7 @@ npx playwright test tests/loops-comprehensive.spec.ts --project=chromium
 - App Router (not Pages Router)
 - Server components by default, "use client" only when needed
 - API routes in src/app/api/
-- Database queries in src/lib/db.ts
+- Database queries in src/lib/db.ts (single source of truth)
 - All components in src/components/ (flat structure)
-- Config/constants should go in src/config/constants.ts
+- Route file parsing through src/lib/route-parser.ts (dispatches to format-specific parsers)
 - API responses: `{ data: T } | { error: string, code: string }`

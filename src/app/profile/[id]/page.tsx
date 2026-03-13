@@ -39,11 +39,9 @@ interface UserProfile {
     conditionsReported: number;
     photosUploaded: number;
   };
-  routes: RouteItem[];
   uploadedRoutes: RouteItem[];
   downloadedRoutes: RouteItem[];
   favouritedRoutes: RouteItem[];
-  totalKm: number;
   followers: number;
   following: number;
   activity: ActivityItem[];
@@ -231,9 +229,10 @@ export default function ProfilePage() {
               <div className="h-3 w-56 skeleton" />
             </div>
           </div>
-          <div className="grid grid-cols-3 md:grid-cols-6 gap-2 mb-6">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="rounded-xl p-3 h-16 skeleton" />
+          <div className="flex flex-col sm:flex-row gap-2 mb-6">
+            <div className="rounded-xl h-16 flex-1 skeleton" />
+            {[...Array(2)].map((_, i) => (
+              <div key={i} className="rounded-xl p-3 h-16 w-20 skeleton" />
             ))}
           </div>
           <div className="h-10 w-full skeleton mb-4" />
@@ -341,19 +340,6 @@ export default function ProfilePage() {
                 </span>
               )}
 
-              {/* Loop Rating */}
-              {profile.loopRating && profile.loopRating.average > 0 && (
-                <span
-                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold"
-                  style={{ color: "var(--warning)", background: "rgba(255, 187, 0, 0.1)" }}
-                >
-                  <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                  </svg>
-                  {profile.loopRating.average.toFixed(1)} Loop Rating
-                  <span style={{ opacity: 0.6 }}>({profile.loopRating.totalRatings})</span>
-                </span>
-              )}
             </div>
 
             {profile.location && (
@@ -427,26 +413,56 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-3 md:grid-cols-6 gap-2 mb-6">
-          {[
-            { label: "Total Km", value: profile.totalKm, color: "var(--accent)" },
-            { label: "Rated", value: profile.stats.routesRated, color: "var(--warning)" },
-            { label: "Reports", value: profile.stats.conditionsReported, color: "var(--success)" },
-            { label: "Photos", value: profile.stats.photosUploaded, color: "var(--purple)" },
-            { label: "Followers", value: profile.followers, color: "var(--text)", action: () => openSocialList("followers") },
-            { label: "Following", value: profile.following, color: "var(--text)", action: () => openSocialList("following") },
-          ].map((stat) => (
+        {/* Loop Rating + Stats */}
+        <div className="flex flex-col sm:flex-row gap-2 mb-6">
+          {/* Loop Rating — prominent */}
+          {profile.loopRating && profile.loopRating.average > 0 && (
             <div
-              key={stat.label}
-              className={`rounded-xl p-3 text-center${("action" in stat) ? " cursor-pointer hover:opacity-80 transition-opacity" : ""}`}
-              style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
-              onClick={"action" in stat ? (stat as { action: () => void }).action : undefined}
+              className="flex items-center gap-3 rounded-xl px-5 py-4 flex-1"
+              style={{ background: "rgba(255, 187, 0, 0.08)", border: "1px solid rgba(255, 187, 0, 0.2)" }}
             >
-              <p className="text-lg font-extrabold" style={{ color: stat.color }}>{stat.value}</p>
-              <p className="text-[9px] uppercase tracking-wider font-bold mt-0.5" style={{ color: "var(--text-muted)" }}>{stat.label}</p>
+              <div className="flex items-center gap-1">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <svg
+                    key={star}
+                    className="w-5 h-5"
+                    viewBox="0 0 24 24"
+                    fill={star <= Math.round(profile.loopRating.average) ? "var(--warning)" : "none"}
+                    stroke="var(--warning)"
+                    strokeWidth={1.5}
+                  >
+                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                  </svg>
+                ))}
+              </div>
+              <div>
+                <p className="text-lg font-extrabold leading-tight" style={{ color: "var(--warning)" }}>
+                  {profile.loopRating.average.toFixed(1)}
+                </p>
+                <p className="text-[10px] uppercase tracking-wider font-bold" style={{ color: "var(--text-muted)" }}>
+                  {profile.loopRating.totalRatings} rating{profile.loopRating.totalRatings !== 1 ? "s" : ""} across {profile.loopRating.routesRated} loop{profile.loopRating.routesRated !== 1 ? "s" : ""}
+                </p>
+              </div>
             </div>
-          ))}
+          )}
+
+          {/* Followers / Following */}
+          <div className="flex gap-2">
+            {[
+              { label: "Followers", value: profile.followers, action: () => openSocialList("followers") },
+              { label: "Following", value: profile.following, action: () => openSocialList("following") },
+            ].map((stat) => (
+              <div
+                key={stat.label}
+                className="rounded-xl p-3 text-center cursor-pointer hover:opacity-80 transition-opacity min-w-[80px]"
+                style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+                onClick={stat.action}
+              >
+                <p className="text-lg font-extrabold" style={{ color: "var(--text)" }}>{stat.value}</p>
+                <p className="text-[9px] uppercase tracking-wider font-bold mt-0.5" style={{ color: "var(--text-muted)" }}>{stat.label}</p>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Tabs */}

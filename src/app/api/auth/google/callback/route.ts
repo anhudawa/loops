@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
 
     const redirectUri = `${baseUrl}/api/auth/google/callback`;
 
-    // Exchange code for tokens
+    // Exchange code for tokens (10s timeout)
     const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -37,6 +37,7 @@ export async function GET(request: NextRequest) {
         redirect_uri: redirectUri,
         grant_type: "authorization_code",
       }),
+      signal: AbortSignal.timeout(10000),
     });
 
     if (!tokenRes.ok) {
@@ -45,9 +46,10 @@ export async function GET(request: NextRequest) {
 
     const tokenData = await tokenRes.json();
 
-    // Fetch user info
+    // Fetch user info (10s timeout)
     const userRes = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
       headers: { Authorization: `Bearer ${tokenData.access_token}` },
+      signal: AbortSignal.timeout(10000),
     });
 
     if (!userRes.ok) {
@@ -78,6 +80,7 @@ export async function GET(request: NextRequest) {
 
     response.cookies.set("session", sessionToken, {
       httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
       maxAge: 60 * 60 * 24 * 30, // 30 days

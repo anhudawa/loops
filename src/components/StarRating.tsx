@@ -9,19 +9,43 @@ export default function StarRating({ routeId }: { routeId: string }) {
   const [count, setCount] = useState(0);
   const [userRating, setUserRating] = useState<number | null>(null);
   const [hovered, setHovered] = useState<number | null>(null);
+  const [isTouchDevice, setIsTouchDevice] = useState(false);
+
+  useEffect(() => {
+    setIsTouchDevice("ontouchstart" in window);
+  }, []);
+
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     fetch(`/api/routes/${routeId}/ratings`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error();
+        return r.json();
+      })
       .then((data) => {
         setAverage(data.average);
         setCount(data.count);
         setUserRating(data.userRating);
-      });
+      })
+      .catch(() => setError(true));
   }, [routeId]);
 
   const handleRate = async (score: number) => {
     if (!user) return;
+
+    // Optimistic: update rating immediately
+    const prevAverage = average;
+    const prevCount = count;
+    const prevUserRating = userRating;
+    const isNew = userRating === null;
+    const newCount = isNew ? count + 1 : count;
+    const newAverage = isNew
+      ? (average * count + score) / newCount
+      : (average * count - (userRating ?? 0) + score) / count;
+    setAverage(newAverage);
+    setCount(newCount);
+    setUserRating(score);
 
     const res = await fetch(`/api/routes/${routeId}/ratings`, {
       method: "POST",
@@ -34,10 +58,23 @@ export default function StarRating({ routeId }: { routeId: string }) {
       setAverage(data.average);
       setCount(data.count);
       setUserRating(data.userRating);
+    } else {
+      // Revert on failure
+      setAverage(prevAverage);
+      setCount(prevCount);
+      setUserRating(prevUserRating);
     }
   };
 
   const displayScore = hovered ?? userRating ?? 0;
+
+  if (error) {
+    return (
+      <div className="flex items-center gap-2">
+        <span className="text-sm" style={{ color: "var(--text-muted)" }}>Ratings unavailable</span>
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center gap-4">
@@ -46,10 +83,21 @@ export default function StarRating({ routeId }: { routeId: string }) {
           <button
             key={star}
             onClick={() => handleRate(star)}
-            onMouseEnter={() => user && setHovered(star)}
-            onMouseLeave={() => setHovered(null)}
+            onMouseEnter={() => !isTouchDevice && user && setHovered(star)}
+            onMouseLeave={() => !isTouchDevice && setHovered(null)}
+            onTouchStart={(e) => {
+              if (!user) return;
+              e.preventDefault();
+              setHovered(star);
+            }}
+            onTouchEnd={(e) => {
+              if (!user) return;
+              e.preventDefault();
+              handleRate(star);
+              setHovered(null);
+            }}
             disabled={!user}
-            className={`transition-colors ${user ? "cursor-pointer" : "cursor-default"}`}
+            className={`min-w-[44px] min-h-[44px] flex items-center justify-center transition-colors ${user ? "cursor-pointer" : "cursor-default"}`}
             title={user ? `Rate ${star} star${star > 1 ? "s" : ""}` : "Sign in to rate"}
           >
             <svg

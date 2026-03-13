@@ -1,47 +1,62 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRouteConditions, insertCondition, getUserBySession } from "@/lib/db";
+import { apiError, handleApiError } from "@/lib/api-utils";
+import { CONDITIONS_PER_PAGE, MAX_CONDITION_NOTE_LENGTH, CONDITION_STATUSES } from "@/config/constants";
 import { v4 as uuidv4 } from "uuid";
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
-  const conditions = await getRouteConditions(id);
-  return NextResponse.json(conditions);
+  try {
+    const { id } = await params;
+    const { searchParams } = new URL(request.url);
+    const page = Math.max(1, Number(searchParams.get("page")) || 1);
+    const rows = await getRouteConditions(id, CONDITIONS_PER_PAGE + 1, (page - 1) * CONDITIONS_PER_PAGE);
+    const hasMore = rows.length > CONDITIONS_PER_PAGE;
+    const conditions = hasMore ? rows.slice(0, CONDITIONS_PER_PAGE) : rows;
+    return NextResponse.json({ data: conditions, hasMore, page });
+  } catch (err) {
+    return handleApiError(err);
+  }
 }
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id: routeId } = await params;
-  const sessionToken = request.cookies.get("session")?.value;
+  try {
+    const { id: routeId } = await params;
+    const sessionToken = request.cookies.get("session")?.value;
 
-  if (!sessionToken) {
-    return NextResponse.json({ error: "Sign in to report conditions" }, { status: 401 });
+    if (!sessionToken) {
+      return apiError("Sign in to report conditions", "UNAUTHORIZED", 401);
+    }
+
+    const user = await getUserBySession(sessionToken);
+    if (!user) {
+      return apiError("Invalid session", "UNAUTHORIZED", 401);
+    }
+
+    const { status, note } = await request.json();
+
+    if (!status || !(CONDITION_STATUSES as readonly string[]).includes(status)) {
+      return apiError(`Status must be ${CONDITION_STATUSES.join(", ")}`, "VALIDATION_ERROR", 400);
+    }
+
+    if (!note || typeof note !== "string" || note.trim().length === 0) {
+      return apiError("Note is required", "VALIDATION_ERROR", 400);
+    }
+
+    if (note.length > MAX_CONDITION_NOTE_LENGTH) {
+      return apiError(`Note too long (max ${MAX_CONDITION_NOTE_LENGTH} characters)`, "VALIDATION_ERROR", 400);
+    }
+
+    await insertCondition(uuidv4(), routeId, user.id, status, note.trim());
+    const rows = await getRouteConditions(routeId, CONDITIONS_PER_PAGE + 1, 0);
+    const hasMore = rows.length > CONDITIONS_PER_PAGE;
+    return NextResponse.json({ data: hasMore ? rows.slice(0, CONDITIONS_PER_PAGE) : rows, hasMore, page: 1 });
+  } catch (err) {
+    return handleApiError(err);
   }
-
-  const user = await getUserBySession(sessionToken);
-  if (!user) {
-    return NextResponse.json({ error: "Invalid session" }, { status: 401 });
-  }
-
-  const { status, note } = await request.json();
-
-  if (!status || !["good", "fair", "poor", "closed"].includes(status)) {
-    return NextResponse.json({ error: "Status must be good, fair, poor, or closed" }, { status: 400 });
-  }
-
-  if (!note || typeof note !== "string" || note.trim().length === 0) {
-    return NextResponse.json({ error: "Note is required" }, { status: 400 });
-  }
-
-  if (note.length > 500) {
-    return NextResponse.json({ error: "Note too long (max 500 characters)" }, { status: 400 });
-  }
-
-  await insertCondition(uuidv4(), routeId, user.id, status, note.trim());
-  const conditions = await getRouteConditions(routeId);
-  return NextResponse.json(conditions);
 }

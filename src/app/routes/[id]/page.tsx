@@ -97,17 +97,27 @@ export default function RouteDetail() {
 
   const handleFollowCreator = async () => {
     if (!route?.created_by || followLoading) return;
+    // Optimistic: toggle immediately
+    const wasFollowing = isFollowingCreator;
+    setIsFollowingCreator(!wasFollowing);
     setFollowLoading(true);
     try {
-      const method = isFollowingCreator ? "DELETE" : "POST";
+      const method = wasFollowing ? "DELETE" : "POST";
       const res = await fetch(`/api/users/${route.created_by}/follow`, { method });
-      if (res.ok) setIsFollowingCreator(!isFollowingCreator);
-    } catch { /* ignore */ }
+      if (!res.ok) setIsFollowingCreator(wasFollowing);
+    } catch {
+      setIsFollowingCreator(wasFollowing);
+    }
     setFollowLoading(false);
   };
 
   const handleFavourite = async () => {
     if (favLoading || !user) return;
+    // Optimistic: toggle immediately
+    const wasFavourited = isFavourited;
+    const prevCount = favCount;
+    setIsFavourited(!wasFavourited);
+    setFavCount(wasFavourited ? prevCount - 1 : prevCount + 1);
     setFavLoading(true);
     try {
       const res = await fetch(`/api/routes/${params.id}/favourite`, { method: "POST" });
@@ -115,8 +125,14 @@ export default function RouteDetail() {
         const data = await res.json();
         setIsFavourited(data.favourited);
         setFavCount(data.count);
+      } else {
+        setIsFavourited(wasFavourited);
+        setFavCount(prevCount);
       }
-    } catch { /* ignore */ }
+    } catch {
+      setIsFavourited(wasFavourited);
+      setFavCount(prevCount);
+    }
     setFavLoading(false);
   };
 
@@ -133,13 +149,18 @@ export default function RouteDetail() {
 
   if (!route || !route.coordinates) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--bg)" }}>
-        <div className="text-center">
-          <p className="mb-4" style={{ color: "var(--text-muted)" }}>Route not found</p>
-          <Link href="/" className="font-bold hover:opacity-80" style={{ color: "var(--accent)" }}>
-            Back to routes
-          </Link>
-        </div>
+      <div className="min-h-screen flex flex-col items-center justify-center px-4" style={{ background: "var(--bg)" }}>
+        <span className="logo-mark text-gradient text-5xl mb-6">LOOPS</span>
+        <h1 className="text-6xl font-extrabold mb-2" style={{ color: "var(--text)" }}>Route not found</h1>
+        <p className="text-lg mb-8" style={{ color: "var(--text-muted)" }}>
+          This loop doesn&apos;t exist — yet.
+        </p>
+        <Link
+          href="/"
+          className="btn-accent px-8 py-3 rounded-xl font-bold text-sm uppercase tracking-wider"
+        >
+          Back to exploring
+        </Link>
       </div>
     );
   }
@@ -154,7 +175,7 @@ export default function RouteDetail() {
       {/* Header */}
       <header className="px-4 md:px-6 py-3" style={{ background: "var(--bg-raised)", borderBottom: "1px solid var(--border)" }}>
         <div className="max-w-5xl mx-auto flex items-center gap-3">
-          <Link href="/" className="hover:opacity-80 transition-opacity" style={{ color: "var(--text-muted)" }}>
+          <Link href="/" className="min-w-[44px] min-h-[44px] flex items-center justify-center hover:opacity-80 transition-opacity" style={{ color: "var(--text-muted)" }}>
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
@@ -216,7 +237,7 @@ export default function RouteDetail() {
               <button
                 onClick={handleFavourite}
                 disabled={favLoading || !user}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-lg transition-all"
+                className="flex items-center gap-1 px-2.5 py-2 min-h-[44px] rounded-lg transition-all"
                 style={{
                   background: isFavourited ? "rgba(255, 51, 85, 0.15)" : "rgba(255,255,255,0.05)",
                   border: `1px solid ${isFavourited ? "rgba(255, 51, 85, 0.3)" : "var(--border)"}`,
@@ -314,7 +335,7 @@ export default function RouteDetail() {
               <button
                 onClick={handleFollowCreator}
                 disabled={followLoading}
-                className="shrink-0 text-xs font-bold uppercase tracking-wider px-4 py-2 rounded-lg transition-all hover:scale-[1.03]"
+                className="shrink-0 text-xs font-bold uppercase tracking-wider px-4 py-2.5 min-h-[44px] rounded-lg transition-all hover:scale-[1.03]"
                 style={
                   isFollowingCreator
                     ? { background: "rgba(200, 255, 0, 0.1)", color: "var(--accent)", border: "1px solid rgba(200, 255, 0, 0.3)" }

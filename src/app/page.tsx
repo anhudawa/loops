@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, useSyncExternalStore } from "react";
 import dynamic from "next/dynamic";
 import FilterSidebar from "@/components/FilterSidebar";
 import RouteCard from "@/components/RouteCard";
+import SkeletonCard from "@/components/SkeletonCard";
 import HeroSection from "@/components/HeroSection";
 import { useAuth } from "@/components/AuthProvider";
 import Link from "next/link";
@@ -31,6 +32,19 @@ interface Route {
   distance_km_away?: number;
 }
 
+/** Returns true when viewport is >= 640px (Tailwind `sm` breakpoint). */
+function useIsSmScreen(): boolean {
+  const subscribe = useCallback((cb: () => void) => {
+    const mql = window.matchMedia("(min-width: 640px)");
+    mql.addEventListener("change", cb);
+    return () => mql.removeEventListener("change", cb);
+  }, []);
+  const getSnapshot = useCallback(() => window.matchMedia("(min-width: 640px)").matches, []);
+  // During SSR, assume mobile (sm = false) so the mobile input is the active one.
+  const getServerSnapshot = useCallback(() => false, []);
+  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+}
+
 const DEFAULT_FILTERS = {
   difficulty: "",
   minDistance: "",
@@ -45,12 +59,16 @@ const DEFAULT_FILTERS = {
 
 export default function Home() {
   const { user, logout, unreadCount } = useAuth();
+  const isSmScreen = useIsSmScreen();
   const contentRef = useRef<HTMLDivElement>(null);
   const [routes, setRoutes] = useState<Route[]>([]);
   const [regions, setRegions] = useState<string[]>([]);
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [page, setPage] = useState(1);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [sortBy, setSortBy] = useState("newest");
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
@@ -81,7 +99,7 @@ export default function Home() {
       .then((data) => setRegions(Array.isArray(data) ? data : []));
   }, [filters.country]);
 
-  const fetchRoutes = useCallback(async () => {
+  const fetchRoutes = useCallback(async (pageNum = 1, append = false) => {
     const params = new URLSearchParams();
     if (filters.difficulty) params.set("difficulty", filters.difficulty);
     if (filters.minDistance) params.set("minDistance", filters.minDistance);
@@ -96,21 +114,32 @@ export default function Home() {
     if (userLocation) {
       params.set("lat", String(userLocation.lat));
       params.set("lng", String(userLocation.lng));
-      // Only show nearby routes unless user explicitly picks a country
       if (!filters.country) {
         params.set("maxRadius", "500");
       }
     }
+    params.set("page", String(pageNum));
 
     const res = await fetch(`/api/routes?${params}`);
-    const data = await res.json();
-    setRoutes(data);
+    const json = await res.json();
+    const newRoutes = Array.isArray(json.data) ? json.data : Array.isArray(json) ? json : [];
+    setRoutes((prev) => append ? [...prev, ...newRoutes] : newRoutes);
+    setHasMore(json.hasMore ?? false);
+    setPage(pageNum);
     setLoading(false);
+    setLoadingMore(false);
   }, [filters, sortBy, userLocation]);
 
   useEffect(() => {
-    fetchRoutes();
+    setLoading(true);
+    setPage(1);
+    fetchRoutes(1, false);
   }, [fetchRoutes]);
+
+  const loadMore = () => {
+    setLoadingMore(true);
+    fetchRoutes(page + 1, true);
+  };
 
   const handleFilterChange = (key: string, value: string) => {
     // Reset region when country changes
@@ -172,6 +201,8 @@ export default function Home() {
                 placeholder="Search routes, regions..."
                 className="w-full rounded-lg pl-9 pr-3 py-2 text-sm"
                 style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+                aria-hidden={!isSmScreen}
+                tabIndex={isSmScreen ? 0 : -1}
               />
             </div>
           </div>
@@ -195,24 +226,27 @@ export default function Home() {
                 Admin
               </Link>
             )}
-            <Link
-              href="/messages"
-              className="relative p-1.5 rounded-lg hover:opacity-80 transition-opacity"
-              style={{ color: "var(--text-muted)" }}
-              aria-label="Messages"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-              </svg>
-              {unreadCount > 0 && (
-                <span
-                  className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 flex items-center justify-center rounded-full text-[10px] font-bold px-1"
-                  style={{ background: "var(--danger)", color: "#fff" }}
-                >
-                  {unreadCount > 99 ? "99+" : unreadCount}
-                </span>
-              )}
-            </Link>
+            {user && (
+              <Link
+                href="/messages"
+                className="relative p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:opacity-80 transition-opacity"
+                style={{ color: "var(--text-muted)" }}
+                aria-label="Messages"
+                title="Messages"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+                {unreadCount > 0 && (
+                  <span
+                    className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 flex items-center justify-center rounded-full text-[10px] font-bold px-1"
+                    style={{ background: "var(--danger)", color: "#fff" }}
+                  >
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </span>
+                )}
+              </Link>
+            )}
             {user && (
               <Link
                 href={`/profile/${user.id}`}
@@ -226,13 +260,23 @@ export default function Home() {
                 />
               </Link>
             )}
-            <button
-              onClick={logout}
-              className="text-xs font-medium hidden sm:block hover:opacity-80"
-              style={{ color: "var(--text-muted)" }}
-            >
-              Sign out
-            </button>
+            {user ? (
+              <button
+                onClick={logout}
+                className="text-xs font-medium hidden sm:block hover:opacity-80"
+                style={{ color: "var(--text-muted)" }}
+              >
+                Sign out
+              </button>
+            ) : (
+              <Link
+                href="/login"
+                className="text-xs font-medium hidden sm:block hover:opacity-80"
+                style={{ color: "var(--text-muted)" }}
+              >
+                Sign in
+              </Link>
+            )}
           </div>
         </div>
 
@@ -249,6 +293,8 @@ export default function Home() {
               placeholder="Search routes, regions..."
               className="w-full rounded-lg pl-9 pr-3 py-2 text-sm"
               style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+              aria-hidden={isSmScreen}
+              tabIndex={isSmScreen ? -1 : 0}
             />
           </div>
         </div>
@@ -278,7 +324,7 @@ export default function Home() {
                 <div className="w-10 h-1 rounded-full absolute left-1/2 -translate-x-1/2 top-2" style={{ background: "var(--border-light)" }} />
                 <button
                   onClick={() => setFiltersOpen(false)}
-                  className="w-8 h-8 flex items-center justify-center rounded-full"
+                  className="w-11 h-11 flex items-center justify-center rounded-full"
                   style={{ color: "var(--text-muted)" }}
                   aria-label="Close filters"
                 >
@@ -351,7 +397,7 @@ export default function Home() {
                 </select>
                 <button
                   onClick={() => setFiltersOpen(true)}
-                  className="md:hidden flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors"
+                  className="md:hidden flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] rounded-lg text-xs font-bold transition-colors"
                   style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
                 >
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -368,21 +414,9 @@ export default function Home() {
             </div>
 
             {loading ? (
-              <div className="space-y-3">
-                {[...Array(4)].map((_, i) => (
-                  <div key={i} className="p-4 rounded-xl animate-pulse border-l-[3px]" style={{ background: "var(--bg-card)", borderLeftColor: "var(--border)" }}>
-                    <div className="flex items-start justify-between gap-2 mb-3">
-                      <div className="h-4 rounded w-44" style={{ background: "var(--border)" }} />
-                      <div className="h-4 rounded w-14" style={{ background: "var(--border)" }} />
-                    </div>
-                    <div className="h-3 rounded w-full mb-1.5" style={{ background: "var(--border)" }} />
-                    <div className="h-3 rounded w-2/3 mb-3" style={{ background: "var(--border)" }} />
-                    <div className="flex gap-3">
-                      <div className="h-2.5 rounded w-12" style={{ background: "var(--border)" }} />
-                      <div className="h-2.5 rounded w-16" style={{ background: "var(--border)" }} />
-                      <div className="h-2.5 rounded w-10" style={{ background: "var(--border)" }} />
-                    </div>
-                  </div>
+              <div className="space-y-2 md:space-y-2.5">
+                {[...Array(6)].map((_, i) => (
+                  <SkeletonCard key={i} />
                 ))}
               </div>
             ) : routes.length === 0 ? (
@@ -416,6 +450,16 @@ export default function Home() {
                     showDistance={!!userLocation}
                   />
                 ))}
+                {hasMore && (
+                  <button
+                    onClick={loadMore}
+                    disabled={loadingMore}
+                    className="w-full py-3 rounded-xl text-sm font-bold transition-all hover:opacity-80 disabled:opacity-50"
+                    style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
+                  >
+                    {loadingMore ? "Loading..." : "Load more routes"}
+                  </button>
+                )}
               </div>
             )}
           </div>

@@ -122,7 +122,7 @@ export default function Home() {
 
     const res = await fetch(`/api/routes?${params}`);
     const json = await res.json();
-    const newRoutes = json.data ?? json;
+    const newRoutes = Array.isArray(json.data) ? json.data : Array.isArray(json) ? json : [];
     setRoutes((prev) => append ? [...prev, ...newRoutes] : newRoutes);
     setHasMore(json.hasMore ?? false);
     setPage(pageNum);

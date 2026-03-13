@@ -175,7 +175,7 @@ export default function RouteDetail() {
       {/* Header */}
       <header className="px-4 md:px-6 py-3" style={{ background: "var(--bg-raised)", borderBottom: "1px solid var(--border)" }}>
         <div className="max-w-5xl mx-auto flex items-center gap-3">
-          <Link href="/" className="hover:opacity-80 transition-opacity" style={{ color: "var(--text-muted)" }}>
+          <Link href="/" className="min-w-[44px] min-h-[44px] flex items-center justify-center hover:opacity-80 transition-opacity" style={{ color: "var(--text-muted)" }}>
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
@@ -237,7 +237,7 @@ export default function RouteDetail() {
               <button
                 onClick={handleFavourite}
                 disabled={favLoading || !user}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-lg transition-all"
+                className="flex items-center gap-1 px-2.5 py-2 min-h-[44px] rounded-lg transition-all"
                 style={{
                   background: isFavourited ? "rgba(255, 51, 85, 0.15)" : "rgba(255,255,255,0.05)",
                   border: `1px solid ${isFavourited ? "rgba(255, 51, 85, 0.3)" : "var(--border)"}`,
@@ -335,7 +335,7 @@ export default function RouteDetail() {
               <button
                 onClick={handleFollowCreator}
                 disabled={followLoading}
-                className="shrink-0 text-xs font-bold uppercase tracking-wider px-4 py-2 rounded-lg transition-all hover:scale-[1.03]"
+                className="shrink-0 text-xs font-bold uppercase tracking-wider px-4 py-2.5 min-h-[44px] rounded-lg transition-all hover:scale-[1.03]"
                 style={
                   isFollowingCreator
                     ? { background: "rgba(200, 255, 0, 0.1)", color: "var(--accent)", border: "1px solid rgba(200, 255, 0, 0.3)" }

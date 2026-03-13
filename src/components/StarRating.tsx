@@ -9,6 +9,11 @@ export default function StarRating({ routeId }: { routeId: string }) {
   const [count, setCount] = useState(0);
   const [userRating, setUserRating] = useState<number | null>(null);
   const [hovered, setHovered] = useState<number | null>(null);
+  const [isTouchDevice, setIsTouchDevice] = useState(false);
+
+  useEffect(() => {
+    setIsTouchDevice("ontouchstart" in window);
+  }, []);
 
   useEffect(() => {
     fetch(`/api/routes/${routeId}/ratings`)
@@ -64,10 +69,21 @@ export default function StarRating({ routeId }: { routeId: string }) {
           <button
             key={star}
             onClick={() => handleRate(star)}
-            onMouseEnter={() => user && setHovered(star)}
-            onMouseLeave={() => setHovered(null)}
+            onMouseEnter={() => !isTouchDevice && user && setHovered(star)}
+            onMouseLeave={() => !isTouchDevice && setHovered(null)}
+            onTouchStart={(e) => {
+              if (!user) return;
+              e.preventDefault();
+              setHovered(star);
+            }}
+            onTouchEnd={(e) => {
+              if (!user) return;
+              e.preventDefault();
+              handleRate(star);
+              setHovered(null);
+            }}
             disabled={!user}
-            className={`transition-colors ${user ? "cursor-pointer" : "cursor-default"}`}
+            className={`min-w-[44px] min-h-[44px] flex items-center justify-center transition-colors ${user ? "cursor-pointer" : "cursor-default"}`}
             title={user ? `Rate ${star} star${star > 1 ? "s" : ""}` : "Sign in to rate"}
           >
             <svg

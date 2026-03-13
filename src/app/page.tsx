@@ -229,7 +229,7 @@ export default function Home() {
             {user && (
               <Link
                 href="/messages"
-                className="relative p-1.5 rounded-lg hover:opacity-80 transition-opacity"
+                className="relative p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:opacity-80 transition-opacity"
                 style={{ color: "var(--text-muted)" }}
                 aria-label="Messages"
                 title="Messages"
@@ -324,7 +324,7 @@ export default function Home() {
                 <div className="w-10 h-1 rounded-full absolute left-1/2 -translate-x-1/2 top-2" style={{ background: "var(--border-light)" }} />
                 <button
                   onClick={() => setFiltersOpen(false)}
-                  className="w-8 h-8 flex items-center justify-center rounded-full"
+                  className="w-11 h-11 flex items-center justify-center rounded-full"
                   style={{ color: "var(--text-muted)" }}
                   aria-label="Close filters"
                 >
@@ -397,7 +397,7 @@ export default function Home() {
                 </select>
                 <button
                   onClick={() => setFiltersOpen(true)}
-                  className="md:hidden flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors"
+                  className="md:hidden flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] rounded-lg text-xs font-bold transition-colors"
                   style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
                 >
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

@@ -17,37 +17,37 @@ export async function GET() {
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          background: "#0a0a0a",
+          background: "linear-gradient(135deg, #0f1a0a 0%, #0a0a0a 50%, #0a1210 100%)",
           fontFamily: "system-ui, sans-serif",
           position: "relative",
         }}
       >
-        {/* Subtle glow */}
+        {/* Glow */}
         <div
           style={{
             position: "absolute",
-            width: "600px",
-            height: "600px",
+            width: "700px",
+            height: "700px",
             borderRadius: "50%",
             background:
-              "radial-gradient(circle, rgba(200, 255, 0, 0.06) 0%, transparent 70%)",
+              "radial-gradient(circle, rgba(200, 255, 0, 0.15) 0%, transparent 70%)",
           }}
         />
 
         {/* Ring */}
         <svg
-          width="200"
-          height="200"
-          viewBox="0 0 200 200"
-          style={{ position: "absolute", opacity: 0.08 }}
+          width="220"
+          height="220"
+          viewBox="0 0 220 220"
+          style={{ position: "absolute", opacity: 0.2 }}
         >
           <circle
-            cx="100"
-            cy="100"
-            r="80"
+            cx="110"
+            cy="110"
+            r="90"
             fill="none"
             stroke="#c8ff00"
-            strokeWidth="16"
+            strokeWidth="12"
           />
         </svg>
 

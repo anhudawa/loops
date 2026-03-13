@@ -248,12 +248,12 @@ function LoginPage() {
               </div>
             </div>
             {/* App preview content */}
-            <div style={{ background: "var(--bg-card)" }}>
+            <div style={{ background: "#111" }}>
               <img
-                src="/api/og"
-                alt="LOOPS app — discover cycling routes worldwide"
+                src="/api/og/2e435a2a-2001-4f4d-a5a6-6c065952172d"
+                alt="LOOPS app — The Traka 360 route preview"
                 className="w-full"
-                style={{ aspectRatio: "1200/630", objectFit: "cover" }}
+                style={{ aspectRatio: "1200/630", objectFit: "cover", opacity: 1 }}
               />
             </div>
           </div>

@@ -53,6 +53,7 @@ export default function AdminPage() {
   const [comments, setComments] = useState<CommentRow[]>([]);
   const [confirm, setConfirm] = useState<{ type: string; id: string; label: string } | null>(null);
   const [loadingTab, setLoadingTab] = useState(false);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     if (!loading && (!user || user.role !== "admin")) {
@@ -143,6 +144,11 @@ export default function AdminPage() {
     );
   }
 
+  const q = search.toLowerCase();
+  const filteredUsers = q ? users.filter((u) => (u.name || "").toLowerCase().includes(q) || u.email.toLowerCase().includes(q)) : users;
+  const filteredRoutes = q ? routes.filter((r) => r.name.toLowerCase().includes(q) || (r.region || r.county).toLowerCase().includes(q)) : routes;
+  const filteredComments = q ? comments.filter((c) => (c.user_name || c.user_email).toLowerCase().includes(q) || c.route_name.toLowerCase().includes(q) || c.body.toLowerCase().includes(q)) : comments;
+
   const tabStyle = (t: Tab) => ({
     color: tab === t ? "var(--accent)" : "var(--text-muted)",
     borderBottom: tab === t ? "2px solid var(--accent)" : "2px solid transparent",
@@ -199,6 +205,18 @@ export default function AdminPage() {
           ))}
         </div>
 
+        {/* Search */}
+        <div className="mb-4">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={`Search ${tab}...`}
+            className="w-full max-w-sm rounded-lg px-4 py-2 text-sm"
+            style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+          />
+        </div>
+
         {/* Content */}
         <div className="rounded-xl overflow-hidden" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
           {loadingTab && (
@@ -226,7 +244,7 @@ export default function AdminPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {users.map((u) => (
+                  {filteredUsers.map((u) => (
                     <tr key={u.id} style={{ borderBottom: "1px solid var(--border)" }}>
                       <td className="p-3 font-bold" style={{ color: "var(--text)" }}>
                         <Link href={`/profile/${u.id}`} className="hover:underline">
@@ -289,7 +307,7 @@ export default function AdminPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {routes.map((r) => (
+                  {filteredRoutes.map((r) => (
                     <tr key={r.id} style={{ borderBottom: "1px solid var(--border)" }}>
                       <td className="p-3 font-bold" style={{ color: "var(--text)" }}>
                         <Link href={`/routes/${r.id}`} className="hover:underline">{r.name}</Link>
@@ -326,7 +344,7 @@ export default function AdminPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {comments.map((c) => (
+                  {filteredComments.map((c) => (
                     <tr key={c.id} style={{ borderBottom: "1px solid var(--border)" }}>
                       <td className="p-3 font-bold" style={{ color: "var(--text)" }}>{c.user_name || c.user_email}</td>
                       <td className="p-3" style={{ color: "var(--text-muted)" }}>{c.route_name}</td>

@@ -2,14 +2,17 @@ import type { Metadata, Viewport } from "next";
 import { AuthProvider } from "@/components/AuthProvider";
 import { ToastProvider } from "@/components/Toast";
 import { CapacitorProvider } from "@/components/CapacitorProvider";
+import Footer from "@/components/Footer";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "LOOPS - Discover & Share Cycling Routes",
+  metadataBase: new URL("https://loops.ie"),
+  alternates: { canonical: "/" },
+  title: "LOOPS — Routes Worth Riding",
   description: "Find and share the best road, gravel, and MTB loops worldwide. Upload GPX files, rate routes, and discover new rides near you. Built by riders, for riders.",
   keywords: ["cycling routes", "gravel cycling", "GPX", "bike routes", "MTB trails", "road cycling", "route sharing", "cycling community"],
   openGraph: {
-    title: "LOOPS - Stop Riding The Same Loop",
+    title: "LOOPS — Routes Worth Riding",
     description: "Discover and share the best gravel, road & MTB loops worldwide. Built by riders, for riders.",
     siteName: "LOOPS",
     type: "website",
@@ -17,7 +20,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "LOOPS - Stop Riding The Same Loop",
+    title: "LOOPS — Routes Worth Riding",
     description: "Discover and share the best gravel, road & MTB loops worldwide. Built by riders, for riders.",
     images: ["/api/og"],
   },
@@ -45,7 +48,10 @@ export default function RootLayout({
       <body className="antialiased">
         <ToastProvider>
           <CapacitorProvider>
-            <AuthProvider>{children}</AuthProvider>
+            <AuthProvider>
+              {children}
+              <Footer />
+            </AuthProvider>
           </CapacitorProvider>
         </ToastProvider>
       </body>

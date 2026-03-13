@@ -53,7 +53,7 @@ export default function FilterSidebar({ filters, regions, onChange, onClear }: F
       {/* Country */}
       <div>
         <label className="block text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>Country</label>
-        <select value={filters.country} onChange={(e) => onChange("country", e.target.value)} className="w-full rounded-lg px-3 py-2 text-sm cursor-pointer" style={selectStyle}>
+        <select value={filters.country} onChange={(e) => onChange("country", e.target.value)} className="w-full rounded-lg px-3 py-2 text-sm cursor-pointer" style={selectStyle} aria-label="Filter by country">
           <option value="">All countries</option>
           {COUNTRIES.map((c) => (
             <option key={c} value={c}>{c}</option>
@@ -116,7 +116,7 @@ export default function FilterSidebar({ filters, regions, onChange, onClear }: F
 
       <div>
         <label className="block text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>Region</label>
-        <select value={filters.county} onChange={(e) => onChange("county", e.target.value)} className="w-full rounded-lg px-3 py-2 text-sm cursor-pointer" style={selectStyle}>
+        <select value={filters.county} onChange={(e) => onChange("county", e.target.value)} className="w-full rounded-lg px-3 py-2 text-sm cursor-pointer" style={selectStyle} aria-label="Filter by region">
           <option value="">All regions</option>
           {regions.map((c) => (
             <option key={c} value={c}>{c}</option>
@@ -126,7 +126,7 @@ export default function FilterSidebar({ filters, regions, onChange, onClear }: F
 
       <div>
         <label className="block text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>Difficulty</label>
-        <select value={filters.difficulty} onChange={(e) => onChange("difficulty", e.target.value)} className="w-full rounded-lg px-3 py-2 text-sm cursor-pointer" style={selectStyle}>
+        <select value={filters.difficulty} onChange={(e) => onChange("difficulty", e.target.value)} className="w-full rounded-lg px-3 py-2 text-sm cursor-pointer" style={selectStyle} aria-label="Filter by difficulty">
           <option value="">All difficulties</option>
           <option value="easy">Easy</option>
           <option value="moderate">Moderate</option>
@@ -145,6 +145,7 @@ export default function FilterSidebar({ filters, regions, onChange, onClear }: F
             onChange={(e) => onChange("minDistance", e.target.value)}
             className="w-full rounded-lg px-3 py-2 text-sm"
             style={inputStyle}
+            aria-label="Minimum distance in km"
           />
           <span className="text-xs" style={{ color: "var(--text-muted)" }}>to</span>
           <input
@@ -154,13 +155,14 @@ export default function FilterSidebar({ filters, regions, onChange, onClear }: F
             onChange={(e) => onChange("maxDistance", e.target.value)}
             className="w-full rounded-lg px-3 py-2 text-sm"
             style={inputStyle}
+            aria-label="Maximum distance in km"
           />
         </div>
       </div>
 
       <div>
         <label className="block text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>Surface</label>
-        <select value={filters.surface_type} onChange={(e) => onChange("surface_type", e.target.value)} className="w-full rounded-lg px-3 py-2 text-sm cursor-pointer" style={selectStyle}>
+        <select value={filters.surface_type} onChange={(e) => onChange("surface_type", e.target.value)} className="w-full rounded-lg px-3 py-2 text-sm cursor-pointer" style={selectStyle} aria-label="Filter by surface type">
           <option value="">All surfaces</option>
           <option value="gravel">Gravel</option>
           <option value="mixed">Mixed</option>

@@ -147,7 +147,7 @@ function LoginPage() {
   );
 
   return (
-    <div className="min-h-screen" style={{ background: "var(--bg)" }}>
+    <div style={{ background: "var(--bg)" }}>
       {/* ─── Sticky Nav ─── */}
       <nav
         className="fixed top-0 left-0 right-0 z-50 px-4 md:px-6 py-3 transition-all duration-300"

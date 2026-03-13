@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRoutes, insertRoute, getCounties, getRegions, getCountries, getUserBySession } from "@/lib/db";
-import { parseGpx } from "@/lib/gpx";
+import { parseRouteFile } from "@/lib/route-parser";
+import { fetchRideWithGPS } from "@/lib/ridewithgps";
+import { validateStravaUrl, getStravaExportError } from "@/lib/strava";
 import { v4 as uuidv4 } from "uuid";
 
 export async function GET(request: NextRequest) {
@@ -54,7 +56,6 @@ export async function POST(request: NextRequest) {
   }
 
   const formData = await request.formData();
-  const gpxFile = formData.get("gpx") as File | null;
   const name = formData.get("name") as string;
   const description = formData.get("description") as string | null;
   const difficulty = formData.get("difficulty") as string;
@@ -68,13 +69,49 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
-  if (gpxFile) {
-    const gpxText = await gpxFile.text();
-    const parsed = parseGpx(gpxText);
+  try {
+    let parsed;
+
+    // Check for URL import
+    const importUrl = formData.get("url") as string | null;
+    // Check for file upload (support both "gpx" and "route_file" field names)
+    const routeFile = (formData.get("route_file") as File | null) || (formData.get("gpx") as File | null);
+
+    if (importUrl) {
+      // URL import path
+      if (/ridewithgps\.com\/(routes|trips)\/\d+/.test(importUrl)) {
+        parsed = await fetchRideWithGPS(importUrl);
+      } else if (validateStravaUrl(importUrl)) {
+        return NextResponse.json(
+          { error: getStravaExportError() },
+          { status: 400 }
+        );
+      } else {
+        return NextResponse.json(
+          { error: "Unsupported URL. Paste a RideWithGPS route link, or export from Strava as GPX/FIT and upload the file." },
+          { status: 400 }
+        );
+      }
+    } else if (routeFile) {
+      // File upload path
+      const filename = routeFile.name.toLowerCase();
+      let content: string | ArrayBuffer;
+
+      if (filename.endsWith(".fit")) {
+        content = await routeFile.arrayBuffer();
+      } else {
+        content = await routeFile.text();
+      }
+
+      parsed = await parseRouteFile(routeFile.name, content);
+    } else {
+      return NextResponse.json({ error: "Please upload a file or paste a URL" }, { status: 400 });
+    }
+
     const { coordinates, elevations, distance_km, elevation_gain_m, elevation_loss_m } = parsed;
 
     if (coordinates.length === 0) {
-      return NextResponse.json({ error: "Could not parse GPX file - no track points found" }, { status: 400 });
+      return NextResponse.json({ error: "No track points found in the uploaded file" }, { status: 400 });
     }
 
     // Store coordinates with elevations: [lat, lng, elevation]
@@ -106,7 +143,8 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json(route, { status: 201 });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to process route";
+    return NextResponse.json({ error: message }, { status: 400 });
   }
-
-  return NextResponse.json({ error: "GPX file is required" }, { status: 400 });
 }

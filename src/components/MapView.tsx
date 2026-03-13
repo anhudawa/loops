@@ -210,5 +210,5 @@ export default function MapView({
     }
   }, [travelOverlay, routes, selectedRouteId]);
 
-  return <div id="map" className="w-full h-full rounded-lg" />;
+  return <div id="map" role="application" aria-label="Interactive map showing cycling route locations" className="w-full h-full rounded-lg" />;
 }

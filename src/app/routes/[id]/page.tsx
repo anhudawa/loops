@@ -133,13 +133,18 @@ export default function RouteDetail() {
 
   if (!route || !route.coordinates) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--bg)" }}>
-        <div className="text-center">
-          <p className="mb-4" style={{ color: "var(--text-muted)" }}>Route not found</p>
-          <Link href="/" className="font-bold hover:opacity-80" style={{ color: "var(--accent)" }}>
-            Back to routes
-          </Link>
-        </div>
+      <div className="min-h-screen flex flex-col items-center justify-center px-4" style={{ background: "var(--bg)" }}>
+        <span className="logo-mark text-gradient text-5xl mb-6">LOOPS</span>
+        <h1 className="text-6xl font-extrabold mb-2" style={{ color: "var(--text)" }}>Route not found</h1>
+        <p className="text-lg mb-8" style={{ color: "var(--text-muted)" }}>
+          This loop doesn&apos;t exist — yet.
+        </p>
+        <Link
+          href="/"
+          className="btn-accent px-8 py-3 rounded-xl font-bold text-sm uppercase tracking-wider"
+        >
+          Back to exploring
+        </Link>
       </div>
     );
   }

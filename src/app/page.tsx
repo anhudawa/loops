@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, useSyncExternalStore } from "react";
 import dynamic from "next/dynamic";
 import FilterSidebar from "@/components/FilterSidebar";
 import RouteCard from "@/components/RouteCard";
+import SkeletonCard from "@/components/SkeletonCard";
 import HeroSection from "@/components/HeroSection";
 import { useAuth } from "@/components/AuthProvider";
 import Link from "next/link";
@@ -31,6 +32,19 @@ interface Route {
   distance_km_away?: number;
 }
 
+/** Returns true when viewport is >= 640px (Tailwind `sm` breakpoint). */
+function useIsSmScreen(): boolean {
+  const subscribe = useCallback((cb: () => void) => {
+    const mql = window.matchMedia("(min-width: 640px)");
+    mql.addEventListener("change", cb);
+    return () => mql.removeEventListener("change", cb);
+  }, []);
+  const getSnapshot = useCallback(() => window.matchMedia("(min-width: 640px)").matches, []);
+  // During SSR, assume mobile (sm = false) so the mobile input is the active one.
+  const getServerSnapshot = useCallback(() => false, []);
+  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+}
+
 const DEFAULT_FILTERS = {
   difficulty: "",
   minDistance: "",
@@ -45,6 +59,7 @@ const DEFAULT_FILTERS = {
 
 export default function Home() {
   const { user, logout, unreadCount } = useAuth();
+  const isSmScreen = useIsSmScreen();
   const contentRef = useRef<HTMLDivElement>(null);
   const [routes, setRoutes] = useState<Route[]>([]);
   const [regions, setRegions] = useState<string[]>([]);
@@ -172,6 +187,8 @@ export default function Home() {
                 placeholder="Search routes, regions..."
                 className="w-full rounded-lg pl-9 pr-3 py-2 text-sm"
                 style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+                aria-hidden={!isSmScreen}
+                tabIndex={isSmScreen ? 0 : -1}
               />
             </div>
           </div>
@@ -195,24 +212,27 @@ export default function Home() {
                 Admin
               </Link>
             )}
-            <Link
-              href="/messages"
-              className="relative p-1.5 rounded-lg hover:opacity-80 transition-opacity"
-              style={{ color: "var(--text-muted)" }}
-              aria-label="Messages"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-              </svg>
-              {unreadCount > 0 && (
-                <span
-                  className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 flex items-center justify-center rounded-full text-[10px] font-bold px-1"
-                  style={{ background: "var(--danger)", color: "#fff" }}
-                >
-                  {unreadCount > 99 ? "99+" : unreadCount}
-                </span>
-              )}
-            </Link>
+            {user && (
+              <Link
+                href="/messages"
+                className="relative p-1.5 rounded-lg hover:opacity-80 transition-opacity"
+                style={{ color: "var(--text-muted)" }}
+                aria-label="Messages"
+                title="Messages"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+                {unreadCount > 0 && (
+                  <span
+                    className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 flex items-center justify-center rounded-full text-[10px] font-bold px-1"
+                    style={{ background: "var(--danger)", color: "#fff" }}
+                  >
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </span>
+                )}
+              </Link>
+            )}
             {user && (
               <Link
                 href={`/profile/${user.id}`}
@@ -226,13 +246,23 @@ export default function Home() {
                 />
               </Link>
             )}
-            <button
-              onClick={logout}
-              className="text-xs font-medium hidden sm:block hover:opacity-80"
-              style={{ color: "var(--text-muted)" }}
-            >
-              Sign out
-            </button>
+            {user ? (
+              <button
+                onClick={logout}
+                className="text-xs font-medium hidden sm:block hover:opacity-80"
+                style={{ color: "var(--text-muted)" }}
+              >
+                Sign out
+              </button>
+            ) : (
+              <Link
+                href="/login"
+                className="text-xs font-medium hidden sm:block hover:opacity-80"
+                style={{ color: "var(--text-muted)" }}
+              >
+                Sign in
+              </Link>
+            )}
           </div>
         </div>
 
@@ -249,6 +279,8 @@ export default function Home() {
               placeholder="Search routes, regions..."
               className="w-full rounded-lg pl-9 pr-3 py-2 text-sm"
               style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+              aria-hidden={isSmScreen}
+              tabIndex={isSmScreen ? -1 : 0}
             />
           </div>
         </div>
@@ -368,21 +400,9 @@ export default function Home() {
             </div>
 
             {loading ? (
-              <div className="space-y-3">
-                {[...Array(4)].map((_, i) => (
-                  <div key={i} className="p-4 rounded-xl animate-pulse border-l-[3px]" style={{ background: "var(--bg-card)", borderLeftColor: "var(--border)" }}>
-                    <div className="flex items-start justify-between gap-2 mb-3">
-                      <div className="h-4 rounded w-44" style={{ background: "var(--border)" }} />
-                      <div className="h-4 rounded w-14" style={{ background: "var(--border)" }} />
-                    </div>
-                    <div className="h-3 rounded w-full mb-1.5" style={{ background: "var(--border)" }} />
-                    <div className="h-3 rounded w-2/3 mb-3" style={{ background: "var(--border)" }} />
-                    <div className="flex gap-3">
-                      <div className="h-2.5 rounded w-12" style={{ background: "var(--border)" }} />
-                      <div className="h-2.5 rounded w-16" style={{ background: "var(--border)" }} />
-                      <div className="h-2.5 rounded w-10" style={{ background: "var(--border)" }} />
-                    </div>
-                  </div>
+              <div className="space-y-2 md:space-y-2.5">
+                {[...Array(6)].map((_, i) => (
+                  <SkeletonCard key={i} />
                 ))}
               </div>
             ) : routes.length === 0 ? (

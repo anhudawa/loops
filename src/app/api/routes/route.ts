@@ -26,6 +26,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(await getCounties());
     }
 
+    const page = Math.max(1, Number(searchParams.get("page")) || 1);
+    const pageSize = 20;
+
     const filters = {
       difficulty: searchParams.get("difficulty") || undefined,
       minDistance: searchParams.get("minDistance") ? Number(searchParams.get("minDistance")) : undefined,
@@ -40,10 +43,14 @@ export async function GET(request: NextRequest) {
       lat: searchParams.get("lat") ? Number(searchParams.get("lat")) : undefined,
       lng: searchParams.get("lng") ? Number(searchParams.get("lng")) : undefined,
       maxRadius: searchParams.get("maxRadius") ? Number(searchParams.get("maxRadius")) : undefined,
+      limit: pageSize,
+      offset: (page - 1) * pageSize,
     };
 
-    const routes = await getRoutes(filters);
-    return NextResponse.json(routes);
+    const rows = await getRoutes(filters);
+    const hasMore = rows.length > pageSize;
+    const routes = hasMore ? rows.slice(0, pageSize) : rows;
+    return NextResponse.json({ data: routes, hasMore, page });
   } catch (err) {
     return handleApiError(err);
   }

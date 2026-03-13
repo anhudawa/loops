@@ -9,8 +9,13 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const conditions = await getRouteConditions(id);
-    return NextResponse.json(conditions);
+    const { searchParams } = new URL(request.url);
+    const page = Math.max(1, Number(searchParams.get("page")) || 1);
+    const pageSize = 10;
+    const rows = await getRouteConditions(id, pageSize + 1, (page - 1) * pageSize);
+    const hasMore = rows.length > pageSize;
+    const conditions = hasMore ? rows.slice(0, pageSize) : rows;
+    return NextResponse.json({ data: conditions, hasMore, page });
   } catch (err) {
     return handleApiError(err);
   }
@@ -48,8 +53,9 @@ export async function POST(
     }
 
     await insertCondition(uuidv4(), routeId, user.id, status, note.trim());
-    const conditions = await getRouteConditions(routeId);
-    return NextResponse.json(conditions);
+    const rows = await getRouteConditions(routeId, 11, 0);
+    const hasMore = rows.length > 10;
+    return NextResponse.json({ data: hasMore ? rows.slice(0, 10) : rows, hasMore, page: 1 });
   } catch (err) {
     return handleApiError(err);
   }

@@ -217,6 +217,8 @@ export interface RouteFilters {
   lat?: number;
   lng?: number;
   maxRadius?: number;
+  limit?: number;
+  offset?: number;
 }
 
 export interface User {
@@ -384,7 +386,12 @@ export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
     GROUP BY r.id, u.name, u.avatar_url
     ${having}
     ORDER BY ${orderBy}
+    LIMIT $${idx++} OFFSET $${idx++}
   `;
+
+  const limit = (filters.limit ?? 20) + 1; // fetch one extra to check hasMore
+  const offset = filters.offset ?? 0;
+  params.push(limit, offset);
 
   const { rows } = await sql.query(query, params);
   return rows as Route[];
@@ -674,13 +681,14 @@ export async function upsertRating(id: string, routeId: string, userId: string, 
 }
 
 // ──── Comments ────
-export async function getRouteComments(routeId: string): Promise<Comment[]> {
+export async function getRouteComments(routeId: string, limit = 10, offset = 0): Promise<Comment[]> {
   const { rows } = await sql`
     SELECT c.id, c.route_id, c.user_id, u.name as user_name, u.email as user_email, u.avatar_url as user_avatar, c.body, c.created_at
     FROM comments c
     JOIN users u ON c.user_id = u.id
     WHERE c.route_id = ${routeId}
     ORDER BY c.created_at DESC
+    LIMIT ${limit} OFFSET ${offset}
   `;
   return rows as Comment[];
 }
@@ -716,14 +724,14 @@ export async function insertPhoto(id: string, routeId: string, userId: string, f
 }
 
 // ──── Conditions ────
-export async function getRouteConditions(routeId: string): Promise<Condition[]> {
+export async function getRouteConditions(routeId: string, limit = 10, offset = 0): Promise<Condition[]> {
   const { rows } = await sql`
     SELECT c.id, c.route_id, c.user_id, u.name as user_name, c.status, c.note, c.created_at
     FROM conditions c
     JOIN users u ON c.user_id = u.id
     WHERE c.route_id = ${routeId}
     ORDER BY c.created_at DESC
-    LIMIT 10
+    LIMIT ${limit} OFFSET ${offset}
   `;
   return rows as Condition[];
 }

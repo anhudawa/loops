@@ -39,12 +39,30 @@ export default function Comments({ routeId }: { routeId: string }) {
   const [body, setBody] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   useEffect(() => {
     fetch(`/api/routes/${routeId}/comments`)
       .then((r) => r.json())
-      .then(setComments);
+      .then((json) => {
+        setComments(json.data ?? json);
+        setHasMore(json.hasMore ?? false);
+        setPage(1);
+      });
   }, [routeId]);
+
+  const loadMore = async () => {
+    setLoadingMore(true);
+    const nextPage = page + 1;
+    const res = await fetch(`/api/routes/${routeId}/comments?page=${nextPage}`);
+    const json = await res.json();
+    setComments((prev) => [...prev, ...(json.data ?? json)]);
+    setHasMore(json.hasMore ?? false);
+    setPage(nextPage);
+    setLoadingMore(false);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,8 +76,10 @@ export default function Comments({ routeId }: { routeId: string }) {
     });
 
     if (res.ok) {
-      const data = await res.json();
-      setComments(data);
+      const json = await res.json();
+      setComments(json.data ?? json);
+      setHasMore(json.hasMore ?? false);
+      setPage(1);
       setBody("");
     }
     setSubmitting(false);
@@ -74,8 +94,10 @@ export default function Comments({ routeId }: { routeId: string }) {
     });
 
     if (res.ok) {
-      const data = await res.json();
-      setComments(data);
+      const json = await res.json();
+      setComments(json.data ?? json);
+      setHasMore(json.hasMore ?? false);
+      setPage(1);
     }
     setDeletingId(null);
   };
@@ -169,7 +191,7 @@ export default function Comments({ routeId }: { routeId: string }) {
           No comments yet. Be the first to share your experience!
         </p>
       ) : (
-        <div className="space-y-1">
+        <div className="space-y-1" role="list" aria-label="Comments">
           {comments.map((comment) => (
             <div
               key={comment.id}
@@ -231,6 +253,16 @@ export default function Comments({ routeId }: { routeId: string }) {
               </div>
             </div>
           ))}
+          {hasMore && (
+            <button
+              onClick={loadMore}
+              disabled={loadingMore}
+              className="w-full py-2 text-xs font-bold transition-opacity hover:opacity-80 disabled:opacity-50"
+              style={{ color: "var(--accent)" }}
+            >
+              {loadingMore ? "Loading..." : "Load more comments"}
+            </button>
+          )}
         </div>
       )}
     </div>

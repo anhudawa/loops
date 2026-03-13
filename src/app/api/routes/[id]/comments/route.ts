@@ -9,8 +9,13 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const comments = await getRouteComments(id);
-    return NextResponse.json(comments);
+    const { searchParams } = new URL(request.url);
+    const page = Math.max(1, Number(searchParams.get("page")) || 1);
+    const pageSize = 10;
+    const rows = await getRouteComments(id, pageSize + 1, (page - 1) * pageSize);
+    const hasMore = rows.length > pageSize;
+    const comments = hasMore ? rows.slice(0, pageSize) : rows;
+    return NextResponse.json({ data: comments, hasMore, page });
   } catch (err) {
     return handleApiError(err);
   }
@@ -43,8 +48,9 @@ export async function POST(
     }
 
     await insertComment(uuidv4(), id, user.id, body.trim());
-    const comments = await getRouteComments(id);
-    return NextResponse.json(comments);
+    const rows = await getRouteComments(id, 11, 0);
+    const hasMore = rows.length > 10;
+    return NextResponse.json({ data: hasMore ? rows.slice(0, 10) : rows, hasMore, page: 1 });
   } catch (err) {
     return handleApiError(err);
   }
@@ -77,8 +83,9 @@ export async function DELETE(
       return apiError("Comment not found or not yours", "FORBIDDEN", 403);
     }
 
-    const comments = await getRouteComments(id);
-    return NextResponse.json(comments);
+    const rows = await getRouteComments(id, 11, 0);
+    const hasMore = rows.length > 10;
+    return NextResponse.json({ data: hasMore ? rows.slice(0, 10) : rows, hasMore, page: 1 });
   } catch (err) {
     return handleApiError(err);
   }

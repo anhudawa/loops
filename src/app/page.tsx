@@ -66,6 +66,9 @@ export default function Home() {
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [page, setPage] = useState(1);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [sortBy, setSortBy] = useState("newest");
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
@@ -96,7 +99,7 @@ export default function Home() {
       .then((data) => setRegions(Array.isArray(data) ? data : []));
   }, [filters.country]);
 
-  const fetchRoutes = useCallback(async () => {
+  const fetchRoutes = useCallback(async (pageNum = 1, append = false) => {
     const params = new URLSearchParams();
     if (filters.difficulty) params.set("difficulty", filters.difficulty);
     if (filters.minDistance) params.set("minDistance", filters.minDistance);
@@ -111,21 +114,32 @@ export default function Home() {
     if (userLocation) {
       params.set("lat", String(userLocation.lat));
       params.set("lng", String(userLocation.lng));
-      // Only show nearby routes unless user explicitly picks a country
       if (!filters.country) {
         params.set("maxRadius", "500");
       }
     }
+    params.set("page", String(pageNum));
 
     const res = await fetch(`/api/routes?${params}`);
-    const data = await res.json();
-    setRoutes(data);
+    const json = await res.json();
+    const newRoutes = json.data ?? json;
+    setRoutes((prev) => append ? [...prev, ...newRoutes] : newRoutes);
+    setHasMore(json.hasMore ?? false);
+    setPage(pageNum);
     setLoading(false);
+    setLoadingMore(false);
   }, [filters, sortBy, userLocation]);
 
   useEffect(() => {
-    fetchRoutes();
+    setLoading(true);
+    setPage(1);
+    fetchRoutes(1, false);
   }, [fetchRoutes]);
+
+  const loadMore = () => {
+    setLoadingMore(true);
+    fetchRoutes(page + 1, true);
+  };
 
   const handleFilterChange = (key: string, value: string) => {
     // Reset region when country changes
@@ -436,6 +450,16 @@ export default function Home() {
                     showDistance={!!userLocation}
                   />
                 ))}
+                {hasMore && (
+                  <button
+                    onClick={loadMore}
+                    disabled={loadingMore}
+                    className="w-full py-3 rounded-xl text-sm font-bold transition-all hover:opacity-80 disabled:opacity-50"
+                    style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
+                  >
+                    {loadingMore ? "Loading..." : "Load more routes"}
+                  </button>
+                )}
               </div>
             )}
           </div>

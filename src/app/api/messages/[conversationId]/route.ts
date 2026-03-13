@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserBySession, getMessages, sendMessage, isConversationParticipant, migrateDb } from "@/lib/db";
 import { apiError, handleApiError } from "@/lib/api-utils";
+import { MAX_MESSAGE_LENGTH } from "@/config/constants";
 import { v4 as uuidv4 } from "uuid";
 
 export async function GET(
@@ -63,8 +64,8 @@ export async function POST(
       return apiError("Message body required", "VALIDATION_ERROR", 400);
     }
 
-    if (body.length > 2000) {
-      return apiError("Message too long (max 2000 characters)", "VALIDATION_ERROR", 400);
+    if (body.length > MAX_MESSAGE_LENGTH) {
+      return apiError(`Message too long (max ${MAX_MESSAGE_LENGTH} characters)`, "VALIDATION_ERROR", 400);
     }
 
     const message = await sendMessage(uuidv4(), conversationId, user.id, body.trim());

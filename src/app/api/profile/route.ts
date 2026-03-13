@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/admin";
 import { updateUserProfile } from "@/lib/db";
 import { apiError, handleApiError } from "@/lib/api-utils";
+import { MAX_USER_NAME_LENGTH, MAX_BIO_LENGTH, MAX_LOCATION_LENGTH } from "@/config/constants";
 
 export async function PATCH(request: NextRequest) {
   try {
@@ -17,17 +18,17 @@ export async function PATCH(request: NextRequest) {
     if (bio !== undefined && typeof bio !== "string") {
       return apiError("Invalid bio", "VALIDATION_ERROR", 400);
     }
-    if (bio && bio.length > 500) {
-      return apiError("Bio must be 500 characters or less", "VALIDATION_ERROR", 400);
+    if (bio && bio.length > MAX_BIO_LENGTH) {
+      return apiError(`Bio must be ${MAX_BIO_LENGTH} characters or less`, "VALIDATION_ERROR", 400);
     }
-    if (name && name.length > 100) {
-      return apiError("Name must be 100 characters or less", "VALIDATION_ERROR", 400);
+    if (name && name.length > MAX_USER_NAME_LENGTH) {
+      return apiError(`Name must be ${MAX_USER_NAME_LENGTH} characters or less`, "VALIDATION_ERROR", 400);
     }
     if (location !== undefined && typeof location !== "string") {
       return apiError("Invalid location", "VALIDATION_ERROR", 400);
     }
-    if (location && location.length > 200) {
-      return apiError("Location must be 200 characters or less", "VALIDATION_ERROR", 400);
+    if (location && location.length > MAX_LOCATION_LENGTH) {
+      return apiError(`Location must be ${MAX_LOCATION_LENGTH} characters or less`, "VALIDATION_ERROR", 400);
     }
 
     const updated = await updateUserProfile(auth.user.id, {

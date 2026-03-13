@@ -4,6 +4,7 @@ import { parseRouteFile } from "@/lib/route-parser";
 import { fetchRideWithGPS } from "@/lib/ridewithgps";
 import { validateStravaUrl, getStravaExportError } from "@/lib/strava";
 import { apiError, handleApiError } from "@/lib/api-utils";
+import { ROUTES_PER_PAGE, MAX_ROUTE_FILE_SIZE, MAX_ROUTE_NAME_LENGTH, MAX_ROUTE_DESCRIPTION_LENGTH, DIFFICULTIES, DISCIPLINES, VALID_ROUTE_EXTENSIONS } from "@/config/constants";
 import { v4 as uuidv4 } from "uuid";
 
 export async function GET(request: NextRequest) {
@@ -27,7 +28,7 @@ export async function GET(request: NextRequest) {
     }
 
     const page = Math.max(1, Number(searchParams.get("page")) || 1);
-    const pageSize = 20;
+    const pageSize = ROUTES_PER_PAGE;
 
     const filters = {
       difficulty: searchParams.get("difficulty") || undefined,
@@ -82,22 +83,20 @@ export async function POST(request: NextRequest) {
       return apiError("Missing required fields", "VALIDATION_ERROR", 400);
     }
 
-    if (name.length > 200) {
-      return apiError("Route name must be 200 characters or less", "VALIDATION_ERROR", 400);
+    if (name.length > MAX_ROUTE_NAME_LENGTH) {
+      return apiError(`Route name must be ${MAX_ROUTE_NAME_LENGTH} characters or less`, "VALIDATION_ERROR", 400);
     }
 
-    if (description && description.length > 5000) {
-      return apiError("Description must be 5000 characters or less", "VALIDATION_ERROR", 400);
+    if (description && description.length > MAX_ROUTE_DESCRIPTION_LENGTH) {
+      return apiError(`Description must be ${MAX_ROUTE_DESCRIPTION_LENGTH} characters or less`, "VALIDATION_ERROR", 400);
     }
 
-    const validDifficulties = ["easy", "moderate", "hard", "expert"];
-    if (!validDifficulties.includes(difficulty)) {
-      return apiError("Difficulty must be easy, moderate, hard, or expert", "VALIDATION_ERROR", 400);
+    if (!(DIFFICULTIES as readonly string[]).includes(difficulty)) {
+      return apiError(`Difficulty must be ${DIFFICULTIES.join(", ")}`, "VALIDATION_ERROR", 400);
     }
 
-    const validDisciplines = ["road", "gravel", "mtb"];
-    if (!validDisciplines.includes(discipline)) {
-      return apiError("Discipline must be road, gravel, or mtb", "VALIDATION_ERROR", 400);
+    if (!(DISCIPLINES as readonly string[]).includes(discipline)) {
+      return apiError(`Discipline must be ${DISCIPLINES.join(", ")}`, "VALIDATION_ERROR", 400);
     }
 
     let parsed;
@@ -126,14 +125,12 @@ export async function POST(request: NextRequest) {
       }
     } else if (routeFile) {
       // File upload path — validate size and type
-      const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-      if (routeFile.size > MAX_FILE_SIZE) {
+      if (routeFile.size > MAX_ROUTE_FILE_SIZE) {
         return apiError("File must be under 10MB", "VALIDATION_ERROR", 400);
       }
 
       const filename = routeFile.name.toLowerCase();
-      const validExtensions = [".gpx", ".fit", ".tcx"];
-      if (!validExtensions.some((ext) => filename.endsWith(ext))) {
+      if (!VALID_ROUTE_EXTENSIONS.some((ext) => filename.endsWith(ext))) {
         return apiError("Unsupported file type. Upload a .gpx, .fit, or .tcx file", "VALIDATION_ERROR", 400);
       }
 

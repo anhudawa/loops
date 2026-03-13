@@ -1,25 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { RATE_LIMIT_AUTH, RATE_LIMIT_UPLOAD, RATE_LIMIT_WRITE, RATE_LIMIT_READ } from "@/config/constants";
 
-/**
- * Rate limits (per minute):
- *   auth 5/min, uploads 3/min, writes 10/min, reads 60/min
- */
 function getRateLimitConfig(pathname: string, method: string) {
   if (pathname.startsWith("/api/auth")) {
-    return { max: 5, prefix: "auth" };
+    return { max: RATE_LIMIT_AUTH, prefix: "auth" };
   }
   if (
     (pathname === "/api/routes" && method === "POST") ||
     (pathname === "/api/profile/avatar" && method === "POST") ||
     (/\/api\/routes\/[^/]+\/photos$/.test(pathname) && method === "POST")
   ) {
-    return { max: 3, prefix: "upload" };
+    return { max: RATE_LIMIT_UPLOAD, prefix: "upload" };
   }
   if (["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
-    return { max: 10, prefix: "write" };
+    return { max: RATE_LIMIT_WRITE, prefix: "write" };
   }
-  return { max: 60, prefix: "read" };
+  return { max: RATE_LIMIT_READ, prefix: "read" };
 }
 
 function getClientId(request: NextRequest): string {

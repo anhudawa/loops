@@ -32,9 +32,8 @@ export async function initPushNotifications() {
     console.error("Push registration failed:", error);
   });
 
-  PushNotifications.addListener("pushNotificationReceived", (notification) => {
+  PushNotifications.addListener("pushNotificationReceived", () => {
     // Foreground notification — could show an in-app toast
-    console.log("Push received:", notification);
   });
 
   PushNotifications.addListener("pushNotificationActionPerformed", (action) => {

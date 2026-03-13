@@ -45,6 +45,10 @@ export async function POST(request: NextRequest) {
       return apiError("Missing recipient or message body", "VALIDATION_ERROR", 400);
     }
 
+    if (body.length > 2000) {
+      return apiError("Message too long (max 2000 characters)", "VALIDATION_ERROR", 400);
+    }
+
     if (to === user.id) {
       return apiError("Cannot message yourself", "VALIDATION_ERROR", 400);
     }

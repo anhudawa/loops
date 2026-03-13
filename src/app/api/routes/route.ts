@@ -75,6 +75,24 @@ export async function POST(request: NextRequest) {
       return apiError("Missing required fields", "VALIDATION_ERROR", 400);
     }
 
+    if (name.length > 200) {
+      return apiError("Route name must be 200 characters or less", "VALIDATION_ERROR", 400);
+    }
+
+    if (description && description.length > 5000) {
+      return apiError("Description must be 5000 characters or less", "VALIDATION_ERROR", 400);
+    }
+
+    const validDifficulties = ["easy", "moderate", "hard", "expert"];
+    if (!validDifficulties.includes(difficulty)) {
+      return apiError("Difficulty must be easy, moderate, hard, or expert", "VALIDATION_ERROR", 400);
+    }
+
+    const validDisciplines = ["road", "gravel", "mtb"];
+    if (!validDisciplines.includes(discipline)) {
+      return apiError("Discipline must be road, gravel, or mtb", "VALIDATION_ERROR", 400);
+    }
+
     let parsed;
 
     // Check for URL import
@@ -100,14 +118,31 @@ export async function POST(request: NextRequest) {
         );
       }
     } else if (routeFile) {
-      // File upload path
+      // File upload path — validate size and type
+      const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+      if (routeFile.size > MAX_FILE_SIZE) {
+        return apiError("File must be under 10MB", "VALIDATION_ERROR", 400);
+      }
+
       const filename = routeFile.name.toLowerCase();
+      const validExtensions = [".gpx", ".fit", ".tcx"];
+      if (!validExtensions.some((ext) => filename.endsWith(ext))) {
+        return apiError("Unsupported file type. Upload a .gpx, .fit, or .tcx file", "VALIDATION_ERROR", 400);
+      }
+
       let content: string | ArrayBuffer;
 
       if (filename.endsWith(".fit")) {
         content = await routeFile.arrayBuffer();
       } else {
         content = await routeFile.text();
+        // Basic structure validation for XML-based formats
+        if (filename.endsWith(".gpx") && !content.includes("<gpx")) {
+          return apiError("Invalid GPX file: missing <gpx> root element", "VALIDATION_ERROR", 400);
+        }
+        if (filename.endsWith(".tcx") && !content.includes("<TrainingCenterDatabase")) {
+          return apiError("Invalid TCX file: missing <TrainingCenterDatabase> root element", "VALIDATION_ERROR", 400);
+        }
       }
 
       parsed = await parseRouteFile(routeFile.name, content);

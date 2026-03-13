@@ -20,8 +20,14 @@ export async function PATCH(request: NextRequest) {
     if (bio && bio.length > 500) {
       return apiError("Bio must be 500 characters or less", "VALIDATION_ERROR", 400);
     }
+    if (name && name.length > 100) {
+      return apiError("Name must be 100 characters or less", "VALIDATION_ERROR", 400);
+    }
     if (location !== undefined && typeof location !== "string") {
       return apiError("Invalid location", "VALIDATION_ERROR", 400);
+    }
+    if (location && location.length > 200) {
+      return apiError("Location must be 200 characters or less", "VALIDATION_ERROR", 400);
     }
 
     const updated = await updateUserProfile(auth.user.id, {

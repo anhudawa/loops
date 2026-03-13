@@ -63,6 +63,10 @@ export async function POST(
       return apiError("Message body required", "VALIDATION_ERROR", 400);
     }
 
+    if (body.length > 2000) {
+      return apiError("Message too long (max 2000 characters)", "VALIDATION_ERROR", 400);
+    }
+
     const message = await sendMessage(uuidv4(), conversationId, user.id, body.trim());
     return NextResponse.json({ message }, { status: 201 });
   } catch (err) {

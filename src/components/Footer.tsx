@@ -1,11 +1,13 @@
+import Link from "next/link";
+
 export default function Footer() {
   const currentYear = new Date().getFullYear();
 
   const links = [
-    { label: "About", href: "#" },
-    { label: "Privacy Policy", href: "#" },
-    { label: "Terms", href: "#" },
-    { label: "Feedback", href: "#" },
+    { label: "About", href: "/about" },
+    { label: "Privacy", href: "/privacy" },
+    { label: "Terms", href: "/terms" },
+    { label: "Feedback", href: "/feedback" },
   ];
 
   return (
@@ -20,14 +22,14 @@ export default function Footer() {
         {/* Links */}
         <nav className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
           {links.map((link) => (
-            <a
+            <Link
               key={link.label}
               href={link.href}
               className="text-[11px] font-bold uppercase tracking-wider transition-colors hover:opacity-80"
               style={{ color: "var(--text-muted)" }}
             >
               {link.label}
-            </a>
+            </Link>
           ))}
         </nav>
 

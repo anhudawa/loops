@@ -1,18 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserBySession, getUnreadCount, migrateDb } from "@/lib/db";
+import { handleApiError } from "@/lib/api-utils";
 
 export async function GET(request: NextRequest) {
-  const sessionToken = request.cookies.get("session")?.value;
-  if (!sessionToken) {
-    return NextResponse.json({ count: 0 });
-  }
+  try {
+    const sessionToken = request.cookies.get("session")?.value;
+    if (!sessionToken) {
+      return NextResponse.json({ count: 0 });
+    }
 
-  const user = await getUserBySession(sessionToken);
-  if (!user) {
-    return NextResponse.json({ count: 0 });
-  }
+    const user = await getUserBySession(sessionToken);
+    if (!user) {
+      return NextResponse.json({ count: 0 });
+    }
 
-  await migrateDb();
-  const count = await getUnreadCount(user.id);
-  return NextResponse.json({ count });
+    await migrateDb();
+    const count = await getUnreadCount(user.id);
+    return NextResponse.json({ count });
+  } catch (err) {
+    return handleApiError(err);
+  }
 }

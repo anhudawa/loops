@@ -3,73 +3,78 @@ import { getRoutes, insertRoute, getCounties, getRegions, getCountries, getUserB
 import { parseRouteFile } from "@/lib/route-parser";
 import { fetchRideWithGPS } from "@/lib/ridewithgps";
 import { validateStravaUrl, getStravaExportError } from "@/lib/strava";
+import { apiError, handleApiError } from "@/lib/api-utils";
 import { v4 as uuidv4 } from "uuid";
 
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
+  try {
+    const { searchParams } = new URL(request.url);
 
-  // Return distinct countries
-  if (searchParams.get("countries") === "true") {
-    return NextResponse.json(await getCountries());
+    // Return distinct countries
+    if (searchParams.get("countries") === "true") {
+      return NextResponse.json(await getCountries());
+    }
+
+    // Return distinct regions, optionally filtered by country
+    if (searchParams.get("regions") === "true") {
+      const country = searchParams.get("country") || undefined;
+      return NextResponse.json(await getRegions(country));
+    }
+
+    // Legacy: return counties
+    if (searchParams.get("counties") === "true") {
+      return NextResponse.json(await getCounties());
+    }
+
+    const filters = {
+      difficulty: searchParams.get("difficulty") || undefined,
+      minDistance: searchParams.get("minDistance") ? Number(searchParams.get("minDistance")) : undefined,
+      maxDistance: searchParams.get("maxDistance") ? Number(searchParams.get("maxDistance")) : undefined,
+      county: searchParams.get("county") || undefined,
+      country: searchParams.get("country") || undefined,
+      discipline: searchParams.get("discipline") || undefined,
+      surface_type: searchParams.get("surface_type") || undefined,
+      search: searchParams.get("search") || undefined,
+      sort: searchParams.get("sort") || undefined,
+      verified: searchParams.get("verified") === "true" ? true : undefined,
+      lat: searchParams.get("lat") ? Number(searchParams.get("lat")) : undefined,
+      lng: searchParams.get("lng") ? Number(searchParams.get("lng")) : undefined,
+      maxRadius: searchParams.get("maxRadius") ? Number(searchParams.get("maxRadius")) : undefined,
+    };
+
+    const routes = await getRoutes(filters);
+    return NextResponse.json(routes);
+  } catch (err) {
+    return handleApiError(err);
   }
-
-  // Return distinct regions, optionally filtered by country
-  if (searchParams.get("regions") === "true") {
-    const country = searchParams.get("country") || undefined;
-    return NextResponse.json(await getRegions(country));
-  }
-
-  // Legacy: return counties
-  if (searchParams.get("counties") === "true") {
-    return NextResponse.json(await getCounties());
-  }
-
-  const filters = {
-    difficulty: searchParams.get("difficulty") || undefined,
-    minDistance: searchParams.get("minDistance") ? Number(searchParams.get("minDistance")) : undefined,
-    maxDistance: searchParams.get("maxDistance") ? Number(searchParams.get("maxDistance")) : undefined,
-    county: searchParams.get("county") || undefined,
-    country: searchParams.get("country") || undefined,
-    discipline: searchParams.get("discipline") || undefined,
-    surface_type: searchParams.get("surface_type") || undefined,
-    search: searchParams.get("search") || undefined,
-    sort: searchParams.get("sort") || undefined,
-    verified: searchParams.get("verified") === "true" ? true : undefined,
-    lat: searchParams.get("lat") ? Number(searchParams.get("lat")) : undefined,
-    lng: searchParams.get("lng") ? Number(searchParams.get("lng")) : undefined,
-    maxRadius: searchParams.get("maxRadius") ? Number(searchParams.get("maxRadius")) : undefined,
-  };
-
-  const routes = await getRoutes(filters);
-  return NextResponse.json(routes);
 }
 
 export async function POST(request: NextRequest) {
-  // Require authenticated user
-  const sessionToken = request.cookies.get("session")?.value;
-  if (!sessionToken) {
-    return NextResponse.json({ error: "Sign in to upload routes" }, { status: 401 });
-  }
-  const currentUser = await getUserBySession(sessionToken);
-  if (!currentUser) {
-    return NextResponse.json({ error: "Sign in to upload routes" }, { status: 401 });
-  }
-
-  const formData = await request.formData();
-  const name = formData.get("name") as string;
-  const description = formData.get("description") as string | null;
-  const difficulty = formData.get("difficulty") as string;
-  const surfaceType = formData.get("surface_type") as string;
-  const county = formData.get("county") as string;
-  const country = (formData.get("country") as string) || "Ireland";
-  const region = (formData.get("region") as string) || county || null;
-  const discipline = (formData.get("discipline") as string) || "gravel";
-
-  if (!name || !difficulty || !surfaceType || !county) {
-    return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
-  }
-
   try {
+    // Require authenticated user
+    const sessionToken = request.cookies.get("session")?.value;
+    if (!sessionToken) {
+      return apiError("Sign in to upload routes", "UNAUTHORIZED", 401);
+    }
+    const currentUser = await getUserBySession(sessionToken);
+    if (!currentUser) {
+      return apiError("Sign in to upload routes", "UNAUTHORIZED", 401);
+    }
+
+    const formData = await request.formData();
+    const name = formData.get("name") as string;
+    const description = formData.get("description") as string | null;
+    const difficulty = formData.get("difficulty") as string;
+    const surfaceType = formData.get("surface_type") as string;
+    const county = formData.get("county") as string;
+    const country = (formData.get("country") as string) || "Ireland";
+    const region = (formData.get("region") as string) || county || null;
+    const discipline = (formData.get("discipline") as string) || "gravel";
+
+    if (!name || !difficulty || !surfaceType || !county) {
+      return apiError("Missing required fields", "VALIDATION_ERROR", 400);
+    }
+
     let parsed;
 
     // Check for URL import
@@ -82,14 +87,16 @@ export async function POST(request: NextRequest) {
       if (/ridewithgps\.com\/(routes|trips)\/\d+/.test(importUrl)) {
         parsed = await fetchRideWithGPS(importUrl);
       } else if (validateStravaUrl(importUrl)) {
-        return NextResponse.json(
-          { error: getStravaExportError() },
-          { status: 400 }
+        return apiError(
+          getStravaExportError(),
+          "VALIDATION_ERROR",
+          400
         );
       } else {
-        return NextResponse.json(
-          { error: "Unsupported URL. Paste a RideWithGPS route link, or export from Strava as GPX/FIT and upload the file." },
-          { status: 400 }
+        return apiError(
+          "Unsupported URL. Paste a RideWithGPS route link, or export from Strava as GPX/FIT and upload the file.",
+          "VALIDATION_ERROR",
+          400
         );
       }
     } else if (routeFile) {
@@ -105,13 +112,13 @@ export async function POST(request: NextRequest) {
 
       parsed = await parseRouteFile(routeFile.name, content);
     } else {
-      return NextResponse.json({ error: "Please upload a file or paste a URL" }, { status: 400 });
+      return apiError("Please upload a file or paste a URL", "VALIDATION_ERROR", 400);
     }
 
     const { coordinates, elevations, distance_km, elevation_gain_m, elevation_loss_m } = parsed;
 
     if (coordinates.length === 0) {
-      return NextResponse.json({ error: "No track points found in the uploaded file" }, { status: 400 });
+      return apiError("No track points found in the uploaded file", "VALIDATION_ERROR", 400);
     }
 
     // Store coordinates with elevations: [lat, lng, elevation]
@@ -144,7 +151,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(route, { status: 201 });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to process route";
-    return NextResponse.json({ error: message }, { status: 400 });
+    return handleApiError(err);
   }
 }

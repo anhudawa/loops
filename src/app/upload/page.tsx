@@ -424,9 +424,24 @@ export default function UploadPage() {
           <button
             type="submit"
             disabled={submitting}
-            className="btn-accent w-full py-3.5 rounded-xl font-bold text-sm uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
+            className="btn-accent w-full py-3.5 rounded-xl font-bold text-sm uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden"
           >
-            {submitting ? (mode === "url" ? "Importing..." : "Uploading...") : (mode === "url" ? "Import Route" : "Upload Route")}
+            {submitting && (
+              <span
+                className="absolute inset-0 animate-pulse"
+                style={{ background: "rgba(255,255,255,0.1)" }}
+              />
+            )}
+            {submitting ? (
+              <span className="flex items-center justify-center gap-2">
+                <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" d="M12 2a10 10 0 0 1 10 10" />
+                </svg>
+                {mode === "url" ? "Importing route..." : "Parsing & uploading..."}
+              </span>
+            ) : (
+              mode === "url" ? "Import Route" : "Upload Route"
+            )}
           </button>
         </form>
       </div>

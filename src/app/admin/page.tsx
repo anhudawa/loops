@@ -52,6 +52,7 @@ export default function AdminPage() {
   const [routes, setRoutes] = useState<RouteRow[]>([]);
   const [comments, setComments] = useState<CommentRow[]>([]);
   const [confirm, setConfirm] = useState<{ type: string; id: string; label: string } | null>(null);
+  const [loadingTab, setLoadingTab] = useState(false);
 
   useEffect(() => {
     if (!loading && (!user || user.role !== "admin")) {
@@ -96,8 +97,14 @@ export default function AdminPage() {
   }, [user, fetchStats, fetchUsers]);
 
   useEffect(() => {
-    if (tab === "routes" && routes.length === 0) fetchRoutes();
-    if (tab === "comments" && comments.length === 0) fetchComments();
+    if (tab === "routes" && routes.length === 0) {
+      setLoadingTab(true);
+      fetchRoutes().finally(() => setLoadingTab(false));
+    }
+    if (tab === "comments" && comments.length === 0) {
+      setLoadingTab(true);
+      fetchComments().finally(() => setLoadingTab(false));
+    }
   }, [tab, routes.length, comments.length, fetchRoutes, fetchComments]);
 
   const handleBan = async (userId: string) => {
@@ -194,7 +201,19 @@ export default function AdminPage() {
 
         {/* Content */}
         <div className="rounded-xl overflow-hidden" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-          {tab === "users" && (
+          {loadingTab && (
+            <div className="p-4 space-y-3 animate-pulse">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="flex gap-4">
+                  <div className="h-4 rounded w-1/4" style={{ background: "var(--border)" }} />
+                  <div className="h-4 rounded w-1/3" style={{ background: "var(--border)" }} />
+                  <div className="h-4 rounded w-1/6" style={{ background: "var(--border)" }} />
+                  <div className="h-4 rounded w-1/6" style={{ background: "var(--border)" }} />
+                </div>
+              ))}
+            </div>
+          )}
+          {!loadingTab && tab === "users" && (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -257,7 +276,7 @@ export default function AdminPage() {
             </div>
           )}
 
-          {tab === "routes" && (
+          {!loadingTab && tab === "routes" && (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -294,7 +313,7 @@ export default function AdminPage() {
             </div>
           )}
 
-          {tab === "comments" && (
+          {!loadingTab && tab === "comments" && (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>

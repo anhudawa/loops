@@ -1,7 +1,7 @@
 export default function SkeletonCard() {
   return (
     <div
-      className="rounded-xl overflow-hidden animate-pulse"
+      className="rounded-xl overflow-hidden"
       style={{
         background: "var(--bg-card)",
         border: "1px solid var(--border)",
@@ -18,10 +18,10 @@ export default function SkeletonCard() {
         {/* Mobile: location + creator placeholder */}
         <div className="md:hidden">
           <div className="flex items-center justify-between">
-            <div className="h-3 rounded w-24" style={{ background: "var(--border)" }} />
+            <div className="skeleton h-3 rounded w-24" />
             <div className="flex items-center gap-1.5">
-              <div className="w-4 h-4 rounded-full" style={{ background: "var(--border)" }} />
-              <div className="h-3 rounded w-16" style={{ background: "var(--border)" }} />
+              <div className="skeleton w-4 h-4 rounded-full" />
+              <div className="skeleton h-3 rounded w-16" />
             </div>
           </div>
         </div>
@@ -30,19 +30,19 @@ export default function SkeletonCard() {
         <div className="hidden md:block">
           {/* Title row */}
           <div className="flex items-center gap-1.5 mb-1">
-            <div className="h-5 rounded w-48" style={{ background: "var(--border)" }} />
+            <div className="skeleton h-5 rounded w-48" />
           </div>
 
           {/* Description lines */}
-          <div className="h-3.5 rounded w-full mb-1.5" style={{ background: "var(--border)" }} />
-          <div className="h-3.5 rounded w-2/3 mb-3" style={{ background: "var(--border)" }} />
+          <div className="skeleton h-3.5 rounded w-full mb-1.5" />
+          <div className="skeleton h-3.5 rounded w-2/3 mb-3" />
 
           {/* Stats row */}
           <div className="flex items-center gap-3">
-            <div className="h-3 rounded w-14" style={{ background: "var(--border)" }} />
-            <div className="h-3 rounded w-16" style={{ background: "var(--border)" }} />
-            <div className="h-3 rounded w-14" style={{ background: "var(--border)" }} />
-            <div className="h-3 rounded w-20" style={{ background: "var(--border)" }} />
+            <div className="skeleton h-3 rounded w-14" />
+            <div className="skeleton h-3 rounded w-16" />
+            <div className="skeleton h-3 rounded w-14" />
+            <div className="skeleton h-3 rounded w-20" />
           </div>
 
           {/* Creator row */}
@@ -50,8 +50,8 @@ export default function SkeletonCard() {
             className="flex items-center gap-2 mt-3 pt-3"
             style={{ borderTop: "1px solid var(--border)" }}
           >
-            <div className="w-5 h-5 rounded-full" style={{ background: "var(--border)" }} />
-            <div className="h-3 rounded w-24" style={{ background: "var(--border)" }} />
+            <div className="skeleton w-5 h-5 rounded-full" />
+            <div className="skeleton h-3 rounded w-24" />
           </div>
         </div>
       </div>

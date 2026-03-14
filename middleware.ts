@@ -66,6 +66,11 @@ export function middleware(request: NextRequest) {
     return response;
   }
 
+  // SEO files — always public
+  if (pathname === "/sitemap.xml" || pathname === "/robots.txt" || pathname === "/llms.txt") {
+    return NextResponse.next();
+  }
+
   // Public pages — homepage, info pages, login, route pages, photos
   const publicExactPaths = ["/", "/about", "/privacy", "/terms", "/feedback"];
   if (

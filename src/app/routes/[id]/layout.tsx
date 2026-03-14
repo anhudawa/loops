@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { getRoute, getRouteRating } from "@/lib/db";
+import { generateRouteJsonLd, generateBreadcrumbJsonLd, slugify } from "@/lib/seo";
+import JsonLd from "@/components/JsonLd";
 
 export async function generateMetadata({
   params,
@@ -13,20 +15,23 @@ export async function generateMetadata({
     return { title: "Route Not Found - LOOPS" };
   }
 
-  const rating = await getRouteRating(id);
-  const ratingText = rating.count > 0 ? ` | ${rating.average}/5 (${rating.count} ratings)` : "";
+  const location = route.region || route.county;
+  const title = `${route.name} — ${route.distance_km}km ${route.difficulty} ${route.discipline} route in ${location}, ${route.country} | LOOPS`;
   const description = route.description
-    ? route.description.slice(0, 160)
-    : `${route.difficulty} gravel route in ${route.county}. ${route.distance_km}km, ${route.elevation_gain_m}m elevation gain.`;
+    ? `${route.description.slice(0, 120)}. ${route.distance_km}km ${route.difficulty} ${route.discipline} route in ${location}, ${route.country}. ${route.elevation_gain_m}m climbing. Free GPX download.`
+    : `${route.distance_km}km ${route.difficulty} ${route.discipline} route in ${location}, ${route.country}. ${route.elevation_gain_m}m climbing. Free GPX download.`;
 
   return {
-    title: `${route.name} - LOOPS`,
-    description: `${description}${ratingText}`,
+    title,
+    description,
+    alternates: { canonical: `https://loops.ie/routes/${id}` },
+    robots: { index: true, follow: true },
     openGraph: {
-      title: `${route.name} | ${route.distance_km}km ${route.difficulty} gravel route`,
+      title: `${route.name} — ${route.distance_km}km ${route.discipline} route in ${location}, ${route.country}`,
       description,
       siteName: "LOOPS",
       type: "article",
+      locale: "en_IE",
       images: [`/api/og/${id}`],
     },
     twitter: {
@@ -38,10 +43,56 @@ export async function generateMetadata({
   };
 }
 
-export default function RouteLayout({
+export default async function RouteLayout({
   children,
+  params,
 }: {
   children: React.ReactNode;
+  params: Promise<{ id: string }>;
 }) {
-  return children;
+  const { id } = await params;
+  const route = await getRoute(id);
+
+  if (!route) return children;
+
+  const rating = await getRouteRating(id);
+
+  const routeJsonLd = generateRouteJsonLd({
+    id: route.id,
+    name: route.name,
+    description: route.description,
+    start_lat: route.start_lat,
+    start_lng: route.start_lng,
+    county: route.county,
+    country: route.country,
+    region: route.region,
+    distance_km: route.distance_km,
+    elevation_gain_m: route.elevation_gain_m,
+    difficulty: route.difficulty,
+    surface_type: route.surface_type,
+    discipline: route.discipline,
+    rating: { average: rating.average, count: rating.count },
+  });
+
+  const breadcrumbItems = [
+    { name: "LOOPS", url: "https://loops.ie" },
+    { name: route.country, url: `https://loops.ie/routes/country/${slugify(route.country)}` },
+  ];
+  if (route.region) {
+    breadcrumbItems.push({
+      name: route.region,
+      url: `https://loops.ie/routes/country/${slugify(route.country)}/${slugify(route.region)}`,
+    });
+  }
+  breadcrumbItems.push({ name: route.name });
+
+  const breadcrumbJsonLd = generateBreadcrumbJsonLd(breadcrumbItems);
+
+  return (
+    <>
+      <JsonLd data={routeJsonLd} />
+      <JsonLd data={breadcrumbJsonLd} />
+      {children}
+    </>
+  );
 }

@@ -596,7 +596,7 @@ test.describe('Accessibility', () => {
     // Map tile images from Leaflet are exempt, but app images should have alt text
     const appImages = await page.evaluate(() => {
       const imgs = Array.from(document.querySelectorAll('img:not(.leaflet-tile)'));
-      return imgs.filter(img => !img.alt).length;
+      return imgs.filter(img => !(img as HTMLImageElement).alt).length;
     });
     console.log('App images without alt text:', appImages);
   });

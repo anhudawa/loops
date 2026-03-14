@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef, Suspense } from "react";
+import { useState, useEffect, useCallback, useMemo, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import DurationStrip from "@/components/DurationStrip";
 import DisciplineTabs from "@/components/DisciplineTabs";
@@ -98,7 +98,6 @@ const selectStyle = {
 
 function HomeContent() {
   const { user, logout, unreadCount } = useAuth();
-  const contentRef = useRef<HTMLDivElement>(null);
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -213,7 +212,13 @@ function HomeContent() {
 
   const clearAllFilters = () => setFilters(DEFAULT_FILTERS);
 
-  const scrollToContent = () => contentRef.current?.scrollIntoView({ behavior: "smooth" });
+  const scrollToContent = () => {
+    const el = document.getElementById("scroll-anchor");
+    if (el) {
+      const top = el.getBoundingClientRect().top + window.scrollY;
+      window.scrollTo({ top, behavior: "smooth" });
+    }
+  };
 
   const sortLabel = useMemo(() => {
     if (filters.sort === "newest") return "Newest";
@@ -289,7 +294,7 @@ function HomeContent() {
           className="w-full py-3 rounded-xl text-sm font-bold transition-all hover:opacity-80 disabled:opacity-50"
           style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
         >
-          {loadingMore ? "Loading..." : "Load more routes"}
+          {loadingMore ? "Loading..." : "Load more loops"}
         </button>
       )}
     </>
@@ -299,8 +304,11 @@ function HomeContent() {
     <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)" }}>
       <HeroSection onExplore={scrollToContent} />
 
+      {/* Scroll anchor — must be outside sticky header for scrollIntoView to work */}
+      <div id="scroll-anchor" />
+
       {/* Header */}
-      <header id="explore" ref={contentRef} className="px-4 md:px-6 py-3 border-b sticky top-0 z-30" style={{ background: "var(--bg-raised)", borderColor: "var(--border)" }}>
+      <header className="px-4 md:px-6 py-3 border-b sticky top-0 z-30" style={{ background: "var(--bg-raised)", borderColor: "var(--border)" }}>
         <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
           <Link href="/" className="shrink-0">
             <span className="logo-mark text-2xl" style={{ color: "var(--text)" }}>LOOPS</span>
@@ -406,7 +414,7 @@ function HomeContent() {
           <span className="text-xs font-bold" style={{ color: "var(--text-muted)" }}>{sortLabel}</span>
           <span className="text-xs" style={{ color: "var(--text-muted)", opacity: 0.5 }}>&mdash;</span>
           <span className="text-xs font-bold" style={{ color: "var(--text)" }}>
-            {loading ? "..." : `${routes.length} route${routes.length !== 1 ? "s" : ""}`}
+            {loading ? "..." : `${routes.length} loop${routes.length !== 1 ? "s" : ""}`}
           </span>
         </div>
 

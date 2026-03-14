@@ -1,6 +1,5 @@
 "use client";
 
-const COUNTRIES = ["Ireland", "UK", "USA", "Spain"];
 const DISCIPLINES = [
   { value: "", label: "All" },
   { value: "road", label: "Road", icon: "🚲" },
@@ -19,12 +18,13 @@ interface FilterSidebarProps {
     country: string;
     discipline: string;
   };
+  countries: string[];
   regions: string[];
   onChange: (key: string, value: string) => void;
   onClear: () => void;
 }
 
-export default function FilterSidebar({ filters, regions, onChange, onClear }: FilterSidebarProps) {
+export default function FilterSidebar({ filters, countries, regions, onChange, onClear }: FilterSidebarProps) {
   const hasFilters = Object.values(filters).some((v) => v !== "");
 
   const selectStyle = {
@@ -55,7 +55,7 @@ export default function FilterSidebar({ filters, regions, onChange, onClear }: F
         <label className="block text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>Country</label>
         <select value={filters.country} onChange={(e) => onChange("country", e.target.value)} className="w-full rounded-lg px-3 py-2 text-sm cursor-pointer" style={selectStyle} aria-label="Filter by country">
           <option value="">All countries</option>
-          {COUNTRIES.map((c) => (
+          {countries.map((c) => (
             <option key={c} value={c}>{c}</option>
           ))}
         </select>

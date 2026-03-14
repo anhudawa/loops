@@ -122,7 +122,7 @@ export default function HeroSection({ onExplore }: { onExplore: () => void }) {
         {stats && (
           <div className="flex items-center justify-center gap-8 md:gap-14">
             {[
-              { value: stats.routes, label: "Routes" },
+              { value: stats.routes, label: "Loops" },
               { value: stats.totalKm, label: "Km Mapped" },
               { value: stats.countries, label: "Countries" },
             ].map((stat) => (

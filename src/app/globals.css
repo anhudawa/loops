@@ -63,6 +63,10 @@ button, [role="button"] {
   user-select: none;
 }
 
+button {
+  cursor: pointer;
+}
+
 /* Leaflet overrides for dark theme */
 .leaflet-container {
   font-family: "Outfit", system-ui, -apple-system, sans-serif;

@@ -12,7 +12,7 @@ export default function StarRating({ routeId }: { routeId: string }) {
   const [isTouchDevice, setIsTouchDevice] = useState(false);
 
   useEffect(() => {
-    setIsTouchDevice("ontouchstart" in window);
+    if (typeof window !== "undefined") setIsTouchDevice("ontouchstart" in window);
   }, []);
 
   const [error, setError] = useState(false);
@@ -66,7 +66,7 @@ export default function StarRating({ routeId }: { routeId: string }) {
     }
   };
 
-  const displayScore = hovered ?? userRating ?? 0;
+  const displayScore = hovered ?? userRating ?? average;
 
   if (error) {
     return (

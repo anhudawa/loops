@@ -30,6 +30,7 @@ export default function ConditionReports({ routeId }: { routeId: string }) {
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   useEffect(() => {
     fetch(`/api/routes/${routeId}/conditions`)
@@ -47,12 +48,16 @@ export default function ConditionReports({ routeId }: { routeId: string }) {
 
   const loadMore = async () => {
     setLoadingMore(true);
-    const nextPage = page + 1;
-    const res = await fetch(`/api/routes/${routeId}/conditions?page=${nextPage}`);
-    const json = await res.json();
-    setConditions((prev) => [...prev, ...(json.data ?? json)]);
-    setHasMore(json.hasMore ?? false);
-    setPage(nextPage);
+    try {
+      const nextPage = page + 1;
+      const res = await fetch(`/api/routes/${routeId}/conditions?page=${nextPage}`);
+      const json = await res.json();
+      setConditions((prev) => [...prev, ...(json.data ?? json)]);
+      setHasMore(json.hasMore ?? false);
+      setPage(nextPage);
+    } catch {
+      // silently handle pagination failure
+    }
     setLoadingMore(false);
   };
 
@@ -61,25 +66,34 @@ export default function ConditionReports({ routeId }: { routeId: string }) {
     if (!note.trim()) return;
 
     setSubmitting(true);
-    const res = await fetch(`/api/routes/${routeId}/conditions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status, note }),
-    });
+    try {
+      const res = await fetch(`/api/routes/${routeId}/conditions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status, note }),
+      });
 
-    if (res.ok) {
-      const json = await res.json();
-      setConditions(json.data ?? json);
-      setHasMore(json.hasMore ?? false);
-      setPage(1);
-      setNote("");
-      setShowForm(false);
+      if (res.ok) {
+        const json = await res.json();
+        setConditions(json.data ?? json);
+        setHasMore(json.hasMore ?? false);
+        setPage(1);
+        setNote("");
+        setShowForm(false);
+      } else {
+        setSubmitError("Failed to submit report.");
+        setTimeout(() => setSubmitError(""), 3000);
+      }
+    } catch {
+      setSubmitError("Failed to submit report.");
+      setTimeout(() => setSubmitError(""), 3000);
     }
     setSubmitting(false);
   };
 
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr + "Z");
+    const isoStr = dateStr.endsWith("Z") ? dateStr : `${dateStr}Z`;
+    const date = new Date(isoStr);
     return date.toLocaleDateString("en-IE", { day: "numeric", month: "short", year: "numeric" });
   };
 
@@ -152,6 +166,11 @@ export default function ConditionReports({ routeId }: { routeId: string }) {
               style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
             />
           </div>
+          {submitError && (
+            <p className="text-xs mb-3 px-3 py-2 rounded-lg" style={{ background: "rgba(255,51,85,0.1)", color: "var(--danger)" }}>
+              {submitError}
+            </p>
+          )}
           <div className="flex items-center justify-between">
             <button type="button" onClick={() => setShowForm(false)} className="text-sm hover:opacity-80" style={{ color: "var(--text-muted)" }}>
               Cancel

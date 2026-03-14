@@ -448,7 +448,7 @@ export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
       END AS zone_boost
     FROM routes_with_distance
     ORDER BY ${orderBy}
-    LIMIT $${limitIdx} OFFSET $${offsetIdx}
+    LIMIT $${limitIdx}::int OFFSET $${offsetIdx}::int
   `;
 
   const { rows } = await sql.query(query, params);
@@ -698,7 +698,7 @@ export async function getUserActivityFeed(userId: string, page = 1, limit = 20):
       WHERE p.user_id = $1
     ) activity
     ORDER BY created_at DESC
-    LIMIT $2 OFFSET $3
+    LIMIT $2::int OFFSET $3::int
     `,
     [userId, limit, offset]
   );
@@ -885,7 +885,7 @@ export async function unbanUser(id: string): Promise<void> {
 export async function getAllUsers(page = 1, limit = 50): Promise<{ users: User[]; total: number }> {
   const offset = (page - 1) * limit;
   const [data, count] = await Promise.all([
-    sql.query(`SELECT * FROM users ORDER BY created_at DESC LIMIT $1 OFFSET $2`, [limit, offset]),
+    sql.query(`SELECT * FROM users ORDER BY created_at DESC LIMIT $1::int OFFSET $2::int`, [limit, offset]),
     sql`SELECT COUNT(*) as c FROM users`,
   ]);
   return { users: data.rows as User[], total: Number(count.rows[0].c) };
@@ -900,7 +900,7 @@ export async function getAllComments(page = 1, limit = 50): Promise<{ comments: 
        JOIN users u ON c.user_id = u.id
        JOIN routes r ON c.route_id = r.id
        ORDER BY c.created_at DESC
-       LIMIT $1 OFFSET $2`,
+       LIMIT $1::int OFFSET $2::int`,
       [limit, offset]
     ),
     sql`SELECT COUNT(*) as c FROM comments`,
@@ -911,7 +911,7 @@ export async function getAllComments(page = 1, limit = 50): Promise<{ comments: 
 export async function getAllRoutes(page = 1, limit = 50): Promise<{ routes: Route[]; total: number }> {
   const offset = (page - 1) * limit;
   const [data, count] = await Promise.all([
-    sql.query(`SELECT * FROM routes ORDER BY created_at DESC LIMIT $1 OFFSET $2`, [limit, offset]),
+    sql.query(`SELECT * FROM routes ORDER BY created_at DESC LIMIT $1::int OFFSET $2::int`, [limit, offset]),
     sql`SELECT COUNT(*) as c FROM routes`,
   ]);
   return { routes: data.rows as Route[], total: Number(count.rows[0].c) };
@@ -1132,7 +1132,7 @@ export async function getMessages(conversationId: string, userId: string, page =
   `;
 
   const { rows } = await sql.query(
-    `SELECT * FROM messages WHERE conversation_id = $1 ORDER BY created_at ASC LIMIT $2 OFFSET $3`,
+    `SELECT * FROM messages WHERE conversation_id = $1 ORDER BY created_at ASC LIMIT $2::int OFFSET $3::int`,
     [conversationId, limit, offset]
   );
   return rows as Message[];

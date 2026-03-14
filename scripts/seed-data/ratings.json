@@ -1,0 +1,82 @@
+{
+  "ratings": [
+    { "routeIndex": 0, "userKey": "ciaran.murphy", "score": 4, "daysAfterRoute": 3 },
+    { "routeIndex": 0, "userKey": "aoife.brennan", "score": 4, "daysAfterRoute": 7 },
+    { "routeIndex": 0, "userKey": "emma.daly", "score": 5, "daysAfterRoute": 10 },
+    { "routeIndex": 0, "userKey": "sarah.kavanagh", "score": 4, "daysAfterRoute": 14 },
+    { "routeIndex": 0, "userKey": "conor.byrne", "score": 3, "daysAfterRoute": 19 },
+    { "routeIndex": 0, "userKey": "padraig.nolan", "score": 4, "daysAfterRoute": 24 },
+
+    { "routeIndex": 1, "userKey": "sarah.kavanagh", "score": 5, "daysAfterRoute": 2 },
+    { "routeIndex": 1, "userKey": "padraig.nolan", "score": 4, "daysAfterRoute": 5 },
+    { "routeIndex": 1, "userKey": "conor.byrne", "score": 4, "daysAfterRoute": 11 },
+    { "routeIndex": 1, "userKey": "ciaran.murphy", "score": 5, "daysAfterRoute": 8 },
+    { "routeIndex": 1, "userKey": "declan.obrien", "score": 5, "daysAfterRoute": 15 },
+    { "routeIndex": 1, "userKey": "aoife.brennan", "score": 4, "daysAfterRoute": 20 },
+    { "routeIndex": 1, "userKey": "emma.daly", "score": 5, "daysAfterRoute": 26 },
+
+    { "routeIndex": 2, "userKey": "conor.byrne", "score": 4, "daysAfterRoute": 4 },
+    { "routeIndex": 2, "userKey": "padraig.nolan", "score": 3, "daysAfterRoute": 9 },
+    { "routeIndex": 2, "userKey": "ronan.kelly", "score": 4, "daysAfterRoute": 16 },
+    { "routeIndex": 2, "userKey": "ciaran.murphy", "score": 3, "daysAfterRoute": 22 },
+    { "routeIndex": 2, "userKey": "sinead.walsh", "score": 4, "daysAfterRoute": 28 },
+
+    { "routeIndex": 3, "userKey": "aoife.brennan", "score": 5, "daysAfterRoute": 3 },
+    { "routeIndex": 3, "userKey": "ronan.kelly", "score": 4, "daysAfterRoute": 8 },
+    { "routeIndex": 3, "userKey": "sarah.kavanagh", "score": 5, "daysAfterRoute": 13 },
+    { "routeIndex": 3, "userKey": "declan.obrien", "score": 4, "daysAfterRoute": 18 },
+    { "routeIndex": 3, "userKey": "emma.daly", "score": 5, "daysAfterRoute": 23 },
+    { "routeIndex": 3, "userKey": "conor.byrne", "score": 4, "daysAfterRoute": 29 },
+    { "routeIndex": 3, "userKey": "sinead.walsh", "score": 5, "daysAfterRoute": 34 },
+
+    { "routeIndex": 4, "userKey": "ciaran.murphy", "score": 5, "daysAfterRoute": 5 },
+    { "routeIndex": 4, "userKey": "sarah.kavanagh", "score": 5, "daysAfterRoute": 12 },
+    { "routeIndex": 4, "userKey": "conor.byrne", "score": 4, "daysAfterRoute": 18 },
+    { "routeIndex": 4, "userKey": "declan.obrien", "score": 5, "daysAfterRoute": 22 },
+    { "routeIndex": 4, "userKey": "sinead.walsh", "score": 4, "daysAfterRoute": 27 },
+    { "routeIndex": 4, "userKey": "ronan.kelly", "score": 5, "daysAfterRoute": 32 },
+    { "routeIndex": 4, "userKey": "padraig.nolan", "score": 4, "daysAfterRoute": 38 },
+    { "routeIndex": 4, "userKey": "emma.daly", "score": 5, "daysAfterRoute": 43 },
+
+    { "routeIndex": 5, "userKey": "ciaran.murphy", "score": 5, "daysAfterRoute": 4 },
+    { "routeIndex": 5, "userKey": "sarah.kavanagh", "score": 5, "daysAfterRoute": 10 },
+    { "routeIndex": 5, "userKey": "aoife.brennan", "score": 4, "daysAfterRoute": 16 },
+    { "routeIndex": 5, "userKey": "sinead.walsh", "score": 5, "daysAfterRoute": 21 },
+    { "routeIndex": 5, "userKey": "padraig.nolan", "score": 4, "daysAfterRoute": 27 },
+    { "routeIndex": 5, "userKey": "declan.obrien", "score": 5, "daysAfterRoute": 33 },
+    { "routeIndex": 5, "userKey": "ronan.kelly", "score": 5, "daysAfterRoute": 39 },
+
+    { "routeIndex": 6, "userKey": "aoife.brennan", "score": 5, "daysAfterRoute": 5 },
+    { "routeIndex": 6, "userKey": "declan.obrien", "score": 5, "daysAfterRoute": 12 },
+    { "routeIndex": 6, "userKey": "padraig.nolan", "score": 4, "daysAfterRoute": 18 },
+    { "routeIndex": 6, "userKey": "ciaran.murphy", "score": 5, "daysAfterRoute": 24 },
+    { "routeIndex": 6, "userKey": "sinead.walsh", "score": 4, "daysAfterRoute": 30 },
+    { "routeIndex": 6, "userKey": "emma.daly", "score": 5, "daysAfterRoute": 36 },
+
+    { "routeIndex": 7, "userKey": "padraig.nolan", "score": 4, "daysAfterRoute": 3 },
+    { "routeIndex": 7, "userKey": "emma.daly", "score": 4, "daysAfterRoute": 9 },
+    { "routeIndex": 7, "userKey": "sarah.kavanagh", "score": 5, "daysAfterRoute": 15 },
+    { "routeIndex": 7, "userKey": "ciaran.murphy", "score": 4, "daysAfterRoute": 20 },
+    { "routeIndex": 7, "userKey": "aoife.brennan", "score": 5, "daysAfterRoute": 26 },
+
+    { "routeIndex": 8, "userKey": "declan.obrien", "score": 5, "daysAfterRoute": 6 },
+    { "routeIndex": 8, "userKey": "sinead.walsh", "score": 4, "daysAfterRoute": 13 },
+    { "routeIndex": 8, "userKey": "emma.daly", "score": 5, "daysAfterRoute": 20 },
+    { "routeIndex": 8, "userKey": "sarah.kavanagh", "score": 4, "daysAfterRoute": 25 },
+    { "routeIndex": 8, "userKey": "aoife.brennan", "score": 5, "daysAfterRoute": 31 },
+    { "routeIndex": 8, "userKey": "ronan.kelly", "score": 4, "daysAfterRoute": 37 },
+
+    { "routeIndex": 9, "userKey": "emma.daly", "score": 4, "daysAfterRoute": 3 },
+    { "routeIndex": 9, "userKey": "conor.byrne", "score": 4, "daysAfterRoute": 8 },
+    { "routeIndex": 9, "userKey": "ronan.kelly", "score": 5, "daysAfterRoute": 14 },
+    { "routeIndex": 9, "userKey": "ciaran.murphy", "score": 4, "daysAfterRoute": 19 },
+    { "routeIndex": 9, "userKey": "niamh.fitzgerald", "score": 3, "daysAfterRoute": 25 },
+
+    { "routeIndex": 10, "userKey": "ronan.kelly", "score": 5, "daysAfterRoute": 5 },
+    { "routeIndex": 10, "userKey": "ciaran.murphy", "score": 4, "daysAfterRoute": 11 },
+    { "routeIndex": 10, "userKey": "aoife.brennan", "score": 5, "daysAfterRoute": 17 },
+    { "routeIndex": 10, "userKey": "emma.daly", "score": 4, "daysAfterRoute": 22 },
+    { "routeIndex": 10, "userKey": "sarah.kavanagh", "score": 5, "daysAfterRoute": 28 },
+    { "routeIndex": 10, "userKey": "sinead.walsh", "score": 4, "daysAfterRoute": 34 }
+  ]
+}

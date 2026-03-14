@@ -19,6 +19,7 @@ export default function PhotoGallery({ routeId }: { routeId: string }) {
   const [uploading, setUploading] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [error, setError] = useState(false);
+  const [uploadError, setUploadError] = useState("");
 
   useEffect(() => {
     fetch(`/api/routes/${routeId}/photos`)
@@ -35,17 +36,25 @@ export default function PhotoGallery({ routeId }: { routeId: string }) {
     if (!file) return;
 
     setUploading(true);
-    const formData = new FormData();
-    formData.append("photo", file);
+    try {
+      const formData = new FormData();
+      formData.append("photo", file);
 
-    const res = await fetch(`/api/routes/${routeId}/photos`, {
-      method: "POST",
-      body: formData,
-    });
+      const res = await fetch(`/api/routes/${routeId}/photos`, {
+        method: "POST",
+        body: formData,
+      });
 
-    if (res.ok) {
-      const data = await res.json();
-      setPhotos(data);
+      if (res.ok) {
+        const data = await res.json();
+        setPhotos(data);
+      } else {
+        setUploadError("Failed to upload photo.");
+        setTimeout(() => setUploadError(""), 3000);
+      }
+    } catch {
+      setUploadError("Failed to upload photo.");
+      setTimeout(() => setUploadError(""), 3000);
     }
     setUploading(false);
     if (fileRef.current) fileRef.current.value = "";
@@ -84,6 +93,12 @@ export default function PhotoGallery({ routeId }: { routeId: string }) {
           </div>
         )}
       </div>
+
+      {uploadError && (
+        <p className="text-xs mb-3 px-3 py-2 rounded-lg" style={{ background: "rgba(255,51,85,0.1)", color: "var(--danger)" }}>
+          {uploadError}
+        </p>
+      )}
 
       {error && (
         <p className="text-sm text-center py-4" style={{ color: "var(--text-muted)" }}>Could not load photos</p>

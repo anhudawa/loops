@@ -37,6 +37,7 @@ export default function ConversationPage() {
   const [newMessage, setNewMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [otherUser, setOtherUser] = useState<{ name: string; avatar: string | null } | null>(null);
+  const [fetchError, setFetchError] = useState(false);
 
   const conversationId = params.conversationId as string;
 
@@ -54,7 +55,7 @@ export default function ConversationPage() {
         setMessages(data.messages);
       }
     } catch {
-      // silently fail
+      setFetchError(true);
     }
     setLoadingMessages(false);
   };
@@ -161,35 +162,47 @@ export default function ConversationPage() {
       </header>
 
       {/* Messages */}
-      <div ref={scrollContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 md:px-6 py-4">
-        <div className="max-w-2xl mx-auto space-y-3">
-          {messages.length === 0 ? (
-            <p className="text-center text-sm py-8" style={{ color: "var(--text-muted)" }}>No messages yet. Start the conversation!</p>
-          ) : (
-            messages.map((msg) => {
-              const isMine = msg.sender_id === user?.id;
-              return (
-                <div key={msg.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
-                  <div
-                    className="max-w-[75%] px-4 py-2.5 rounded-2xl"
-                    style={{
-                      background: isMine ? "var(--accent)" : "var(--bg-card)",
-                      color: isMine ? "#000" : "var(--text)",
-                      border: isMine ? "none" : "1px solid var(--border)",
-                      borderBottomRightRadius: isMine ? "4px" : "16px",
-                      borderBottomLeftRadius: isMine ? "16px" : "4px",
-                    }}
-                  >
-                    <p className="text-sm whitespace-pre-wrap break-words">{msg.body}</p>
-                    <p className="text-[10px] mt-1" style={{ opacity: 0.6 }}>{formatTime(msg.created_at)}</p>
-                  </div>
-                </div>
-              );
-            })
-          )}
-          <div ref={messagesEndRef} />
+      {fetchError ? (
+        <div className="flex-1 flex flex-col items-center justify-center gap-4">
+          <p className="text-sm" style={{ color: "var(--text-muted)" }}>Could not load messages.</p>
+          <button
+            onClick={() => { setFetchError(false); setLoadingMessages(true); fetchMessages(); }}
+            className="btn-accent px-4 py-2 rounded-lg text-sm font-bold"
+          >
+            Try again
+          </button>
         </div>
-      </div>
+      ) : (
+        <div ref={scrollContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 md:px-6 py-4">
+          <div className="max-w-2xl mx-auto space-y-3">
+            {messages.length === 0 ? (
+              <p className="text-center text-sm py-8" style={{ color: "var(--text-muted)" }}>No messages yet. Start the conversation!</p>
+            ) : (
+              messages.map((msg) => {
+                const isMine = msg.sender_id === user?.id;
+                return (
+                  <div key={msg.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
+                    <div
+                      className="max-w-[75%] px-4 py-2.5 rounded-2xl"
+                      style={{
+                        background: isMine ? "var(--accent)" : "var(--bg-card)",
+                        color: isMine ? "#000" : "var(--text)",
+                        border: isMine ? "none" : "1px solid var(--border)",
+                        borderBottomRightRadius: isMine ? "4px" : "16px",
+                        borderBottomLeftRadius: isMine ? "16px" : "4px",
+                      }}
+                    >
+                      <p className="text-sm whitespace-pre-wrap break-words">{msg.body}</p>
+                      <p className="text-[10px] mt-1" style={{ opacity: 0.6 }}>{formatTime(msg.created_at)}</p>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+        </div>
+      )}
 
       {/* Input */}
       <div className="shrink-0 px-4 md:px-6 py-3" style={{ background: "var(--bg-raised)", borderTop: "1px solid var(--border)" }}>

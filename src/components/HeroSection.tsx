@@ -45,7 +45,8 @@ export default function HeroSection({ onExplore }: { onExplore: () => void }) {
   useEffect(() => {
     fetch("/api/stats")
       .then((r) => r.json())
-      .then(setStats);
+      .then(setStats)
+      .catch(() => {});
   }, []);
 
   return (

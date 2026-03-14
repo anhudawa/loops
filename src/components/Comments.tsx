@@ -16,7 +16,8 @@ interface Comment {
 
 function timeAgo(dateStr: string) {
   const now = Date.now();
-  const date = new Date(dateStr + "Z").getTime();
+  const isoStr = dateStr.endsWith("Z") ? dateStr : `${dateStr}Z`;
+  const date = new Date(isoStr).getTime();
   const diff = now - date;
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return "just now";
@@ -26,7 +27,7 @@ function timeAgo(dateStr: string) {
   const days = Math.floor(hrs / 24);
   if (days < 7) return `${days}d ago`;
   if (days < 30) return `${Math.floor(days / 7)}w ago`;
-  return new Date(dateStr + "Z").toLocaleDateString("en-IE", {
+  return new Date(isoStr).toLocaleDateString("en-IE", {
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -43,6 +44,7 @@ export default function Comments({ routeId }: { routeId: string }) {
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(false);
+  const [mutationError, setMutationError] = useState("");
 
   useEffect(() => {
     fetch(`/api/routes/${routeId}/comments`)
@@ -89,20 +91,29 @@ export default function Comments({ routeId }: { routeId: string }) {
     setBody("");
     setSubmitting(true);
 
-    const res = await fetch(`/api/routes/${routeId}/comments`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ body: submittedBody }),
-    });
+    try {
+      const res = await fetch(`/api/routes/${routeId}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body: submittedBody }),
+      });
 
-    if (res.ok) {
-      const json = await res.json();
-      setComments(json.data ?? json);
-      setHasMore(json.hasMore ?? false);
-      setPage(1);
-    } else {
+      if (res.ok) {
+        const json = await res.json();
+        setComments(json.data ?? json);
+        setHasMore(json.hasMore ?? false);
+        setPage(1);
+      } else {
+        setComments(prevComments);
+        setBody(submittedBody);
+        setMutationError("Failed to post comment.");
+        setTimeout(() => setMutationError(""), 3000);
+      }
+    } catch {
       setComments(prevComments);
       setBody(submittedBody);
+      setMutationError("Failed to post comment.");
+      setTimeout(() => setMutationError(""), 3000);
     }
     setSubmitting(false);
   };
@@ -113,19 +124,27 @@ export default function Comments({ routeId }: { routeId: string }) {
     setComments(comments.filter((c) => c.id !== commentId));
     setDeletingId(commentId);
 
-    const res = await fetch(`/api/routes/${routeId}/comments`, {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ commentId }),
-    });
+    try {
+      const res = await fetch(`/api/routes/${routeId}/comments`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ commentId }),
+      });
 
-    if (res.ok) {
-      const json = await res.json();
-      setComments(json.data ?? json);
-      setHasMore(json.hasMore ?? false);
-      setPage(1);
-    } else {
+      if (res.ok) {
+        const json = await res.json();
+        setComments(json.data ?? json);
+        setHasMore(json.hasMore ?? false);
+        setPage(1);
+      } else {
+        setComments(prevComments);
+        setMutationError("Failed to delete comment.");
+        setTimeout(() => setMutationError(""), 3000);
+      }
+    } catch {
       setComments(prevComments);
+      setMutationError("Failed to delete comment.");
+      setTimeout(() => setMutationError(""), 3000);
     }
     setDeletingId(null);
   };
@@ -211,6 +230,13 @@ export default function Comments({ routeId }: { routeId: string }) {
             to join the discussion
           </p>
         </div>
+      )}
+
+      {/* Mutation error */}
+      {mutationError && (
+        <p className="text-xs mb-3 px-3 py-2 rounded-lg" style={{ background: "rgba(255,51,85,0.1)", color: "var(--danger)" }}>
+          {mutationError}
+        </p>
       )}
 
       {/* Comments list */}

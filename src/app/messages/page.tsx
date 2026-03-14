@@ -34,6 +34,8 @@ export default function MessagesPage() {
   const router = useRouter();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loadingConversations, setLoadingConversations] = useState(true);
+  const [error, setError] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -49,9 +51,12 @@ export default function MessagesPage() {
           setConversations(data.conversations || []);
           setLoadingConversations(false);
         })
-        .catch(() => setLoadingConversations(false));
+        .catch(() => {
+          setError(true);
+          setLoadingConversations(false);
+        });
     }
-  }, [user]);
+  }, [user, retryKey]);
 
   if (loading || loadingConversations) {
     return (
@@ -95,7 +100,17 @@ export default function MessagesPage() {
       </header>
 
       <div className="max-w-2xl mx-auto px-4 md:px-6 py-6">
-        {conversations.length === 0 ? (
+        {error && !loadingConversations ? (
+          <div className="flex flex-col items-center justify-center py-16 gap-4">
+            <p className="text-sm" style={{ color: "var(--text-muted)" }}>Could not load messages.</p>
+            <button
+              onClick={() => { setError(false); setLoadingConversations(true); setRetryKey((k) => k + 1); }}
+              className="btn-accent px-4 py-2 rounded-lg text-sm font-bold"
+            >
+              Try again
+            </button>
+          </div>
+        ) : conversations.length === 0 ? (
           <div className="text-center py-16">
             <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
               <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} style={{ color: "var(--text-muted)" }}>

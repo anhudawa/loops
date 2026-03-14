@@ -1,0 +1,103 @@
+{
+  "routes": [
+    {
+      "gpx": "skerries-loop.gpx",
+      "name": "Skerries Loop",
+      "description": "North Dublin coastal loop out to Skerries and back. Flat and fast with sea views.",
+      "difficulty": "moderate",
+      "county": "Dublin",
+      "country": "Ireland",
+      "assignedUser": "declan.obrien"
+    },
+    {
+      "gpx": "skerries-via-the-lanes.gpx",
+      "name": "Skerries via the Lanes",
+      "description": "The long way to Skerries through the country lanes. Rolling north Dublin roads with a coastal finish.",
+      "difficulty": "moderate",
+      "county": "Dublin",
+      "country": "Ireland",
+      "assignedUser": "sinead.walsh"
+    },
+    {
+      "gpx": "dublin-canal-ride.gpx",
+      "name": "Dublin Canal Ride",
+      "description": "Flat loop following the canals west to Celbridge and back. Perfect Sunday spin.",
+      "difficulty": "moderate",
+      "county": "Dublin",
+      "country": "Ireland",
+      "assignedUser": "niamh.fitzgerald"
+    },
+    {
+      "gpx": "canals.gpx",
+      "name": "Canals",
+      "description": "Dublin to Athlone and back on the canal towpaths and roads. A proper full-day adventure.",
+      "difficulty": "expert",
+      "county": "Dublin",
+      "country": "Ireland",
+      "assignedUser": "ciaran.murphy"
+    },
+    {
+      "gpx": "wicklow-200.gpx",
+      "name": "Wicklow 200",
+      "description": "200km through the Wicklow Mountains via Gorey. 3,400m of climbing. When you're done, you're done.",
+      "difficulty": "expert",
+      "county": "Wicklow",
+      "country": "Ireland",
+      "assignedUser": "aoife.brennan"
+    },
+    {
+      "gpx": "coll-de-rates.fit",
+      "name": "Coll de Rates",
+      "description": "Classic Calpe climb over the Coll de Rates. Stunning views of the Marina Alta from the top.",
+      "difficulty": "hard",
+      "county": "Alicante",
+      "country": "Spain",
+      "assignedUser": "emma.daly"
+    },
+    {
+      "gpx": "guadalest-loop.fit",
+      "name": "Guadalest Loop",
+      "description": "Big day from Calpe inland to Guadalest and Castell de Castells. Serious climbing through the mountains of the Marina Alta.",
+      "difficulty": "expert",
+      "county": "Alicante",
+      "country": "Spain",
+      "assignedUser": "conor.byrne"
+    },
+    {
+      "gpx": "bernia-loop.fit",
+      "name": "Bernia Loop",
+      "description": "Short but punchy loop from Calpe around the Sierra de Bernia. Every metre of climbing earned.",
+      "difficulty": "hard",
+      "county": "Alicante",
+      "country": "Spain",
+      "assignedUser": "ronan.kelly"
+    },
+    {
+      "gpx": "alcalali-loop.fit",
+      "name": "Alcalali Loop",
+      "description": "Century loop from Calpe through the Jalon valley via Alcalali. Rolling inland roads with 2,000m of climbing.",
+      "difficulty": "expert",
+      "county": "Alicante",
+      "country": "Spain",
+      "assignedUser": "ciaran.murphy"
+    },
+    {
+      "gpx": "javea-loop.fit",
+      "name": "Javea Loop",
+      "description": "Coastal ride from Calpe to Javea and back. The easiest of the Calpe loops but still has bite.",
+      "difficulty": "hard",
+      "county": "Alicante",
+      "country": "Spain",
+      "assignedUser": "sinead.walsh"
+    },
+    {
+      "gpx": "denia-loop.fit",
+      "name": "Denia Loop",
+      "description": "Calpe to Denia along the coast with an inland return. Great mix of coastal flats and interior climbing.",
+      "difficulty": "hard",
+      "county": "Alicante",
+      "country": "Spain",
+      "assignedUser": "niamh.fitzgerald"
+    }
+  ]
+}

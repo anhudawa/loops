@@ -63,16 +63,25 @@ export default function RouteDetail() {
   const [isFavourited, setIsFavourited] = useState(false);
   const [favCount, setFavCount] = useState(0);
   const [favLoading, setFavLoading] = useState(false);
+  const [fetchError, setFetchError] = useState(false);
+  const [mutationError, setMutationError] = useState("");
+
+  const fetchRoute = async () => {
+    if (!params.id) return;
+    setFetchError(false);
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/routes/${params.id}`);
+      const data = await res.json();
+      setRoute(data);
+    } catch {
+      setFetchError(true);
+    }
+    setLoading(false);
+  };
 
   useEffect(() => {
-    if (params.id) {
-      fetch(`/api/routes/${params.id}`)
-        .then((r) => r.json())
-        .then((data) => {
-          setRoute(data);
-          setLoading(false);
-        });
-    }
+    fetchRoute();
   }, [params.id]);
 
   // Check favourite status
@@ -105,9 +114,15 @@ export default function RouteDetail() {
     try {
       const method = wasFollowing ? "DELETE" : "POST";
       const res = await fetch(`/api/users/${route.created_by}/follow`, { method });
-      if (!res.ok) setIsFollowingCreator(wasFollowing);
+      if (!res.ok) {
+        setIsFollowingCreator(wasFollowing);
+        setMutationError("Action failed. Please try again.");
+        setTimeout(() => setMutationError(""), 3000);
+      }
     } catch {
       setIsFollowingCreator(wasFollowing);
+      setMutationError("Action failed. Please try again.");
+      setTimeout(() => setMutationError(""), 3000);
     }
     setFollowLoading(false);
   };
@@ -129,13 +144,31 @@ export default function RouteDetail() {
       } else {
         setIsFavourited(wasFavourited);
         setFavCount(prevCount);
+        setMutationError("Action failed. Please try again.");
+        setTimeout(() => setMutationError(""), 3000);
       }
     } catch {
       setIsFavourited(wasFavourited);
       setFavCount(prevCount);
+      setMutationError("Action failed. Please try again.");
+      setTimeout(() => setMutationError(""), 3000);
     }
     setFavLoading(false);
   };
+
+  if (fetchError) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ background: "var(--bg)" }}>
+        <p className="text-sm" style={{ color: "var(--text-muted)" }}>Something went wrong loading this route.</p>
+        <button
+          onClick={() => fetchRoute()}
+          className="btn-accent px-4 py-2 rounded-lg text-sm font-bold"
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -265,6 +298,7 @@ export default function RouteDetail() {
               </button>
             </div>
           </div>
+          {mutationError && <p className="text-xs mt-1" style={{ color: "var(--danger)" }}>{mutationError}</p>}
 
           <div className="mb-4">
             <StarRating routeId={route.id} />

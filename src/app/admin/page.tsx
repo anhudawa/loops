@@ -54,6 +54,8 @@ export default function AdminPage() {
   const [confirm, setConfirm] = useState<{ type: string; id: string; label: string } | null>(null);
   const [loadingTab, setLoadingTab] = useState(false);
   const [search, setSearch] = useState("");
+  const [loadError, setLoadError] = useState(false);
+  const [actionError, setActionError] = useState("");
 
   useEffect(() => {
     if (!loading && (!user || user.role !== "admin")) {
@@ -62,31 +64,44 @@ export default function AdminPage() {
   }, [user, loading, router]);
 
   const fetchStats = useCallback(async () => {
-    const res = await fetch("/api/admin/stats");
-    if (res.ok) setStats(await res.json());
+    try {
+      const res = await fetch("/api/admin/stats");
+      if (res.ok) setStats(await res.json());
+    } catch {
+      // Stats are non-critical, silently ignore
+    }
   }, []);
 
   const fetchUsers = useCallback(async () => {
-    const res = await fetch("/api/admin/users");
-    if (res.ok) {
+    try {
+      const res = await fetch("/api/admin/users");
+      if (!res.ok) throw new Error("Failed to fetch users");
       const data = await res.json();
       setUsers(data.users);
+    } catch {
+      setLoadError(true);
     }
   }, []);
 
   const fetchRoutes = useCallback(async () => {
-    const res = await fetch("/api/admin/routes");
-    if (res.ok) {
+    try {
+      const res = await fetch("/api/admin/routes");
+      if (!res.ok) throw new Error("Failed to fetch routes");
       const data = await res.json();
       setRoutes(data.routes);
+    } catch {
+      setLoadError(true);
     }
   }, []);
 
   const fetchComments = useCallback(async () => {
-    const res = await fetch("/api/admin/comments");
-    if (res.ok) {
+    try {
+      const res = await fetch("/api/admin/comments");
+      if (!res.ok) throw new Error("Failed to fetch comments");
       const data = await res.json();
       setComments(data.comments);
+    } catch {
+      setLoadError(true);
     }
   }, []);
 
@@ -109,37 +124,82 @@ export default function AdminPage() {
   }, [tab, routes.length, comments.length, fetchRoutes, fetchComments]);
 
   const handleBan = async (userId: string) => {
-    await fetch(`/api/admin/users/${userId}/ban`, { method: "POST" });
-    fetchUsers();
-    fetchStats();
-    setConfirm(null);
+    try {
+      const res = await fetch(`/api/admin/users/${userId}/ban`, { method: "POST" });
+      if (!res.ok) throw new Error();
+      fetchUsers();
+      fetchStats();
+      setConfirm(null);
+    } catch {
+      setActionError("Action failed. Please try again.");
+      setTimeout(() => setActionError(""), 3000);
+      setConfirm(null);
+    }
   };
 
   const handleUnban = async (userId: string) => {
-    await fetch(`/api/admin/users/${userId}/ban`, { method: "DELETE" });
-    fetchUsers();
-    fetchStats();
-    setConfirm(null);
+    try {
+      const res = await fetch(`/api/admin/users/${userId}/ban`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      fetchUsers();
+      fetchStats();
+      setConfirm(null);
+    } catch {
+      setActionError("Action failed. Please try again.");
+      setTimeout(() => setActionError(""), 3000);
+      setConfirm(null);
+    }
   };
 
   const handleDeleteRoute = async (routeId: string) => {
-    await fetch(`/api/admin/routes/${routeId}`, { method: "DELETE" });
-    setRoutes((prev) => prev.filter((r) => r.id !== routeId));
-    fetchStats();
-    setConfirm(null);
+    try {
+      const res = await fetch(`/api/admin/routes/${routeId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      setRoutes((prev) => prev.filter((r) => r.id !== routeId));
+      fetchStats();
+      setConfirm(null);
+    } catch {
+      setActionError("Action failed. Please try again.");
+      setTimeout(() => setActionError(""), 3000);
+      setConfirm(null);
+    }
   };
 
   const handleDeleteComment = async (commentId: string) => {
-    await fetch(`/api/admin/comments/${commentId}`, { method: "DELETE" });
-    setComments((prev) => prev.filter((c) => c.id !== commentId));
-    fetchStats();
-    setConfirm(null);
+    try {
+      const res = await fetch(`/api/admin/comments/${commentId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      setComments((prev) => prev.filter((c) => c.id !== commentId));
+      fetchStats();
+      setConfirm(null);
+    } catch {
+      setActionError("Action failed. Please try again.");
+      setTimeout(() => setActionError(""), 3000);
+      setConfirm(null);
+    }
   };
 
   if (loading || !user || user.role !== "admin") {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--bg)" }}>
         <div className="animate-pulse" style={{ color: "var(--text-muted)" }}>Loading...</div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--bg)" }}>
+        <div className="text-center">
+          <p className="text-lg font-bold mb-2" style={{ color: "var(--danger)" }}>Failed to load admin data</p>
+          <button
+            onClick={() => { setLoadError(false); fetchStats(); fetchUsers(); }}
+            className="text-sm font-bold px-4 py-2 rounded-lg"
+            style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+          >
+            Retry
+          </button>
+        </div>
       </div>
     );
   }
@@ -216,6 +276,13 @@ export default function AdminPage() {
             style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
           />
         </div>
+
+        {/* Action error */}
+        {actionError && (
+          <div className="mb-4 px-4 py-2 rounded-lg text-sm" style={{ background: "rgba(255,51,85,0.15)", color: "var(--danger)" }}>
+            {actionError}
+          </div>
+        )}
 
         {/* Content */}
         <div className="rounded-xl overflow-hidden" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>

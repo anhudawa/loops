@@ -1,18 +1,15 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef, useSyncExternalStore, Suspense } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import dynamic from "next/dynamic";
-import FilterBar from "@/components/FilterBar";
-import ShowRoutesButton from "@/components/ShowRoutesButton";
+import DurationStrip from "@/components/DurationStrip";
+import DisciplineTabs from "@/components/DisciplineTabs";
 import RouteCard from "@/components/RouteCard";
 import SkeletonCard from "@/components/SkeletonCard";
 import HeroSection from "@/components/HeroSection";
 import { useAuth } from "@/components/AuthProvider";
 import Link from "next/link";
 import { DEFAULT_SPEED_KMH } from "@/config/constants";
-
-const MapView = dynamic(() => import("@/components/MapView"), { ssr: false });
 
 interface Route {
   id: string;
@@ -38,55 +35,34 @@ interface Route {
   rating_count?: number;
 }
 
-/** Returns true when viewport is >= 768px (Tailwind `md` breakpoint). */
-function useMdScreen(): boolean {
-  const subscribe = useCallback((cb: () => void) => {
-    const mql = window.matchMedia("(min-width: 768px)");
-    mql.addEventListener("change", cb);
-    return () => mql.removeEventListener("change", cb);
-  }, []);
-  const getSnapshot = useCallback(() => window.matchMedia("(min-width: 768px)").matches, []);
-  const getServerSnapshot = useCallback(() => false, []);
-  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
-}
-
 const STORAGE_KEY = "loops-filters";
 
 interface FilterState {
   duration: string | null;
   discipline: string;
-  difficulty: string;
-  surface: string;
-  region: string;
-  verified: boolean;
-  search: string;
+  country: string;
+  city: string;
   sort: string;
 }
 
 const DEFAULT_FILTERS: FilterState = {
   duration: null,
   discipline: "",
-  difficulty: "",
-  surface: "",
-  region: "",
-  verified: false,
-  search: "",
+  country: "",
+  city: "",
   sort: "",
 };
 
 function filtersFromParams(params: URLSearchParams): FilterState | null {
-  const keys = ["duration", "discipline", "difficulty", "surface_type", "region", "verified", "sort"];
+  const keys = ["duration", "discipline", "country", "city", "sort"];
   const hasAny = keys.some((k) => params.has(k));
   if (!hasAny) return null;
 
   return {
     duration: params.get("duration") || null,
     discipline: params.get("discipline") || "",
-    difficulty: params.get("difficulty") || "",
-    surface: params.get("surface_type") || "",
-    region: params.get("region") || "",
-    verified: params.get("verified") === "true",
-    search: params.get("search") || "",
+    country: params.get("country") || "",
+    city: params.get("city") || "",
     sort: params.get("sort") || "",
   };
 }
@@ -105,19 +81,24 @@ function filtersToParams(f: FilterState): URLSearchParams {
   const p = new URLSearchParams();
   if (f.duration) p.set("duration", f.duration);
   if (f.discipline) p.set("discipline", f.discipline);
-  if (f.difficulty) p.set("difficulty", f.difficulty);
-  if (f.surface) p.set("surface_type", f.surface);
-  if (f.region) p.set("region", f.region);
-  if (f.verified) p.set("verified", "true");
+  if (f.country) p.set("country", f.country);
+  if (f.city) p.set("city", f.city);
   if (f.sort) p.set("sort", f.sort);
   return p;
 }
 
+const selectStyle = {
+  background: "var(--bg-card)",
+  border: "1px solid var(--border)",
+  color: "var(--text)",
+  borderRadius: 8,
+  padding: "5px 12px",
+  fontSize: 13,
+};
+
 function HomeContent() {
   const { user, logout, unreadCount } = useAuth();
-  const isMdScreen = useMdScreen();
   const contentRef = useRef<HTMLDivElement>(null);
-  const routeListRef = useRef<HTMLDivElement>(null);
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -126,13 +107,13 @@ function HomeContent() {
   });
 
   const [routes, setRoutes] = useState<Route[]>([]);
-  const [regions, setRegions] = useState<string[]>([]);
-  const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
+  const [countries, setCountries] = useState<string[]>([]);
+  const [cities, setCities] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [page, setPage] = useState(1);
-  const [showMap, setShowMap] = useState(false);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [avgSpeedKmh, setAvgSpeedKmh] = useState(DEFAULT_SPEED_KMH);
 
@@ -155,22 +136,33 @@ function HomeContent() {
     }
   }, [filters, router]);
 
-  const hasActiveFilters = filters.duration !== null || filters.discipline !== "" || filters.difficulty !== "" || filters.surface !== "" || filters.region !== "" || filters.verified;
+  const hasActiveFilters = filters.duration !== null || filters.discipline !== "" || filters.country !== "" || filters.city !== "";
 
+  // Fetch countries on mount
   useEffect(() => {
-    fetch(`/api/routes?regions=true`)
+    fetch("/api/routes?countries=true")
       .then((r) => r.json())
-      .then((data) => setRegions(Array.isArray(data) ? data : []));
+      .then((data) => setCountries(Array.isArray(data) ? data : []))
+      .catch(() => {});
   }, []);
+
+  // Fetch cities when country changes
+  useEffect(() => {
+    if (!filters.country) {
+      setCities([]);
+      return;
+    }
+    fetch(`/api/routes?regions=true&country=${encodeURIComponent(filters.country)}`)
+      .then((r) => r.json())
+      .then((data) => setCities(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  }, [filters.country]);
 
   const fetchRoutes = useCallback(async (pageNum = 1, append = false, fallbackSort?: string) => {
     const params = new URLSearchParams();
-    if (filters.difficulty) params.set("difficulty", filters.difficulty);
     if (filters.discipline) params.set("discipline", filters.discipline);
-    if (filters.surface) params.set("surface_type", filters.surface);
-    if (filters.region) params.set("county", filters.region);
-    if (filters.verified) params.set("verified", "true");
-    if (filters.search) params.set("search", filters.search);
+    if (filters.country) params.set("country", filters.country);
+    if (filters.city) params.set("county", filters.city);
     if (filters.duration) params.set("duration", filters.duration);
 
     // Use fallback sort if provided, otherwise use filter sort
@@ -183,22 +175,29 @@ function HomeContent() {
     }
     params.set("page", String(pageNum));
 
-    const res = await fetch(`/api/routes?${params}`);
-    const json = await res.json();
-    const newRoutes = Array.isArray(json.data) ? json.data : Array.isArray(json) ? json : [];
+    setFetchError(false);
+    try {
+      const res = await fetch(`/api/routes?${params}`);
+      const json = await res.json();
+      const newRoutes = Array.isArray(json.data) ? json.data : Array.isArray(json) ? json : [];
 
-    // If no routes found with default sort and user has location, fall back to top rated
-    if (newRoutes.length === 0 && pageNum === 1 && !append && !fallbackSort && !filters.sort && userLocation) {
-      fetchRoutes(1, false, "rating");
-      return;
+      // If no routes found with default sort and user has location, fall back to top rated
+      if (newRoutes.length === 0 && pageNum === 1 && !append && !fallbackSort && !filters.sort && userLocation) {
+        fetchRoutes(1, false, "rating");
+        return;
+      }
+
+      setRoutes((prev) => append ? [...prev, ...newRoutes] : newRoutes);
+      setHasMore(json.hasMore ?? false);
+      setPage(pageNum);
+      if (json.avgSpeedKmh) setAvgSpeedKmh(json.avgSpeedKmh);
+      setLoading(false);
+      setLoadingMore(false);
+    } catch {
+      setFetchError(true);
+      setLoading(false);
+      setLoadingMore(false);
     }
-
-    setRoutes((prev) => append ? [...prev, ...newRoutes] : newRoutes);
-    setHasMore(json.hasMore ?? false);
-    setPage(pageNum);
-    if (json.avgSpeedKmh) setAvgSpeedKmh(json.avgSpeedKmh);
-    setLoading(false);
-    setLoadingMore(false);
   }, [filters, userLocation]);
 
   useEffect(() => {
@@ -214,7 +213,6 @@ function HomeContent() {
 
   const clearAllFilters = () => setFilters(DEFAULT_FILTERS);
 
-  const scrollToRoutes = () => routeListRef.current?.scrollIntoView({ behavior: "smooth" });
   const scrollToContent = () => contentRef.current?.scrollIntoView({ behavior: "smooth" });
 
   const sortLabel = useMemo(() => {
@@ -226,30 +224,12 @@ function HomeContent() {
     return "Best rated";
   }, [filters.sort, userLocation]);
 
-  const filterBarProps = {
-    duration: filters.duration,
-    discipline: filters.discipline,
-    difficulty: filters.difficulty,
-    surface: filters.surface,
-    region: filters.region,
-    verified: filters.verified,
-    regions,
-    avgSpeedKmh,
-    routeCount: routes.length,
-    onDurationChange: (d: string | null) => setFilters((f) => ({ ...f, duration: d })),
-    onDisciplineChange: (d: string) => setFilters((f) => ({ ...f, discipline: d })),
-    onDifficultyChange: (v: string) => setFilters((f) => ({ ...f, difficulty: v })),
-    onSurfaceChange: (v: string) => setFilters((f) => ({ ...f, surface: v })),
-    onRegionChange: (v: string) => setFilters((f) => ({ ...f, region: v })),
-    onVerifiedChange: (v: boolean) => setFilters((f) => ({ ...f, verified: v })),
-  };
-
   const sortSelect = (
     <select
       value={filters.sort}
       onChange={(e) => setFilters((f) => ({ ...f, sort: e.target.value }))}
-      className="text-[10px] rounded px-1.5 py-1 cursor-pointer"
-      style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
+      className="cursor-pointer"
+      style={selectStyle}
     >
       <option value="">Default</option>
       {userLocation && <option value="nearby">Nearest</option>}
@@ -279,14 +259,26 @@ function HomeContent() {
     </div>
   );
 
+  const errorState = (
+    <div className="flex flex-col items-center justify-center py-16 gap-4">
+      <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto" style={{ background: "var(--bg-card)" }}>
+        <svg className="w-6 h-6" style={{ color: "var(--text-muted)" }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+        </svg>
+      </div>
+      <p className="text-sm" style={{ color: "var(--text-muted)" }}>Something went wrong loading routes.</p>
+      <button onClick={() => fetchRoutes(1, false)} className="btn-accent px-4 py-2 rounded-lg text-sm font-bold">
+        Try again
+      </button>
+    </div>
+  );
+
   const routeList = (
     <>
       {routes.map((route) => (
         <RouteCard
           key={route.id}
           route={route}
-          isSelected={route.id === selectedRouteId}
-          onHover={(id) => setSelectedRouteId(id)}
           showDistance={!!userLocation}
         />
       ))}
@@ -308,28 +300,11 @@ function HomeContent() {
       <HeroSection onExplore={scrollToContent} />
 
       {/* Header */}
-      <header id="explore" ref={contentRef} className="px-4 md:px-6 py-3 border-b" style={{ background: "var(--bg-raised)", borderColor: "var(--border)" }}>
-        <div className="max-w-screen-2xl mx-auto flex items-center justify-between gap-3">
+      <header id="explore" ref={contentRef} className="px-4 md:px-6 py-3 border-b sticky top-0 z-30" style={{ background: "var(--bg-raised)", borderColor: "var(--border)" }}>
+        <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
           <Link href="/" className="shrink-0">
             <span className="logo-mark text-2xl" style={{ color: "var(--text)" }}>LOOPS</span>
           </Link>
-
-          <div className="flex-1 max-w-lg mx-3 hidden md:block">
-            <div className="relative">
-              <svg className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-muted)" }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-              <input
-                type="text"
-                value={filters.search}
-                onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
-                onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
-                placeholder="Search routes, regions..."
-                className="w-full rounded-lg pl-9 pr-3 py-2 text-sm"
-                style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
-              />
-            </div>
-          </div>
 
           <div className="flex items-center gap-2 shrink-0">
             <Link href="/upload" className="btn-accent px-3 py-1.5 rounded-lg text-sm font-bold flex items-center gap-1.5">
@@ -372,108 +347,82 @@ function HomeContent() {
             )}
           </div>
         </div>
-
-        <div className="mt-2.5 md:hidden">
-          <div className="relative">
-            <svg className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-muted)" }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input
-              type="text"
-              value={filters.search}
-              onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
-              onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
-              placeholder="Search routes, regions..."
-              className="w-full rounded-lg pl-9 pr-3 py-2 text-sm"
-              style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
-            />
-          </div>
-        </div>
       </header>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col md:flex-row max-w-screen-2xl mx-auto w-full">
-        {/* Desktop: Left panel */}
-        <aside className="hidden md:flex md:flex-col w-80 shrink-0 border-r overflow-y-auto" style={{ background: "var(--bg-raised)", borderColor: "var(--border)" }}>
-          <div className="p-4">
-            <FilterBar {...filterBarProps} />
-          </div>
-          <div className="px-4 py-2 border-t border-b flex items-center justify-between" style={{ borderColor: "var(--border)" }}>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold" style={{ color: "var(--text-muted)" }}>{sortLabel}</span>
-              <span className="text-xs" style={{ color: "var(--text-muted)", opacity: 0.5 }}>—</span>
-              <span className="text-xs font-bold" style={{ color: "var(--text)" }}>
-                {loading ? "..." : `${routes.length} route${routes.length !== 1 ? "s" : ""}`}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              {hasActiveFilters && (
-                <button onClick={clearAllFilters} className="text-[10px] font-bold hover:opacity-80" style={{ color: "var(--accent)" }}>Clear all</button>
-              )}
-              {sortSelect}
-            </div>
-          </div>
-          <div className="flex-1 overflow-y-auto p-3 space-y-2">
-            {loading ? [...Array(6)].map((_, i) => <SkeletonCard key={i} />) : routes.length === 0 ? emptyState : routeList}
-          </div>
-        </aside>
-
-        {/* Desktop: Map */}
-        <div className="hidden md:block flex-1 min-w-0">
-          <div className="h-full map-container">
-            <MapView routes={routes} selectedRouteId={selectedRouteId || undefined} onRouteSelect={(id) => setSelectedRouteId(id)} />
-          </div>
+      <main className="max-w-3xl mx-auto w-full px-4 md:px-6 pb-20">
+        {/* Duration Strip */}
+        <div className="py-6">
+          <DurationStrip
+            selected={filters.duration}
+            onSelect={(d: string | null) => setFilters((f) => ({ ...f, duration: d }))}
+            avgSpeedKmh={avgSpeedKmh}
+          />
         </div>
 
-        {/* Mobile */}
-        <div className="md:hidden flex-1 flex flex-col min-w-0">
-          <div className="px-3 pt-3 pb-1">
-            <FilterBar {...filterBarProps} />
-          </div>
-          <div className="px-3 py-2 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold" style={{ color: "var(--text-muted)" }}>{sortLabel}</span>
-              <span className="text-xs" style={{ color: "var(--text-muted)", opacity: 0.5 }}>—</span>
-              <span className="text-xs font-bold" style={{ color: "var(--text)" }}>
-                {loading ? "..." : `${routes.length} route${routes.length !== 1 ? "s" : ""}`}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              {hasActiveFilters && (
-                <button onClick={clearAllFilters} className="text-[10px] font-bold hover:opacity-80" style={{ color: "var(--accent)" }}>Clear</button>
-              )}
-              <button
-                onClick={() => setShowMap(!showMap)}
-                className="text-xs font-bold px-2.5 py-1.5 rounded-lg"
-                style={{
-                  background: showMap ? "var(--accent-glow)" : "var(--bg-card)",
-                  border: showMap ? "1px solid var(--accent)" : "1px solid var(--border)",
-                  color: showMap ? "var(--accent)" : "var(--text-secondary)",
-                }}
-              >
-                Map
-              </button>
-              {sortSelect}
-            </div>
-          </div>
+        {/* Filter Row */}
+        <div className="flex flex-wrap items-center gap-2 pb-4">
+          <DisciplineTabs
+            selected={filters.discipline}
+            onSelect={(d: string) => setFilters((f) => ({ ...f, discipline: d }))}
+          />
 
-          {showMap && (
-            <div className="h-[30vh] map-container">
-              <MapView routes={routes} selectedRouteId={selectedRouteId || undefined} onRouteSelect={(id) => setSelectedRouteId(id)} />
-            </div>
+          <select
+            value={filters.country}
+            onChange={(e) => setFilters((f) => ({ ...f, country: e.target.value, city: "" }))}
+            className="cursor-pointer"
+            style={selectStyle}
+          >
+            <option value="">All Countries</option>
+            {countries.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+
+          <select
+            value={filters.city}
+            onChange={(e) => setFilters((f) => ({ ...f, city: e.target.value }))}
+            disabled={!filters.country}
+            className="cursor-pointer disabled:opacity-50"
+            style={selectStyle}
+          >
+            <option value="">All Cities</option>
+            {cities.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+
+          {sortSelect}
+
+          {hasActiveFilters && (
+            <button onClick={clearAllFilters} className="text-xs font-bold hover:opacity-80" style={{ color: "var(--accent)" }}>
+              Clear all
+            </button>
           )}
-
-          <div ref={routeListRef} className="flex-1 overflow-y-auto p-3 pb-20">
-            {loading ? (
-              <div className="space-y-2">{[...Array(6)].map((_, i) => <SkeletonCard key={i} />)}</div>
-            ) : routes.length === 0 ? emptyState : (
-              <div className="space-y-2">{routeList}</div>
-            )}
-          </div>
-
-          <ShowRoutesButton count={routes.length} onClick={scrollToRoutes} />
         </div>
-      </div>
+
+        {/* Route Count */}
+        <div className="flex items-center gap-2 pb-3">
+          <span className="text-xs font-bold" style={{ color: "var(--text-muted)" }}>{sortLabel}</span>
+          <span className="text-xs" style={{ color: "var(--text-muted)", opacity: 0.5 }}>&mdash;</span>
+          <span className="text-xs font-bold" style={{ color: "var(--text)" }}>
+            {loading ? "..." : `${routes.length} route${routes.length !== 1 ? "s" : ""}`}
+          </span>
+        </div>
+
+        {/* Route Cards */}
+        <div className="space-y-2">
+          {loading ? (
+            [...Array(6)].map((_, i) => <SkeletonCard key={i} />)
+          ) : fetchError ? (
+            errorState
+          ) : routes.length === 0 ? (
+            emptyState
+          ) : (
+            routeList
+          )}
+        </div>
+      </main>
     </div>
   );
 }

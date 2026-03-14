@@ -40,7 +40,7 @@ export default function ElevationProfile({
   const [isTouchDevice, setIsTouchDevice] = useState(false);
 
   useEffect(() => {
-    setIsTouchDevice("ontouchstart" in window);
+    if (typeof window !== "undefined") setIsTouchDevice("ontouchstart" in window);
   }, []);
 
   // Downsample elevations for rendering — max 600 points for smooth canvas

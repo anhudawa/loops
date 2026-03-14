@@ -9,8 +9,8 @@ import "./globals.css";
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.loops.ie"),
   alternates: { canonical: "/" },
-  title: "LOOPS — Routes Worth Riding",
-  description: "Find and share the best road, gravel, and MTB loops worldwide. Upload GPX files, rate routes, and discover new rides near you. Built by riders, for riders.",
+  title: "LOOPS — Cycling Routes Worldwide | Free GPX Downloads",
+  description: "Discover cycling routes worldwide. Free GPX downloads, community ratings, elevation profiles. Gravel, road & MTB routes from real riders.",
   keywords: ["cycling routes", "gravel cycling", "GPX", "bike routes", "MTB trails", "road cycling", "route sharing", "cycling community"],
   openGraph: {
     title: "LOOPS — Routes Worth Riding",

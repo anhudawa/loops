@@ -69,6 +69,7 @@ export function middleware(request: NextRequest) {
   // Public pages — no auth required
   if (
     pathname.startsWith("/login") ||
+    pathname.startsWith("/routes/") ||
     pathname.startsWith("/photos") ||
     pathname === "/about" ||
     pathname === "/privacy" ||

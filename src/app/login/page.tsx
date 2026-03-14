@@ -306,9 +306,9 @@ function LoginPage() {
                 >
                   {prop.icon}
                 </div>
-                <h3 className="font-extrabold text-sm uppercase tracking-wider mb-2" style={{ color: "var(--text)" }}>
+                <h2 className="font-extrabold text-sm uppercase tracking-wider mb-2" style={{ color: "var(--text)" }}>
                   {prop.title}
-                </h3>
+                </h2>
                 <p className="text-sm leading-relaxed" style={{ color: "var(--text-muted)" }}>
                   {prop.desc}
                 </p>
@@ -342,8 +342,8 @@ function LoginPage() {
                     {/* Cover */}
                     <div className="aspect-[16/9] relative overflow-hidden" style={{ background: "var(--bg-raised)" }}>
                       <img
-                        src={route.cover_photo ? `/photos/${route.cover_photo}` : `/api/og/${route.id}`}
-                        alt=""
+                        src={`/api/og/${route.id}`}
+                        alt={`Preview of ${route.name} cycling route`}
                         className="w-full h-full object-cover"
                         loading="lazy"
                       />

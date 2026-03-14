@@ -6,7 +6,7 @@ import Footer from "@/components/Footer";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://loops.ie"),
+  metadataBase: new URL("https://www.loops.ie"),
   alternates: { canonical: "/" },
   title: "LOOPS — Routes Worth Riding",
   description: "Find and share the best road, gravel, and MTB loops worldwide. Upload GPX files, rate routes, and discover new rides near you. Built by riders, for riders.",

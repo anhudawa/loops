@@ -4,6 +4,13 @@ export const metadata: Metadata = {
   title: "Sign In — LOOPS",
   description:
     "Discover real cycling routes shared by real riders. Free GPX downloads, no paywall, no subscription. Browse gravel, road & MTB loops worldwide — human-curated, community-rated, open to everyone.",
+  alternates: {
+    canonical: "https://www.loops.ie/login",
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
   openGraph: {
     title: "LOOPS — Routes Worth Riding",
     description:

@@ -81,7 +81,7 @@ export default function RouteCard({ route, isSelected, onHover, showDistance }: 
         <div className="aspect-[3/1] md:aspect-[21/9] relative overflow-hidden" style={{ background: "var(--bg-raised)" }}>
           {!imgError ? (
             <img
-              src={route.cover_photo ? `/photos/${route.cover_photo}` : `/api/og/${route.id}`}
+              src={`/api/og/${route.id}`}
               alt=""
               className="w-full h-full object-cover"
               loading="lazy"

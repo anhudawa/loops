@@ -90,6 +90,7 @@ export async function GET(
       favouritedRoutes,
       communityScore,
       loopRating,
+      avg_speed_kmh: user.avg_speed_kmh ?? 25,
     });
   } catch (err) {
     return handleApiError(err);

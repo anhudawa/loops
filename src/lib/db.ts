@@ -1,4 +1,5 @@
 import { sql } from "@vercel/postgres";
+import { DURATION_TIERS, DEFAULT_SPEED_KMH } from "@/config/constants";
 
 // ──── Init ────
 export async function initDb() {
@@ -171,6 +172,15 @@ export async function migrateDb() {
     )
   `;
 
+  // User speed preference for duration filtering
+  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS avg_speed_kmh REAL DEFAULT 25`;
+
+  // Indexes for filter performance
+  await sql`CREATE INDEX IF NOT EXISTS idx_routes_discipline ON routes(discipline)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_routes_surface_type ON routes(surface_type)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_routes_difficulty ON routes(difficulty)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_route_ratings_route_id ON ratings(route_id)`;
+
   // Backfill orphaned routes — assign to first user (site creator)
   await sql`
     UPDATE routes SET created_by = (
@@ -219,6 +229,8 @@ export interface RouteFilters {
   maxRadius?: number;
   limit?: number;
   offset?: number;
+  duration?: string;   // "1h" | "2h" | "3h" | "4h+"
+  avgSpeedKmh?: number;
 }
 
 export interface User {
@@ -231,6 +243,7 @@ export interface User {
   location: string | null;
   session_token: string | null;
   created_at: string;
+  avg_speed_kmh: number;
 }
 
 export interface Rating {
@@ -297,14 +310,6 @@ export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
     conditions.push(`r.difficulty = $${idx++}`);
     params.push(filters.difficulty);
   }
-  if (filters.minDistance !== undefined) {
-    conditions.push(`r.distance_km >= $${idx++}`);
-    params.push(filters.minDistance);
-  }
-  if (filters.maxDistance !== undefined) {
-    conditions.push(`r.distance_km <= $${idx++}`);
-    params.push(filters.maxDistance);
-  }
   if (filters.county) {
     conditions.push(`r.county = $${idx++}`);
     params.push(filters.county);
@@ -327,32 +332,38 @@ export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
     idx++;
   }
 
-  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-
-  // Haversine distance calculation for "Near Me"
-  const hasLocation = filters.lat !== undefined && filters.lng !== undefined;
-  const distanceSelect = hasLocation
-    ? `, (6371 * acos(
-        cos(radians($${idx})) * cos(radians(r.start_lat)) *
-        cos(radians(r.start_lng) - radians($${idx + 1})) +
-        sin(radians($${idx})) * sin(radians(r.start_lat))
-      )) as distance_km_away`
-    : "";
-
-  if (hasLocation) {
-    params.push(filters.lat!, filters.lng!);
-    idx += 2;
+  // Duration filtering (uses route fields directly, no aggregation needed)
+  const avgSpeed = filters.avgSpeedKmh ?? DEFAULT_SPEED_KMH;
+  if (filters.duration && filters.duration in DURATION_TIERS) {
+    const tier = DURATION_TIERS[filters.duration as keyof typeof DURATION_TIERS];
+    if ("maxMinutes" in tier && tier.maxMinutes !== undefined) {
+      conditions.push(`(r.distance_km / $${idx} * 60 + r.elevation_gain_m / 10) <= $${idx + 1}`);
+      params.push(avgSpeed, tier.maxMinutes);
+      idx += 2;
+    }
+    if ("minMinutes" in tier && tier.minMinutes !== undefined) {
+      conditions.push(`(r.distance_km / $${idx} * 60 + r.elevation_gain_m / 10) >= $${idx + 1}`);
+      params.push(avgSpeed, tier.minMinutes);
+      idx += 2;
+    }
   }
 
-  const sortMap: Record<string, string> = {
-    newest: "r.created_at DESC",
-    distance: "r.distance_km DESC",
-    rating: "avg_score DESC, rating_count DESC",
-    nearby: hasLocation ? "distance_km_away ASC" : "r.created_at DESC",
-  };
-  const orderBy = hasLocation && !filters.sort
-    ? "distance_km_away ASC"
-    : sortMap[filters.sort || ""] || "r.created_at DESC";
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+
+  // Haversine distance + proximity zone support
+  const hasLocation = filters.lat !== undefined && filters.lng !== undefined;
+
+  let latIdx = 0;
+  let lngIdx = 0;
+  if (hasLocation) {
+    latIdx = idx++;
+    lngIdx = idx++;
+    params.push(filters.lat!, filters.lng!);
+  }
+
+  // Speed param index for estimated_minutes in SELECT
+  const speedIdx = idx++;
+  params.push(avgSpeed);
 
   // Build HAVING clauses
   const havingClauses: string[] = [];
@@ -361,37 +372,84 @@ export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
   }
   if (hasLocation && filters.maxRadius !== undefined) {
     havingClauses.push(`(6371 * acos(
-      cos(radians($${idx - 2})) * cos(radians(r.start_lat)) *
-      cos(radians(r.start_lng) - radians($${idx - 1})) +
-      sin(radians($${idx - 2})) * sin(radians(r.start_lat))
+      cos(radians($${latIdx})) * cos(radians(r.start_lat)) *
+      cos(radians(r.start_lng) - radians($${lngIdx})) +
+      sin(radians($${latIdx})) * sin(radians(r.start_lat))
     )) <= $${idx}`);
     params.push(filters.maxRadius);
     idx++;
   }
   const having = havingClauses.length > 0 ? `HAVING ${havingClauses.join(" AND ")}` : "";
 
-  const query = `
-    SELECT r.*, COALESCE(AVG(rt.score), 0) as avg_score, COUNT(rt.id) as rating_count,
-      (SELECT p.filename FROM photos p WHERE p.route_id = r.id ORDER BY p.created_at LIMIT 1) as cover_photo,
-      CASE WHEN r.verified = true OR (COUNT(rt.id) >= 3 AND COALESCE(AVG(rt.score), 0) >= 3.0) THEN 1 ELSE 0 END as is_verified,
-      u.name as creator_name, u.avatar_url as creator_avatar,
-      COALESCE((SELECT AVG(rt2.score) FROM routes r2 JOIN ratings rt2 ON rt2.route_id = r2.id WHERE r2.created_by = r.created_by), 0) as creator_rating,
-      COALESCE((SELECT COUNT(rt2.id) FROM routes r2 JOIN ratings rt2 ON rt2.route_id = r2.id WHERE r2.created_by = r.created_by), 0) as creator_rating_count,
-      (SELECT COUNT(*) FROM comments cm WHERE cm.route_id = r.id) as comment_count
-      ${distanceSelect}
-    FROM routes r
-    LEFT JOIN ratings rt ON rt.route_id = r.id
-    LEFT JOIN users u ON u.id = r.created_by
-    ${where}
-    GROUP BY r.id, u.name, u.avatar_url
-    ${having}
-    ORDER BY ${orderBy}
-    LIMIT $${idx++} OFFSET $${idx++}
-  `;
+  // Determine ORDER BY
+  const sortMap: Record<string, string> = {
+    newest: "r.created_at DESC",
+    distance: "r.distance_km DESC",
+    rating: "avg_rating DESC NULLS LAST, rating_count DESC",
+    nearby: hasLocation ? "haversine_distance ASC" : "r.created_at DESC",
+    duration_match: "estimated_minutes ASC",
+  };
 
-  const limit = (filters.limit ?? 20) + 1; // fetch one extra to check hasMore
-  const offset = filters.offset ?? 0;
-  params.push(limit, offset);
+  let orderBy: string;
+  if (filters.sort && sortMap[filters.sort]) {
+    orderBy = sortMap[filters.sort];
+  } else if (hasLocation) {
+    // Default with location: proximity zone with rating boost
+    orderBy = "(base_zone + zone_boost) ASC, avg_rating DESC NULLS LAST";
+  } else {
+    // Default without location: highest rated first
+    orderBy = "avg_rating DESC NULLS LAST, rating_count DESC";
+  }
+
+  const haversineExpr = hasLocation
+    ? `6371 * acos(
+        cos(radians($${latIdx})) * cos(radians(r.start_lat)) *
+        cos(radians(r.start_lng) - radians($${lngIdx})) +
+        sin(radians($${latIdx})) * sin(radians(r.start_lat))
+      )`
+    : "NULL";
+
+  const limitVal = (filters.limit ?? 20) + 1; // fetch one extra to check hasMore
+  const offsetVal = filters.offset ?? 0;
+  const limitIdx = idx++;
+  const offsetIdx = idx++;
+  params.push(limitVal, offsetVal);
+
+  const query = `
+    WITH routes_with_distance AS (
+      SELECT r.*,
+        COALESCE(AVG(rt.score), 0) as avg_rating,
+        COUNT(rt.id) as rating_count,
+        (SELECT p.filename FROM photos p WHERE p.route_id = r.id ORDER BY p.created_at LIMIT 1) as cover_photo,
+        CASE WHEN r.verified = true OR (COUNT(rt.id) >= 3 AND COALESCE(AVG(rt.score), 0) >= 3.0) THEN 1 ELSE 0 END as is_verified,
+        u.name as creator_name, u.avatar_url as creator_avatar,
+        COALESCE((SELECT AVG(rt2.score) FROM routes r2 JOIN ratings rt2 ON rt2.route_id = r2.id WHERE r2.created_by = r.created_by), 0) as creator_rating,
+        COALESCE((SELECT COUNT(rt2.id) FROM routes r2 JOIN ratings rt2 ON rt2.route_id = r2.id WHERE r2.created_by = r.created_by), 0) as creator_rating_count,
+        (SELECT COUNT(*) FROM comments cm WHERE cm.route_id = r.id) as comment_count,
+        (r.distance_km / $${speedIdx} * 60 + r.elevation_gain_m / 10) as estimated_minutes,
+        ${haversineExpr} as haversine_distance
+      FROM routes r
+      LEFT JOIN ratings rt ON rt.route_id = r.id
+      LEFT JOIN users u ON u.id = r.created_by
+      ${where}
+      GROUP BY r.id, u.name, u.avatar_url
+      ${having}
+    )
+    SELECT *,
+      CASE
+        WHEN haversine_distance IS NULL THEN 3
+        WHEN haversine_distance < 25 THEN 1
+        WHEN haversine_distance < 75 THEN 2
+        ELSE 3
+      END AS base_zone,
+      CASE
+        WHEN avg_rating >= 4.5 AND rating_count >= 3 THEN -1
+        ELSE 0
+      END AS zone_boost
+    FROM routes_with_distance
+    ORDER BY ${orderBy}
+    LIMIT $${limitIdx} OFFSET $${offsetIdx}
+  `;
 
   const { rows } = await sql.query(query, params);
   return rows as Route[];
@@ -526,13 +584,14 @@ export async function upsertGoogleUser(
 
 export async function updateUserProfile(
   id: string,
-  data: { name?: string; bio?: string; location?: string }
+  data: { name?: string; bio?: string; location?: string; avg_speed_kmh?: number }
 ): Promise<User | undefined> {
   await sql`
     UPDATE users
     SET name = COALESCE(${data.name ?? null}, name),
         bio = COALESCE(${data.bio ?? null}, bio),
-        location = COALESCE(${data.location ?? null}, location)
+        location = COALESCE(${data.location ?? null}, location),
+        avg_speed_kmh = COALESCE(${data.avg_speed_kmh ?? null}, avg_speed_kmh)
     WHERE id = ${id}
   `;
   return getUserById(id);

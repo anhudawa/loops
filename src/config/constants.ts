@@ -29,3 +29,29 @@ export const RATE_LIMIT_AUTH = 5;
 export const RATE_LIMIT_UPLOAD = 3;
 export const RATE_LIMIT_WRITE = 10;
 export const RATE_LIMIT_READ = 60;
+
+// ──── Filter system ────
+export const DEFAULT_SPEED_KMH = 25;
+export const MIN_SPEED_KMH = 15;
+export const MAX_SPEED_KMH = 45;
+export const ELEVATION_MINUTES_PER_10M = 1;
+
+export const DURATION_TIERS = {
+  "1h": { label: "1h", maxMinutes: 90 },
+  "2h": { label: "2h", minMinutes: 90, maxMinutes: 150 },
+  "3h": { label: "3h", minMinutes: 150, maxMinutes: 240 },
+  "4h+": { label: "4h+", minMinutes: 240 },
+} as const;
+
+export const PROXIMITY_ZONES = {
+  nearby: { max: 25, label: "Nearby" },
+  regional: { min: 25, max: 75, label: "Regional" },
+  further: { min: 75, label: "Further" },
+} as const;
+
+export const SURFACE_LABELS: Record<string, string> = {
+  "Road": "road",
+  "Gravel": "gravel",
+  "Trail": "trail",
+  "Mixed": "mixed",
+};

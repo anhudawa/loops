@@ -4,7 +4,7 @@ import { parseRouteFile } from "@/lib/route-parser";
 import { fetchRideWithGPS } from "@/lib/ridewithgps";
 import { validateStravaUrl, getStravaExportError } from "@/lib/strava";
 import { apiError, handleApiError } from "@/lib/api-utils";
-import { ROUTES_PER_PAGE, MAX_ROUTE_FILE_SIZE, MAX_ROUTE_NAME_LENGTH, MAX_ROUTE_DESCRIPTION_LENGTH, DIFFICULTIES, DISCIPLINES, VALID_ROUTE_EXTENSIONS } from "@/config/constants";
+import { ROUTES_PER_PAGE, MAX_ROUTE_FILE_SIZE, MAX_ROUTE_NAME_LENGTH, MAX_ROUTE_DESCRIPTION_LENGTH, DIFFICULTIES, DISCIPLINES, VALID_ROUTE_EXTENSIONS, DEFAULT_SPEED_KMH } from "@/config/constants";
 import { v4 as uuidv4 } from "uuid";
 
 export async function GET(request: NextRequest) {
@@ -27,13 +27,21 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(await getCounties());
     }
 
+    // Get user speed for duration estimates
+    let userSpeed = DEFAULT_SPEED_KMH;
+    const sessionToken = request.cookies.get("session")?.value;
+    if (sessionToken) {
+      const user = await getUserBySession(sessionToken);
+      if (user?.avg_speed_kmh) {
+        userSpeed = user.avg_speed_kmh;
+      }
+    }
+
     const page = Math.max(1, Number(searchParams.get("page")) || 1);
     const pageSize = ROUTES_PER_PAGE;
 
     const filters = {
       difficulty: searchParams.get("difficulty") || undefined,
-      minDistance: searchParams.get("minDistance") ? Number(searchParams.get("minDistance")) : undefined,
-      maxDistance: searchParams.get("maxDistance") ? Number(searchParams.get("maxDistance")) : undefined,
       county: searchParams.get("county") || undefined,
       country: searchParams.get("country") || undefined,
       discipline: searchParams.get("discipline") || undefined,
@@ -43,7 +51,8 @@ export async function GET(request: NextRequest) {
       verified: searchParams.get("verified") === "true" ? true : undefined,
       lat: searchParams.get("lat") ? Number(searchParams.get("lat")) : undefined,
       lng: searchParams.get("lng") ? Number(searchParams.get("lng")) : undefined,
-      maxRadius: searchParams.get("maxRadius") ? Number(searchParams.get("maxRadius")) : undefined,
+      duration: searchParams.get("duration") || undefined,
+      avgSpeedKmh: userSpeed,
       limit: pageSize,
       offset: (page - 1) * pageSize,
     };
@@ -51,7 +60,7 @@ export async function GET(request: NextRequest) {
     const rows = await getRoutes(filters);
     const hasMore = rows.length > pageSize;
     const routes = hasMore ? rows.slice(0, pageSize) : rows;
-    return NextResponse.json({ data: routes, hasMore, page });
+    return NextResponse.json({ data: routes, hasMore, page, avgSpeedKmh: userSpeed });
   } catch (err) {
     return handleApiError(err);
   }

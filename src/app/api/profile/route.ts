@@ -9,7 +9,7 @@ export async function PATCH(request: NextRequest) {
     const auth = await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
 
-    const { name, bio, location } = await request.json();
+    const { name, bio, location, avg_speed_kmh } = await request.json();
 
     // Validate
     if (name !== undefined && typeof name !== "string") {
@@ -30,11 +30,18 @@ export async function PATCH(request: NextRequest) {
     if (location && location.length > MAX_LOCATION_LENGTH) {
       return apiError(`Location must be ${MAX_LOCATION_LENGTH} characters or less`, "VALIDATION_ERROR", 400);
     }
+    if (avg_speed_kmh !== undefined) {
+      const speed = Number(avg_speed_kmh);
+      if (isNaN(speed) || speed < 15 || speed > 45) {
+        return apiError("Speed must be between 15 and 45 km/h", "VALIDATION_ERROR", 400);
+      }
+    }
 
     const updated = await updateUserProfile(auth.user.id, {
       name: name || undefined,
       bio: bio !== undefined ? bio : undefined,
       location: location !== undefined ? location : undefined,
+      avg_speed_kmh: avg_speed_kmh !== undefined ? Number(avg_speed_kmh) : undefined,
     });
 
     return NextResponse.json({
@@ -42,6 +49,7 @@ export async function PATCH(request: NextRequest) {
       name: updated!.name,
       bio: updated!.bio,
       location: updated!.location,
+      avg_speed_kmh: updated!.avg_speed_kmh ?? 25,
     });
   } catch (err) {
     return handleApiError(err);

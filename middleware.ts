@@ -66,8 +66,15 @@ export function middleware(request: NextRequest) {
     return response;
   }
 
-  // Page auth gate
-  if (pathname.startsWith("/login")) {
+  // Public pages — no auth required
+  if (
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/photos") ||
+    pathname === "/about" ||
+    pathname === "/privacy" ||
+    pathname === "/terms" ||
+    pathname === "/feedback"
+  ) {
     return NextResponse.next();
   }
 

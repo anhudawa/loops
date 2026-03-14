@@ -19,6 +19,9 @@ interface RouteCardProps {
     cover_photo?: string | null;
     is_verified?: number;
     distance_km_away?: number;
+    estimated_minutes?: number;
+    avg_score?: number;
+    rating_count?: number;
     created_by?: string | null;
     creator_name?: string | null;
     creator_avatar?: string | null;
@@ -29,6 +32,14 @@ interface RouteCardProps {
   isSelected?: boolean;
   onHover?: (id: string | null) => void;
   showDistance?: boolean;
+}
+
+function formatDuration(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = Math.round(minutes % 60);
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m.toString().padStart(2, "0")}m`;
 }
 
 const DIFFICULTY_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
@@ -104,13 +115,27 @@ export default function RouteCard({ route, isSelected, onHover, showDistance }: 
             </span>
           </div>
 
-          {/* Distance badge */}
+          {/* Proximity badge */}
           {showDistance && route.distance_km_away !== undefined && (
             <span
-              className="absolute top-3 left-3 text-[11px] font-bold px-2 py-0.5 rounded"
-              style={{ color: "var(--accent)", background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)" }}
+              className="absolute bottom-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded"
+              style={{ color: "var(--text)", background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)" }}
             >
-              {Math.round(route.distance_km_away)} km away
+              {route.distance_km_away < 1
+                ? "< 1 km away"
+                : `${Math.round(route.distance_km_away)} km away`}
+            </span>
+          )}
+          {/* Rating badge */}
+          {route.avg_score !== undefined && Number(route.avg_score) > 0 && (
+            <span
+              className="absolute top-2 right-2 md:hidden text-[11px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5"
+              style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)" }}
+            >
+              <svg className="w-3 h-3" viewBox="0 0 24 24" fill="var(--warning)">
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+              </svg>
+              <span style={{ color: "var(--text)" }}>{Number(route.avg_score).toFixed(1)}</span>
             </span>
           )}
         </div>
@@ -168,16 +193,24 @@ export default function RouteCard({ route, isSelected, onHover, showDistance }: 
               <span className="flex items-center gap-1 font-bold" style={{ color: "var(--accent)" }}>
                 {route.distance_km} km
               </span>
-              <span style={{ color: "var(--border-light)" }} aria-hidden="true">|</span>
+              {route.estimated_minutes !== undefined && route.estimated_minutes > 0 && (
+                <>
+                  <span style={{ color: "var(--border-light)" }} aria-hidden="true">·</span>
+                  <span className="font-bold" style={{ color: "var(--accent)" }}>
+                    ~{formatDuration(route.estimated_minutes)}
+                  </span>
+                </>
+              )}
+              <span style={{ color: "var(--border-light)" }} aria-hidden="true">·</span>
               <span className="flex items-center gap-1">
                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" />
                 </svg>
                 {route.elevation_gain_m}m
               </span>
-              <span style={{ color: "var(--border-light)" }} aria-hidden="true">|</span>
+              <span style={{ color: "var(--border-light)" }} aria-hidden="true">·</span>
               <span className="capitalize">{route.surface_type}</span>
-              <span style={{ color: "var(--border-light)" }} aria-hidden="true">|</span>
+              <span style={{ color: "var(--border-light)" }} aria-hidden="true">·</span>
               <span>{locationText}{countryText}</span>
             </div>
 

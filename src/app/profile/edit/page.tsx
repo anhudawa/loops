@@ -14,6 +14,7 @@ export default function EditProfilePage() {
   const [location, setLocation] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avgSpeedKmh, setAvgSpeedKmh] = useState(25);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [loadingProfile, setLoadingProfile] = useState(true);
@@ -34,6 +35,7 @@ export default function EditProfilePage() {
             setBio(data.bio || "");
             setLocation(data.location || "");
             setAvatarUrl(data.avatar_url || null);
+            setAvgSpeedKmh(data.avg_speed_kmh ?? 25);
           }
           setLoadingProfile(false);
         });
@@ -90,7 +92,7 @@ export default function EditProfilePage() {
       const res = await fetch("/api/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, bio, location }),
+        body: JSON.stringify({ name, bio, location, avg_speed_kmh: avgSpeedKmh }),
       });
 
       if (!res.ok) {
@@ -220,6 +222,31 @@ export default function EditProfilePage() {
               className="w-full rounded-lg px-4 py-2.5 text-sm"
               style={inputStyle}
             />
+          </div>
+
+          {/* Cruising Speed */}
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>
+              Your typical cruising speed
+            </label>
+            <div className="flex items-center gap-3">
+              <input
+                type="range"
+                min={15}
+                max={45}
+                step={1}
+                value={avgSpeedKmh}
+                onChange={(e) => setAvgSpeedKmh(Number(e.target.value))}
+                className="flex-1"
+                style={{ accentColor: "var(--accent)" }}
+              />
+              <span className="text-sm font-bold min-w-[52px] text-right" style={{ color: "var(--accent)" }}>
+                {avgSpeedKmh} km/h
+              </span>
+            </div>
+            <p className="text-[10px] mt-1" style={{ color: "var(--text-muted)" }}>
+              Used to estimate ride duration on route cards
+            </p>
           </div>
 
           {error && (

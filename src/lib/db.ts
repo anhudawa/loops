@@ -337,12 +337,12 @@ export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
   if (filters.duration && filters.duration in DURATION_TIERS) {
     const tier = DURATION_TIERS[filters.duration as keyof typeof DURATION_TIERS];
     if ("maxMinutes" in tier && tier.maxMinutes !== undefined) {
-      conditions.push(`(r.distance_km / $${idx} * 60 + r.elevation_gain_m / 10) <= $${idx + 1}`);
+      conditions.push(`(r.distance_km / $${idx}::numeric * 60 + r.elevation_gain_m / 10) <= $${idx + 1}::numeric`);
       params.push(avgSpeed, tier.maxMinutes);
       idx += 2;
     }
     if ("minMinutes" in tier && tier.minMinutes !== undefined) {
-      conditions.push(`(r.distance_km / $${idx} * 60 + r.elevation_gain_m / 10) >= $${idx + 1}`);
+      conditions.push(`(r.distance_km / $${idx}::numeric * 60 + r.elevation_gain_m / 10) >= $${idx + 1}::numeric`);
       params.push(avgSpeed, tier.minMinutes);
       idx += 2;
     }
@@ -407,7 +407,7 @@ export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
         cos(radians(r.start_lng) - radians($${lngIdx})) +
         sin(radians($${latIdx})) * sin(radians(r.start_lat))
       )`
-    : "NULL";
+    : "NULL::double precision";
 
   const limitVal = (filters.limit ?? 20) + 1; // fetch one extra to check hasMore
   const offsetVal = filters.offset ?? 0;
@@ -426,7 +426,7 @@ export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
         COALESCE((SELECT AVG(rt2.score) FROM routes r2 JOIN ratings rt2 ON rt2.route_id = r2.id WHERE r2.created_by = r.created_by), 0) as creator_rating,
         COALESCE((SELECT COUNT(rt2.id) FROM routes r2 JOIN ratings rt2 ON rt2.route_id = r2.id WHERE r2.created_by = r.created_by), 0) as creator_rating_count,
         (SELECT COUNT(*) FROM comments cm WHERE cm.route_id = r.id) as comment_count,
-        (r.distance_km / $${speedIdx} * 60 + r.elevation_gain_m / 10) as estimated_minutes,
+        (r.distance_km / $${speedIdx}::numeric * 60 + r.elevation_gain_m / 10) as estimated_minutes,
         ${haversineExpr} as haversine_distance
       FROM routes r
       LEFT JOIN ratings rt ON rt.route_id = r.id

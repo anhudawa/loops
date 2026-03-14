@@ -263,7 +263,7 @@ export default function Comments({ routeId }: { routeId: string }) {
                     <button
                       onClick={() => handleDelete(comment.id)}
                       disabled={deletingId === comment.id}
-                      className="ml-auto opacity-60 sm:opacity-0 sm:group-hover:opacity-60 hover:!opacity-100 transition-opacity min-w-[44px] min-h-[44px] flex items-center justify-center"
+                      className="ml-auto opacity-60 hover:!opacity-100 transition-opacity min-w-[44px] min-h-[44px] flex items-center justify-center"
                       style={{ color: "var(--danger)" }}
                       title="Delete comment"
                     >

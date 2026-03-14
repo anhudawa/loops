@@ -140,16 +140,18 @@ function DropdownChip({ label, value, options, onChange }: DropdownChipProps) {
                 cursor: "pointer",
                 transition: "background 0.1s ease",
               }}
-              onMouseEnter={(e) => {
-                if (value !== option.value) {
+              onPointerEnter={(e) => {
+                if (e.pointerType !== "touch" && value !== option.value) {
                   e.currentTarget.style.background = "rgba(255,255,255,0.05)";
                 }
               }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background =
-                  value === option.value
-                    ? "rgba(200,255,0,0.08)"
-                    : "transparent";
+              onPointerLeave={(e) => {
+                if (e.pointerType !== "touch") {
+                  e.currentTarget.style.background =
+                    value === option.value
+                      ? "rgba(200,255,0,0.08)"
+                      : "transparent";
+                }
               }}
             >
               {option.label}

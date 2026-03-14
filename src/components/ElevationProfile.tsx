@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, useState, useMemo } from "react";
+import { useRef, useEffect, useState, useMemo, useCallback } from "react";
 
 interface Climb {
   startKm: number;
@@ -37,6 +37,11 @@ export default function ElevationProfile({
     distance: number;
   } | null>(null);
   const [climbsOpen, setClimbsOpen] = useState(false);
+  const [isTouchDevice, setIsTouchDevice] = useState(false);
+
+  useEffect(() => {
+    setIsTouchDevice("ontouchstart" in window);
+  }, []);
 
   // Downsample elevations for rendering — max 600 points for smooth canvas
   const sampledElevations = downsample(elevations, 600);
@@ -153,21 +158,33 @@ export default function ElevationProfile({
     ctx.stroke();
   }, [sampledElevations, distanceKm]);
 
-  // Mouse hover for tooltip
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  // Shared tooltip calculation from a client X/Y position
+  const updateTooltip = useCallback((clientX: number, clientY: number) => {
     const canvas = canvasRef.current;
     if (!canvas || sampledElevations.length < 2) return;
 
     const rect = canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
+    const posX = clientX - rect.left;
     const padding = { left: 44, right: 12 };
     const plotWidth = rect.width - padding.left - padding.right;
-    const ratio = Math.max(0, Math.min(1, (mouseX - padding.left) / plotWidth));
+    const ratio = Math.max(0, Math.min(1, (posX - padding.left) / plotWidth));
     const idx = Math.round(ratio * (sampledElevations.length - 1));
     const elevation = sampledElevations[idx];
     const distance = ratio * distanceKm;
 
-    setTooltip({ x: mouseX, y: e.clientY - rect.top, elevation, distance });
+    setTooltip({ x: posX, y: clientY - rect.top, elevation, distance });
+  }, [sampledElevations, distanceKm]);
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    updateTooltip(e.clientX, e.clientY);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    const touch = e.touches[0];
+    if (touch) {
+      e.preventDefault();
+      updateTooltip(touch.clientX, touch.clientY);
+    }
   };
 
   if (!hasRealData) {
@@ -206,6 +223,8 @@ export default function ElevationProfile({
           style={{ height: "180px", cursor: "crosshair" }}
           onMouseMove={handleMouseMove}
           onMouseLeave={() => setTooltip(null)}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={() => setTooltip(null)}
         />
         {tooltip && (
           <div
@@ -241,7 +260,7 @@ export default function ElevationProfile({
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
           </svg>
-          <span className="text-[11px]">hover for details</span>
+          <span className="text-[11px]">{isTouchDevice ? "tap for details" : "hover for details"}</span>
         </span>
       </div>
 

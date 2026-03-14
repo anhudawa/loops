@@ -212,7 +212,7 @@ test.describe('Footer', () => {
     await page.goto(`${BASE}/login`);
     const footer = page.locator('footer');
     await expect(footer.getByText('Contact')).toBeVisible();
-    await expect(footer.getByText('Privacy')).toBeVisible();
+    await expect(footer.getByRole('link', { name: 'Privacy' }).first()).toBeVisible();
     await expect(footer.getByText(/© 2026 LOOPS/)).toBeVisible();
     await expect(footer.getByText(/Made in Ireland/)).toBeVisible();
   });
@@ -226,7 +226,7 @@ test.describe('Footer', () => {
 
   test('BUG: Privacy link redirects to login instead of showing privacy policy', async ({ page }) => {
     await page.goto(`${BASE}/login`);
-    await page.getByRole('link', { name: 'Privacy' }).click();
+    await page.getByRole('link', { name: 'Privacy' }).first().click();
     await page.waitForTimeout(2000);
     // BUG: /privacy should show the privacy policy, but redirects to /login
     expect(page.url()).toContain('/privacy');
@@ -334,7 +334,7 @@ test.describe('Mobile Responsive', () => {
 
   test('nav bar is usable on mobile', async ({ page }) => {
     await page.goto(`${BASE}/login`);
-    const nav = page.locator('nav');
+    const nav = page.locator('nav').first();
     await expect(nav).toBeVisible();
     // Check no horizontal overflow
     const navWidth = await nav.evaluate(el => el.scrollWidth);

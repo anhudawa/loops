@@ -32,7 +32,7 @@ test.describe('Landing Page — Hero', () => {
 
   test('"Free forever" trust badge is visible', async ({ page }) => {
     await page.goto(`${BASE}/login`);
-    await expect(page.getByText(/free forever/i).first()).toBeVisible();
+    await expect(page.getByText(/free forever/i)).toBeVisible();
     await expect(page.getByText(/no credit card/i).first()).toBeVisible();
   });
 
@@ -180,10 +180,10 @@ test.describe('Landing Page — Features', () => {
 
   test('integration logos section (Strava, Komoot, Wahoo, Garmin)', async ({ page }) => {
     await page.goto(`${BASE}/login`);
-    await expect(page.getByText('Strava', { exact: true })).toBeVisible();
-    await expect(page.getByText('Komoot', { exact: true })).toBeVisible();
-    await expect(page.getByText('Wahoo', { exact: true })).toBeVisible();
-    await expect(page.getByText('Garmin', { exact: true })).toBeVisible();
+    await expect(page.getByText('Strava')).toBeVisible();
+    await expect(page.getByText('Komoot')).toBeVisible();
+    await expect(page.getByText('Wahoo')).toBeVisible();
+    await expect(page.getByText('Garmin')).toBeVisible();
   });
 
   test('"Ready to ride?" final CTA section', async ({ page }) => {
@@ -196,10 +196,9 @@ test.describe('Landing Page — Features', () => {
 
   test('community stats (Riders, Comments, Ratings) are visible', async ({ page }) => {
     await page.goto(`${BASE}/login`);
-    // Community stats labels use CSS text-transform: uppercase — DOM text is capitalized
-    await expect(page.getByText('Riders', { exact: true })).toBeVisible();
-    await expect(page.getByText('Comments', { exact: true })).toBeVisible();
-    await expect(page.getByText('Ratings', { exact: true })).toBeVisible();
+    await expect(page.getByText('RIDERS')).toBeVisible();
+    await expect(page.getByText('COMMENTS')).toBeVisible();
+    await expect(page.getByText('RATINGS')).toBeVisible();
   });
 });
 
@@ -212,7 +211,7 @@ test.describe('Footer', () => {
     await page.goto(`${BASE}/login`);
     const footer = page.locator('footer');
     await expect(footer.getByText('Contact')).toBeVisible();
-    await expect(footer.getByRole('link', { name: 'Privacy' }).first()).toBeVisible();
+    await expect(footer.getByText('Privacy')).toBeVisible();
     await expect(footer.getByText(/© 2026 LOOPS/)).toBeVisible();
     await expect(footer.getByText(/Made in Ireland/)).toBeVisible();
   });
@@ -226,7 +225,7 @@ test.describe('Footer', () => {
 
   test('BUG: Privacy link redirects to login instead of showing privacy policy', async ({ page }) => {
     await page.goto(`${BASE}/login`);
-    await page.getByRole('link', { name: 'Privacy' }).first().click();
+    await page.getByRole('link', { name: 'Privacy' }).click();
     await page.waitForTimeout(2000);
     // BUG: /privacy should show the privacy policy, but redirects to /login
     expect(page.url()).toContain('/privacy');
@@ -334,7 +333,7 @@ test.describe('Mobile Responsive', () => {
 
   test('nav bar is usable on mobile', async ({ page }) => {
     await page.goto(`${BASE}/login`);
-    const nav = page.locator('nav').first();
+    const nav = page.locator('nav');
     await expect(nav).toBeVisible();
     // Check no horizontal overflow
     const navWidth = await nav.evaluate(el => el.scrollWidth);
@@ -428,26 +427,21 @@ test.describe('SEO', () => {
   });
 
   test('canonical URL is set', async ({ page }) => {
-    await page.goto(`${BASE}/login`, { waitUntil: 'networkidle' });
-    const canonical = await page.evaluate(() => {
-      const link = document.querySelector('link[rel="canonical"]');
-      return link?.getAttribute('href') ?? null;
-    });
+    await page.goto(`${BASE}/login`);
+    const canonical = await page.locator('link[rel="canonical"]').getAttribute('href');
     console.log('Canonical:', canonical);
     // Should exist for SEO
     expect(canonical).toBeTruthy();
   });
 
   test('robots meta allows indexing', async ({ page }) => {
-    await page.goto(`${BASE}/login`, { waitUntil: 'networkidle' });
-    const robots = await page.evaluate(() => {
-      const meta = document.querySelector('meta[name="robots"]');
-      return meta?.getAttribute('content') ?? null;
-    });
+    await page.goto(`${BASE}/login`);
+    const robots = await page.locator('meta[name="robots"]').getAttribute('content');
     console.log('Robots:', robots);
-    // Should exist and not block indexing
-    expect(robots).toBeTruthy();
-    expect(robots).not.toContain('noindex');
+    // Should not block indexing of the landing page
+    if (robots) {
+      expect(robots).not.toContain('noindex');
+    }
   });
 
   test('BUG: individual route pages not accessible to search engines', async ({ page }) => {

@@ -10,7 +10,9 @@
     "seed": "npx tsx scripts/seed.ts",
     "cap:sync": "npx cap sync",
     "cap:ios": "npx cap open ios",
-    "cap:android": "npx cap open android"
+    "cap:android": "npx cap open android",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@capacitor/android": "^8.2.0",
@@ -54,6 +56,7 @@
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",
     "typescript": "5.9.3",
+    "vitest": "^4.1.0",
     "xml2js": "^0.6.2"
   }
 }

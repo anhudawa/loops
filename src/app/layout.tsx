@@ -12,6 +12,9 @@ export const metadata: Metadata = {
   title: "LOOPS — Cycling Routes Worldwide | Free GPX Downloads",
   description: "Discover cycling routes worldwide. Free GPX downloads, community ratings, elevation profiles. Gravel, road & MTB routes from real riders.",
   keywords: ["cycling routes", "gravel cycling", "GPX", "bike routes", "MTB trails", "road cycling", "route sharing", "cycling community"],
+  verification: {
+    google: "0-mGmMRQK6Iu8na6wuEcwzm1I7RO2uT3-XJ3T8C5wys",
+  },
   openGraph: {
     title: "LOOPS — Routes Worth Riding",
     description: "Discover and share the best gravel, road & MTB loops worldwide. Built by riders, for riders.",

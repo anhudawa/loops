@@ -74,7 +74,7 @@ export default async function RouteLayout({
     rating: { average: rating.average, count: rating.count },
   });
 
-  const breadcrumbItems = [
+  const breadcrumbItems: { name: string; url?: string }[] = [
     { name: "LOOPS", url: "https://loops.ie" },
     { name: route.country, url: `https://loops.ie/routes/country/${slugify(route.country)}` },
   ];

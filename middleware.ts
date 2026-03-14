@@ -79,6 +79,11 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Redirect /explore to homepage
+  if (pathname === "/explore") {
+    return NextResponse.redirect(new URL("/#explore", request.url));
+  }
+
   const session = request.cookies.get("session")?.value;
   if (!session) {
     return NextResponse.redirect(new URL("/login", request.url));

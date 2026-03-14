@@ -432,7 +432,7 @@ function LoginPage() {
                   {item.step}
                 </div>
                 <h3 className="font-bold text-sm mb-1" style={{ color: "var(--text)" }}>{item.title}</h3>
-                <p className="text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>{item.desc}</p>
+                <p className="text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>{item.desc}</p>
               </div>
             ))}
           </div>
@@ -445,7 +445,7 @@ function LoginPage() {
           <h2 className="text-center font-extrabold text-sm uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>
             Tired of the paywall?
           </h2>
-          <p className="text-center text-xs mb-8" style={{ color: "var(--text-muted)" }}>
+          <p className="text-center text-xs mb-8" style={{ color: "var(--text-secondary)" }}>
             We built LOOPS because route discovery shouldn&apos;t cost a subscription.
           </p>
           <div className="grid grid-cols-1 gap-3">
@@ -469,7 +469,7 @@ function LoginPage() {
                   </svg>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs line-through" style={{ color: "var(--text-muted)", opacity: 0.5 }}>
+                  <p className="text-xs line-through" style={{ color: "var(--text-muted)", opacity: 0.7 }}>
                     {item.them}
                   </p>
                   <p className="text-sm font-bold" style={{ color: "var(--accent)" }}>

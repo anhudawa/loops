@@ -32,7 +32,7 @@ test.describe('Landing Page — Hero', () => {
 
   test('"Free forever" trust badge is visible', async ({ page }) => {
     await page.goto(`${BASE}/login`);
-    await expect(page.getByText(/free forever/i)).toBeVisible();
+    await expect(page.getByText(/free forever/i).first()).toBeVisible();
     await expect(page.getByText(/no credit card/i).first()).toBeVisible();
   });
 
@@ -180,10 +180,10 @@ test.describe('Landing Page — Features', () => {
 
   test('integration logos section (Strava, Komoot, Wahoo, Garmin)', async ({ page }) => {
     await page.goto(`${BASE}/login`);
-    await expect(page.getByText('Strava')).toBeVisible();
-    await expect(page.getByText('Komoot')).toBeVisible();
-    await expect(page.getByText('Wahoo')).toBeVisible();
-    await expect(page.getByText('Garmin')).toBeVisible();
+    await expect(page.getByText('Strava').first()).toBeVisible();
+    await expect(page.getByText('Komoot').first()).toBeVisible();
+    await expect(page.getByText('Wahoo').first()).toBeVisible();
+    await expect(page.getByText('Garmin').first()).toBeVisible();
   });
 
   test('"Ready to ride?" final CTA section', async ({ page }) => {
@@ -196,9 +196,9 @@ test.describe('Landing Page — Features', () => {
 
   test('community stats (Riders, Comments, Ratings) are visible', async ({ page }) => {
     await page.goto(`${BASE}/login`);
-    await expect(page.getByText('RIDERS')).toBeVisible();
-    await expect(page.getByText('COMMENTS')).toBeVisible();
-    await expect(page.getByText('RATINGS')).toBeVisible();
+    await expect(page.getByText(/riders/i).first()).toBeVisible();
+    await expect(page.getByText(/comments/i).first()).toBeVisible();
+    await expect(page.getByText(/ratings/i).first()).toBeVisible();
   });
 });
 
@@ -209,9 +209,9 @@ test.describe('Landing Page — Features', () => {
 test.describe('Footer', () => {
   test('footer has Contact, Privacy links and copyright', async ({ page }) => {
     await page.goto(`${BASE}/login`);
-    const footer = page.locator('footer');
+    const footer = page.locator('footer').first();
     await expect(footer.getByText('Contact')).toBeVisible();
-    await expect(footer.getByText('Privacy')).toBeVisible();
+    await expect(footer.getByText('Privacy').first()).toBeVisible();
     await expect(footer.getByText(/© 2026 LOOPS/)).toBeVisible();
     await expect(footer.getByText(/Made in Ireland/)).toBeVisible();
   });
@@ -225,7 +225,7 @@ test.describe('Footer', () => {
 
   test('BUG: Privacy link redirects to login instead of showing privacy policy', async ({ page }) => {
     await page.goto(`${BASE}/login`);
-    await page.getByRole('link', { name: 'Privacy' }).click();
+    await page.getByRole('link', { name: 'Privacy' }).first().click();
     await page.waitForTimeout(2000);
     // BUG: /privacy should show the privacy policy, but redirects to /login
     expect(page.url()).toContain('/privacy');
@@ -333,7 +333,7 @@ test.describe('Mobile Responsive', () => {
 
   test('nav bar is usable on mobile', async ({ page }) => {
     await page.goto(`${BASE}/login`);
-    const nav = page.locator('nav');
+    const nav = page.locator('nav').first();
     await expect(nav).toBeVisible();
     // Check no horizontal overflow
     const navWidth = await nav.evaluate(el => el.scrollWidth);

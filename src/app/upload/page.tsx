@@ -164,7 +164,7 @@ export default function UploadPage() {
 
       <div className="max-w-2xl mx-auto px-4 md:px-6 py-8">
         <h1 className="text-xl md:text-2xl font-extrabold tracking-tight uppercase mb-2" style={{ color: "var(--text)" }}>Share a Loop</h1>
-        <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>Upload a route file or import from Strava / RideWithGPS.</p>
+        <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>Upload a route file or import from RideWithGPS.</p>
 
         {/* Mode Toggle */}
         <div className="flex rounded-xl overflow-hidden mb-6" style={{ border: "1px solid var(--border)" }}>
@@ -257,7 +257,7 @@ export default function UploadPage() {
                   type="url"
                   value={importUrl}
                   onChange={(e) => setImportUrl(e.target.value)}
-                  placeholder="https://www.strava.com/activities/..."
+                  placeholder="https://ridewithgps.com/routes/..."
                   className="w-full rounded-xl px-4 py-3.5 text-sm pr-32"
                   style={inputStyle}
                 />

@@ -51,10 +51,21 @@ export default function MapView({
       zoomControl: true,
     });
 
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+    const tileLayer = L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
       attribution: '&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
       maxZoom: 18,
+      errorTileUrl: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPj/HwADBwIAMCbHYQAAAABJRU5ErkJggg==",
     }).addTo(mapRef.current);
+
+    // Fallback to OSM tiles if CARTO fails
+    let tileErrors = 0;
+    tileLayer.on("tileerror", () => {
+      tileErrors++;
+      if (tileErrors > 5 && mapRef.current) {
+        tileLayer.setUrl("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png");
+        tileErrors = 0;
+      }
+    });
 
     layersRef.current = L.layerGroup().addTo(mapRef.current);
     windLayerRef.current = L.layerGroup().addTo(mapRef.current);

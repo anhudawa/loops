@@ -163,7 +163,7 @@ function HomeContent() {
       .then((data) => setRegions(Array.isArray(data) ? data : []));
   }, []);
 
-  const fetchRoutes = useCallback(async (pageNum = 1, append = false) => {
+  const fetchRoutes = useCallback(async (pageNum = 1, append = false, fallbackSort?: string) => {
     const params = new URLSearchParams();
     if (filters.difficulty) params.set("difficulty", filters.difficulty);
     if (filters.discipline) params.set("discipline", filters.discipline);
@@ -172,7 +172,11 @@ function HomeContent() {
     if (filters.verified) params.set("verified", "true");
     if (filters.search) params.set("search", filters.search);
     if (filters.duration) params.set("duration", filters.duration);
-    if (filters.sort) params.set("sort", filters.sort);
+
+    // Use fallback sort if provided, otherwise use filter sort
+    const effectiveSort = fallbackSort || filters.sort;
+    if (effectiveSort) params.set("sort", effectiveSort);
+
     if (userLocation) {
       params.set("lat", String(userLocation.lat));
       params.set("lng", String(userLocation.lng));
@@ -182,6 +186,13 @@ function HomeContent() {
     const res = await fetch(`/api/routes?${params}`);
     const json = await res.json();
     const newRoutes = Array.isArray(json.data) ? json.data : Array.isArray(json) ? json : [];
+
+    // If no routes found with default sort and user has location, fall back to top rated
+    if (newRoutes.length === 0 && pageNum === 1 && !append && !fallbackSort && !filters.sort && userLocation) {
+      fetchRoutes(1, false, "rating");
+      return;
+    }
+
     setRoutes((prev) => append ? [...prev, ...newRoutes] : newRoutes);
     setHasMore(json.hasMore ?? false);
     setPage(pageNum);
@@ -297,7 +308,7 @@ function HomeContent() {
       <HeroSection onExplore={scrollToContent} />
 
       {/* Header */}
-      <header ref={contentRef} className="px-4 md:px-6 py-3 border-b" style={{ background: "var(--bg-raised)", borderColor: "var(--border)" }}>
+      <header id="explore" ref={contentRef} className="px-4 md:px-6 py-3 border-b" style={{ background: "var(--bg-raised)", borderColor: "var(--border)" }}>
         <div className="max-w-screen-2xl mx-auto flex items-center justify-between gap-3">
           <Link href="/" className="shrink-0">
             <span className="logo-mark text-2xl" style={{ color: "var(--text)" }}>LOOPS</span>
@@ -312,6 +323,7 @@ function HomeContent() {
                 type="text"
                 value={filters.search}
                 onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
+                onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
                 placeholder="Search routes, regions..."
                 className="w-full rounded-lg pl-9 pr-3 py-2 text-sm"
                 style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
@@ -370,6 +382,7 @@ function HomeContent() {
               type="text"
               value={filters.search}
               onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
+              onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
               placeholder="Search routes, regions..."
               className="w-full rounded-lg pl-9 pr-3 py-2 text-sm"
               style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import ElevationProfile from "@/components/ElevationProfile";
@@ -51,6 +51,7 @@ const DIFF: Record<string, { label: string; color: string; bg: string }> = {
 
 export default function RouteDetail() {
   const params = useParams();
+  const router = useRouter();
   const { user } = useAuth();
   const [route, setRoute] = useState<Route | null>(null);
   const [loading, setLoading] = useState(true);
@@ -175,11 +176,11 @@ export default function RouteDetail() {
       {/* Header */}
       <header className="px-4 md:px-6 py-3" style={{ background: "var(--bg-raised)", borderBottom: "1px solid var(--border)" }}>
         <div className="max-w-5xl mx-auto flex items-center gap-3">
-          <Link href="/" className="min-w-[44px] min-h-[44px] flex items-center justify-center hover:opacity-80 transition-opacity" style={{ color: "var(--text-muted)" }}>
+          <button onClick={() => router.back()} className="min-w-[44px] min-h-[44px] flex items-center justify-center hover:opacity-80 transition-opacity" style={{ color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer" }}>
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
-          </Link>
+          </button>
           <Link href="/">
             <span className="logo-mark text-xl" style={{ color: "var(--text)" }}>LOOPS</span>
           </Link>

@@ -917,6 +917,158 @@ export async function getAllRoutes(page = 1, limit = 50): Promise<{ routes: Rout
   return { routes: data.rows as Route[], total: Number(count.rows[0].c) };
 }
 
+// ──── SEO Queries ────
+
+export async function getAllRoutesForSitemap(): Promise<{ id: string; created_at: string }[]> {
+  const { rows } = await sql`SELECT id, created_at FROM routes ORDER BY created_at DESC`;
+  return rows as { id: string; created_at: string }[];
+}
+
+export async function getRoutesByCountrySlug(slug: string): Promise<Route[]> {
+  const { rows } = await sql.query(
+    `SELECT r.*, COALESCE(AVG(rt.score), 0) as avg_score, COUNT(rt.id) as rating_count
+     FROM routes r
+     LEFT JOIN ratings rt ON rt.route_id = r.id
+     WHERE LOWER(REPLACE(r.country, ' ', '-')) = $1
+     GROUP BY r.id
+     ORDER BY COALESCE(AVG(rt.score), 0) DESC, r.created_at DESC`,
+    [slug]
+  );
+  return rows as Route[];
+}
+
+export async function getRoutesByRegionSlug(countrySlug: string, regionSlug: string): Promise<Route[]> {
+  const { rows } = await sql.query(
+    `SELECT r.*, COALESCE(AVG(rt.score), 0) as avg_score, COUNT(rt.id) as rating_count
+     FROM routes r
+     LEFT JOIN ratings rt ON rt.route_id = r.id
+     WHERE LOWER(REPLACE(r.country, ' ', '-')) = $1
+       AND LOWER(REPLACE(r.region, ' ', '-')) = $2
+     GROUP BY r.id
+     ORDER BY COALESCE(AVG(rt.score), 0) DESC, r.created_at DESC`,
+    [countrySlug, regionSlug]
+  );
+  return rows as Route[];
+}
+
+export async function getCountryStats(countrySlug: string): Promise<{
+  routeCount: number;
+  totalDistanceKm: number;
+  avgRating: number;
+  disciplines: string[];
+  difficulties: string[];
+  displayName: string;
+  regions: { name: string; routeCount: number }[];
+} | null> {
+  const { rows } = await sql.query(
+    `SELECT
+       COUNT(*) as route_count,
+       COALESCE(SUM(distance_km), 0) as total_distance,
+       COALESCE((SELECT AVG(rt.score) FROM ratings rt JOIN routes r2 ON rt.route_id = r2.id WHERE LOWER(REPLACE(r2.country, ' ', '-')) = $1), 0) as avg_rating,
+       MIN(country) as display_name
+     FROM routes
+     WHERE LOWER(REPLACE(country, ' ', '-')) = $1`,
+    [countrySlug]
+  );
+
+  if (!rows[0] || Number(rows[0].route_count) === 0) return null;
+
+  const { rows: disciplineRows } = await sql.query(
+    `SELECT DISTINCT discipline FROM routes WHERE LOWER(REPLACE(country, ' ', '-')) = $1 ORDER BY discipline`,
+    [countrySlug]
+  );
+
+  const { rows: difficultyRows } = await sql.query(
+    `SELECT DISTINCT difficulty FROM routes WHERE LOWER(REPLACE(country, ' ', '-')) = $1 ORDER BY difficulty`,
+    [countrySlug]
+  );
+
+  const { rows: regionRows } = await sql.query(
+    `SELECT region as name, COUNT(*) as route_count
+     FROM routes
+     WHERE LOWER(REPLACE(country, ' ', '-')) = $1 AND region IS NOT NULL
+     GROUP BY region
+     ORDER BY region`,
+    [countrySlug]
+  );
+
+  return {
+    routeCount: Number(rows[0].route_count),
+    totalDistanceKm: Math.round(Number(rows[0].total_distance)),
+    avgRating: Number(Number(rows[0].avg_rating).toFixed(1)),
+    disciplines: disciplineRows.map((r) => r.discipline),
+    difficulties: difficultyRows.map((r) => r.difficulty),
+    displayName: rows[0].display_name,
+    regions: regionRows.map((r) => ({ name: r.name, routeCount: Number(r.route_count) })),
+  };
+}
+
+export async function getRegionStats(countrySlug: string, regionSlug: string): Promise<{
+  routeCount: number;
+  totalDistanceKm: number;
+  avgRating: number;
+  disciplines: string[];
+  difficulties: string[];
+  displayName: string;
+  countryDisplayName: string;
+} | null> {
+  const { rows } = await sql.query(
+    `SELECT
+       COUNT(*) as route_count,
+       COALESCE(SUM(distance_km), 0) as total_distance,
+       COALESCE((SELECT AVG(rt.score) FROM ratings rt JOIN routes r2 ON rt.route_id = r2.id WHERE LOWER(REPLACE(r2.country, ' ', '-')) = $1 AND LOWER(REPLACE(r2.region, ' ', '-')) = $2), 0) as avg_rating,
+       MIN(region) as display_name,
+       MIN(country) as country_display_name
+     FROM routes
+     WHERE LOWER(REPLACE(country, ' ', '-')) = $1
+       AND LOWER(REPLACE(region, ' ', '-')) = $2`,
+    [countrySlug, regionSlug]
+  );
+
+  if (!rows[0] || Number(rows[0].route_count) === 0) return null;
+
+  const { rows: disciplineRows } = await sql.query(
+    `SELECT DISTINCT discipline FROM routes WHERE LOWER(REPLACE(country, ' ', '-')) = $1 AND LOWER(REPLACE(region, ' ', '-')) = $2 ORDER BY discipline`,
+    [countrySlug, regionSlug]
+  );
+
+  const { rows: difficultyRows } = await sql.query(
+    `SELECT DISTINCT difficulty FROM routes WHERE LOWER(REPLACE(country, ' ', '-')) = $1 AND LOWER(REPLACE(region, ' ', '-')) = $2 ORDER BY difficulty`,
+    [countrySlug, regionSlug]
+  );
+
+  return {
+    routeCount: Number(rows[0].route_count),
+    totalDistanceKm: Math.round(Number(rows[0].total_distance)),
+    avgRating: Number(Number(rows[0].avg_rating).toFixed(1)),
+    disciplines: disciplineRows.map((r) => r.discipline),
+    difficulties: difficultyRows.map((r) => r.difficulty),
+    displayName: rows[0].display_name,
+    countryDisplayName: rows[0].country_display_name,
+  };
+}
+
+export async function getRelatedRoutes(
+  routeId: string,
+  country: string,
+  region: string | null,
+  limit: number
+): Promise<Route[]> {
+  if (region) {
+    const { rows } = await sql.query(
+      `SELECT * FROM routes WHERE country = $1 AND region = $2 AND id != $3 ORDER BY created_at DESC LIMIT $4`,
+      [country, region, routeId, limit]
+    );
+    if (rows.length > 0) return rows as Route[];
+  }
+  // Fall back to same country
+  const { rows } = await sql.query(
+    `SELECT * FROM routes WHERE country = $1 AND id != $2 ORDER BY created_at DESC LIMIT $3`,
+    [country, routeId, limit]
+  );
+  return rows as Route[];
+}
+
 // ──── Downloads ────
 export async function trackDownload(id: string, routeId: string, userId: string): Promise<void> {
   await sql`

@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import ElevationProfile from "@/components/ElevationProfile";
+import ClimbCards from "@/components/ClimbCards";
 import StarRating from "@/components/StarRating";
 import Comments from "@/components/Comments";
 import PhotoGallery from "@/components/PhotoGallery";
@@ -13,6 +14,11 @@ import RideActions from "@/components/RideActions";
 import ShareRide from "@/components/ShareRide";
 import WeatherCard from "@/components/WeatherCard";
 import { useAuth } from "@/components/AuthProvider";
+import Breadcrumbs from "@/components/Breadcrumbs";
+import RouteFaq from "@/components/RouteFaq";
+import RelatedRoutes from "@/components/RelatedRoutes";
+import { slugify } from "@/lib/seo";
+import { detectClimbs, haversine, CATEGORY_COLORS, type Climb } from "@/lib/climb-detection";
 
 const MapView = dynamic(() => import("@/components/MapView"), { ssr: false });
 
@@ -52,7 +58,7 @@ const DIFF: Record<string, { label: string; color: string; bg: string }> = {
 export default function RouteDetail() {
   const params = useParams();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [route, setRoute] = useState<Route | null>(null);
   const [loading, setLoading] = useState(true);
   const [windData, setWindData] = useState<{ direction: number; speed: number } | null>(null);
@@ -65,6 +71,15 @@ export default function RouteDetail() {
   const [favLoading, setFavLoading] = useState(false);
   const [fetchError, setFetchError] = useState(false);
   const [mutationError, setMutationError] = useState("");
+  // Profile hover → map marker (set by profile, drives map)
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  // Map click → profile crosshair (set by map click, drives profile)
+  const [highlightIndex, setHighlightIndex] = useState<number | null>(null);
+  // Climb card → map highlight section
+  const [highlightSection, setHighlightSection] = useState<{
+    coords: [number, number][];
+    color: string;
+  } | null>(null);
 
   const fetchRoute = async () => {
     if (!params.id) return;
@@ -83,6 +98,26 @@ export default function RouteDetail() {
   useEffect(() => {
     fetchRoute();
   }, [params.id]);
+
+
+  const [relatedRoutes, setRelatedRoutes] = useState<Route[]>([]);
+
+  useEffect(() => {
+    if (!route) return;
+    fetch(`/api/routes?country=${encodeURIComponent(route.country)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        const all = data.data || data;
+        const sameRegion = route.region
+          ? all.filter((r: Route) => r.id !== route.id && r.region === route.region)
+          : [];
+        const filtered = sameRegion.length > 0
+          ? sameRegion.slice(0, 4)
+          : all.filter((r: Route) => r.id !== route.id).slice(0, 4);
+        setRelatedRoutes(filtered);
+      })
+      .catch(() => {});
+  }, [route?.id, route?.country, route?.region]);
 
   // Check favourite status
   useEffect(() => {
@@ -200,9 +235,43 @@ export default function RouteDetail() {
   }
 
   const rawCoords: number[][] = JSON.parse(route.coordinates);
+  const fullCoordinates: [number, number, number][] = rawCoords.map((c) => [c[0], c[1], c[2] ?? 0]);
   const coordinates: [number, number][] = rawCoords.map((c) => [c[0], c[1]]);
-  const elevations: number[] = rawCoords.map((c) => c[2] ?? 0);
+  const climbs = detectClimbs(fullCoordinates);
   const diff = DIFF[route.difficulty] || DIFF.easy;
+
+  const handlePositionChange = (index: number | null) => {
+    setHoverIndex(index);
+    // Clear map-to-profile crosshair when user starts hovering profile
+    if (index != null) setHighlightIndex(null);
+  };
+
+  const handleClimbSelect = (climb: Climb) => {
+    const sectionCoords = fullCoordinates
+      .slice(climb.startIndex, climb.endIndex + 1)
+      .map((c): [number, number] => [c[0], c[1]]);
+    const color = climb.category ? CATEGORY_COLORS[climb.category] ?? "#c8ff00" : "#c8ff00";
+    setHighlightSection({ coords: sectionCoords, color });
+  };
+
+  const handlePolylineClick = (latlng: { lat: number; lng: number }) => {
+    // Find nearest coordinate index — drives profile crosshair
+    let minDist = Infinity;
+    let nearestIdx = 0;
+    for (let i = 0; i < fullCoordinates.length; i++) {
+      const d = haversine([fullCoordinates[i][0], fullCoordinates[i][1]], [latlng.lat, latlng.lng]);
+      if (d < minDist) {
+        minDist = d;
+        nearestIdx = i;
+      }
+    }
+    setHighlightIndex(nearestIdx);
+  };
+
+  // Compute hover position for map marker (from profile hover only)
+  const hoverPosition = hoverIndex != null && hoverIndex < fullCoordinates.length
+    ? { lat: fullCoordinates[hoverIndex][0], lng: fullCoordinates[hoverIndex][1] }
+    : null;
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
@@ -222,7 +291,16 @@ export default function RouteDetail() {
 
       {/* Hero: Map full-bleed */}
       <div className="h-[200px] md:h-[360px] relative">
-        <MapView routes={[route]} selectedRouteId={route.id} windOverlay={windOverlayEnabled && windData ? windData : null} travelOverlay={travelOverlayEnabled} />
+        <MapView
+          routes={[route]}
+          selectedRouteId={route.id}
+          windOverlay={windOverlayEnabled && windData ? windData : null}
+          travelOverlay={travelOverlayEnabled}
+          hoverPosition={hoverPosition}
+          highlightSection={highlightSection}
+          onPolylineClick={handlePolylineClick}
+          onMapClick={() => setHighlightSection(null)}
+        />
         <div className="absolute bottom-0 left-0 right-0 h-20 pointer-events-none z-[1]" style={{ background: "linear-gradient(to top, var(--bg), transparent)" }} />
       </div>
 
@@ -237,6 +315,20 @@ export default function RouteDetail() {
             onTravelToggle={setTravelOverlayEnabled}
             onWeatherLoaded={(wind) => setWindData(wind)}
             coordinates={coordinates}
+          />
+        </div>
+
+        {/* Breadcrumbs */}
+        <div className="mb-3">
+          <Breadcrumbs
+            items={[
+              { label: "LOOPS", href: "/" },
+              { label: route.country, href: `/routes/country/${slugify(route.country)}` },
+              ...(route.region
+                ? [{ label: route.region, href: `/routes/country/${slugify(route.country)}/${slugify(route.region)}` }]
+                : []),
+              { label: route.name },
+            ]}
           />
         </div>
 
@@ -268,17 +360,17 @@ export default function RouteDetail() {
               >
                 {diff.label}
               </span>
+              {user ? (
               <button
                 onClick={handleFavourite}
-                disabled={favLoading || !user}
+                disabled={favLoading}
                 className="flex items-center gap-1 px-2.5 py-2 min-h-[44px] rounded-lg transition-all"
                 style={{
                   background: isFavourited ? "rgba(255, 51, 85, 0.15)" : "rgba(255,255,255,0.05)",
                   border: `1px solid ${isFavourited ? "rgba(255, 51, 85, 0.3)" : "var(--border)"}`,
                   opacity: favLoading ? 0.5 : 1,
-                  cursor: user ? "pointer" : "default",
                 }}
-                title={user ? (isFavourited ? "Remove from favourites" : "Add to favourites") : "Sign in to favourite"}
+                title={isFavourited ? "Remove from favourites" : "Add to favourites"}
               >
                 <svg
                   className="w-4 h-4 transition-transform"
@@ -296,6 +388,32 @@ export default function RouteDetail() {
                   </span>
                 )}
               </button>
+              ) : (
+              <Link
+                href={`/login?redirect=/routes/${route.id}`}
+                className="flex items-center gap-1 px-2.5 py-2 min-h-[44px] rounded-lg transition-all hover:opacity-80"
+                style={{
+                  background: "rgba(255,255,255,0.05)",
+                  border: "1px solid var(--border)",
+                }}
+                title="Sign in to favourite"
+              >
+                <svg
+                  className="w-4 h-4"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="var(--text-muted)"
+                  strokeWidth={2}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                </svg>
+                {favCount > 0 && (
+                  <span className="text-[11px] font-bold" style={{ color: "var(--text-muted)" }}>
+                    {favCount}
+                  </span>
+                )}
+              </Link>
+              )}
             </div>
           </div>
           {mutationError && <p className="text-xs mt-1" style={{ color: "var(--danger)" }}>{mutationError}</p>}
@@ -398,27 +516,58 @@ export default function RouteDetail() {
           <RideActions routeId={route.id} routeName={route.name} />
         </div>
 
-        {/* Description & Elevation */}
-        <div className="grid md:grid-cols-2 gap-3 md:gap-4 mb-4">
-          <div className="rounded-2xl p-4 md:p-6" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-            <h2 className="text-xs font-extrabold uppercase tracking-wider mb-3" style={{ color: "var(--text-secondary)" }}>About this route</h2>
-            {route.description ? (
-              <p className="text-sm leading-relaxed" style={{ color: "var(--text-muted)" }}>{route.description}</p>
-            ) : (
-              <p className="text-sm italic" style={{ color: "var(--text-muted)" }}>No description provided</p>
-            )}
-          </div>
+        {/* Elevation Profile — full width */}
+        <div className="rounded-2xl p-4 md:p-6 mb-3 md:mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+          <h2 className="text-xs font-extrabold uppercase tracking-wider mb-3" style={{ color: "var(--text-secondary)" }}>
+            Elevation Profile
+          </h2>
+          <ElevationProfile
+            coordinates={fullCoordinates}
+            distanceKm={route.distance_km}
+            onPositionChange={handlePositionChange}
+            highlightIndex={highlightIndex}
+          />
+        </div>
 
-          <div className="rounded-2xl p-4 md:p-6" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-            <h2 className="text-xs font-extrabold uppercase tracking-wider mb-3" style={{ color: "var(--text-secondary)" }}>Elevation Profile</h2>
-            <ElevationProfile
-              elevations={elevations}
-              coordinates={coordinates}
-              distanceKm={route.distance_km}
-              elevationGain={route.elevation_gain_m}
-              elevationLoss={route.elevation_loss_m}
-            />
+        {/* Climb Cards */}
+        {climbs.length > 0 && (
+          <div className="rounded-2xl p-4 md:p-6 mb-3 md:mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+            <ClimbCards climbs={climbs} onClimbSelect={handleClimbSelect} />
           </div>
+        )}
+
+        {/* About this route — full width */}
+        <div className="rounded-2xl p-4 md:p-6 mb-3 md:mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+          <h2 className="text-xs font-extrabold uppercase tracking-wider mb-3" style={{ color: "var(--text-secondary)" }}>
+            About this route
+          </h2>
+          {route.description ? (
+            <p className="text-sm leading-relaxed" style={{ color: "var(--text-muted)" }}>{route.description}</p>
+          ) : (
+            <p className="text-sm italic" style={{ color: "var(--text-muted)" }}>No description provided</p>
+          )}
+        </div>
+
+        {/* FAQ */}
+        <div className="rounded-2xl p-4 md:p-6 mb-3 md:mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+          <RouteFaq
+            routeName={route.name}
+            distanceKm={route.distance_km}
+            elevationGainM={route.elevation_gain_m}
+            surfaceType={route.surface_type}
+            discipline={route.discipline}
+            difficulty={route.difficulty}
+          />
+        </div>
+
+        {/* Related Routes */}
+        <div className="rounded-2xl p-4 md:p-6 mb-3 md:mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+          <RelatedRoutes
+            routes={relatedRoutes}
+            regionOrCountry={route.region || route.country}
+            country={route.country}
+            isRegion={!!route.region}
+          />
         </div>
 
         {/* Trail Conditions */}
@@ -431,6 +580,38 @@ export default function RouteDetail() {
           <Comments routeId={route.id} />
         </div>
       </div>
+
+      {/* Sticky bottom CTA for unauthenticated users */}
+      {!user && !authLoading && (
+        <div
+          className="fixed bottom-0 left-0 right-0 z-50 px-4 py-3 md:py-4"
+          style={{
+            background: "linear-gradient(to top, var(--bg) 60%, transparent)",
+            backdropFilter: "blur(12px)",
+          }}
+        >
+          <div className="max-w-4xl mx-auto flex items-center gap-3">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold" style={{ color: "var(--text)" }}>
+                Join LOOPS
+              </p>
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                Download routes, rate rides, join the community
+              </p>
+            </div>
+            <Link
+              href={`/login?redirect=/routes/${route.id}`}
+              className="shrink-0 px-5 py-2.5 rounded-xl font-bold text-sm uppercase tracking-wider transition-all hover:brightness-110"
+              style={{
+                background: "var(--accent)",
+                color: "var(--bg)",
+              }}
+            >
+              Sign Up Free
+            </Link>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -12,7 +12,7 @@ export default function StarRating({ routeId }: { routeId: string }) {
   const [isTouchDevice, setIsTouchDevice] = useState(false);
 
   useEffect(() => {
-    if (typeof window !== "undefined") setIsTouchDevice("ontouchstart" in window);
+    setIsTouchDevice("ontouchstart" in window);
   }, []);
 
   const [error, setError] = useState(false);

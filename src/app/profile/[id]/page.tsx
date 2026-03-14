@@ -114,14 +114,11 @@ export default function ProfilePage() {
   const [socialList, setSocialList] = useState<{ id: string; name: string | null; avatar_url: string | null }[]>([]);
   const [socialLoading, setSocialLoading] = useState(false);
   const [shareToast, setShareToast] = useState(false);
-  const [fetchError, setFetchError] = useState(false);
-  const [mutationError, setMutationError] = useState("");
 
   const isOwnProfile = currentUser?.id === params.id;
 
   useEffect(() => {
     if (params.id) {
-      setFetchError(false);
       fetch(`/api/users/${params.id}`)
         .then((r) => r.json())
         .then((data) => {
@@ -130,8 +127,7 @@ export default function ProfilePage() {
             setIsFollowing(data.viewerFollowing);
           }
           setLoading(false);
-        })
-        .catch(() => { setFetchError(true); setLoading(false); });
+        });
     }
   }, [params.id]);
 
@@ -143,16 +139,12 @@ export default function ProfilePage() {
     const res = await fetch(`/api/users/${params.id}/follow`, { method });
     if (res.ok) {
       setIsFollowing(!isFollowing);
-      setMutationError("");
       if (profile) {
         setProfile({
           ...profile,
           followers: profile.followers + (isFollowing ? -1 : 1),
         });
       }
-    } else {
-      setMutationError("Action failed");
-      setTimeout(() => setMutationError(""), 3000);
     }
     setFollowLoading(false);
   };
@@ -183,8 +175,9 @@ export default function ProfilePage() {
       const data = await res.json();
       setSocialList(data.users || []);
     } catch {
-      setSocialLoading(false);
+      // ignore
     }
+    setSocialLoading(false);
   };
 
   const handleShare = async () => {
@@ -205,22 +198,18 @@ export default function ProfilePage() {
   const loadMoreActivity = async () => {
     if (loadingMore || !hasMore) return;
     setLoadingMore(true);
-    try {
-      const nextPage = activityPage + 1;
-      const res = await fetch(`/api/users/${params.id}/activity?page=${nextPage}`);
-      const data = await res.json();
-      if (data.activity.length === 0) {
-        setHasMore(false);
-      } else {
-        setProfile((prev) =>
-          prev ? { ...prev, activity: [...prev.activity, ...data.activity] } : prev
-        );
-        setActivityPage(nextPage);
-      }
-      setLoadingMore(false);
-    } catch {
-      setLoadingMore(false);
+    const nextPage = activityPage + 1;
+    const res = await fetch(`/api/users/${params.id}/activity?page=${nextPage}`);
+    const data = await res.json();
+    if (data.activity.length === 0) {
+      setHasMore(false);
+    } else {
+      setProfile((prev) =>
+        prev ? { ...prev, activity: [...prev.activity, ...data.activity] } : prev
+      );
+      setActivityPage(nextPage);
     }
+    setLoadingMore(false);
   };
 
   if (loading) {
@@ -250,17 +239,6 @@ export default function ProfilePage() {
           <div className="h-10 w-full skeleton mb-4" />
           <div className="h-64 w-full skeleton rounded-2xl" />
         </div>
-      </div>
-    );
-  }
-
-  if (fetchError) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ background: "var(--bg)" }}>
-        <p className="text-sm" style={{ color: "var(--text-muted)" }}>Something went wrong loading this profile.</p>
-        <button onClick={() => { setFetchError(false); setLoading(true); /* re-trigger */ }} className="btn-accent px-4 py-2 rounded-lg text-sm font-bold">
-          Try again
-        </button>
       </div>
     );
   }
@@ -395,9 +373,6 @@ export default function ProfilePage() {
                   >
                     {isFollowing ? "Following" : "Follow"}
                   </button>
-                  {mutationError && (
-                    <span className="text-xs font-bold" style={{ color: "var(--danger)" }}>{mutationError}</span>
-                  )}
                   <button
                     onClick={handleMessage}
                     className="px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all hover:opacity-80"

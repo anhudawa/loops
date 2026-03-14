@@ -76,7 +76,18 @@ export async function GET(request: NextRequest) {
     const sessionToken = uuidv4();
     await upsertGoogleUser(uuidv4(), googleId, email, name, avatarUrl, sessionToken);
 
-    const response = NextResponse.redirect(new URL("/", baseUrl));
+    // Check for post-login redirect (set by login page)
+    const loginRedirect = request.cookies.get("login_redirect")?.value;
+    let redirectTo = "/";
+    if (loginRedirect) {
+      const decoded = decodeURIComponent(loginRedirect);
+      // Only allow relative paths to prevent open redirect
+      if (decoded.startsWith("/") && !decoded.startsWith("//")) {
+        redirectTo = decoded;
+      }
+    }
+
+    const response = NextResponse.redirect(new URL(redirectTo, baseUrl));
 
     response.cookies.set("session", sessionToken, {
       httpOnly: true,
@@ -85,6 +96,9 @@ export async function GET(request: NextRequest) {
       path: "/",
       maxAge: 60 * 60 * 24 * 30, // 30 days
     });
+
+    // Clear the redirect cookie
+    response.cookies.set("login_redirect", "", { path: "/", maxAge: 0 });
 
     return response;
   } catch {

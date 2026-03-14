@@ -30,17 +30,31 @@ export default function MapView({
   onRouteSelect,
   windOverlay,
   travelOverlay,
+  hoverPosition,
+  highlightSection,
+  onPolylineClick,
+  onMapClick,
 }: {
   routes: Route[];
   selectedRouteId?: string;
   onRouteSelect?: (id: string) => void;
   windOverlay?: { direction: number; speed: number } | null;
   travelOverlay?: boolean;
+  hoverPosition?: { lat: number; lng: number } | null;
+  highlightSection?: { coords: [number, number][]; color: string } | null;
+  onPolylineClick?: (latlng: { lat: number; lng: number }) => void;
+  onMapClick?: () => void;
 }) {
   const mapRef = useRef<L.Map | null>(null);
   const layersRef = useRef<L.LayerGroup | null>(null);
   const windLayerRef = useRef<L.LayerGroup | null>(null);
   const travelLayerRef = useRef<L.LayerGroup | null>(null);
+  const hoverMarkerRef = useRef<L.CircleMarker | null>(null);
+  const highlightLayerRef = useRef<L.Polyline | null>(null);
+  const onMapClickRef = useRef(onMapClick);
+
+  // Keep the ref current
+  useEffect(() => { onMapClickRef.current = onMapClick; }, [onMapClick]);
 
   useEffect(() => {
     if (mapRef.current) return;
@@ -49,29 +63,26 @@ export default function MapView({
       center: [53.5, -7.5],
       zoom: 7,
       zoomControl: true,
+      scrollWheelZoom: false,
     });
 
-    const tileLayer = L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
       attribution: '&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
       maxZoom: 18,
-      errorTileUrl: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPj/HwADBwIAMCbHYQAAAABJRU5ErkJggg==",
     }).addTo(mapRef.current);
-
-    // Fallback to OSM tiles if CARTO fails
-    let tileErrors = 0;
-    tileLayer.on("tileerror", () => {
-      tileErrors++;
-      if (tileErrors > 5 && mapRef.current) {
-        tileLayer.setUrl("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png");
-        tileErrors = 0;
-      }
-    });
 
     layersRef.current = L.layerGroup().addTo(mapRef.current);
     windLayerRef.current = L.layerGroup().addTo(mapRef.current);
     travelLayerRef.current = L.layerGroup().addTo(mapRef.current);
 
+    // Map click to dismiss highlights
+    mapRef.current.on("click", () => {
+      onMapClickRef.current?.();
+    });
+
     return () => {
+      hoverMarkerRef.current?.remove();
+      highlightLayerRef.current?.remove();
       mapRef.current?.remove();
       mapRef.current = null;
     };
@@ -114,6 +125,13 @@ export default function MapView({
         marker.on("click", () => onRouteSelect(route.id));
         polyline.on("click", () => onRouteSelect(route.id));
       }
+
+      // Polyline click handler for map → profile sync
+      if (onPolylineClick) {
+        polyline.on("click", (e: L.LeafletMouseEvent) => {
+          onPolylineClick({ lat: e.latlng.lat, lng: e.latlng.lng });
+        });
+      }
     });
 
     if (selectedRouteId) {
@@ -132,7 +150,51 @@ export default function MapView({
         mapRef.current.fitBounds(L.latLngBounds(allCoords), { padding: [30, 30] });
       }
     }
-  }, [routes, selectedRouteId, onRouteSelect]);
+  }, [routes, selectedRouteId, onRouteSelect, onPolylineClick]);
+
+  // Hover marker from elevation profile
+  useEffect(() => {
+    if (!mapRef.current) return;
+
+    // Remove old marker
+    if (hoverMarkerRef.current) {
+      hoverMarkerRef.current.remove();
+      hoverMarkerRef.current = null;
+    }
+
+    if (hoverPosition) {
+      hoverMarkerRef.current = L.circleMarker([hoverPosition.lat, hoverPosition.lng], {
+        radius: 6,
+        fillColor: "#c8ff00",
+        color: "#0a0a0a",
+        weight: 2,
+        fillOpacity: 1,
+      }).addTo(mapRef.current);
+    }
+  }, [hoverPosition]);
+
+  // Highlight section for climb cards
+  useEffect(() => {
+    if (!mapRef.current) return;
+
+    if (highlightLayerRef.current) {
+      highlightLayerRef.current.remove();
+      highlightLayerRef.current = null;
+    }
+
+    if (highlightSection) {
+      highlightLayerRef.current = L.polyline(highlightSection.coords, {
+        color: highlightSection.color,
+        weight: 5,
+        opacity: 1,
+      }).addTo(mapRef.current);
+
+      mapRef.current.fitBounds(L.latLngBounds(highlightSection.coords), {
+        padding: [60, 60],
+        maxZoom: 14,
+      });
+    }
+  }, [highlightSection]);
 
   // Helper: bearing between two lat/lng points in degrees
   const bearing = (a: [number, number], b: [number, number]) => {

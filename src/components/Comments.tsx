@@ -44,7 +44,6 @@ export default function Comments({ routeId }: { routeId: string }) {
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(false);
-  const [mutationError, setMutationError] = useState("");
 
   useEffect(() => {
     fetch(`/api/routes/${routeId}/comments`)
@@ -91,29 +90,20 @@ export default function Comments({ routeId }: { routeId: string }) {
     setBody("");
     setSubmitting(true);
 
-    try {
-      const res = await fetch(`/api/routes/${routeId}/comments`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body: submittedBody }),
-      });
+    const res = await fetch(`/api/routes/${routeId}/comments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ body: submittedBody }),
+    });
 
-      if (res.ok) {
-        const json = await res.json();
-        setComments(json.data ?? json);
-        setHasMore(json.hasMore ?? false);
-        setPage(1);
-      } else {
-        setComments(prevComments);
-        setBody(submittedBody);
-        setMutationError("Failed to post comment.");
-        setTimeout(() => setMutationError(""), 3000);
-      }
-    } catch {
+    if (res.ok) {
+      const json = await res.json();
+      setComments(json.data ?? json);
+      setHasMore(json.hasMore ?? false);
+      setPage(1);
+    } else {
       setComments(prevComments);
       setBody(submittedBody);
-      setMutationError("Failed to post comment.");
-      setTimeout(() => setMutationError(""), 3000);
     }
     setSubmitting(false);
   };
@@ -124,27 +114,19 @@ export default function Comments({ routeId }: { routeId: string }) {
     setComments(comments.filter((c) => c.id !== commentId));
     setDeletingId(commentId);
 
-    try {
-      const res = await fetch(`/api/routes/${routeId}/comments`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ commentId }),
-      });
+    const res = await fetch(`/api/routes/${routeId}/comments`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ commentId }),
+    });
 
-      if (res.ok) {
-        const json = await res.json();
-        setComments(json.data ?? json);
-        setHasMore(json.hasMore ?? false);
-        setPage(1);
-      } else {
-        setComments(prevComments);
-        setMutationError("Failed to delete comment.");
-        setTimeout(() => setMutationError(""), 3000);
-      }
-    } catch {
+    if (res.ok) {
+      const json = await res.json();
+      setComments(json.data ?? json);
+      setHasMore(json.hasMore ?? false);
+      setPage(1);
+    } else {
       setComments(prevComments);
-      setMutationError("Failed to delete comment.");
-      setTimeout(() => setMutationError(""), 3000);
     }
     setDeletingId(null);
   };
@@ -232,13 +214,6 @@ export default function Comments({ routeId }: { routeId: string }) {
         </div>
       )}
 
-      {/* Mutation error */}
-      {mutationError && (
-        <p className="text-xs mb-3 px-3 py-2 rounded-lg" style={{ background: "rgba(255,51,85,0.1)", color: "var(--danger)" }}>
-          {mutationError}
-        </p>
-      )}
-
       {/* Comments list */}
       {error ? (
         <p className="text-sm text-center py-6" style={{ color: "var(--text-muted)" }}>Could not load comments</p>
@@ -289,7 +264,7 @@ export default function Comments({ routeId }: { routeId: string }) {
                     <button
                       onClick={() => handleDelete(comment.id)}
                       disabled={deletingId === comment.id}
-                      className="ml-auto opacity-60 hover:!opacity-100 transition-opacity min-w-[44px] min-h-[44px] flex items-center justify-center"
+                      className="ml-auto opacity-60 sm:opacity-0 sm:group-hover:opacity-60 hover:!opacity-100 transition-opacity min-w-[44px] min-h-[44px] flex items-center justify-center"
                       style={{ color: "var(--danger)" }}
                       title="Delete comment"
                     >

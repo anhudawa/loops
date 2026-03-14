@@ -45,13 +45,12 @@ export default function HeroSection({ onExplore }: { onExplore: () => void }) {
   useEffect(() => {
     fetch("/api/stats")
       .then((r) => r.json())
-      .then(setStats)
-      .catch(() => {});
+      .then(setStats);
   }, []);
 
   return (
     <section
-      className="min-h-[60vh] md:min-h-[85vh] flex flex-col items-center justify-center relative overflow-hidden px-4"
+      className="min-h-[60vh] md:min-h-[85vh] flex flex-col items-center justify-center relative overflow-x-hidden px-4"
       style={{ background: "var(--bg)" }}
     >
       {/* Background effects */}

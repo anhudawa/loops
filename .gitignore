@@ -44,3 +44,4 @@ next-env.d.ts
 # capacitor native projects (generated)
 /ios
 /android
+.worktrees/

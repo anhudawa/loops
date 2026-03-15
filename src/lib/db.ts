@@ -189,6 +189,19 @@ export async function migrateDb() {
     WHERE created_by IS NULL
     AND EXISTS (SELECT 1 FROM users)
   `;
+
+  // Strava OAuth tokens
+  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS strava_access_token TEXT`;
+  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS strava_refresh_token TEXT`;
+  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS strava_token_expires_at BIGINT`;
+
+  // Strava activity reference on routes for deduplication
+  await sql`ALTER TABLE routes ADD COLUMN IF NOT EXISTS strava_activity_id BIGINT`;
+
+  // Difficulty: relax NOT NULL constraint so new routes can omit it
+  await sql`ALTER TABLE routes ALTER COLUMN difficulty DROP NOT NULL`;
+  await sql`ALTER TABLE routes DROP CONSTRAINT IF EXISTS routes_difficulty_check`;
+  await sql`ALTER TABLE routes ALTER COLUMN difficulty SET DEFAULT NULL`;
 }
 
 // ──── Types ────
@@ -196,7 +209,7 @@ export interface Route {
   id: string;
   name: string;
   description: string | null;
-  difficulty: "easy" | "moderate" | "hard" | "expert";
+  difficulty: "easy" | "moderate" | "hard" | "expert" | null;
   distance_km: number;
   elevation_gain_m: number;
   elevation_loss_m: number;
@@ -211,10 +224,10 @@ export interface Route {
   coordinates: string;
   created_by: string | null;
   created_at: string;
+  strava_activity_id: number | null;
 }
 
 export interface RouteFilters {
-  difficulty?: string;
   minDistance?: number;
   maxDistance?: number;
   county?: string;
@@ -244,6 +257,10 @@ export interface User {
   session_token: string | null;
   created_at: string;
   avg_speed_kmh: number;
+  strava_id: string | null;
+  strava_access_token: string | null;
+  strava_refresh_token: string | null;
+  strava_token_expires_at: number | null;
 }
 
 export interface Rating {

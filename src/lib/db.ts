@@ -323,10 +323,6 @@ export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
   const params: unknown[] = [];
   let idx = 1;
 
-  if (filters.difficulty) {
-    conditions.push(`r.difficulty = $${idx++}`);
-    params.push(filters.difficulty);
-  }
   if (filters.county) {
     conditions.push(`r.county = $${idx++}`);
     params.push(filters.county);
@@ -491,8 +487,8 @@ export async function getRoute(id: string): Promise<(Route & { is_verified?: num
 
 export async function insertRoute(route: Omit<Route, "created_at">): Promise<Route> {
   await sql`
-    INSERT INTO routes (id, name, description, difficulty, distance_km, elevation_gain_m, elevation_loss_m, surface_type, county, country, region, discipline, start_lat, start_lng, gpx_filename, coordinates, created_by)
-    VALUES (${route.id}, ${route.name}, ${route.description}, ${route.difficulty}, ${route.distance_km}, ${route.elevation_gain_m}, ${route.elevation_loss_m}, ${route.surface_type}, ${route.county}, ${route.country}, ${route.region}, ${route.discipline}, ${route.start_lat}, ${route.start_lng}, ${route.gpx_filename}, ${route.coordinates}, ${route.created_by})
+    INSERT INTO routes (id, name, description, difficulty, distance_km, elevation_gain_m, elevation_loss_m, surface_type, county, country, region, discipline, start_lat, start_lng, gpx_filename, coordinates, created_by, strava_activity_id)
+    VALUES (${route.id}, ${route.name}, ${route.description}, ${route.difficulty}, ${route.distance_km}, ${route.elevation_gain_m}, ${route.elevation_loss_m}, ${route.surface_type}, ${route.county}, ${route.country}, ${route.region}, ${route.discipline}, ${route.start_lat}, ${route.start_lng}, ${route.gpx_filename}, ${route.coordinates}, ${route.created_by}, ${route.strava_activity_id ?? null})
   `;
   return (await getRoute(route.id))!;
 }
@@ -521,37 +517,6 @@ export async function upsertUser(id: string, email: string, name: string | null,
 export async function getUserById(id: string): Promise<User | undefined> {
   const { rows } = await sql`SELECT * FROM users WHERE id = ${id}`;
   return rows[0] as User | undefined;
-}
-
-export async function getUserByStravaId(stravaId: string): Promise<User | undefined> {
-  const { rows } = await sql`SELECT * FROM users WHERE strava_id = ${stravaId}`;
-  return rows[0] as User | undefined;
-}
-
-export async function upsertStravaUser(
-  id: string,
-  stravaId: string,
-  name: string,
-  avatarUrl: string | null,
-  sessionToken: string
-): Promise<User> {
-  const existing = await getUserByStravaId(stravaId);
-  if (existing) {
-    await sql`
-      UPDATE users
-      SET session_token = ${sessionToken},
-          name = COALESCE(${name}, name),
-          avatar_url = COALESCE(${avatarUrl}, avatar_url)
-      WHERE strava_id = ${stravaId}
-    `;
-    return (await getUserByStravaId(stravaId))!;
-  }
-  const placeholderEmail = `strava_${stravaId}@strava.user`;
-  await sql`
-    INSERT INTO users (id, email, name, avatar_url, strava_id, session_token)
-    VALUES (${id}, ${placeholderEmail}, ${name}, ${avatarUrl}, ${stravaId}, ${sessionToken})
-  `;
-  return (await getUserByStravaId(stravaId))!;
 }
 
 export async function getUserByGoogleId(googleId: string): Promise<User | undefined> {
@@ -612,6 +577,58 @@ export async function updateUserProfile(
     WHERE id = ${id}
   `;
   return getUserById(id);
+}
+
+export async function saveStravaTokens(
+  userId: string,
+  stravaId: string,
+  accessToken: string,
+  refreshToken: string,
+  expiresAt: number
+): Promise<void> {
+  await sql`
+    UPDATE users
+    SET strava_id = ${stravaId},
+        strava_access_token = ${accessToken},
+        strava_refresh_token = ${refreshToken},
+        strava_token_expires_at = ${expiresAt}
+    WHERE id = ${userId}
+  `;
+}
+
+export async function updateStravaTokens(
+  userId: string,
+  accessToken: string,
+  refreshToken: string,
+  expiresAt: number
+): Promise<void> {
+  await sql`
+    UPDATE users
+    SET strava_access_token = ${accessToken},
+        strava_refresh_token = ${refreshToken},
+        strava_token_expires_at = ${expiresAt}
+    WHERE id = ${userId}
+  `;
+}
+
+export async function clearStravaTokens(userId: string): Promise<void> {
+  await sql`
+    UPDATE users
+    SET strava_id = NULL,
+        strava_access_token = NULL,
+        strava_refresh_token = NULL,
+        strava_token_expires_at = NULL
+    WHERE id = ${userId}
+  `;
+}
+
+export async function getRoutesByStravaActivityIds(activityIds: number[]): Promise<{ strava_activity_id: number }[]> {
+  if (activityIds.length === 0) return [];
+  const { rows } = await sql.query(
+    `SELECT strava_activity_id FROM routes WHERE strava_activity_id = ANY($1::bigint[])`,
+    [activityIds]
+  );
+  return rows as { strava_activity_id: number }[];
 }
 
 // ──── Magic links ────

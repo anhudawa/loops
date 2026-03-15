@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getRoutes, insertRoute, getCounties, getRegions, getCountries, getUserBySession } from "@/lib/db";
 import { parseRouteFile } from "@/lib/route-parser";
 import { fetchRideWithGPS } from "@/lib/ridewithgps";
-import { validateStravaUrl, getStravaExportError } from "@/lib/strava";
 import { apiError, handleApiError } from "@/lib/api-utils";
 import { ROUTES_PER_PAGE, MAX_ROUTE_FILE_SIZE, MAX_ROUTE_NAME_LENGTH, MAX_ROUTE_DESCRIPTION_LENGTH, DIFFICULTIES, DISCIPLINES, VALID_ROUTE_EXTENSIONS, DEFAULT_SPEED_KMH } from "@/config/constants";
 import { v4 as uuidv4 } from "uuid";
@@ -119,9 +118,9 @@ export async function POST(request: NextRequest) {
       // URL import path
       if (/ridewithgps\.com\/(routes|trips)\/\d+/.test(importUrl)) {
         parsed = await fetchRideWithGPS(importUrl);
-      } else if (validateStravaUrl(importUrl)) {
+      } else if (/strava\.com\/(activities|routes)\/\d+/.test(importUrl)) {
         return apiError(
-          getStravaExportError(),
+          "Strava requires you to be logged in, so we can't import directly. To add this route:\n\n1. Open the activity on Strava\n2. Click the three dots (···) menu\n3. Select \"Export GPX\" or \"Export Original\"\n4. Upload the downloaded file here",
           "VALIDATION_ERROR",
           400
         );
@@ -195,6 +194,7 @@ export async function POST(request: NextRequest) {
       gpx_filename: null,
       coordinates: JSON.stringify(coordsWithElevation),
       created_by: currentUser.id,
+      strava_activity_id: null,
     });
 
     return NextResponse.json(route, { status: 201 });

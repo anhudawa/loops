@@ -69,7 +69,7 @@ export async function GET(
       // continue without rating
     }
 
-    const diffColor = DIFF_COLORS[route.difficulty] || "#666";
+    const diffColor = (route.difficulty ? DIFF_COLORS[route.difficulty] : undefined) || "#666";
     const isVerified = route.is_verified === 1;
 
     // Parse coordinates and normalize for SVG path

@@ -11,7 +11,7 @@ export async function GET() {
         FROM routes
       `,
       sql`
-        SELECT r.id, r.name, r.distance_km, r.difficulty, r.surface_type, r.country,
+        SELECT r.id, r.name, r.distance_km, r.surface_type, r.country,
           r.discipline, r.coordinates,
           COALESCE(AVG(rt.score), 0) as avg_score,
           COUNT(rt.id) as rating_count,
@@ -44,7 +44,6 @@ export async function GET() {
         id: r.id,
         name: r.name,
         distance_km: Number(r.distance_km),
-        difficulty: r.difficulty,
         surface_type: r.surface_type,
         country: r.country,
         discipline: r.discipline,

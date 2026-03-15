@@ -3,7 +3,7 @@ import { getRoutes, insertRoute, getCounties, getRegions, getCountries, getUserB
 import { parseRouteFile } from "@/lib/route-parser";
 import { fetchRideWithGPS } from "@/lib/ridewithgps";
 import { apiError, handleApiError } from "@/lib/api-utils";
-import { ROUTES_PER_PAGE, MAX_ROUTE_FILE_SIZE, MAX_ROUTE_NAME_LENGTH, MAX_ROUTE_DESCRIPTION_LENGTH, DIFFICULTIES, DISCIPLINES, VALID_ROUTE_EXTENSIONS, DEFAULT_SPEED_KMH } from "@/config/constants";
+import { ROUTES_PER_PAGE, MAX_ROUTE_FILE_SIZE, MAX_ROUTE_NAME_LENGTH, MAX_ROUTE_DESCRIPTION_LENGTH, DISCIPLINES, VALID_ROUTE_EXTENSIONS, DEFAULT_SPEED_KMH } from "@/config/constants";
 import { v4 as uuidv4 } from "uuid";
 
 export async function GET(request: NextRequest) {
@@ -40,7 +40,6 @@ export async function GET(request: NextRequest) {
     const pageSize = ROUTES_PER_PAGE;
 
     const filters = {
-      difficulty: searchParams.get("difficulty") || undefined,
       county: searchParams.get("county") || undefined,
       country: searchParams.get("country") || undefined,
       discipline: searchParams.get("discipline") || undefined,
@@ -80,14 +79,13 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const name = formData.get("name") as string;
     const description = formData.get("description") as string | null;
-    const difficulty = formData.get("difficulty") as string;
     const surfaceType = formData.get("surface_type") as string;
     const county = formData.get("county") as string;
     const country = (formData.get("country") as string) || "Ireland";
     const region = (formData.get("region") as string) || county || null;
     const discipline = (formData.get("discipline") as string) || "gravel";
 
-    if (!name || !difficulty || !surfaceType || !county) {
+    if (!name || !surfaceType || !county) {
       return apiError("Missing required fields", "VALIDATION_ERROR", 400);
     }
 
@@ -97,10 +95,6 @@ export async function POST(request: NextRequest) {
 
     if (description && description.length > MAX_ROUTE_DESCRIPTION_LENGTH) {
       return apiError(`Description must be ${MAX_ROUTE_DESCRIPTION_LENGTH} characters or less`, "VALIDATION_ERROR", 400);
-    }
-
-    if (!(DIFFICULTIES as readonly string[]).includes(difficulty)) {
-      return apiError(`Difficulty must be ${DIFFICULTIES.join(", ")}`, "VALIDATION_ERROR", 400);
     }
 
     if (!(DISCIPLINES as readonly string[]).includes(discipline)) {
@@ -180,7 +174,6 @@ export async function POST(request: NextRequest) {
       id,
       name,
       description: description || null,
-      difficulty: difficulty as "easy" | "moderate" | "hard" | "expert",
       distance_km,
       elevation_gain_m,
       elevation_loss_m,

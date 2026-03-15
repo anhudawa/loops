@@ -19,7 +19,6 @@ export const COMMENTS_PER_PAGE = 10;
 export const CONDITIONS_PER_PAGE = 10;
 
 // ──── Valid enums ────
-export const DIFFICULTIES = ["easy", "moderate", "hard", "expert"] as const;
 export const DISCIPLINES = ["road", "gravel", "mtb"] as const;
 export const CONDITION_STATUSES = ["good", "fair", "poor", "closed"] as const;
 export const VALID_ROUTE_EXTENSIONS = [".gpx", ".fit", ".tcx"] as const;

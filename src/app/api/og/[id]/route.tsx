@@ -3,13 +3,6 @@ import { getRoute, getRouteRating } from "@/lib/db";
 
 export const runtime = "nodejs";
 
-const DIFF_COLORS: Record<string, string> = {
-  easy: "#00ff88",
-  moderate: "#ffbb00",
-  hard: "#ff3355",
-  expert: "#bb44ff",
-};
-
 function fallbackImage(message: string) {
   return new ImageResponse(
     (
@@ -69,7 +62,6 @@ export async function GET(
       // continue without rating
     }
 
-    const diffColor = (route.difficulty ? DIFF_COLORS[route.difficulty] : undefined) || "#666";
     const isVerified = route.is_verified === 1;
 
     // Parse coordinates and normalize for SVG path
@@ -140,20 +132,6 @@ export async function GET(
             {/* Middle: Route info */}
             <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                <span
-                  style={{
-                    fontSize: "14px",
-                    fontWeight: 700,
-                    color: diffColor,
-                    textTransform: "uppercase" as const,
-                    letterSpacing: "0.1em",
-                    padding: "4px 12px",
-                    borderRadius: "6px",
-                    background: `${diffColor}18`,
-                  }}
-                >
-                  {route.difficulty}
-                </span>
                 {stars && (
                   <span style={{ fontSize: "14px", color: "#ffbb00", fontWeight: 700 }}>
                     ★ {stars}

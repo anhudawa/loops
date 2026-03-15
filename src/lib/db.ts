@@ -22,7 +22,6 @@ export async function initDb() {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       description TEXT,
-      difficulty TEXT NOT NULL CHECK(difficulty IN ('easy', 'moderate', 'hard', 'expert')),
       distance_km REAL NOT NULL,
       elevation_gain_m REAL NOT NULL,
       elevation_loss_m REAL NOT NULL,
@@ -178,7 +177,6 @@ export async function migrateDb() {
   // Indexes for filter performance
   await sql`CREATE INDEX IF NOT EXISTS idx_routes_discipline ON routes(discipline)`;
   await sql`CREATE INDEX IF NOT EXISTS idx_routes_surface_type ON routes(surface_type)`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_routes_difficulty ON routes(difficulty)`;
   await sql`CREATE INDEX IF NOT EXISTS idx_route_ratings_route_id ON ratings(route_id)`;
 
   // Backfill orphaned routes — assign to first user (site creator)
@@ -198,10 +196,6 @@ export async function migrateDb() {
   // Strava activity reference on routes for deduplication
   await sql`ALTER TABLE routes ADD COLUMN IF NOT EXISTS strava_activity_id BIGINT`;
 
-  // Difficulty: relax NOT NULL constraint so new routes can omit it
-  await sql`ALTER TABLE routes ALTER COLUMN difficulty DROP NOT NULL`;
-  await sql`ALTER TABLE routes DROP CONSTRAINT IF EXISTS routes_difficulty_check`;
-  await sql`ALTER TABLE routes ALTER COLUMN difficulty SET DEFAULT NULL`;
 }
 
 // ──── Types ────
@@ -209,7 +203,6 @@ export interface Route {
   id: string;
   name: string;
   description: string | null;
-  difficulty: "easy" | "moderate" | "hard" | "expert" | null;
   distance_km: number;
   elevation_gain_m: number;
   elevation_loss_m: number;
@@ -487,8 +480,8 @@ export async function getRoute(id: string): Promise<(Route & { is_verified?: num
 
 export async function insertRoute(route: Omit<Route, "created_at">): Promise<Route> {
   await sql`
-    INSERT INTO routes (id, name, description, difficulty, distance_km, elevation_gain_m, elevation_loss_m, surface_type, county, country, region, discipline, start_lat, start_lng, gpx_filename, coordinates, created_by, strava_activity_id)
-    VALUES (${route.id}, ${route.name}, ${route.description}, ${route.difficulty}, ${route.distance_km}, ${route.elevation_gain_m}, ${route.elevation_loss_m}, ${route.surface_type}, ${route.county}, ${route.country}, ${route.region}, ${route.discipline}, ${route.start_lat}, ${route.start_lng}, ${route.gpx_filename}, ${route.coordinates}, ${route.created_by}, ${route.strava_activity_id ?? null})
+    INSERT INTO routes (id, name, description, distance_km, elevation_gain_m, elevation_loss_m, surface_type, county, country, region, discipline, start_lat, start_lng, gpx_filename, coordinates, created_by, strava_activity_id)
+    VALUES (${route.id}, ${route.name}, ${route.description}, ${route.distance_km}, ${route.elevation_gain_m}, ${route.elevation_loss_m}, ${route.surface_type}, ${route.county}, ${route.country}, ${route.region}, ${route.discipline}, ${route.start_lat}, ${route.start_lng}, ${route.gpx_filename}, ${route.coordinates}, ${route.created_by}, ${route.strava_activity_id ?? null})
   `;
   return (await getRoute(route.id))!;
 }
@@ -990,7 +983,6 @@ export async function getCountryStats(countrySlug: string): Promise<{
   totalDistanceKm: number;
   avgRating: number;
   disciplines: string[];
-  difficulties: string[];
   displayName: string;
   regions: { name: string; routeCount: number }[];
 } | null> {
@@ -1012,11 +1004,6 @@ export async function getCountryStats(countrySlug: string): Promise<{
     [countrySlug]
   );
 
-  const { rows: difficultyRows } = await sql.query(
-    `SELECT DISTINCT difficulty FROM routes WHERE LOWER(REPLACE(country, ' ', '-')) = $1 ORDER BY difficulty`,
-    [countrySlug]
-  );
-
   const { rows: regionRows } = await sql.query(
     `SELECT region as name, COUNT(*) as route_count
      FROM routes
@@ -1031,7 +1018,6 @@ export async function getCountryStats(countrySlug: string): Promise<{
     totalDistanceKm: Math.round(Number(rows[0].total_distance)),
     avgRating: Number(Number(rows[0].avg_rating).toFixed(1)),
     disciplines: disciplineRows.map((r) => r.discipline),
-    difficulties: difficultyRows.map((r) => r.difficulty),
     displayName: rows[0].display_name,
     regions: regionRows.map((r) => ({ name: r.name, routeCount: Number(r.route_count) })),
   };
@@ -1042,7 +1028,6 @@ export async function getRegionStats(countrySlug: string, regionSlug: string): P
   totalDistanceKm: number;
   avgRating: number;
   disciplines: string[];
-  difficulties: string[];
   displayName: string;
   countryDisplayName: string;
 } | null> {
@@ -1066,17 +1051,11 @@ export async function getRegionStats(countrySlug: string, regionSlug: string): P
     [countrySlug, regionSlug]
   );
 
-  const { rows: difficultyRows } = await sql.query(
-    `SELECT DISTINCT difficulty FROM routes WHERE LOWER(REPLACE(country, ' ', '-')) = $1 AND LOWER(REPLACE(region, ' ', '-')) = $2 ORDER BY difficulty`,
-    [countrySlug, regionSlug]
-  );
-
   return {
     routeCount: Number(rows[0].route_count),
     totalDistanceKm: Math.round(Number(rows[0].total_distance)),
     avgRating: Number(Number(rows[0].avg_rating).toFixed(1)),
     disciplines: disciplineRows.map((r) => r.discipline),
-    difficulties: difficultyRows.map((r) => r.difficulty),
     displayName: rows[0].display_name,
     countryDisplayName: rows[0].country_display_name,
   };

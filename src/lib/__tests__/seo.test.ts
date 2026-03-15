@@ -42,7 +42,6 @@ describe("generateRouteJsonLd", () => {
     region: "West Cork",
     distance_km: 45,
     elevation_gain_m: 620,
-    difficulty: "moderate",
     surface_type: "gravel",
     discipline: "gravel",
   };

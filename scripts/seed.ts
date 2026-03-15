@@ -58,7 +58,6 @@ async function seed() {
       gpx: string;
       name: string;
       description: string;
-      difficulty: string;
       county: string;
       country: string;
       assignedUser: string;
@@ -163,13 +162,13 @@ async function seed() {
 
     await sql`
       INSERT INTO routes (
-        id, name, description, difficulty, distance_km,
+        id, name, description, distance_km,
         elevation_gain_m, elevation_loss_m, surface_type,
         county, country, region, discipline,
         start_lat, start_lng, gpx_filename, coordinates,
         created_by, created_at
       ) VALUES (
-        ${routeId}, ${r.name}, ${r.description}, ${r.difficulty}, ${parsed.distance_km},
+        ${routeId}, ${r.name}, ${r.description}, ${parsed.distance_km},
         ${parsed.elevation_gain_m}, ${parsed.elevation_loss_m}, ${"road"},
         ${r.county}, ${r.country}, ${r.county}, ${"road"},
         ${startLat}, ${startLng}, ${r.gpx}, ${JSON.stringify(coordsWithElevation)},

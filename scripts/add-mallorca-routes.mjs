@@ -6,14 +6,14 @@ const POSTGRES_URL = "postgresql://neondb_owner:npg_NmxMEVUs4b9n@ep-square-viole
 const pool = createPool({ connectionString: POSTGRES_URL });
 
 const ROUTES = [
-  { id: 36069772, name: "Cap Formentor", difficulty: "moderate", surface: "road" },
-  { id: 29010051, name: "Bay of Pollensa Loop", difficulty: "hard", surface: "road" },
-  { id: 19189792, name: "Puig Major Loop", difficulty: "expert", surface: "road" },
-  { id: 28958575, name: "Andratx to Pollensa via Sa Calobra", difficulty: "expert", surface: "road" },
-  { id: 41610233, name: "Puig de Randa Loop", difficulty: "moderate", surface: "road" },
-  { id: 41610231, name: "Santa Magdalena & La Victoria", difficulty: "moderate", surface: "road" },
-  { id: 41610234, name: "Southern Coast Classic", difficulty: "moderate", surface: "road" },
-  { id: 5894608, name: "Loop of Mallorca", difficulty: "expert", surface: "road" },
+  { id: 36069772, name: "Cap Formentor", surface: "road" },
+  { id: 29010051, name: "Bay of Pollensa Loop", surface: "road" },
+  { id: 19189792, name: "Puig Major Loop", surface: "road" },
+  { id: 28958575, name: "Andratx to Pollensa via Sa Calobra", surface: "road" },
+  { id: 41610233, name: "Puig de Randa Loop", surface: "road" },
+  { id: 41610231, name: "Santa Magdalena & La Victoria", surface: "road" },
+  { id: 41610234, name: "Southern Coast Classic", surface: "road" },
+  { id: 5894608, name: "Loop of Mallorca", surface: "road" },
 ];
 
 function downsample(points, maxPoints) {
@@ -59,13 +59,12 @@ async function fetchAndInsert(route, createdBy) {
   const uuid = randomUUID();
 
   await pool.query(
-    `INSERT INTO routes (id, name, description, difficulty, distance_km, elevation_gain_m, elevation_loss_m, surface_type, county, country, region, discipline, start_lat, start_lng, gpx_filename, coordinates, created_by, verified)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
+    `INSERT INTO routes (id, name, description, distance_km, elevation_gain_m, elevation_loss_m, surface_type, county, country, region, discipline, start_lat, start_lng, gpx_filename, coordinates, created_by, verified)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
     [
       uuid,
       route.name,
       rte.description || `Classic Mallorca road cycling route — ${distanceKm}km with ${elevGain}m of climbing.`,
-      route.difficulty,
       distanceKm,
       elevGain,
       elevLoss,

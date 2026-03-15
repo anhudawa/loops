@@ -12,7 +12,6 @@ const ROUTES = [
   {
     name: "Costa Brava Coastline via Sant Grau",
     gpxUrl: "https://epicroadrides.com/wp-content/uploads/2018/02/Cycling_Costa_Brava_via_Tossa_de_Mar_and_Sant_Grau.gpx",
-    difficulty: "moderate",
     surfaceType: "road",
     description: "Classic Girona loop to the Costa Brava coastline through Sant Grau. Features a 6.3km climb to Sant Grau monastery, stunning coastal roads past crystal clear bays near Tossa de Mar, returning via quiet country lanes.",
     distanceKm: 95,
@@ -21,7 +20,6 @@ const ROUTES = [
   {
     name: "Els Àngels Loop, Girona",
     gpxUrl: "https://epicroadrides.com/wp-content/uploads/2018/02/Els_Àngels_Girona_loop.gpx",
-    difficulty: "moderate",
     surfaceType: "road",
     description: "Popular Girona cycling loop featuring the classic climb to Santuari dels Àngels chapel where Salvador Dalí got married. Two climbs through woodland and medieval villages in the Gavarres mountains.",
     distanceKm: 71,
@@ -30,7 +28,6 @@ const ROUTES = [
   {
     name: "Mare de Déu del Mont Loop",
     gpxUrl: "https://epicroadrides.com/wp-content/uploads/2018/02/Mare_De_Déu_Del_Mont_loop.gpx",
-    difficulty: "hard",
     surfaceType: "road",
     description: "Challenging Girona loop centred on the notorious Mare de Déu del Mont climb — 18km averaging 5.4% with sections hitting 14%. Quiet rolling countryside, forest terrain, and panoramic summit views. Returns via Banyoles lake.",
     distanceKm: 120,
@@ -39,7 +36,6 @@ const ROUTES = [
   {
     name: "Rocacorba, Girona",
     gpxUrl: "https://epicroadrides.com/wp-content/uploads/2018/02/Rocacorba_Girona.gpx",
-    difficulty: "hard",
     surfaceType: "road",
     description: "Girona's answer to Alpe d'Huez. A 25km warm-up through flat countryside before the famous 10km Rocacorba climb — averaging 5-9.5% with sections reaching 15% near the summit.",
     distanceKm: 37,
@@ -48,7 +44,6 @@ const ROUTES = [
   {
     name: "Sant Hilari Sacalm & Susqueda Dam Loop",
     gpxUrl: "https://epicroadrides.com/wp-content/uploads/2018/02/Sant_Hilari_Sacalm_and_Panta_de_Susqueda_dam_loop.gpx",
-    difficulty: "hard",
     surfaceType: "road",
     description: "Punchy Girona loop with 1,710m of climbing through quiet winding roads. Features a gradual 20km climb to Sant Hilari Sacalm, twisting forest descents, and the dramatic Susqueda dam and reservoir.",
     distanceKm: 114,
@@ -151,13 +146,12 @@ async function insertRoute(route) {
   const uuid = randomUUID();
 
   await pool.query(
-    `INSERT INTO routes (id, name, description, difficulty, distance_km, elevation_gain_m, elevation_loss_m, surface_type, county, country, region, discipline, start_lat, start_lng, gpx_filename, coordinates, created_by, verified)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
+    `INSERT INTO routes (id, name, description, distance_km, elevation_gain_m, elevation_loss_m, surface_type, county, country, region, discipline, start_lat, start_lng, gpx_filename, coordinates, created_by, verified)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
     [
       uuid,
       route.name,
       route.description,
-      route.difficulty,
       distanceKm,
       elevGain,
       elevLoss,

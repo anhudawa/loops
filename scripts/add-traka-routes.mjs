@@ -6,9 +6,9 @@ const POSTGRES_URL = "postgresql://neondb_owner:npg_NmxMEVUs4b9n@ep-square-viole
 const pool = createPool({ connectionString: POSTGRES_URL });
 
 const ROUTES = [
-  { id: 46513147, name: "The Traka 100", difficulty: "hard" },
-  { id: 46222155, name: "The Traka 200", difficulty: "hard" },
-  { id: 51243342, name: "The Traka 360", difficulty: "expert" },
+  { id: 46513147, name: "The Traka 100" },
+  { id: 46222155, name: "The Traka 200" },
+  { id: 51243342, name: "The Traka 360" },
 ];
 
 function downsample(points, maxPoints) {
@@ -50,13 +50,12 @@ async function fetchAndInsert(route) {
   const uuid = randomUUID();
 
   await pool.query(
-    `INSERT INTO routes (id, name, description, difficulty, distance_km, elevation_gain_m, elevation_loss_m, surface_type, county, country, region, discipline, start_lat, start_lng, gpx_filename, coordinates, created_by, verified)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
+    `INSERT INTO routes (id, name, description, distance_km, elevation_gain_m, elevation_loss_m, surface_type, county, country, region, discipline, start_lat, start_lng, gpx_filename, coordinates, created_by, verified)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
     [
       uuid,
       route.name,
       `The Traka ${route.name.split(" ").pop()} — 2026 provisional route through Girona's finest gravel terrain.`,
-      route.difficulty,
       distanceKm,
       elevGain,
       elevLoss,

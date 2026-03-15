@@ -29,7 +29,6 @@ interface RouteJsonLdInput {
   region: string | null;
   distance_km: number;
   elevation_gain_m: number;
-  difficulty: string | null;
   surface_type: string;
   discipline: string;
   rating?: { average: number; count: number };
@@ -40,7 +39,7 @@ export function generateRouteJsonLd(route: RouteJsonLdInput) {
     "@context": "https://schema.org",
     "@type": "SportsActivityLocation",
     name: route.name,
-    description: route.description || `${route.difficulty} ${route.discipline} route in ${route.region || route.county}, ${route.country}`,
+    description: route.description || `${route.discipline} route in ${route.region || route.county}, ${route.country}`,
     url: `https://loops.ie/routes/${route.id}`,
     geo: {
       "@type": "GeoCoordinates",
@@ -57,7 +56,6 @@ export function generateRouteJsonLd(route: RouteJsonLdInput) {
     additionalProperty: [
       { "@type": "PropertyValue", name: "Distance", value: `${route.distance_km} km` },
       { "@type": "PropertyValue", name: "Elevation Gain", value: `${route.elevation_gain_m} m` },
-      { "@type": "PropertyValue", name: "Difficulty", value: route.difficulty ? route.difficulty.charAt(0).toUpperCase() + route.difficulty.slice(1) : "Unrated" },
       { "@type": "PropertyValue", name: "Surface", value: route.surface_type.charAt(0).toUpperCase() + route.surface_type.slice(1) },
       { "@type": "PropertyValue", name: "Discipline", value: route.discipline.charAt(0).toUpperCase() + route.discipline.slice(1) },
     ],

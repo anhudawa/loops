@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
+import StravaConnectButton from "@/components/StravaConnectButton";
 
 export default function EditProfilePage() {
   const { user, loading, refresh } = useAuth();
@@ -247,6 +248,22 @@ export default function EditProfilePage() {
             <p className="text-[10px] mt-1" style={{ color: "var(--text-muted)" }}>
               Used to estimate ride duration on route cards
             </p>
+          </div>
+
+          {/* Connected Accounts */}
+          <div className="mt-8 pt-6" style={{ borderTop: "1px solid var(--border)" }}>
+            <h3 className="text-sm font-bold mb-3">Connected Accounts</h3>
+            <div className="flex items-center justify-between p-3 rounded-xl" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+              <div>
+                <p className="text-sm font-medium">Strava</p>
+                <p className="text-xs" style={{ color: "var(--text-muted)" }}>Import rides directly from Strava</p>
+              </div>
+              <StravaConnectButton
+                isConnected={!!user?.strava_id}
+                returnTo="/profile/edit"
+                onDisconnected={() => window.location.reload()}
+              />
+            </div>
           </div>
 
           {error && (

@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { useToast } from "@/components/Toast";
 import Link from "next/link";
+import StravaConnectButton from "@/components/StravaConnectButton";
+import StravaActivityBrowser from "@/components/StravaActivityBrowser";
 
 const COUNTRIES = ["Ireland", "UK", "USA", "Spain"];
 
@@ -20,6 +22,16 @@ function detectUrlProvider(url: string): { name: string; supported: boolean } | 
   if (/ridewithgps\.com\/(routes|trips)\/\d+/.test(url)) return { name: "RideWithGPS", supported: true };
   if (/strava\.com\/(activities|routes)\/\d+/.test(url)) return { name: "Strava", supported: false };
   return null;
+}
+
+interface ParsedRoute {
+  coordinates: number[][];
+  distance_km: number;
+  elevation_gain_m: number;
+  elevation_loss_m: number;
+  start_lat: number;
+  start_lng: number;
+  strava_activity_id: number;
 }
 
 export default function UploadPage() {
@@ -43,12 +55,36 @@ export default function UploadPage() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [stravaConnected, setStravaConnected] = useState(false);
+  const [importingActivity, setImportingActivity] = useState<number | null>(null);
+  const [showStravaImport, setShowStravaImport] = useState(false);
+  const [parsedRoute, setParsedRoute] = useState<ParsedRoute | null>(null);
 
   useEffect(() => {
     if (!loading && !user) {
       router.push("/login");
     }
   }, [user, loading, router]);
+
+  // Initialize stravaConnected from auth context
+  useEffect(() => {
+    if (user) {
+      setStravaConnected(!!user.strava_id);
+    }
+  }, [user]);
+
+  // Handle post-OAuth redirect URL params
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("strava_connected") === "true") {
+      setStravaConnected(true);
+      setShowStravaImport(true);
+      window.history.replaceState({}, "", "/upload");
+    }
+    if (params.get("strava_error")) {
+      window.history.replaceState({}, "", "/upload");
+    }
+  }, []);
 
   // Fetch regions when country changes
   useEffect(() => {
@@ -83,24 +119,62 @@ export default function UploadPage() {
     return filename.replace(/\.(gpx|fit|tcx)$/i, "");
   };
 
+  async function handleStravaImport(activityId: number) {
+    setImportingActivity(activityId);
+    try {
+      const res = await fetch(`/api/strava/activities/${activityId}`);
+      const json = await res.json();
+      if (!res.ok) {
+        alert(json.error || "Import failed. Try again.");
+        return;
+      }
+      const d = json.data;
+      setForm((prev) => ({
+        ...prev,
+        name: d.name,
+        discipline: d.discipline,
+        surface_type: d.discipline === "mtb" ? "trail" : d.discipline === "gravel" ? "gravel" : "road",
+        country: "",
+        region: "",
+      }));
+      setParsedRoute({
+        coordinates: d.coordinates,
+        distance_km: d.distance_km,
+        elevation_gain_m: d.elevation_gain_m,
+        elevation_loss_m: d.elevation_loss_m,
+        start_lat: d.start_lat,
+        start_lng: d.start_lng,
+        strava_activity_id: d.strava_activity_id,
+      });
+      setShowStravaImport(false);
+    } catch {
+      alert("Import failed. Try again.");
+    } finally {
+      setImportingActivity(null);
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (mode === "file" && !file) {
-      setError("Please select a route file");
-      return;
-    }
-    if (mode === "url" && !importUrl) {
-      setError("Please paste a URL");
-      return;
-    }
-    if (mode === "url" && !urlProvider) {
-      setError("Unsupported URL. Paste a RideWithGPS route link.");
-      return;
-    }
-    if (mode === "url" && urlProvider && !urlProvider.supported) {
-      setError("Strava requires login, so we can't import directly. Export the activity as GPX or FIT from Strava, then upload the file here.");
-      return;
+    // If a Strava activity was imported, we only need form metadata (no file/url required)
+    if (!parsedRoute) {
+      if (mode === "file" && !file) {
+        setError("Please select a route file");
+        return;
+      }
+      if (mode === "url" && !importUrl) {
+        setError("Please paste a URL");
+        return;
+      }
+      if (mode === "url" && !urlProvider) {
+        setError("Unsupported URL. Paste a RideWithGPS route link.");
+        return;
+      }
+      if (mode === "url" && urlProvider && !urlProvider.supported) {
+        setError("Strava requires login, so we can't import directly. Export the activity as GPX or FIT from Strava, then upload the file here.");
+        return;
+      }
     }
     if (!form.name || !form.region) {
       setError("Please fill in all required fields");
@@ -111,7 +185,10 @@ export default function UploadPage() {
     setError("");
 
     const formData = new FormData();
-    if (mode === "file" && file) {
+    if (parsedRoute) {
+      // Strava import path — send strava_activity_id instead of a file
+      formData.append("strava_activity_id", String(parsedRoute.strava_activity_id));
+    } else if (mode === "file" && file) {
       formData.append("route_file", file);
     } else if (mode === "url") {
       formData.append("url", importUrl);
@@ -164,34 +241,92 @@ export default function UploadPage() {
         <h1 className="text-xl md:text-2xl font-extrabold tracking-tight uppercase mb-2" style={{ color: "var(--text)" }}>Share a Loop</h1>
         <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>Upload a route file or import from RideWithGPS.</p>
 
-        {/* Mode Toggle */}
-        <div className="flex rounded-xl overflow-hidden mb-6" style={{ border: "1px solid var(--border)" }}>
-          <button
-            type="button"
-            onClick={() => setMode("file")}
-            className="flex-1 py-2.5 text-sm font-bold uppercase tracking-wider transition-all"
-            style={{
-              background: mode === "file" ? "var(--accent)" : "var(--bg-card)",
-              color: mode === "file" ? "var(--bg)" : "var(--text-muted)",
-            }}
-          >
-            Upload File
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode("url")}
-            className="flex-1 py-2.5 text-sm font-bold uppercase tracking-wider transition-all"
-            style={{
-              background: mode === "url" ? "var(--accent)" : "var(--bg-card)",
-              color: mode === "url" ? "var(--bg)" : "var(--text-muted)",
-            }}
-          >
-            Import URL
-          </button>
+        {/* Strava Import Section */}
+        <div className="mb-6 p-4 rounded-xl" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-bold">Import from Strava</h3>
+            <StravaConnectButton
+              isConnected={stravaConnected}
+              returnTo="/upload"
+              onDisconnected={() => {
+                setStravaConnected(false);
+                setShowStravaImport(false);
+              }}
+            />
+          </div>
+
+          {stravaConnected ? (
+            showStravaImport ? (
+              <StravaActivityBrowser
+                onImport={handleStravaImport}
+                importing={importingActivity}
+              />
+            ) : (
+              <button
+                onClick={() => setShowStravaImport(true)}
+                className="w-full py-3 rounded-xl text-sm font-medium transition-colors"
+                style={{ color: "var(--accent)", border: "1px dashed var(--border)" }}
+              >
+                Browse Strava activities
+              </button>
+            )
+          ) : (
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+              Import your rides directly from Strava — no file download needed.
+            </p>
+          )}
         </div>
 
+        {/* Show imported Strava activity indicator */}
+        {parsedRoute && (
+          <div className="mb-6 px-4 py-3 rounded-xl flex items-center justify-between" style={{ background: "var(--accent-glow)", border: "1px solid var(--accent)" }}>
+            <div>
+              <p className="text-sm font-bold" style={{ color: "var(--accent)" }}>Strava activity imported</p>
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                {parsedRoute.distance_km} km · {parsedRoute.elevation_gain_m}m gain · Fill in the details below to publish
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setParsedRoute(null)}
+              className="text-xs px-3 py-1.5 rounded-lg"
+              style={{ color: "var(--text-muted)", border: "1px solid var(--border)" }}
+            >
+              Clear
+            </button>
+          </div>
+        )}
+
+        {/* Mode Toggle — only show when no Strava activity is imported */}
+        {!parsedRoute && (
+          <div className="flex rounded-xl overflow-hidden mb-6" style={{ border: "1px solid var(--border)" }}>
+            <button
+              type="button"
+              onClick={() => setMode("file")}
+              className="flex-1 py-2.5 text-sm font-bold uppercase tracking-wider transition-all"
+              style={{
+                background: mode === "file" ? "var(--accent)" : "var(--bg-card)",
+                color: mode === "file" ? "var(--bg)" : "var(--text-muted)",
+              }}
+            >
+              Upload File
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("url")}
+              className="flex-1 py-2.5 text-sm font-bold uppercase tracking-wider transition-all"
+              style={{
+                background: mode === "url" ? "var(--accent)" : "var(--bg-card)",
+                color: mode === "url" ? "var(--bg)" : "var(--text-muted)",
+              }}
+            >
+              Import URL
+            </button>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-6">
-          {mode === "file" ? (
+          {!parsedRoute && (mode === "file" ? (
             /* File Upload Drop Zone */
             <div
               className="border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all"
@@ -280,7 +415,7 @@ export default function UploadPage() {
                 </p>
               )}
             </div>
-          )}
+          ))}
 
           {/* Route Name */}
           <div>
@@ -418,10 +553,10 @@ export default function UploadPage() {
                 <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" d="M12 2a10 10 0 0 1 10 10" />
                 </svg>
-                {mode === "url" ? "Importing route..." : "Parsing & uploading..."}
+                {parsedRoute ? "Saving route..." : mode === "url" ? "Importing route..." : "Parsing & uploading..."}
               </span>
             ) : (
-              mode === "url" ? "Import Route" : "Upload Route"
+              parsedRoute ? "Save Strava Route" : mode === "url" ? "Import Route" : "Upload Route"
             )}
           </button>
         </form>

@@ -4,6 +4,8 @@ import { parseRouteFile } from "@/lib/route-parser";
 import { fetchRideWithGPS } from "@/lib/ridewithgps";
 import { apiError, handleApiError } from "@/lib/api-utils";
 import { ROUTES_PER_PAGE, MAX_ROUTE_FILE_SIZE, MAX_ROUTE_NAME_LENGTH, MAX_ROUTE_DESCRIPTION_LENGTH, DISCIPLINES, VALID_ROUTE_EXTENSIONS, DEFAULT_SPEED_KMH } from "@/config/constants";
+import { getValidAccessToken, fetchActivity, fetchActivityStreams, mapStravaDiscipline } from "@/lib/strava-api";
+import { calculateStats } from "@/lib/geo-utils";
 import { v4 as uuidv4 } from "uuid";
 
 export async function GET(request: NextRequest) {
@@ -103,12 +105,68 @@ export async function POST(request: NextRequest) {
 
     let parsed;
 
+    // Check for Strava activity import
+    const stravaActivityId = formData.get("strava_activity_id") as string | null;
     // Check for URL import
     const importUrl = formData.get("url") as string | null;
     // Check for file upload (support both "gpx" and "route_file" field names)
     const routeFile = (formData.get("route_file") as File | null) || (formData.get("gpx") as File | null);
 
-    if (importUrl) {
+    if (stravaActivityId) {
+      // Strava activity import path — fetch data server-side
+      const accessToken = await getValidAccessToken(currentUser.id);
+      if (!accessToken) {
+        return apiError("Strava not connected. Reconnect your account and try again.", "STRAVA_NOT_CONNECTED", 400);
+      }
+      const activityId = Number(stravaActivityId);
+      if (isNaN(activityId)) {
+        return apiError("Invalid Strava activity ID", "VALIDATION_ERROR", 400);
+      }
+      try {
+        const [activity, streams] = await Promise.all([
+          fetchActivity(accessToken, activityId),
+          fetchActivityStreams(accessToken, activityId),
+        ]);
+        const coordinates: [number, number][] = streams.latlng?.data ?? [];
+        const elevations: number[] = streams.altitude?.data ?? [];
+        if (coordinates.length === 0) {
+          return apiError("This Strava activity has no GPS data.", "VALIDATION_ERROR", 400);
+        }
+        const stats = calculateStats(coordinates, elevations);
+        const stravaDiscipline = mapStravaDiscipline(activity.type);
+        const coordsWithElevation = coordinates.map((coord, i) => {
+          const ele = elevations[i] ?? 0;
+          return [coord[0], coord[1], Math.round(ele * 10) / 10];
+        });
+        const id = uuidv4();
+        const route = await insertRoute({
+          id,
+          name,
+          description: description || null,
+          distance_km: Math.round(stats.distance_km * 10) / 10,
+          elevation_gain_m: Math.round(stats.elevation_gain_m),
+          elevation_loss_m: Math.round(stats.elevation_loss_m),
+          surface_type: surfaceType as "gravel" | "mixed" | "trail" | "road" | "singletrack" | "technical",
+          county,
+          country,
+          region,
+          discipline: (stravaDiscipline || "road") as "road" | "gravel" | "mtb",
+          start_lat: coordinates[0][0],
+          start_lng: coordinates[0][1],
+          gpx_filename: null,
+          coordinates: JSON.stringify(coordsWithElevation),
+          created_by: currentUser.id,
+          strava_activity_id: activityId,
+        });
+        return NextResponse.json(route, { status: 201 });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "";
+        if (message === "RATE_LIMITED") {
+          return apiError("Too many imports. Try again in a few minutes.", "RATE_LIMITED", 429);
+        }
+        return apiError("Failed to fetch activity from Strava.", "STRAVA_ERROR", 502);
+      }
+    } else if (importUrl) {
       // URL import path
       if (/ridewithgps\.com\/(routes|trips)\/\d+/.test(importUrl)) {
         parsed = await fetchRideWithGPS(importUrl);

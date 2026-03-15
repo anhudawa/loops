@@ -8,6 +8,7 @@ interface User {
   name: string | null;
   role: "user" | "admin" | "banned";
   avatar_url?: string | null;
+  strava_id?: string | null;
 }
 
 interface AuthContextType {

@@ -125,7 +125,7 @@ export default function UploadPage() {
       const res = await fetch(`/api/strava/activities/${activityId}`);
       const json = await res.json();
       if (!res.ok) {
-        alert(json.error || "Import failed. Try again.");
+        toast(json.error || "Import failed. Try again.", "error");
         return;
       }
       const d = json.data;
@@ -148,7 +148,7 @@ export default function UploadPage() {
       });
       setShowStravaImport(false);
     } catch {
-      alert("Import failed. Try again.");
+      toast("Import failed. Try again.", "error");
     } finally {
       setImportingActivity(null);
     }

@@ -196,6 +196,11 @@ export async function migrateDb() {
   // Strava activity reference on routes for deduplication
   await sql`ALTER TABLE routes ADD COLUMN IF NOT EXISTS strava_activity_id BIGINT`;
 
+  // Difficulty: relax NOT NULL constraint so new routes can omit it
+  await sql`ALTER TABLE routes ALTER COLUMN difficulty DROP NOT NULL`;
+  await sql`ALTER TABLE routes DROP CONSTRAINT IF EXISTS routes_difficulty_check`;
+  await sql`ALTER TABLE routes ALTER COLUMN difficulty SET DEFAULT NULL`;
+
 }
 
 // ──── Types ────

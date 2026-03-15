@@ -26,7 +26,6 @@ interface Route {
   id: string;
   name: string;
   description: string | null;
-  difficulty: string;
   distance_km: number;
   elevation_gain_m: number;
   elevation_loss_m: number;
@@ -47,13 +46,6 @@ interface Route {
   creator_rating?: number;
   creator_rating_count?: number;
 }
-
-const DIFF: Record<string, { label: string; color: string; bg: string }> = {
-  easy: { label: "Easy", color: "var(--success)", bg: "rgba(0, 255, 136, 0.1)" },
-  moderate: { label: "Moderate", color: "var(--warning)", bg: "rgba(255, 187, 0, 0.1)" },
-  hard: { label: "Hard", color: "var(--danger)", bg: "rgba(255, 51, 85, 0.1)" },
-  expert: { label: "Expert", color: "var(--purple)", bg: "rgba(187, 68, 255, 0.1)" },
-};
 
 export default function RouteDetail() {
   const params = useParams();
@@ -238,7 +230,6 @@ export default function RouteDetail() {
   const fullCoordinates: [number, number, number][] = rawCoords.map((c) => [c[0], c[1], c[2] ?? 0]);
   const coordinates: [number, number][] = rawCoords.map((c) => [c[0], c[1]]);
   const climbs = detectClimbs(fullCoordinates);
-  const diff = DIFF[route.difficulty] || DIFF.easy;
 
   const handlePositionChange = (index: number | null) => {
     setHoverIndex(index);
@@ -354,12 +345,6 @@ export default function RouteDetail() {
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              <span
-                className="text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-lg neon-badge"
-                style={{ color: diff.color, background: diff.bg }}
-              >
-                {diff.label}
-              </span>
               {user ? (
               <button
                 onClick={handleFavourite}
@@ -556,7 +541,6 @@ export default function RouteDetail() {
             elevationGainM={route.elevation_gain_m}
             surfaceType={route.surface_type}
             discipline={route.discipline}
-            difficulty={route.difficulty}
           />
         </div>
 

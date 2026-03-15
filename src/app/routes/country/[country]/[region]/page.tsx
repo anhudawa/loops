@@ -153,12 +153,6 @@ export default async function RegionPage({
                   {route.distance_km}km · {route.elevation_gain_m}m climbing
                 </div>
               </div>
-              <span
-                className="text-xs font-bold uppercase"
-                style={{ color: route.difficulty === "easy" ? "var(--success)" : route.difficulty === "moderate" ? "var(--warning)" : route.difficulty === "hard" ? "var(--danger)" : "var(--purple)" }}
-              >
-                {route.difficulty}
-              </span>
             </Link>
           ))}
         </div>

@@ -16,7 +16,6 @@ interface ActivityItem {
 interface RouteItem {
   id: string;
   name: string;
-  difficulty: string;
   distance_km: number;
   county: string;
   country?: string;
@@ -56,13 +55,6 @@ interface UserProfile {
     routesRated: number;
   };
 }
-
-const DIFFICULTY_STYLES: Record<string, { color: string; bg: string }> = {
-  easy: { color: "var(--success)", bg: "rgba(0, 255, 136, 0.1)" },
-  moderate: { color: "var(--warning)", bg: "rgba(255, 187, 0, 0.1)" },
-  hard: { color: "var(--danger)", bg: "rgba(255, 51, 85, 0.1)" },
-  expert: { color: "var(--purple)", bg: "rgba(187, 68, 255, 0.1)" },
-};
 
 const TIER_STYLES: Record<string, { color: string; bg: string; icon: string }> = {
   Explorer: { color: "#88aacc", bg: "rgba(136, 170, 204, 0.1)", icon: "\uD83E\uDDED" },
@@ -521,7 +513,6 @@ export default function ProfilePage() {
               ) : (
                 <div className="space-y-1">
                   {filteredLoops.map((route) => {
-                    const diff = DIFFICULTY_STYLES[route.difficulty] || DIFFICULTY_STYLES.easy;
                     return (
                       <Link key={route.id} href={`/routes/${route.id}`}>
                         <div className="flex items-center justify-between p-3 rounded-xl hover-row">
@@ -546,12 +537,6 @@ export default function ProfilePage() {
                               </p>
                             </div>
                           </div>
-                          <span
-                            className="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-lg capitalize neon-badge shrink-0 ml-2"
-                            style={{ color: diff.color, background: diff.bg }}
-                          >
-                            {route.difficulty}
-                          </span>
                         </div>
                       </Link>
                     );

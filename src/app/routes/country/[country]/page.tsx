@@ -67,7 +67,7 @@ export default async function CountryPage({
     },
     {
       question: `How many cycling routes are in ${stats.displayName}?`,
-      answer: `There are ${stats.routeCount} cycling routes in ${stats.displayName} on LOOPS, covering ${stats.disciplines.join(", ")} disciplines across ${stats.difficulties.join(", ")} difficulty levels.`,
+      answer: `There are ${stats.routeCount} cycling routes in ${stats.displayName} on LOOPS, covering ${stats.disciplines.join(", ")} disciplines.`,
     },
     {
       question: `Can I download GPX files for routes in ${stats.displayName}?`,
@@ -168,12 +168,6 @@ export default async function CountryPage({
                   {route.distance_km}km · {route.elevation_gain_m}m climbing{route.region ? ` · ${route.region}` : ""}
                 </div>
               </div>
-              <span
-                className="text-xs font-bold uppercase"
-                style={{ color: route.difficulty === "easy" ? "var(--success)" : route.difficulty === "moderate" ? "var(--warning)" : route.difficulty === "hard" ? "var(--danger)" : "var(--purple)" }}
-              >
-                {route.difficulty}
-              </span>
             </Link>
           ))}
         </div>

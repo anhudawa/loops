@@ -70,7 +70,6 @@ interface FeaturedRoute {
   id: string;
   name: string;
   distance_km: number;
-  difficulty: string;
   surface_type: string;
   country: string;
   discipline: string;
@@ -78,13 +77,6 @@ interface FeaturedRoute {
   rating_count: number;
   cover_photo: string | null;
 }
-
-const DIFF_COLORS: Record<string, { color: string; bg: string }> = {
-  easy: { color: "var(--success)", bg: "rgba(0, 255, 136, 0.15)" },
-  moderate: { color: "var(--warning)", bg: "rgba(255, 187, 0, 0.15)" },
-  hard: { color: "var(--danger)", bg: "rgba(255, 51, 85, 0.15)" },
-  expert: { color: "var(--purple)", bg: "rgba(187, 68, 255, 0.15)" },
-};
 
 /* ── Main login/squeeze page ── */
 function LoginPage() {
@@ -336,7 +328,6 @@ function LoginPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {stats.featuredRoutes.map((route) => {
-                const diff = DIFF_COLORS[route.difficulty] || DIFF_COLORS.easy;
                 return (
                   <div
                     key={route.id}
@@ -359,15 +350,6 @@ function LoginPage() {
                       >
                         <span className="text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg" style={{ background: "var(--accent)", color: "var(--bg)" }}>
                           Sign in to explore
-                        </span>
-                      </div>
-                      {/* Badges */}
-                      <div className="absolute top-2 right-2 flex gap-1">
-                        <span
-                          className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded"
-                          style={{ color: diff.color, background: diff.bg, backdropFilter: "blur(4px)" }}
-                        >
-                          {route.difficulty}
                         </span>
                       </div>
                     </div>

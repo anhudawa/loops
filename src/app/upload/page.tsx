@@ -36,7 +36,6 @@ export default function UploadPage() {
   const [form, setForm] = useState({
     name: "",
     description: "",
-    difficulty: "moderate",
     surface_type: "gravel",
     country: "Ireland",
     region: "",
@@ -119,7 +118,6 @@ export default function UploadPage() {
     }
     formData.append("name", form.name);
     formData.append("description", form.description);
-    formData.append("difficulty", form.difficulty);
     formData.append("surface_type", form.surface_type);
     formData.append("county", form.region);
     formData.append("country", form.country);
@@ -378,23 +376,6 @@ export default function UploadPage() {
 
           {/* Grid fields */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>
-                Difficulty <span style={{ color: "var(--danger)" }}>*</span>
-              </label>
-              <select
-                value={form.difficulty}
-                onChange={(e) => setForm((prev) => ({ ...prev, difficulty: e.target.value }))}
-                className="w-full rounded-lg px-4 py-2.5 text-sm cursor-pointer"
-                style={inputStyle}
-              >
-                <option value="easy">Easy</option>
-                <option value="moderate">Moderate</option>
-                <option value="hard">Hard</option>
-                <option value="expert">Expert</option>
-              </select>
-            </div>
-
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>
                 Surface <span style={{ color: "var(--danger)" }}>*</span>

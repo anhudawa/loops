@@ -28,7 +28,6 @@ interface RouteRow {
   region?: string | null;
   discipline?: string;
   distance_km: number;
-  difficulty: string;
   created_at: string;
 }
 
@@ -369,7 +368,6 @@ export default function AdminPage() {
                     <th className="text-left p-3 text-[10px] uppercase tracking-wider font-bold" style={{ color: "var(--text-muted)" }}>Route</th>
                     <th className="text-left p-3 text-[10px] uppercase tracking-wider font-bold" style={{ color: "var(--text-muted)" }}>County</th>
                     <th className="text-left p-3 text-[10px] uppercase tracking-wider font-bold" style={{ color: "var(--text-muted)" }}>Distance</th>
-                    <th className="text-left p-3 text-[10px] uppercase tracking-wider font-bold" style={{ color: "var(--text-muted)" }}>Difficulty</th>
                     <th className="text-right p-3 text-[10px] uppercase tracking-wider font-bold" style={{ color: "var(--text-muted)" }}>Actions</th>
                   </tr>
                 </thead>
@@ -381,7 +379,6 @@ export default function AdminPage() {
                       </td>
                       <td className="p-3" style={{ color: "var(--text-muted)" }}>{r.region || r.county}{r.country ? `, ${r.country}` : ""}</td>
                       <td className="p-3" style={{ color: "var(--text-muted)" }}>{r.distance_km} km</td>
-                      <td className="p-3 capitalize" style={{ color: "var(--text-muted)" }}>{r.difficulty}</td>
                       <td className="p-3 text-right">
                         <button
                           onClick={() => setConfirm({ type: "deleteRoute", id: r.id, label: r.name })}

@@ -16,10 +16,10 @@ export async function generateMetadata({
   }
 
   const location = route.region || route.county;
-  const title = `${route.name} — ${route.distance_km}km ${route.difficulty} ${route.discipline} route in ${location}, ${route.country} | LOOPS`;
+  const title = `${route.name} — ${route.distance_km}km ${route.discipline} route in ${location}, ${route.country} | LOOPS`;
   const description = route.description
-    ? `${route.description.slice(0, 120)}. ${route.distance_km}km ${route.difficulty} ${route.discipline} route in ${location}, ${route.country}. ${route.elevation_gain_m}m climbing. Free GPX download.`
-    : `${route.distance_km}km ${route.difficulty} ${route.discipline} route in ${location}, ${route.country}. ${route.elevation_gain_m}m climbing. Free GPX download.`;
+    ? `${route.description.slice(0, 120)}. ${route.distance_km}km ${route.discipline} route in ${location}, ${route.country}. ${route.elevation_gain_m}m climbing. Free GPX download.`
+    : `${route.distance_km}km ${route.discipline} route in ${location}, ${route.country}. ${route.elevation_gain_m}m climbing. Free GPX download.`;
 
   return {
     title,
@@ -68,7 +68,6 @@ export default async function RouteLayout({
     region: route.region,
     distance_km: route.distance_km,
     elevation_gain_m: route.elevation_gain_m,
-    difficulty: route.difficulty,
     surface_type: route.surface_type,
     discipline: route.discipline,
     rating: { average: rating.average, count: rating.count },

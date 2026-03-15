@@ -8,7 +8,6 @@ interface ShareRideProps {
     name: string;
     distance_km: number;
     elevation_gain_m: number;
-    difficulty: string;
     surface_type: string;
     county: string;
     country?: string;
@@ -50,7 +49,6 @@ export default function ShareRide({ route }: ShareRideProps) {
   const [startTime, setStartTime] = useState(getDefaultTime);
   const [meetingPoint, setMeetingPoint] = useState("");
 
-  const difficulty = route.difficulty.charAt(0).toUpperCase() + route.difficulty.slice(1);
   const surface = route.surface_type.charAt(0).toUpperCase() + route.surface_type.slice(1);
 
   const handleShare = () => {
@@ -63,7 +61,7 @@ export default function ShareRide({ route }: ShareRideProps) {
       `📍 *Meeting point:* ${meetingPoint || "TBC"}`,
       `🕐 *Start time:* ${formatTime(startTime)}`,
       "",
-      `📊 ${route.distance_km} km · ${route.elevation_gain_m}m elev · ${difficulty} · ${surface}`,
+      `📊 ${route.distance_km} km · ${route.elevation_gain_m}m elev · ${surface}`,
       `📌 ${route.region || route.county}, ${route.country || "Ireland"}`,
       "",
       `🔗 ${routeUrl}`,
@@ -171,8 +169,6 @@ export default function ShareRide({ route }: ShareRideProps) {
                     <span>{route.distance_km} km</span>
                     <span>·</span>
                     <span>{route.elevation_gain_m}m elev</span>
-                    <span>·</span>
-                    <span>{difficulty}</span>
                     <span>·</span>
                     <span>{surface}</span>
                   </div>

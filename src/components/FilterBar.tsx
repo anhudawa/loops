@@ -7,7 +7,6 @@ import RefineChips from "./RefineChips";
 interface FilterBarProps {
   duration: string | null;
   discipline: string;
-  difficulty: string;
   surface: string;
   region: string;
   verified: boolean;
@@ -16,7 +15,6 @@ interface FilterBarProps {
   routeCount: number;
   onDurationChange: (d: string | null) => void;
   onDisciplineChange: (d: string) => void;
-  onDifficultyChange: (v: string) => void;
   onSurfaceChange: (v: string) => void;
   onRegionChange: (v: string) => void;
   onVerifiedChange: (v: boolean) => void;
@@ -25,7 +23,6 @@ interface FilterBarProps {
 export default function FilterBar({
   duration,
   discipline,
-  difficulty,
   surface,
   region,
   verified,
@@ -33,7 +30,6 @@ export default function FilterBar({
   avgSpeedKmh,
   onDurationChange,
   onDisciplineChange,
-  onDifficultyChange,
   onSurfaceChange,
   onRegionChange,
   onVerifiedChange,
@@ -58,12 +54,10 @@ export default function FilterBar({
       />
 
       <RefineChips
-        difficulty={difficulty}
         surface={surface}
         region={region}
         verified={verified}
         regions={regions}
-        onDifficultyChange={onDifficultyChange}
         onSurfaceChange={onSurfaceChange}
         onRegionChange={onRegionChange}
         onVerifiedChange={onVerifiedChange}

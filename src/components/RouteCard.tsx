@@ -8,7 +8,6 @@ interface RouteCardProps {
     id: string;
     name: string;
     description: string | null;
-    difficulty: string;
     distance_km: number;
     elevation_gain_m: number;
     surface_type: string;

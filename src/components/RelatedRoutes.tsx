@@ -5,7 +5,6 @@ interface RelatedRoute {
   id: string;
   name: string;
   distance_km: number;
-  difficulty: string;
   discipline: string;
   elevation_gain_m: number;
 }
@@ -16,13 +15,6 @@ interface RelatedRoutesProps {
   country: string;
   isRegion: boolean;
 }
-
-const DIFF_COLORS: Record<string, string> = {
-  easy: "var(--success)",
-  moderate: "var(--warning)",
-  hard: "var(--danger)",
-  expert: "var(--purple)",
-};
 
 export default function RelatedRoutes({ routes, regionOrCountry, country, isRegion }: RelatedRoutesProps) {
   if (routes.length === 0) return null;
@@ -52,12 +44,6 @@ export default function RelatedRoutes({ routes, regionOrCountry, country, isRegi
                 {route.distance_km}km · {route.elevation_gain_m}m climbing
               </div>
             </div>
-            <span
-              className="text-xs font-bold uppercase"
-              style={{ color: DIFF_COLORS[route.difficulty] || "var(--text-muted)" }}
-            >
-              {route.difficulty}
-            </span>
           </Link>
         ))}
       </div>

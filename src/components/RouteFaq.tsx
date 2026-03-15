@@ -10,15 +10,7 @@ interface RouteFaqProps {
   elevationGainM: number;
   surfaceType: string;
   discipline: string;
-  difficulty: string;
 }
-
-const DIFFICULTY_CONTEXT: Record<string, string> = {
-  easy: "Suitable for beginners and casual riders. Mostly flat or gentle gradients.",
-  moderate: "Some climbing and varied terrain. Good fitness recommended.",
-  hard: "Significant climbing and technical sections. Strong fitness required.",
-  expert: "Extreme terrain and sustained climbing. For experienced cyclists only.",
-};
 
 export default function RouteFaq({
   routeName,
@@ -26,7 +18,6 @@ export default function RouteFaq({
   elevationGainM,
   surfaceType,
   discipline,
-  difficulty,
 }: RouteFaqProps) {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
@@ -42,10 +33,6 @@ export default function RouteFaq({
     {
       question: `How do I ride ${routeName}?`,
       answer: `Download the free GPX file and load it into Strava, Komoot, Wahoo, or Garmin.`,
-    },
-    {
-      question: `What difficulty is ${routeName}?`,
-      answer: `${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}. ${DIFFICULTY_CONTEXT[difficulty] || ""}`,
     },
   ];
 

@@ -9,7 +9,6 @@ const DISCIPLINES = [
 
 interface FilterSidebarProps {
   filters: {
-    difficulty: string;
     minDistance: string;
     maxDistance: string;
     county: string;
@@ -125,17 +124,6 @@ export default function FilterSidebar({ filters, countries, regions, onChange, o
       </div>
 
       <div>
-        <label className="block text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>Difficulty</label>
-        <select value={filters.difficulty} onChange={(e) => onChange("difficulty", e.target.value)} className="w-full rounded-lg px-3 py-2 text-sm cursor-pointer" style={selectStyle} aria-label="Filter by difficulty">
-          <option value="">All difficulties</option>
-          <option value="easy">Easy</option>
-          <option value="moderate">Moderate</option>
-          <option value="hard">Hard</option>
-          <option value="expert">Expert</option>
-        </select>
-      </div>
-
-      <div>
         <label className="block text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>Distance (km)</label>
         <div className="flex gap-2 items-center">
           <input
@@ -173,24 +161,6 @@ export default function FilterSidebar({ filters, countries, regions, onChange, o
         </select>
       </div>
 
-      <div className="pt-4 border-t" style={{ borderColor: "var(--border)" }}>
-        <h3 className="block text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>Legend</h3>
-        <div className="space-y-2">
-          {[
-            { label: "Easy", color: "var(--success)", desc: "Flat, maintained" },
-            { label: "Moderate", color: "var(--warning)", desc: "Some hills" },
-            { label: "Hard", color: "var(--danger)", desc: "Hilly, rough" },
-            { label: "Expert", color: "var(--purple)", desc: "Technical" },
-          ].map((d) => (
-            <div key={d.label} className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: d.color, boxShadow: `0 0 6px ${d.color}40` }} />
-              <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                <span className="font-bold" style={{ color: "var(--text-secondary)" }}>{d.label}</span> {d.desc}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }

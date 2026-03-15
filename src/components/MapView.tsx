@@ -7,7 +7,7 @@ import "leaflet/dist/leaflet.css";
 interface Route {
   id: string;
   name: string;
-  difficulty: string;
+  discipline: string;
   distance_km: number;
   county: string;
   country?: string;
@@ -17,11 +17,10 @@ interface Route {
   coordinates: string;
 }
 
-const DIFFICULTY_COLORS: Record<string, string> = {
-  easy: "#00ff88",
-  moderate: "#ffbb00",
-  hard: "#ff3355",
-  expert: "#bb44ff",
+const DISCIPLINE_COLORS: Record<string, string> = {
+  road: "#ffbb00",
+  gravel: "#ff6633",
+  mtb: "#bb44ff",
 };
 
 export default function MapView({
@@ -94,7 +93,7 @@ export default function MapView({
 
     routes.forEach((route) => {
       const coords: [number, number][] = JSON.parse(route.coordinates);
-      const color = DIFFICULTY_COLORS[route.difficulty] || "#666";
+      const color = DISCIPLINE_COLORS[route.discipline] || "#666";
       const isSelected = route.id === selectedRouteId;
 
       const polyline = L.polyline(coords, {
@@ -114,7 +113,7 @@ export default function MapView({
       marker.bindPopup(`
         <div style="font-family: 'Inter', system-ui; min-width: 180px; background: #1a1a1a; color: #f5f5f5; padding: 2px;">
           <strong style="font-size: 14px; letter-spacing: -0.02em;">${route.name}</strong><br/>
-          <span style="color: ${color}; font-weight: 700; text-transform: uppercase; font-size: 11px; letter-spacing: 0.05em;">${route.difficulty}</span>
+          <span style="color: ${color}; font-weight: 700; text-transform: uppercase; font-size: 11px; letter-spacing: 0.05em;">${route.discipline}</span>
           &middot; <span style="color: #c8ff00; font-weight: 700;">${route.distance_km} km</span><br/>
           <span style="color: #666;">${route.region || route.county}${route.country ? `, ${route.country}` : ""}</span><br/>
           <a href="/routes/${route.id}" style="color: #c8ff00; text-decoration: none; font-size: 13px; font-weight: 600;">View details &rarr;</a>

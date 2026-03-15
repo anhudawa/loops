@@ -3,23 +3,14 @@
 import { useState, useRef, useEffect } from "react";
 
 interface RefineChipsProps {
-  difficulty: string;
   surface: string;
   region: string;
   verified: boolean;
   regions: string[];
-  onDifficultyChange: (v: string) => void;
   onSurfaceChange: (v: string) => void;
   onRegionChange: (v: string) => void;
   onVerifiedChange: (v: boolean) => void;
 }
-
-const DIFFICULTY_OPTIONS = [
-  { label: "Easy", value: "easy" },
-  { label: "Moderate", value: "moderate" },
-  { label: "Hard", value: "hard" },
-  { label: "Expert", value: "expert" },
-];
 
 const SURFACE_OPTIONS = [
   { label: "Road", value: "road" },
@@ -164,12 +155,10 @@ function DropdownChip({ label, value, options, onChange }: DropdownChipProps) {
 }
 
 export default function RefineChips({
-  difficulty,
   surface,
   region,
   verified,
   regions,
-  onDifficultyChange,
   onSurfaceChange,
   onRegionChange,
   onVerifiedChange,
@@ -187,12 +176,6 @@ export default function RefineChips({
         scrollbarWidth: "none",
       }}
     >
-      <DropdownChip
-        label="Difficulty"
-        value={difficulty}
-        options={DIFFICULTY_OPTIONS}
-        onChange={onDifficultyChange}
-      />
       <DropdownChip
         label="Surface"
         value={surface}

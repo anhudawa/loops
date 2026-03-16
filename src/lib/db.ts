@@ -188,6 +188,16 @@ export async function migrateDb() {
     AND EXISTS (SELECT 1 FROM users)
   `;
 
+  // OAuth CSRF state tokens
+  await sql`
+    CREATE TABLE IF NOT EXISTS oauth_states (
+      state TEXT PRIMARY KEY,
+      return_to TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`ALTER TABLE oauth_states ADD COLUMN IF NOT EXISTS return_to TEXT`;
+
   // Strava OAuth tokens
   await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS strava_access_token TEXT`;
   await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS strava_refresh_token TEXT`;

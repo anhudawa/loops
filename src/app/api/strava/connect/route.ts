@@ -23,8 +23,6 @@ export async function GET(request: NextRequest) {
 
   // Generate CSRF state token and store with returnTo
   const state = uuidv4();
-  // Ensure return_to column exists (migration for existing tables)
-  await sql`ALTER TABLE oauth_states ADD COLUMN IF NOT EXISTS return_to TEXT`;
   await sql`INSERT INTO oauth_states (state, return_to) VALUES (${state}, ${returnTo})`;
   await sql`DELETE FROM oauth_states WHERE created_at < NOW() - INTERVAL '10 minutes'`;
 

@@ -19,6 +19,7 @@ export async function GET() {
     await sql`
       CREATE TABLE IF NOT EXISTS oauth_states (
         state TEXT PRIMARY KEY,
+        return_to TEXT,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `;

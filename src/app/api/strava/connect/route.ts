@@ -17,7 +17,9 @@ export async function GET(request: NextRequest) {
   }
 
   // Store the page the user came from so we can redirect back
-  const returnTo = request.nextUrl.searchParams.get("returnTo") || "/upload";
+  // Only allow relative paths to prevent open redirect
+  const rawReturnTo = request.nextUrl.searchParams.get("returnTo") || "/upload";
+  const returnTo = rawReturnTo.startsWith("/") && !rawReturnTo.startsWith("//") ? rawReturnTo : "/upload";
 
   // Generate CSRF state token and store with returnTo
   const state = uuidv4();

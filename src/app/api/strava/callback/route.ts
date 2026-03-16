@@ -17,7 +17,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(new URL("/upload?strava_error=invalid_state", request.url));
     }
     await sql`DELETE FROM oauth_states WHERE state = ${stateParam}`;
-    returnTo = rows[0].return_to || "/upload";
+    const rawReturnTo = rows[0].return_to || "/upload";
+    // Defense in depth: validate returnTo again to prevent open redirect
+    returnTo = rawReturnTo.startsWith("/") && !rawReturnTo.startsWith("//") ? rawReturnTo : "/upload";
   } else {
     return NextResponse.redirect(new URL("/upload?strava_error=invalid_state", request.url));
   }

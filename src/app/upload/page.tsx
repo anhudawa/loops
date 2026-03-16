@@ -427,6 +427,7 @@ export default function UploadPage() {
               value={form.name}
               onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
               placeholder="e.g. Ballyhoura Mountain Loop"
+              maxLength={200}
               className="w-full rounded-lg px-4 py-2.5 text-sm"
               style={inputStyle}
             />
@@ -439,6 +440,7 @@ export default function UploadPage() {
               value={form.description}
               onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
               rows={3}
+              maxLength={5000}
               placeholder="Tell others about this route - surface conditions, highlights, tips..."
               className="w-full rounded-lg px-4 py-2.5 text-sm"
               style={inputStyle}

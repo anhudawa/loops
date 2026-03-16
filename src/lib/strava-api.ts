@@ -40,7 +40,7 @@ export function mapStravaDiscipline(type: string): "road" | "gravel" | "mtb" {
       return "mtb";
     case "Ride":
     case "EBikeRide":
-    case "VirtualRide":
+    case "VirtualRide": // Filtered out by isCyclingWithGps (no GPS) — kept for completeness
     default:
       return "road";
   }

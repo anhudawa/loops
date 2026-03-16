@@ -95,7 +95,8 @@ function LoginPage() {
   useEffect(() => {
     const err = searchParams.get("error");
     if (err === "google_failed") setError("Could not sign in with Google. Please try again.");
-    if (err === "account_suspended") setError("This account has been suspended.");
+    else if (err === "account_suspended") setError("This account has been suspended.");
+    else if (err) setError("Something went wrong. Please try again.");
   }, [searchParams]);
 
   useEffect(() => {

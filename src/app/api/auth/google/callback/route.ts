@@ -14,14 +14,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL("/login?error=google_failed", baseUrl));
   }
 
-  // CSRF check
-  const { rows } = await sql`SELECT state FROM oauth_states WHERE state = ${state}`;
-  if (rows.length === 0) {
-    return NextResponse.redirect(new URL("/login?error=google_failed", baseUrl));
-  }
-  await sql`DELETE FROM oauth_states WHERE state = ${state}`;
-
   try {
+    // CSRF check
+    const { rows } = await sql`SELECT state FROM oauth_states WHERE state = ${state}`;
+    if (rows.length === 0) {
+      return NextResponse.redirect(new URL("/login?error=google_failed", baseUrl));
+    }
+    await sql`DELETE FROM oauth_states WHERE state = ${state}`;
     await migrateDb();
 
     const redirectUri = `${baseUrl}/api/auth/google/callback`;

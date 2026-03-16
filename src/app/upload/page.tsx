@@ -134,7 +134,7 @@ export default function UploadPage() {
         name: d.name,
         discipline: d.discipline,
         surface_type: d.discipline === "mtb" ? "trail" : d.discipline === "gravel" ? "gravel" : "road",
-        country: "",
+        country: "Ireland",
         region: "",
       }));
       setParsedRoute({

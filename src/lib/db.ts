@@ -197,6 +197,7 @@ export async function migrateDb() {
     )
   `;
   await sql`ALTER TABLE oauth_states ADD COLUMN IF NOT EXISTS return_to TEXT`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_oauth_states_created_at ON oauth_states(created_at)`;
 
   // Strava OAuth tokens
   await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS strava_access_token TEXT`;

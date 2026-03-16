@@ -7,6 +7,7 @@ import { useToast } from "@/components/Toast";
 import Link from "next/link";
 import StravaConnectButton from "@/components/StravaConnectButton";
 import StravaActivityBrowser from "@/components/StravaActivityBrowser";
+import { DEFAULT_COUNTRY } from "@/config/constants";
 
 const COUNTRIES = ["Ireland", "UK", "USA", "Spain"];
 
@@ -49,7 +50,7 @@ export default function UploadPage() {
     name: "",
     description: "",
     surface_type: "gravel",
-    country: "Ireland",
+    country: DEFAULT_COUNTRY,
     region: "",
     discipline: "gravel",
   });
@@ -134,7 +135,7 @@ export default function UploadPage() {
         name: d.name,
         discipline: d.discipline,
         surface_type: d.discipline === "mtb" ? "trail" : d.discipline === "gravel" ? "gravel" : "road",
-        country: "Ireland",
+        country: DEFAULT_COUNTRY,
         region: "",
       }));
       setParsedRoute({

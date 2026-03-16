@@ -3,7 +3,7 @@ import { getRoutes, insertRoute, getCounties, getRegions, getCountries, getUserB
 import { parseRouteFile } from "@/lib/route-parser";
 import { fetchRideWithGPS } from "@/lib/ridewithgps";
 import { apiError, handleApiError } from "@/lib/api-utils";
-import { ROUTES_PER_PAGE, MAX_ROUTE_FILE_SIZE, MAX_ROUTE_NAME_LENGTH, MAX_ROUTE_DESCRIPTION_LENGTH, DISCIPLINES, VALID_ROUTE_EXTENSIONS, DEFAULT_SPEED_KMH } from "@/config/constants";
+import { ROUTES_PER_PAGE, MAX_ROUTE_FILE_SIZE, MAX_ROUTE_NAME_LENGTH, MAX_ROUTE_DESCRIPTION_LENGTH, DISCIPLINES, VALID_ROUTE_EXTENSIONS, DEFAULT_SPEED_KMH, DEFAULT_COUNTRY } from "@/config/constants";
 import { getValidAccessToken, fetchActivity, fetchActivityStreams, mapStravaDiscipline } from "@/lib/strava-api";
 import { calculateStats } from "@/lib/geo-utils";
 import { v4 as uuidv4 } from "uuid";
@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
     const description = formData.get("description") as string | null;
     const surfaceType = formData.get("surface_type") as string;
     const county = formData.get("county") as string;
-    const country = (formData.get("country") as string) || "Ireland";
+    const country = (formData.get("country") as string) || DEFAULT_COUNTRY;
     const region = (formData.get("region") as string) || county || null;
     const discipline = (formData.get("discipline") as string) || "gravel";
 

@@ -29,6 +29,9 @@ export const RATE_LIMIT_UPLOAD = 3;
 export const RATE_LIMIT_WRITE = 10;
 export const RATE_LIMIT_READ = 60;
 
+// ──── Defaults ────
+export const DEFAULT_COUNTRY = "Ireland";
+
 // ──── Filter system ────
 export const DEFAULT_SPEED_KMH = 25;
 export const MIN_SPEED_KMH = 15;

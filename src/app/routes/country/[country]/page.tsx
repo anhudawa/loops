@@ -38,6 +38,12 @@ export async function generateMetadata({
       locale: "en_IE",
       images: ["/api/og"],
     },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: ["/api/og"],
+    },
   };
 }
 

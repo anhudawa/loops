@@ -91,8 +91,9 @@ const selectStyle = {
   border: "1px solid var(--border)",
   color: "var(--text)",
   borderRadius: 8,
-  padding: "5px 12px",
+  padding: "10px 12px",
   fontSize: 13,
+  minHeight: 44,
 };
 
 function HomeContent() {

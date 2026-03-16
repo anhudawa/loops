@@ -111,12 +111,12 @@ export default function MapView({
       }).addTo(layersRef.current!);
 
       marker.bindPopup(`
-        <div style="font-family: 'Inter', system-ui; min-width: 180px; background: #1a1a1a; color: #f5f5f5; padding: 2px;">
+        <div style="font-family: 'Inter', system-ui; min-width: 180px; max-width: 260px; background: #1a1a1a; color: #f5f5f5; padding: 2px; overflow-wrap: break-word;">
           <strong style="font-size: 14px; letter-spacing: -0.02em;">${route.name}</strong><br/>
           <span style="color: ${color}; font-weight: 700; text-transform: uppercase; font-size: 11px; letter-spacing: 0.05em;">${route.discipline}</span>
           &middot; <span style="color: #c8ff00; font-weight: 700;">${route.distance_km} km</span><br/>
           <span style="color: #666;">${route.region || route.county}${route.country ? `, ${route.country}` : ""}</span><br/>
-          <a href="/routes/${route.id}" style="color: #c8ff00; text-decoration: none; font-size: 13px; font-weight: 600;">View details &rarr;</a>
+          <a href="/routes/${route.id}" style="color: #c8ff00; text-decoration: none; font-size: 13px; font-weight: 600; display: inline-block; min-height: 44px; line-height: 44px;">View details &rarr;</a>
         </div>
       `);
 

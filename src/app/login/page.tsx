@@ -119,6 +119,11 @@ function LoginPage() {
 
   const handleGoogleLogin = async () => {
     try {
+      // Store redirect URL in cookie so callback can redirect back
+      const redirect = searchParams.get("redirect");
+      if (redirect) {
+        document.cookie = `login_redirect=${encodeURIComponent(redirect)}; path=/; max-age=600; SameSite=Lax`;
+      }
       const res = await fetch("/api/auth/google");
       const data = await res.json();
       if (!data.url) { setError("Could not sign in with Google. Please try again."); return; }
@@ -306,9 +311,9 @@ function LoginPage() {
                 >
                   {prop.icon}
                 </div>
-                <h2 className="font-extrabold text-sm uppercase tracking-wider mb-2" style={{ color: "var(--text)" }}>
+                <h3 className="font-extrabold text-sm uppercase tracking-wider mb-2" style={{ color: "var(--text)" }}>
                   {prop.title}
-                </h2>
+                </h3>
                 <p className="text-sm leading-relaxed" style={{ color: "var(--text-muted)" }}>
                   {prop.desc}
                 </p>
@@ -342,8 +347,8 @@ function LoginPage() {
                     {/* Cover */}
                     <div className="aspect-[16/9] relative overflow-hidden" style={{ background: "var(--bg-raised)" }}>
                       <img
-                        src={`/api/og/${route.id}`}
-                        alt={`Preview of ${route.name} cycling route`}
+                        src={route.cover_photo ? `/photos/${route.cover_photo}` : `/api/og/${route.id}`}
+                        alt=""
                         className="w-full h-full object-cover"
                         loading="lazy"
                       />

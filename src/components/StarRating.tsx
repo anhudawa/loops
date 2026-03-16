@@ -2,9 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "./AuthProvider";
+import { useToast } from "./Toast";
 
 export default function StarRating({ routeId }: { routeId: string }) {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [average, setAverage] = useState(0);
   const [count, setCount] = useState(0);
   const [userRating, setUserRating] = useState<number | null>(null);
@@ -63,6 +65,7 @@ export default function StarRating({ routeId }: { routeId: string }) {
       setAverage(prevAverage);
       setCount(prevCount);
       setUserRating(prevUserRating);
+      toast("Failed to save rating. Please try again.", "error");
     }
   };
 

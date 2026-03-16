@@ -45,13 +45,14 @@ export async function POST(
     }
 
     const { score } = await request.json();
-    if (!score || score < 1 || score > 5) {
-      return apiError("Score must be 1-5", "VALIDATION_ERROR", 400);
+    const intScore = Number(score);
+    if (!Number.isInteger(intScore) || intScore < 1 || intScore > 5) {
+      return apiError("Score must be an integer 1-5", "VALIDATION_ERROR", 400);
     }
 
-    await upsertRating(uuidv4(), id, user.id, score);
+    await upsertRating(uuidv4(), id, user.id, intScore);
     const rating = await getRouteRating(id);
-    return NextResponse.json({ ...rating, userRating: score });
+    return NextResponse.json({ ...rating, userRating: intScore });
   } catch (err) {
     return handleApiError(err);
   }

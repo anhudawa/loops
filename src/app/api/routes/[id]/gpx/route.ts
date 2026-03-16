@@ -8,6 +8,16 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Require authentication to download GPX
+    const sessionToken = request.cookies.get("session")?.value;
+    if (!sessionToken) {
+      return apiError("Sign in to download routes", "UNAUTHORIZED", 401);
+    }
+    const user = await getUserBySession(sessionToken);
+    if (!user) {
+      return apiError("Sign in to download routes", "UNAUTHORIZED", 401);
+    }
+
     const { id } = await params;
     const route = await getRoute(id);
 
@@ -15,18 +25,12 @@ export async function GET(
       return apiError("Route not found", "NOT_FOUND", 404);
     }
 
-    // Track download if user is authenticated
-    const sessionToken = request.cookies.get("session")?.value;
-    if (sessionToken) {
-      const user = await getUserBySession(sessionToken);
-      if (user) {
-        try {
-          await migrateDb(); // ensure downloads table exists
-          await trackDownload(uuidv4(), id, user.id);
-        } catch {
-          // Don't block the download if tracking fails
-        }
-      }
+    // Track download
+    try {
+      await migrateDb();
+      await trackDownload(uuidv4(), id, user.id);
+    } catch {
+      // Don't block the download if tracking fails
     }
 
     // Generate GPX from stored coordinates (may be [lat,lng] or [lat,lng,ele])

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { AuthProvider } from "@/components/AuthProvider";
 import { ToastProvider } from "@/components/Toast";
 import { CapacitorProvider } from "@/components/CapacitorProvider";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import Footer from "@/components/Footer";
 import "./globals.css";
 
@@ -46,14 +47,16 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
       </head>
       <body className="antialiased">
-        <ToastProvider>
-          <CapacitorProvider>
-            <AuthProvider>
-              {children}
-              <Footer />
-            </AuthProvider>
-          </CapacitorProvider>
-        </ToastProvider>
+        <ErrorBoundary>
+          <ToastProvider>
+            <CapacitorProvider>
+              <AuthProvider>
+                {children}
+                <Footer />
+              </AuthProvider>
+            </CapacitorProvider>
+          </ToastProvider>
+        </ErrorBoundary>
       </body>
     </html>
   );

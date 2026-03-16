@@ -66,16 +66,8 @@ export function middleware(request: NextRequest) {
     return response;
   }
 
-  // Public pages — no auth required
-  if (
-    pathname.startsWith("/login") ||
-    pathname.startsWith("/routes/") ||
-    pathname.startsWith("/photos") ||
-    pathname === "/about" ||
-    pathname === "/privacy" ||
-    pathname === "/terms" ||
-    pathname === "/feedback"
-  ) {
+  // Public pages — login + shared route links
+  if (pathname.startsWith("/login") || pathname.startsWith("/routes/")) {
     return NextResponse.next();
   }
 
@@ -88,7 +80,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    "/((?!_next/static|_next/image|favicon.ico).*)",
-  ],
+  matcher: ["/:path*"],
 };

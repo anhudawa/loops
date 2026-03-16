@@ -13,6 +13,7 @@ import RideActions from "@/components/RideActions";
 import ShareRide from "@/components/ShareRide";
 import WeatherCard from "@/components/WeatherCard";
 import { useAuth } from "@/components/AuthProvider";
+import { useToast } from "@/components/Toast";
 
 const MapView = dynamic(() => import("@/components/MapView"), { ssr: false });
 
@@ -51,7 +52,8 @@ const DIFF: Record<string, { label: string; color: string; bg: string }> = {
 
 export default function RouteDetail() {
   const params = useParams();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+  const { toast } = useToast();
   const [route, setRoute] = useState<Route | null>(null);
   const [loading, setLoading] = useState(true);
   const [windData, setWindData] = useState<{ direction: number; speed: number } | null>(null);
@@ -104,9 +106,13 @@ export default function RouteDetail() {
     try {
       const method = wasFollowing ? "DELETE" : "POST";
       const res = await fetch(`/api/users/${route.created_by}/follow`, { method });
-      if (!res.ok) setIsFollowingCreator(wasFollowing);
+      if (!res.ok) {
+        setIsFollowingCreator(wasFollowing);
+        toast("Failed to update follow status.", "error");
+      }
     } catch {
       setIsFollowingCreator(wasFollowing);
+      toast("Failed to update follow status.", "error");
     }
     setFollowLoading(false);
   };
@@ -128,10 +134,12 @@ export default function RouteDetail() {
       } else {
         setIsFavourited(wasFavourited);
         setFavCount(prevCount);
+        toast("Failed to update favourite. Please try again.", "error");
       }
     } catch {
       setIsFavourited(wasFavourited);
       setFavCount(prevCount);
+      toast("Failed to update favourite. Please try again.", "error");
     }
     setFavLoading(false);
   };
@@ -234,17 +242,17 @@ export default function RouteDetail() {
               >
                 {diff.label}
               </span>
+              {user ? (
               <button
                 onClick={handleFavourite}
-                disabled={favLoading || !user}
+                disabled={favLoading}
                 className="flex items-center gap-1 px-2.5 py-2 min-h-[44px] rounded-lg transition-all"
                 style={{
                   background: isFavourited ? "rgba(255, 51, 85, 0.15)" : "rgba(255,255,255,0.05)",
                   border: `1px solid ${isFavourited ? "rgba(255, 51, 85, 0.3)" : "var(--border)"}`,
                   opacity: favLoading ? 0.5 : 1,
-                  cursor: user ? "pointer" : "default",
                 }}
-                title={user ? (isFavourited ? "Remove from favourites" : "Add to favourites") : "Sign in to favourite"}
+                title={isFavourited ? "Remove from favourites" : "Add to favourites"}
               >
                 <svg
                   className="w-4 h-4 transition-transform"
@@ -262,6 +270,32 @@ export default function RouteDetail() {
                   </span>
                 )}
               </button>
+              ) : (
+              <Link
+                href={`/login?redirect=/routes/${route.id}`}
+                className="flex items-center gap-1 px-2.5 py-2 min-h-[44px] rounded-lg transition-all hover:opacity-80"
+                style={{
+                  background: "rgba(255,255,255,0.05)",
+                  border: "1px solid var(--border)",
+                }}
+                title="Sign in to favourite"
+              >
+                <svg
+                  className="w-4 h-4"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="var(--text-muted)"
+                  strokeWidth={2}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                </svg>
+                {favCount > 0 && (
+                  <span className="text-[11px] font-bold" style={{ color: "var(--text-muted)" }}>
+                    {favCount}
+                  </span>
+                )}
+              </Link>
+              )}
             </div>
           </div>
 
@@ -396,6 +430,38 @@ export default function RouteDetail() {
           <Comments routeId={route.id} />
         </div>
       </div>
+
+      {/* Sticky bottom CTA for unauthenticated users */}
+      {!user && !authLoading && (
+        <div
+          className="fixed bottom-0 left-0 right-0 z-50 px-4 py-3 md:py-4"
+          style={{
+            background: "linear-gradient(to top, var(--bg) 60%, transparent)",
+            backdropFilter: "blur(12px)",
+          }}
+        >
+          <div className="max-w-4xl mx-auto flex items-center gap-3">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold" style={{ color: "var(--text)" }}>
+                Join LOOPS
+              </p>
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                Download routes, rate rides, join the community
+              </p>
+            </div>
+            <Link
+              href={`/login?redirect=/routes/${route.id}`}
+              className="shrink-0 px-5 py-2.5 rounded-xl font-bold text-sm uppercase tracking-wider transition-all hover:brightness-110"
+              style={{
+                background: "var(--accent)",
+                color: "var(--bg)",
+              }}
+            >
+              Sign Up Free
+            </Link>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

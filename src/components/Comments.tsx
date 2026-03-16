@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "./AuthProvider";
+import { useToast } from "./Toast";
 import Link from "next/link";
 
 interface Comment {
@@ -35,6 +36,7 @@ function timeAgo(dateStr: string) {
 
 export default function Comments({ routeId }: { routeId: string }) {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [comments, setComments] = useState<Comment[]>([]);
   const [body, setBody] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -103,6 +105,7 @@ export default function Comments({ routeId }: { routeId: string }) {
     } else {
       setComments(prevComments);
       setBody(submittedBody);
+      toast("Failed to post comment. Please try again.", "error");
     }
     setSubmitting(false);
   };
@@ -126,6 +129,7 @@ export default function Comments({ routeId }: { routeId: string }) {
       setPage(1);
     } else {
       setComments(prevComments);
+      toast("Failed to delete comment. Please try again.", "error");
     }
     setDeletingId(null);
   };

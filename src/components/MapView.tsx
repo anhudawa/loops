@@ -49,6 +49,7 @@ export default function MapView({
       center: [53.5, -7.5],
       zoom: 7,
       zoomControl: true,
+      scrollWheelZoom: false,
     });
 
     L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {

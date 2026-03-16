@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useToast } from "./Toast";
 
 interface StravaConnectButtonProps {
   isConnected: boolean;
@@ -9,6 +10,7 @@ interface StravaConnectButtonProps {
 }
 
 export default function StravaConnectButton({ isConnected, returnTo = "/upload", onDisconnected }: StravaConnectButtonProps) {
+  const { toast } = useToast();
   const [disconnecting, setDisconnecting] = useState(false);
 
   async function handleDisconnect() {
@@ -17,9 +19,11 @@ export default function StravaConnectButton({ isConnected, returnTo = "/upload",
       const res = await fetch("/api/strava/connect", { method: "DELETE" });
       if (res.ok) {
         onDisconnected?.();
+      } else {
+        toast("Failed to disconnect Strava. Please try again.", "error");
       }
     } catch {
-      // Silently fail — user can try again
+      toast("Failed to disconnect Strava. Please try again.", "error");
     } finally {
       setDisconnecting(false);
     }

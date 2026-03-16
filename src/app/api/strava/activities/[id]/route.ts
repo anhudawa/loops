@@ -25,6 +25,9 @@ export async function GET(
 
   const { id } = await params;
   const activityId = Number(id);
+  if (isNaN(activityId)) {
+    return NextResponse.json({ error: "Invalid activity ID", code: "VALIDATION_ERROR" }, { status: 400 });
+  }
 
   try {
     const [activity, streams] = await Promise.all([

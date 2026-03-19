@@ -45,7 +45,7 @@ body {
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: "Outfit", system-ui, -apple-system, sans-serif;
+  font-family: var(--font-outfit, "Outfit"), system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   padding-top: var(--sat);
   padding-bottom: var(--sab);
@@ -63,7 +63,7 @@ button, [role="button"] {
 
 /* Leaflet overrides for dark theme */
 .leaflet-container {
-  font-family: "Outfit", system-ui, -apple-system, sans-serif;
+  font-family: var(--font-outfit, "Outfit"), system-ui, -apple-system, sans-serif;
   z-index: 0;
 }
 

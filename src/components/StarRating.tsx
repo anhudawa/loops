@@ -11,11 +11,7 @@ export default function StarRating({ routeId }: { routeId: string }) {
   const [count, setCount] = useState(0);
   const [userRating, setUserRating] = useState<number | null>(null);
   const [hovered, setHovered] = useState<number | null>(null);
-  const [isTouchDevice, setIsTouchDevice] = useState(false);
-
-  useEffect(() => {
-    setIsTouchDevice("ontouchstart" in window);
-  }, []);
+  const [isTouchDevice] = useState(() => typeof window !== "undefined" && "ontouchstart" in window);
 
   const [error, setError] = useState(false);
 

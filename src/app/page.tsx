@@ -115,7 +115,6 @@ function filtersToParams(f: FilterState): URLSearchParams {
 
 function HomeContent() {
   const { user, logout, unreadCount } = useAuth();
-  const isMdScreen = useMdScreen();
   const contentRef = useRef<HTMLDivElement>(null);
   const routeListRef = useRef<HTMLDivElement>(null);
   const searchParams = useSearchParams();
@@ -191,8 +190,8 @@ function HomeContent() {
   }, [filters, userLocation]);
 
   useEffect(() => {
-    setLoading(true);
-    setPage(1);
+    setLoading(true); // eslint-disable-line react-hooks/set-state-in-effect
+    setPage(1);  
     fetchRoutes(1, false);
   }, [fetchRoutes]);
 

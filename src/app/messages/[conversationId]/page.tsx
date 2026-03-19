@@ -61,6 +61,7 @@ export default function ConversationPage() {
 
   useEffect(() => {
     if (user && conversationId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       fetchMessages();
 
       // Also get conversation list to find other user's info

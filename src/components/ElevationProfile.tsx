@@ -30,6 +30,7 @@ export default function ElevationProfile({
 }: ElevationProfileProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(300);
   const [tooltip, setTooltip] = useState<{
     x: number;
     y: number;
@@ -43,7 +44,7 @@ export default function ElevationProfile({
   const hasRealData = elevations.length > 0 && elevations.some((e) => e !== 0);
 
   // Calculate per-point cumulative distances and detect climbs
-  const { cumulativeDistances, climbs } = useMemo(() => {
+  const { climbs } = useMemo(() => {
     if (!hasRealData || coordinates.length < 2) {
       return { cumulativeDistances: [], climbs: [] };
     }
@@ -57,6 +58,16 @@ export default function ElevationProfile({
     const detectedClimbs = detectClimbs(elevations, cumDist);
     return { cumulativeDistances: cumDist, climbs: detectedClimbs };
   }, [elevations, coordinates, hasRealData]);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const obs = new ResizeObserver((entries) => {
+      setContainerWidth(entries[0].contentRect.width);
+    });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -211,7 +222,7 @@ export default function ElevationProfile({
           <div
             className="absolute pointer-events-none z-10 px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap"
             style={{
-              left: Math.min(tooltip.x, (containerRef.current?.offsetWidth ?? 300) - 120),
+              left: Math.min(tooltip.x, containerWidth - 120),
               top: Math.max(0, tooltip.y - 44),
               background: "rgba(0,0,0,0.85)",
               border: "1px solid rgba(200,255,0,0.3)",
@@ -377,7 +388,6 @@ function detectClimbs(elevations: number[], cumDistances: number[]): Climb[] {
     const climbStart = i;
     let climbPeak = i;
     let peakElev = smoothed[i];
-    let totalGain = 0;
     let localLow = smoothed[i];
 
     // Walk uphill, allowing small dips
@@ -386,7 +396,6 @@ function detectClimbs(elevations: number[], cumDistances: number[]): Climb[] {
       if (smoothed[i] > peakElev) {
         peakElev = smoothed[i];
         climbPeak = i;
-        totalGain += smoothed[i] - localLow;
         localLow = smoothed[i];
       } else {
         // Descending — check if dip is too large

@@ -20,11 +20,12 @@ interface FilterSidebarProps {
     discipline: string;
   };
   regions: string[];
+  countries?: string[];
   onChange: (key: string, value: string) => void;
   onClear: () => void;
 }
 
-export default function FilterSidebar({ filters, regions, onChange, onClear }: FilterSidebarProps) {
+export default function FilterSidebar({ filters, regions, countries: _countries, onChange, onClear }: FilterSidebarProps) {
   const hasFilters = Object.values(filters).some((v) => v !== "");
 
   const selectStyle = {

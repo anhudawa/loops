@@ -14,20 +14,32 @@ interface Climb {
 }
 
 interface ElevationProfileProps {
-  elevations: number[];
-  coordinates: [number, number][];
+  /** Pass either separate elevations + 2D coords, or combined 3D coords */
+  elevations?: number[];
+  coordinates: [number, number][] | [number, number, number][];
   distanceKm: number;
-  elevationGain: number;
-  elevationLoss: number;
+  elevationGain?: number;
+  elevationLoss?: number;
+  /** Called with the hovered coordinate index (or null when not hovering) */
+  onPositionChange?: (index: number | null) => void;
+  /** Index of coordinate to highlight (e.g. from a map click) */
+  highlightIndex?: number | null;
 }
 
 export default function ElevationProfile({
-  elevations,
-  coordinates,
+  elevations: elevationsProp,
+  coordinates: coordinatesProp,
   distanceKm,
-  elevationGain,
-  elevationLoss,
+  elevationGain = 0,
+  elevationLoss = 0,
+  onPositionChange,
+  highlightIndex,
 }: ElevationProfileProps) {
+  // Normalise: extract elevations from 3D coords if not provided separately
+  const coordinates = coordinatesProp.map((c): [number, number] => [c[0], c[1]]);
+  const elevations: number[] = elevationsProp && elevationsProp.length > 0
+    ? elevationsProp
+    : coordinatesProp.map((c) => (c as number[])[2] ?? 0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(300);
@@ -164,7 +176,7 @@ export default function ElevationProfile({
     ctx.stroke();
   }, [sampledElevations, distanceKm]);
 
-  // Mouse hover for tooltip
+  // Mouse hover for tooltip + external position change callback
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas || sampledElevations.length < 2) return;
@@ -179,7 +191,19 @@ export default function ElevationProfile({
     const distance = ratio * distanceKm;
 
     setTooltip({ x: mouseX, y: e.clientY - rect.top, elevation, distance });
+
+    // Map hovered sample index back to original coordinate index
+    const coordIdx = Math.round(ratio * (coordinates.length - 1));
+    onPositionChange?.(coordIdx);
   };
+
+  const handleMouseLeave = () => {
+    setTooltip(null);
+    onPositionChange?.(null);
+  };
+
+  // highlightIndex can drive future crosshair rendering — stored for future use
+  void highlightIndex;
 
   if (!hasRealData) {
     return (
@@ -216,7 +240,7 @@ export default function ElevationProfile({
           className="w-full"
           style={{ height: "180px", cursor: "crosshair" }}
           onMouseMove={handleMouseMove}
-          onMouseLeave={() => setTooltip(null)}
+          onMouseLeave={handleMouseLeave}
         />
         {tooltip && (
           <div

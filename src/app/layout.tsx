@@ -6,6 +6,7 @@ import { CapacitorProvider } from "@/components/CapacitorProvider";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import Footer from "@/components/Footer";
 import JsonLd from "@/components/JsonLd";
+import { generateOrganizationJsonLd, generateWebSiteJsonLd } from "@/lib/seo";
 import "./globals.css";
 
 const outfit = Outfit({
@@ -52,13 +53,8 @@ export default function RootLayout({
   return (
     <html lang="en" className={outfit.variable}>
       <body className="antialiased">
-        <JsonLd data={{
-          "@context": "https://schema.org",
-          "@type": "WebSite",
-          name: "LOOPS",
-          url: "https://loops.ie",
-          description: "Find and share the best cycling routes worldwide",
-        }} />
+        <JsonLd data={generateWebSiteJsonLd()} />
+        <JsonLd data={generateOrganizationJsonLd()} />
         <ErrorBoundary>
           <ToastProvider>
             <CapacitorProvider>

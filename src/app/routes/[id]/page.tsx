@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import ElevationProfile from "@/components/ElevationProfile";
+import ClimbCards from "@/components/ClimbCards";
 import StarRating from "@/components/StarRating";
 import Comments from "@/components/Comments";
 import PhotoGallery from "@/components/PhotoGallery";
@@ -14,6 +15,11 @@ import ShareRide from "@/components/ShareRide";
 import WeatherCard from "@/components/WeatherCard";
 import { useAuth } from "@/components/AuthProvider";
 import { useToast } from "@/components/Toast";
+import Breadcrumbs from "@/components/Breadcrumbs";
+import RouteFaq from "@/components/RouteFaq";
+import RelatedRoutes from "@/components/RelatedRoutes";
+import { slugify } from "@/lib/seo";
+import { detectClimbs, haversine, CATEGORY_COLORS, type Climb } from "@/lib/climb-detection";
 
 const MapView = dynamic(() => import("@/components/MapView"), { ssr: false });
 
@@ -64,6 +70,15 @@ export default function RouteDetail() {
   const [isFavourited, setIsFavourited] = useState(false);
   const [favCount, setFavCount] = useState(0);
   const [favLoading, setFavLoading] = useState(false);
+  // Profile hover → map marker (set by profile, drives map)
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  // Map click → profile crosshair (set by map click, drives profile)
+  const [highlightIndex, setHighlightIndex] = useState<number | null>(null);
+  // Climb card → map highlight section
+  const [highlightSection, setHighlightSection] = useState<{
+    coords: [number, number][];
+    color: string;
+  } | null>(null);
 
   useEffect(() => {
     if (params.id) {
@@ -75,6 +90,26 @@ export default function RouteDetail() {
         });
     }
   }, [params.id]);
+
+
+  const [relatedRoutes, setRelatedRoutes] = useState<Route[]>([]);
+
+  useEffect(() => {
+    if (!route) return;
+    fetch(`/api/routes?country=${encodeURIComponent(route.country)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        const all = data.data || data;
+        const sameRegion = route.region
+          ? all.filter((r: Route) => r.id !== route.id && r.region === route.region)
+          : [];
+        const filtered = sameRegion.length > 0
+          ? sameRegion.slice(0, 4)
+          : all.filter((r: Route) => r.id !== route.id).slice(0, 4);
+        setRelatedRoutes(filtered);
+      })
+      .catch(() => {});
+  }, [route?.id, route?.country, route?.region]);
 
   // Check favourite status
   useEffect(() => {
@@ -174,9 +209,43 @@ export default function RouteDetail() {
   }
 
   const rawCoords: number[][] = JSON.parse(route.coordinates);
+  const fullCoordinates: [number, number, number][] = rawCoords.map((c) => [c[0], c[1], c[2] ?? 0]);
   const coordinates: [number, number][] = rawCoords.map((c) => [c[0], c[1]]);
-  const elevations: number[] = rawCoords.map((c) => c[2] ?? 0);
+  const climbs = detectClimbs(fullCoordinates);
   const diff = DIFF[route.difficulty] || DIFF.easy;
+
+  const handlePositionChange = (index: number | null) => {
+    setHoverIndex(index);
+    // Clear map-to-profile crosshair when user starts hovering profile
+    if (index != null) setHighlightIndex(null);
+  };
+
+  const handleClimbSelect = (climb: Climb) => {
+    const sectionCoords = fullCoordinates
+      .slice(climb.startIndex, climb.endIndex + 1)
+      .map((c): [number, number] => [c[0], c[1]]);
+    const color = climb.category ? CATEGORY_COLORS[climb.category] ?? "#c8ff00" : "#c8ff00";
+    setHighlightSection({ coords: sectionCoords, color });
+  };
+
+  const handlePolylineClick = (latlng: { lat: number; lng: number }) => {
+    // Find nearest coordinate index — drives profile crosshair
+    let minDist = Infinity;
+    let nearestIdx = 0;
+    for (let i = 0; i < fullCoordinates.length; i++) {
+      const d = haversine([fullCoordinates[i][0], fullCoordinates[i][1]], [latlng.lat, latlng.lng]);
+      if (d < minDist) {
+        minDist = d;
+        nearestIdx = i;
+      }
+    }
+    setHighlightIndex(nearestIdx);
+  };
+
+  // Compute hover position for map marker (from profile hover only)
+  const hoverPosition = hoverIndex != null && hoverIndex < fullCoordinates.length
+    ? { lat: fullCoordinates[hoverIndex][0], lng: fullCoordinates[hoverIndex][1] }
+    : null;
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
@@ -196,7 +265,16 @@ export default function RouteDetail() {
 
       {/* Hero: Map full-bleed */}
       <div className="h-[200px] md:h-[360px] relative">
-        <MapView routes={[route]} selectedRouteId={route.id} windOverlay={windOverlayEnabled && windData ? windData : null} travelOverlay={travelOverlayEnabled} />
+        <MapView
+          routes={[route]}
+          selectedRouteId={route.id}
+          windOverlay={windOverlayEnabled && windData ? windData : null}
+          travelOverlay={travelOverlayEnabled}
+          hoverPosition={hoverPosition}
+          highlightSection={highlightSection}
+          onPolylineClick={handlePolylineClick}
+          onMapClick={() => setHighlightSection(null)}
+        />
         <div className="absolute bottom-0 left-0 right-0 h-20 pointer-events-none z-[1]" style={{ background: "linear-gradient(to top, var(--bg), transparent)" }} />
       </div>
 
@@ -211,6 +289,20 @@ export default function RouteDetail() {
             onTravelToggle={setTravelOverlayEnabled}
             onWeatherLoaded={(wind) => setWindData(wind)}
             coordinates={coordinates}
+          />
+        </div>
+
+        {/* Breadcrumbs */}
+        <div className="mb-3">
+          <Breadcrumbs
+            items={[
+              { label: "LOOPS", href: "/" },
+              { label: route.country, href: `/routes/country/${slugify(route.country)}` },
+              ...(route.region
+                ? [{ label: route.region, href: `/routes/country/${slugify(route.country)}/${slugify(route.region)}` }]
+                : []),
+              { label: route.name },
+            ]}
           />
         </div>
 
@@ -397,27 +489,58 @@ export default function RouteDetail() {
           <RideActions routeId={route.id} routeName={route.name} />
         </div>
 
-        {/* Description & Elevation */}
-        <div className="grid md:grid-cols-2 gap-3 md:gap-4 mb-4">
-          <div className="rounded-2xl p-4 md:p-6" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-            <h2 className="text-xs font-extrabold uppercase tracking-wider mb-3" style={{ color: "var(--text-secondary)" }}>About this route</h2>
-            {route.description ? (
-              <p className="text-sm leading-relaxed" style={{ color: "var(--text-muted)" }}>{route.description}</p>
-            ) : (
-              <p className="text-sm italic" style={{ color: "var(--text-muted)" }}>No description provided</p>
-            )}
-          </div>
+        {/* Elevation Profile — full width */}
+        <div className="rounded-2xl p-4 md:p-6 mb-3 md:mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+          <h2 className="text-xs font-extrabold uppercase tracking-wider mb-3" style={{ color: "var(--text-secondary)" }}>
+            Elevation Profile
+          </h2>
+          <ElevationProfile
+            coordinates={fullCoordinates}
+            distanceKm={route.distance_km}
+            onPositionChange={handlePositionChange}
+            highlightIndex={highlightIndex}
+          />
+        </div>
 
-          <div className="rounded-2xl p-4 md:p-6" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-            <h2 className="text-xs font-extrabold uppercase tracking-wider mb-3" style={{ color: "var(--text-secondary)" }}>Elevation Profile</h2>
-            <ElevationProfile
-              elevations={elevations}
-              coordinates={coordinates}
-              distanceKm={route.distance_km}
-              elevationGain={route.elevation_gain_m}
-              elevationLoss={route.elevation_loss_m}
-            />
+        {/* Climb Cards */}
+        {climbs.length > 0 && (
+          <div className="rounded-2xl p-4 md:p-6 mb-3 md:mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+            <ClimbCards climbs={climbs} onClimbSelect={handleClimbSelect} />
           </div>
+        )}
+
+        {/* About this route — full width */}
+        <div className="rounded-2xl p-4 md:p-6 mb-3 md:mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+          <h2 className="text-xs font-extrabold uppercase tracking-wider mb-3" style={{ color: "var(--text-secondary)" }}>
+            About this route
+          </h2>
+          {route.description ? (
+            <p className="text-sm leading-relaxed" style={{ color: "var(--text-muted)" }}>{route.description}</p>
+          ) : (
+            <p className="text-sm italic" style={{ color: "var(--text-muted)" }}>No description provided</p>
+          )}
+        </div>
+
+        {/* FAQ */}
+        <div className="rounded-2xl p-4 md:p-6 mb-3 md:mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+          <RouteFaq
+            routeName={route.name}
+            distanceKm={route.distance_km}
+            elevationGainM={route.elevation_gain_m}
+            surfaceType={route.surface_type}
+            discipline={route.discipline}
+            difficulty={route.difficulty}
+          />
+        </div>
+
+        {/* Related Routes */}
+        <div className="rounded-2xl p-4 md:p-6 mb-3 md:mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+          <RelatedRoutes
+            routes={relatedRoutes}
+            regionOrCountry={route.region || route.country}
+            country={route.country}
+            isRegion={!!route.region}
+          />
         </div>
 
         {/* Trail Conditions */}

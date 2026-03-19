@@ -1,0 +1,16 @@
+# LOOPS — Cycling Route Discovery Platform
+> Find and share the best road, gravel, and MTB cycling routes worldwide.
+
+LOOPS is a free cycling route platform where every route has been ridden and uploaded by a real cyclist. Routes include GPX downloads, elevation profiles, community ratings, and conditions reports.
+
+## Key Pages
+- Homepage: https://loops.ie — Browse all cycling routes with filters
+- Routes by Country: https://loops.ie/routes/country/{country} — Cycling routes in a specific country
+- Route Detail: https://loops.ie/routes/{id} — Individual route with map, elevation, GPX download
+- About: https://loops.ie/about — About the platform
+
+## Route Data Available
+Each route includes: name, description, difficulty (easy/moderate/hard/expert), distance (km), elevation gain (m), surface type (gravel/mixed/trail/road), discipline (road/gravel/mtb), county, country, region, GPS coordinates, community ratings, user comments, condition reports, and free GPX file download.
+
+## Coverage
+Routes available in: Ireland, United Kingdom, and expanding worldwide. Community-uploaded with editorial curation.

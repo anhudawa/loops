@@ -66,8 +66,14 @@ export function middleware(request: NextRequest) {
     return response;
   }
 
-  // Public pages — login + shared route links
-  if (pathname.startsWith("/login") || pathname.startsWith("/routes/")) {
+  // Public pages — homepage, info pages, login, route pages, photos
+  const publicExactPaths = ["/", "/about", "/privacy", "/terms", "/feedback"];
+  if (
+    publicExactPaths.includes(pathname) ||
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/routes/") ||
+    pathname.startsWith("/photos")
+  ) {
     return NextResponse.next();
   }
 

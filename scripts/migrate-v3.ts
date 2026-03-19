@@ -40,7 +40,7 @@ async function migrate() {
     await sql`ALTER TABLE routes DROP CONSTRAINT IF EXISTS routes_surface_type_check`;
     await sql`ALTER TABLE routes ADD CONSTRAINT routes_surface_type_check CHECK(surface_type IN ('gravel', 'mixed', 'trail', 'road', 'singletrack', 'technical'))`;
     console.log("✅ Expanded surface_type constraint");
-  } catch (e) {
+  } catch {
     console.log("⚠️  surface_type constraint update skipped (may already be updated)");
   }
 
@@ -48,7 +48,7 @@ async function migrate() {
   try {
     await sql`ALTER TABLE routes ADD CONSTRAINT routes_discipline_check CHECK(discipline IN ('road', 'gravel', 'mtb'))`;
     console.log("✅ Added discipline constraint");
-  } catch (e) {
+  } catch {
     console.log("⚠️  discipline constraint already exists");
   }
 

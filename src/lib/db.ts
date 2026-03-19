@@ -1,4 +1,5 @@
 import { sql } from "@vercel/postgres";
+import { v4 as uuidv4 } from "uuid";
 import { DURATION_TIERS, DEFAULT_SPEED_KMH } from "@/config/constants";
 
 // ──── Init ────
@@ -1115,7 +1116,7 @@ export async function getOrCreateConversation(userId: string, otherUserId: strin
   if (existing.length > 0) return existing[0].id;
 
   // Create new conversation
-  const convId = require("uuid").v4();
+  const convId = uuidv4();
   await sql`INSERT INTO conversations (id) VALUES (${convId})`;
   await sql`INSERT INTO conversation_participants (conversation_id, user_id) VALUES (${convId}, ${userId})`;
   await sql`INSERT INTO conversation_participants (conversation_id, user_id) VALUES (${convId}, ${otherUserId})`;

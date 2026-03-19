@@ -408,7 +408,7 @@ export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
         cos(radians(r.start_lng) - radians($${lngIdx})) +
         sin(radians($${latIdx})) * sin(radians(r.start_lat))
       )`
-    : "NULL";
+    : "NULL::double precision";
 
   const limitVal = (filters.limit ?? 20) + 1; // fetch one extra to check hasMore
   const offsetVal = filters.offset ?? 0;

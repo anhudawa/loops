@@ -14,6 +14,7 @@ import RideActions from "@/components/RideActions";
 import ShareRide from "@/components/ShareRide";
 import WeatherCard from "@/components/WeatherCard";
 import { useAuth } from "@/components/AuthProvider";
+import { useToast } from "@/components/Toast";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import RouteFaq from "@/components/RouteFaq";
 import RelatedRoutes from "@/components/RelatedRoutes";
@@ -51,6 +52,7 @@ export default function RouteDetail() {
   const params = useParams();
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
+  const { toast } = useToast();
   const [route, setRoute] = useState<Route | null>(null);
   const [loading, setLoading] = useState(true);
   const [windData, setWindData] = useState<{ direction: number; speed: number } | null>(null);

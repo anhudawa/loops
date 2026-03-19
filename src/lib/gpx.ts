@@ -1,4 +1,4 @@
-import { haversine, calculateStats } from "./geo-utils";
+import { calculateStats } from "./geo-utils";
 
 export interface GpxData {
   name: string | null;

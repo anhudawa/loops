@@ -37,27 +37,33 @@ interface RouteJsonLdInput {
 export function generateRouteJsonLd(route: RouteJsonLdInput) {
   const jsonLd: Record<string, unknown> = {
     "@context": "https://schema.org",
-    "@type": "SportsActivityLocation",
+    "@type": "ExerciseAction",
     name: route.name,
     description: route.description || `${route.discipline} route in ${route.region || route.county}, ${route.country}`,
     url: `https://loops.ie/routes/${route.id}`,
-    geo: {
-      "@type": "GeoCoordinates",
-      latitude: route.start_lat,
-      longitude: route.start_lng,
+    exerciseType: route.discipline.charAt(0).toUpperCase() + route.discipline.slice(1),
+    distance: {
+      "@type": "Distance",
+      name: `${route.distance_km} km`,
     },
-    address: {
-      "@type": "PostalAddress",
-      addressRegion: route.region || route.county,
-      addressCountry: route.country,
-    },
-    sport: "Cycling",
     image: `https://loops.ie/api/og/${route.id}`,
+    location: {
+      "@type": "Place",
+      name: `${route.region || route.county}, ${route.country}`,
+      geo: {
+        "@type": "GeoCoordinates",
+        latitude: route.start_lat,
+        longitude: route.start_lng,
+      },
+      address: {
+        "@type": "PostalAddress",
+        addressRegion: route.region || route.county,
+        addressCountry: route.country,
+      },
+    },
     additionalProperty: [
-      { "@type": "PropertyValue", name: "Distance", value: `${route.distance_km} km` },
       { "@type": "PropertyValue", name: "Elevation Gain", value: `${route.elevation_gain_m} m` },
       { "@type": "PropertyValue", name: "Surface", value: route.surface_type.charAt(0).toUpperCase() + route.surface_type.slice(1) },
-      { "@type": "PropertyValue", name: "Discipline", value: route.discipline.charAt(0).toUpperCase() + route.discipline.slice(1) },
     ],
   };
 
@@ -70,6 +76,34 @@ export function generateRouteJsonLd(route: RouteJsonLdInput) {
   }
 
   return jsonLd;
+}
+
+export function generateOrganizationJsonLd() {
+  return {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: "Loops.ie",
+    url: "https://loops.ie",
+    description: "Discover cycling routes across Ireland",
+  };
+}
+
+export function generateWebSiteJsonLd() {
+  return {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: "LOOPS",
+    url: "https://loops.ie",
+    description: "Find and share the best cycling routes worldwide",
+    potentialAction: {
+      "@type": "SearchAction",
+      target: {
+        "@type": "EntryPoint",
+        urlTemplate: "https://loops.ie/?q={search_term_string}",
+      },
+      "query-input": "required name=search_term_string",
+    },
+  };
 }
 
 interface BreadcrumbItem {

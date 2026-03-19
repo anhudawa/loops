@@ -1,5 +1,6 @@
 // Generate placeholder app icons as SVG → convert to PNG later
 // For now, create SVG files that can be used with @capacitor/assets
+/* eslint-disable @typescript-eslint/no-require-imports */
 const fs = require("fs");
 const path = require("path");
 

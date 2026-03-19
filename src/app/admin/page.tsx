@@ -106,18 +106,18 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (user?.role === "admin") {
-      fetchStats();
-      fetchUsers();
+      fetchStats(); // eslint-disable-line react-hooks/set-state-in-effect
+      fetchUsers();  
     }
   }, [user, fetchStats, fetchUsers]);
 
   useEffect(() => {
     if (tab === "routes" && routes.length === 0) {
-      setLoadingTab(true);
+      setLoadingTab(true); // eslint-disable-line react-hooks/set-state-in-effect
       fetchRoutes().finally(() => setLoadingTab(false));
     }
     if (tab === "comments" && comments.length === 0) {
-      setLoadingTab(true);
+      setLoadingTab(true);  
       fetchComments().finally(() => setLoadingTab(false));
     }
   }, [tab, routes.length, comments.length, fetchRoutes, fetchComments]);

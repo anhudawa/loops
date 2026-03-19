@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "./AuthProvider";
+import { useToast } from "./Toast";
 import Link from "next/link";
 
 interface Condition {
@@ -21,6 +22,7 @@ const STATUS_STYLES: Record<string, { color: string; bg: string; label: string }
 
 export default function ConditionReports({ routeId }: { routeId: string }) {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [conditions, setConditions] = useState<Condition[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [status, setStatus] = useState("good");
@@ -58,13 +60,28 @@ export default function ConditionReports({ routeId }: { routeId: string }) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!note.trim()) return;
+    if (!note.trim() || !user) return;
 
+    // Optimistic: show report immediately
+    const optimisticCondition: Condition = {
+      id: `optimistic-${Date.now()}`,
+      user_name: user.name,
+      status,
+      note: note.trim(),
+      created_at: new Date().toISOString().replace("Z", ""),
+    };
+    const prevConditions = conditions;
+    const submittedStatus = status;
+    const submittedNote = note.trim();
+    setConditions([optimisticCondition, ...conditions]);
+    setNote("");
+    setShowForm(false);
     setSubmitting(true);
+
     const res = await fetch(`/api/routes/${routeId}/conditions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status, note }),
+      body: JSON.stringify({ status: submittedStatus, note: submittedNote }),
     });
 
     if (res.ok) {
@@ -72,8 +89,13 @@ export default function ConditionReports({ routeId }: { routeId: string }) {
       setConditions(json.data ?? json);
       setHasMore(json.hasMore ?? false);
       setPage(1);
-      setNote("");
-      setShowForm(false);
+    } else {
+      // Revert on failure
+      setConditions(prevConditions);
+      setNote(submittedNote);
+      setStatus(submittedStatus);
+      setShowForm(true);
+      toast("Failed to submit report. Please try again.", "error");
     }
     setSubmitting(false);
   };

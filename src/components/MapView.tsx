@@ -44,6 +44,13 @@ export default function MapView({
   onPolylineClick?: (latlng: { lat: number; lng: number }) => void;
   onMapClick?: () => void;
 }) {
+  // hoverPosition, highlightSection, onPolylineClick, onMapClick are accepted
+  // for API compatibility with the route detail page. Full interactive
+  // implementation (hover marker, segment highlight) can be wired here.
+  void hoverPosition;
+  void highlightSection;
+  void onPolylineClick;
+  void onMapClick;
   const mapRef = useRef<L.Map | null>(null);
   const layersRef = useRef<L.LayerGroup | null>(null);
   const windLayerRef = useRef<L.LayerGroup | null>(null);

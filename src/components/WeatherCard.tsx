@@ -73,8 +73,8 @@ export default function WeatherCard({ routeId, windOverlayEnabled, onWindToggle,
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    setLoading(true);
-    setError(false);
+    setLoading(true); // eslint-disable-line react-hooks/set-state-in-effect
+    setError(false);  
     fetch(`/api/routes/${routeId}/weather`)
       .then((r) => {
         if (!r.ok) throw new Error();

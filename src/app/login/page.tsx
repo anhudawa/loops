@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 
 /* ── Animated counter ── */
@@ -78,57 +78,24 @@ interface FeaturedRoute {
   cover_photo: string | null;
 }
 
-/* ── Main login/squeeze page ── */
-function LoginPage() {
-  const searchParams = useSearchParams();
-  const [error, setError] = useState("");
-  const [stats, setStats] = useState<{
-    routes: number;
-    totalKm: number;
-    countries: number;
-    featuredRoutes: FeaturedRoute[];
-    community: { riders: number; comments: number; ratings: number };
-  } | null>(null);
-  const [navSolid, setNavSolid] = useState(false);
-  const heroRef = useRef<HTMLDivElement>(null);
+const DIFF_COLORS: Record<string, { color: string; bg: string }> = {
+  easy: { color: "var(--success)", bg: "rgba(0, 255, 136, 0.15)" },
+  moderate: { color: "var(--warning)", bg: "rgba(255, 187, 0, 0.15)" },
+  hard: { color: "var(--danger)", bg: "rgba(255, 51, 85, 0.15)" },
+  expert: { color: "var(--purple)", bg: "rgba(187, 68, 255, 0.15)" },
+};
 
-  useEffect(() => {
-    const err = searchParams.get("error");
-    if (err === "google_failed") setError("Could not sign in with Google. Please try again.");
-    else if (err === "account_suspended") setError("This account has been suspended.");
-    else if (err) setError("Something went wrong. Please try again.");
-  }, [searchParams]);
-
-  useEffect(() => {
-    fetch("/api/stats").then((r) => r.json()).then(setStats).catch(() => {});
-  }, []);
-
-  // Sticky nav transition
-  useEffect(() => {
-    const handleScroll = () => setNavSolid(window.scrollY > 60);
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-
-  const handleGoogleLogin = async () => {
-    try {
-      // Store redirect URL in cookie so callback can redirect back
-      const redirect = searchParams.get("redirect");
-      if (redirect) {
-        document.cookie = `login_redirect=${encodeURIComponent(redirect)}; path=/; max-age=600; SameSite=Lax`;
-      }
-      const res = await fetch("/api/auth/google");
-      const data = await res.json();
-      if (!data.url) { setError("Could not sign in with Google. Please try again."); return; }
-      window.location.href = data.url;
-    } catch {
-      setError("Could not sign in with Google. Please try again.");
-    }
-  };
-
-  const GoogleButton = ({ size = "default" }: { size?: "default" | "small" }) => (
+/* ── Google sign-in button ── */
+function GoogleButton({
+  size = "default",
+  onClick,
+}: {
+  size?: "default" | "small";
+  onClick: () => void;
+}) {
+  return (
     <button
-      onClick={handleGoogleLogin}
+      onClick={onClick}
       className={`flex items-center justify-center gap-2.5 rounded-xl font-bold uppercase tracking-wider transition-all hover:opacity-90 hover:scale-[1.02] ${
         size === "small" ? "px-5 py-2.5 text-xs" : "w-full py-3.5 text-sm"
       }`}
@@ -143,6 +110,58 @@ function LoginPage() {
       {size === "small" ? "Get Started" : "Get Started with Google"}
     </button>
   );
+}
+
+/* ── Main login/squeeze page ── */
+function LoginPage() {
+  const searchParams = useSearchParams();
+  const [manualError, setManualError] = useState("");
+  const [stats, setStats] = useState<{
+    routes: number;
+    totalKm: number;
+    countries: number;
+    featuredRoutes: FeaturedRoute[];
+    community: { riders: number; comments: number; ratings: number };
+  } | null>(null);
+  const [navSolid, setNavSolid] = useState(false);
+  const heroRef = useRef<HTMLDivElement>(null);
+
+  // Derive URL-sourced errors directly — no effect needed
+  const paramErr = searchParams.get("error");
+  const urlError =
+    paramErr === "google_failed"
+      ? "Could not sign in with Google. Please try again."
+      : paramErr === "account_suspended"
+        ? "This account has been suspended."
+        : "";
+  const error = manualError || urlError;
+
+  useEffect(() => {
+    fetch("/api/stats").then((r) => r.json()).then(setStats).catch(() => {});
+  }, []);
+
+  // Sticky nav transition
+  useEffect(() => {
+    const handleScroll = () => setNavSolid(window.scrollY > 60);
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const handleGoogleLogin = useCallback(async () => {
+    try {
+      // Store redirect URL in cookie so callback can redirect back
+      const redirect = searchParams.get("redirect");
+      if (redirect) {
+        document.cookie = `login_redirect=${encodeURIComponent(redirect)}; path=/; max-age=600; SameSite=Lax`;
+      }
+      const res = await fetch("/api/auth/google");
+      const data = await res.json();
+      if (!data.url) { setManualError("Could not sign in with Google. Please try again."); return; }
+      window.location.href = data.url;
+    } catch {
+      setManualError("Could not sign in with Google. Please try again.");
+    }
+  }, [searchParams]);
 
   return (
     <div style={{ background: "var(--bg)" }}>
@@ -157,7 +176,7 @@ function LoginPage() {
       >
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <span className="logo-mark text-xl" style={{ color: "var(--text)" }}>LOOPS</span>
-          <GoogleButton size="small" />
+          <GoogleButton size="small" onClick={handleGoogleLogin} />
         </div>
       </nav>
 
@@ -196,7 +215,7 @@ function LoginPage() {
             {error && (
               <div className="alert-error mb-3 text-sm" role="alert">{error}</div>
             )}
-            <GoogleButton />
+            <GoogleButton onClick={handleGoogleLogin} />
             <p className="text-[11px] text-center mt-2.5" style={{ color: "var(--text-muted)" }}>
               Free forever. No credit card. No subscription.
             </p>
@@ -304,9 +323,9 @@ function LoginPage() {
                 >
                   {prop.icon}
                 </div>
-                <h2 className="font-extrabold text-sm uppercase tracking-wider mb-2" style={{ color: "var(--text)" }}>
+                <h3 className="font-extrabold text-sm uppercase tracking-wider mb-2" style={{ color: "var(--text)" }}>
                   {prop.title}
-                </h2>
+                </h3>
                 <p className="text-sm leading-relaxed" style={{ color: "var(--text-muted)" }}>
                   {prop.desc}
                 </p>
@@ -339,8 +358,8 @@ function LoginPage() {
                     {/* Cover */}
                     <div className="aspect-[16/9] relative overflow-hidden" style={{ background: "var(--bg-raised)" }}>
                       <img
-                        src={`/api/og/${route.id}`}
-                        alt={`Preview of ${route.name} cycling route`}
+                        src={route.cover_photo ? `/photos/${route.cover_photo}` : `/api/og/${route.id}`}
+                        alt=""
                         className="w-full h-full object-cover"
                         loading="lazy"
                       />
@@ -505,7 +524,7 @@ function LoginPage() {
             <p className="text-xs mb-5" style={{ color: "var(--text-muted)" }}>
               Join riders who are done paying to discover routes.
             </p>
-            <GoogleButton />
+            <GoogleButton onClick={handleGoogleLogin} />
             <p className="text-xs mt-3" style={{ color: "var(--text-muted)" }}>
               No credit card. No spam. No paywall. Just loops.
             </p>

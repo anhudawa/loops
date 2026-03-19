@@ -2,18 +2,16 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "./AuthProvider";
+import { useToast } from "./Toast";
 
 export default function StarRating({ routeId }: { routeId: string }) {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [average, setAverage] = useState(0);
   const [count, setCount] = useState(0);
   const [userRating, setUserRating] = useState<number | null>(null);
   const [hovered, setHovered] = useState<number | null>(null);
-  const [isTouchDevice, setIsTouchDevice] = useState(false);
-
-  useEffect(() => {
-    setIsTouchDevice("ontouchstart" in window);
-  }, []);
+  const [isTouchDevice] = useState(() => typeof window !== "undefined" && "ontouchstart" in window);
 
   const [error, setError] = useState(false);
 
@@ -63,6 +61,7 @@ export default function StarRating({ routeId }: { routeId: string }) {
       setAverage(prevAverage);
       setCount(prevCount);
       setUserRating(prevUserRating);
+      toast("Failed to save rating. Please try again.", "error");
     }
   };
 

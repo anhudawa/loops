@@ -1,10 +1,20 @@
 import type { Metadata, Viewport } from "next";
+import { Outfit } from "next/font/google";
 import { AuthProvider } from "@/components/AuthProvider";
 import { ToastProvider } from "@/components/Toast";
 import { CapacitorProvider } from "@/components/CapacitorProvider";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import Footer from "@/components/Footer";
 import JsonLd from "@/components/JsonLd";
+import { generateOrganizationJsonLd, generateWebSiteJsonLd } from "@/lib/seo";
 import "./globals.css";
+
+const outfit = Outfit({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800", "900"],
+  display: "swap",
+  variable: "--font-outfit",
+});
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.loops.ie"),
@@ -44,28 +54,20 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-      </head>
+    <html lang="en" className={outfit.variable}>
       <body className="antialiased">
-        <JsonLd data={{
-          "@context": "https://schema.org",
-          "@type": "WebSite",
-          name: "LOOPS",
-          url: "https://loops.ie",
-          description: "Find and share the best cycling routes worldwide",
-        }} />
-        <ToastProvider>
-          <CapacitorProvider>
-            <AuthProvider>
-              {children}
-              <Footer />
-            </AuthProvider>
-          </CapacitorProvider>
-        </ToastProvider>
+        <JsonLd data={generateWebSiteJsonLd()} />
+        <JsonLd data={generateOrganizationJsonLd()} />
+        <ErrorBoundary>
+          <ToastProvider>
+            <CapacitorProvider>
+              <AuthProvider>
+                {children}
+                <Footer />
+              </AuthProvider>
+            </CapacitorProvider>
+          </ToastProvider>
+        </ErrorBoundary>
       </body>
     </html>
   );

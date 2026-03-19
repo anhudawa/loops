@@ -1,12 +1,17 @@
 import Link from "next/link";
-import { getCountries } from "@/lib/db";
-import { slugify } from "@/lib/seo";
+import { getCountries, getRoutes } from "@/lib/db";
+import { slugify, generateItemListJsonLd } from "@/lib/seo";
+import JsonLd from "@/components/JsonLd";
 
 export default async function HomeSeoContent() {
-  const countries = await getCountries();
+  const [countries, featuredRoutes] = await Promise.all([
+    getCountries(),
+    getRoutes({ limit: 20 }),
+  ]);
 
   return (
     <section className="max-w-5xl mx-auto px-4 md:px-6 py-12 mt-8" style={{ borderTop: "1px solid var(--border)" }}>
+      <JsonLd data={generateItemListJsonLd("Cycling Routes on LOOPS", featuredRoutes)} />
       <h2 className="text-2xl font-extrabold mb-4" style={{ color: "var(--text)" }}>
         Discover Cycling Routes Worldwide
       </h2>

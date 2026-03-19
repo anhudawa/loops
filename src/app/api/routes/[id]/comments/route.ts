@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRouteComments, insertComment, deleteOwnComment, getUserBySession } from "@/lib/db";
-import { apiError, handleApiError } from "@/lib/api-utils";
+import { apiError, handleApiError, stripHtml } from "@/lib/api-utils";
 import { COMMENTS_PER_PAGE, MAX_COMMENT_LENGTH } from "@/config/constants";
 import { v4 as uuidv4 } from "uuid";
 
@@ -48,7 +48,12 @@ export async function POST(
       return apiError(`Comment too long (max ${MAX_COMMENT_LENGTH} characters)`, "VALIDATION_ERROR", 400);
     }
 
-    await insertComment(uuidv4(), id, user.id, body.trim());
+    const sanitized = stripHtml(body.trim());
+    if (sanitized.length === 0) {
+      return apiError("Comment cannot be empty", "VALIDATION_ERROR", 400);
+    }
+
+    await insertComment(uuidv4(), id, user.id, sanitized);
     const rows = await getRouteComments(id, COMMENTS_PER_PAGE + 1, 0);
     const hasMore = rows.length > COMMENTS_PER_PAGE;
     return NextResponse.json({ data: hasMore ? rows.slice(0, COMMENTS_PER_PAGE) : rows, hasMore, page: 1 });

@@ -330,49 +330,39 @@ function checkConnectivity(coords: [number, number][]): RuleViolation | null {
 }
 
 /**
- * RULE 5: DEAD_END
- * Warning if >2km of out-and-back on same segment.
- * Uses a spatial grid to find retraced sections efficiently.
+ * RULE 5: OUT_AND_BACK
+ * Fatal if >30% of the second half of the route retraces the first half.
+ *
+ * Method: sample every ~200m, split at midpoint, then for each second-half
+ * sample check whether any first-half sample is within 100m. A route where
+ * the majority of the return leg shares roads with the outbound leg is an
+ * out-and-back, not a true loop — riders are forced to retrace the same roads.
  */
-function checkDeadEnd(coords: [number, number][]): RuleViolation | null {
-  if (coords.length < 10) return null;
+function checkOutAndBack(coords: [number, number][]): RuleViolation | null {
+  if (coords.length < 20) return null;
 
-  // Sample route every 100m
-  const sampled = sampleCoords(coords, 100);
-  if (sampled.length < 5) return null;
+  const sampled = sampleCoords(coords, 200);
+  if (sampled.length < 10) return null;
 
-  // Accumulate path distances for each sampled index
-  const pathDist: number[] = [0];
-  for (let i = 1; i < sampled.length; i++) {
-    pathDist[i] = pathDist[i - 1] + haversineKm(sampled[i - 1], sampled[i]);
+  const mid = Math.floor(sampled.length / 2);
+  const firstHalf = sampled.slice(0, mid);
+  const secondHalf = sampled.slice(mid);
+
+  const PROXIMITY_KM = 0.1; // 100m — same road
+  let retraced = 0;
+  for (const sp of secondHalf) {
+    if (firstHalf.some((fp) => haversineKm(sp, fp) < PROXIMITY_KM)) {
+      retraced++;
+    }
   }
 
-  const PROXIMITY_KM = 0.03; // 30m — consider as "same road"
-  const MIN_PATH_SEPARATION_KM = 0.5; // must be 500m apart in path to count as out-and-back
-  const RETRACE_THRESHOLD_KM = 2.0;
-
-  let retracedKm = 0;
-
-  // For each point, find if a significantly earlier point is spatially close
-  // (indicating we passed the same location twice with a detour in between)
-  for (let i = 5; i < sampled.length; i++) {
-    const pt = sampled[i];
-    for (let j = 0; j < i - 1; j++) {
-      const pathSep = pathDist[i] - pathDist[j];
-      if (pathSep < MIN_PATH_SEPARATION_KM) continue;
-      if (haversineKm(pt, sampled[j]) < PROXIMITY_KM) {
-        // We retraced approximately (pathDist[i] - pathDist[j]) / 2 km
-        retracedKm += pathSep / 2;
-        break;
-      }
-    }
-    if (retracedKm > RETRACE_THRESHOLD_KM) {
-      return {
-        rule: "DEAD_END",
-        message: `Route contains ~${retracedKm.toFixed(1)}km of out-and-back on the same segment`,
-        severity: "warning",
-      };
-    }
+  const pct = retraced / secondHalf.length;
+  if (pct > 0.3) {
+    return {
+      rule: "OUT_AND_BACK",
+      message: `${(pct * 100).toFixed(1)}% of the return leg retraces the outbound leg — route is out-and-back, not a loop (max: 30%)`,
+      severity: "fatal",
+    };
   }
   return null;
 }
@@ -490,8 +480,8 @@ export function validateRouteRules(
   const connectivityViolation = checkConnectivity(coordinates);
   if (connectivityViolation) violations.push(connectivityViolation);
 
-  const deadEndViolation = checkDeadEnd(coordinates);
-  if (deadEndViolation) violations.push(deadEndViolation);
+  const outAndBackViolation = checkOutAndBack(coordinates);
+  if (outAndBackViolation) violations.push(outAndBackViolation);
 
   // ── OSM-dependent rules ──────────────────────────────────────────────────
 

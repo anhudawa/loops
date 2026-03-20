@@ -9,6 +9,8 @@
  *   scenic_score       (0–20)  – water, forests, peaks, coastline nearby
  */
 
+import { validateRouteRules } from "./route-rules";
+
 export type Discipline = "road" | "gravel" | "mtb";
 
 export interface QualityBreakdown {
@@ -545,6 +547,26 @@ export async function scoreRoute(
 ): Promise<QualityScore> {
   const { sampleIntervalMeters = 200 } = options;
   const allFlags: string[] = [];
+
+  // 0. Hard rules pre-check (OSM data not yet available at this stage)
+  const rulesResult = validateRouteRules(
+    coordinates.map((c) => [c[0], c[1]] as [number, number]),
+    discipline
+  );
+  if (!rulesResult.passed) {
+    const fatalViolations = rulesResult.violations.filter((v) => v.severity === "fatal");
+    return {
+      total: 0,
+      breakdown: { surface_score: 0, safety_score: 0, scenic_score: 0, gps_quality_score: 0 },
+      flags: fatalViolations.map((v) => `[${v.rule}] ${v.message}`),
+      confidence: 0,
+      osm_cached: false,
+    };
+  }
+  // Surface warning violations become flags even when passed
+  for (const v of rulesResult.violations) {
+    if (v.severity === "warning") allFlags.push(`[${v.rule}] ${v.message}`);
+  }
 
   // 1. GPS quality (pure local — no API)
   const { score: gps_quality_score, flags: gpsFlags } = scoreGpsQuality(coordinates);

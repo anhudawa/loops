@@ -378,7 +378,31 @@ function checkDeadEnd(coords: [number, number][]): RuleViolation | null {
 }
 
 /**
- * RULE 6: MIN_DISTANCE
+ * RULE 6: LOOP_CLOSURE
+ * Fatal if start and end points are more than 3km apart (road/gravel) or 5km apart (mtb).
+ * Routes that don't close are point-to-point and not suitable as loops.
+ */
+function checkLoopClosure(
+  coords: [number, number][],
+  discipline: Discipline
+): RuleViolation | null {
+  if (coords.length < 2) return null;
+  const start = coords[0];
+  const end = coords[coords.length - 1];
+  const gap = haversineKm(start, end);
+  const maxGap = discipline === "mtb" ? 5.0 : 3.0;
+  if (gap > maxGap) {
+    return {
+      rule: "LOOP_CLOSURE",
+      message: `Route is point-to-point: start and end are ${gap.toFixed(1)}km apart (max: ${maxGap}km for ${discipline})`,
+      severity: "fatal",
+    };
+  }
+  return null;
+}
+
+/**
+ * RULE 8: MIN_DISTANCE
  * Fatal if road <15km, gravel <10km, mtb <5km.
  */
 function checkMinDistance(
@@ -399,7 +423,7 @@ function checkMinDistance(
 }
 
 /**
- * RULE 7: SURFACE_MISMATCH
+ * RULE 9: SURFACE_MISMATCH
  * Fatal if gravel >30% paved, mtb >20% paved.
  */
 function checkSurfaceMismatch(
@@ -456,6 +480,9 @@ export function validateRouteRules(
   const skipped: string[] = [];
 
   // ── Pure GPS rules (no OSM needed) ──────────────────────────────────────
+
+  const loopClosureViolation = checkLoopClosure(coordinates, discipline);
+  if (loopClosureViolation) violations.push(loopClosureViolation);
 
   const minDistViolation = checkMinDistance(coordinates, discipline);
   if (minDistViolation) violations.push(minDistViolation);

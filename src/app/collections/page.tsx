@@ -15,7 +15,12 @@ export const metadata: Metadata = {
 };
 
 export default async function CollectionsPage() {
-  const collections = await getCollections();
+  let collections: Awaited<ReturnType<typeof getCollections>> = [];
+  try {
+    collections = await getCollections();
+  } catch {
+    // DB unavailable — render empty state
+  }
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>

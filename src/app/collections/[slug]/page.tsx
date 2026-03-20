@@ -12,7 +12,12 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const collection = await getCollectionBySlug(slug);
+  let collection: Awaited<ReturnType<typeof getCollectionBySlug>> = null;
+  try {
+    collection = await getCollectionBySlug(slug);
+  } catch {
+    return {};
+  }
   if (!collection) return {};
 
   const title = collection.seo_title || `${collection.name} — LOOPS Collections`;
@@ -45,7 +50,12 @@ const DISCIPLINE_LABELS: Record<string, { icon: string; label: string }> = {
 
 export default async function CollectionPage({ params }: Props) {
   const { slug } = await params;
-  const collection = await getCollectionBySlug(slug);
+  let collection: Awaited<ReturnType<typeof getCollectionBySlug>> = null;
+  try {
+    collection = await getCollectionBySlug(slug);
+  } catch {
+    notFound();
+  }
   if (!collection) notFound();
 
   const disc = DISCIPLINE_LABELS[collection.discipline] ?? DISCIPLINE_LABELS.mixed;

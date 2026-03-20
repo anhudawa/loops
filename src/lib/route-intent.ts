@@ -5,7 +5,8 @@
  * RouteSpec using Claude. Geocodes place names via Nominatim.
  */
 
-import Anthropic from "@anthropic-ai/sdk";
+// Loaded dynamically to prevent Turbopack from bundling Node.js native modules
+type AnthropicClient = InstanceType<typeof import("@anthropic-ai/sdk").default>;
 
 export interface RouteSpec {
   distance_km: number;
@@ -101,7 +102,8 @@ async function geocodePlace(
 }
 
 export async function parseRouteIntent(prompt: string): Promise<RouteSpec> {
-  const client = new Anthropic();
+  const { default: Anthropic } = await import("@anthropic-ai/sdk");
+  const client: AnthropicClient = new Anthropic();
 
   const message = await client.messages.create({
     model: "claude-opus-4-6",

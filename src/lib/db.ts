@@ -247,6 +247,10 @@ export async function migrateDb() {
   await sql`CREATE INDEX IF NOT EXISTS idx_collections_featured ON collections(featured)`;
   await sql`CREATE INDEX IF NOT EXISTS idx_collection_routes_collection_id ON collection_routes(collection_id)`;
 
+  // Route quality status (set by scripts/run-full-quality-audit.mjs)
+  await sql`ALTER TABLE routes ADD COLUMN IF NOT EXISTS quality_status TEXT DEFAULT 'pending'`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_routes_quality_status ON routes(quality_status)`;
+
 }
 
 // ──── Types ────
@@ -269,6 +273,7 @@ export interface Route {
   created_by: string | null;
   created_at: string;
   strava_activity_id: number | null;
+  quality_status: "approved" | "failed" | "pending" | null;
 }
 
 export interface RouteFilters {
@@ -388,6 +393,9 @@ export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
     params.push(`%${filters.search}%`);
     idx++;
   }
+
+  // Only show approved routes (or legacy routes without a quality_status yet)
+  conditions.push(`(r.quality_status = 'approved' OR r.quality_status IS NULL)`);
 
   // Duration filtering (uses route fields directly, no aggregation needed)
   const avgSpeed = filters.avgSpeedKmh ?? DEFAULT_SPEED_KMH;

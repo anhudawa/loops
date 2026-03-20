@@ -77,7 +77,9 @@ export function middleware(request: NextRequest) {
     publicExactPaths.includes(pathname) ||
     pathname.startsWith("/login") ||
     pathname.startsWith("/routes/") ||
-    pathname.startsWith("/photos")
+    pathname.startsWith("/photos") ||
+    pathname === "/collections" ||
+    pathname.startsWith("/collections/")
   ) {
     return NextResponse.next();
   }

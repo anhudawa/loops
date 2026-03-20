@@ -168,3 +168,29 @@ export function generateItemListJsonLd(name: string, routes: ItemListRoute[]) {
     })),
   };
 }
+
+interface CollectionJsonLdInput {
+  name: string;
+  slug: string;
+  description: string | null;
+  location: string | null;
+  country: string | null;
+  routes: { id: string; name: string; distance_km: number }[];
+}
+
+export function generateCollectionJsonLd(collection: CollectionJsonLdInput) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name: collection.name,
+    description: collection.description || `Curated cycling routes${collection.location ? ` in ${collection.location}` : ""}`,
+    url: `https://loops.ie/collections/${collection.slug}`,
+    numberOfItems: collection.routes.length,
+    itemListElement: collection.routes.map((route, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name: route.name,
+      url: `https://loops.ie/routes/${route.id}`,
+    })),
+  };
+}

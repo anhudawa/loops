@@ -10,6 +10,7 @@ import HeroSection from "@/components/HeroSection";
 import { useAuth } from "@/components/AuthProvider";
 import Link from "next/link";
 import { DEFAULT_SPEED_KMH } from "@/config/constants";
+import FeaturedCollections from "./FeaturedCollections";
 
 interface Route {
   id: string;
@@ -359,6 +360,11 @@ function HomeContent() {
 
       {/* Main Content */}
       <main className="max-w-3xl mx-auto w-full px-4 md:px-6 pb-20">
+        {/* Featured Collections */}
+        <div className="pt-6">
+          <FeaturedCollections />
+        </div>
+
         {/* Duration Strip */}
         <div className="py-6">
           <DurationStrip

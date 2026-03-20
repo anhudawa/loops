@@ -213,6 +213,40 @@ export async function migrateDb() {
   await sql`ALTER TABLE routes DROP CONSTRAINT IF EXISTS routes_difficulty_check`;
   await sql`ALTER TABLE routes ALTER COLUMN difficulty SET DEFAULT NULL`;
 
+  // Collections
+  await sql`
+    CREATE TABLE IF NOT EXISTS collections (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      slug TEXT NOT NULL UNIQUE,
+      description TEXT,
+      location TEXT,
+      country TEXT,
+      cover_image_url TEXT,
+      discipline TEXT NOT NULL DEFAULT 'mixed' CHECK(discipline IN ('road', 'gravel', 'mtb', 'mixed')),
+      difficulty_range TEXT,
+      total_routes_count INTEGER NOT NULL DEFAULT 0,
+      featured BOOLEAN NOT NULL DEFAULT FALSE,
+      seo_title TEXT,
+      seo_description TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS collection_routes (
+      collection_id TEXT NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
+      route_id TEXT NOT NULL REFERENCES routes(id) ON DELETE CASCADE,
+      display_order INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (collection_id, route_id)
+    )
+  `;
+
+  await sql`CREATE INDEX IF NOT EXISTS idx_collections_slug ON collections(slug)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_collections_featured ON collections(featured)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_collection_routes_collection_id ON collection_routes(collection_id)`;
+
 }
 
 // ──── Types ────
@@ -1388,4 +1422,104 @@ export async function savePushToken(id: string, userId: string, token: string, p
 export async function getPushTokensForUser(userId: string) {
   const result = await sql`SELECT token, platform FROM push_tokens WHERE user_id = ${userId}`;
   return result.rows as { token: string; platform: string }[];
+}
+
+// ──── Collections ────
+
+export interface Collection {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  location: string | null;
+  country: string | null;
+  cover_image_url: string | null;
+  discipline: "road" | "gravel" | "mtb" | "mixed";
+  difficulty_range: string | null;
+  total_routes_count: number;
+  featured: boolean;
+  seo_title: string | null;
+  seo_description: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CollectionWithRoutes extends Collection {
+  routes: Route[];
+}
+
+export async function getCollections(): Promise<Collection[]> {
+  const { rows } = await sql`
+    SELECT * FROM collections ORDER BY featured DESC, created_at DESC
+  `;
+  return rows as Collection[];
+}
+
+export async function getFeaturedCollections(): Promise<Collection[]> {
+  const { rows } = await sql`
+    SELECT * FROM collections WHERE featured = TRUE ORDER BY created_at DESC LIMIT 6
+  `;
+  return rows as Collection[];
+}
+
+export async function getCollectionBySlug(slug: string): Promise<CollectionWithRoutes | null> {
+  const { rows: collRows } = await sql`
+    SELECT * FROM collections WHERE slug = ${slug} LIMIT 1
+  `;
+  if (collRows.length === 0) return null;
+  const collection = collRows[0] as Collection;
+
+  const { rows: routeRows } = await sql`
+    SELECT r.*, cr.display_order
+    FROM routes r
+    JOIN collection_routes cr ON cr.route_id = r.id
+    WHERE cr.collection_id = ${collection.id}
+    ORDER BY cr.display_order ASC, r.created_at ASC
+  `;
+
+  return { ...collection, routes: routeRows as Route[] };
+}
+
+export async function insertCollection(data: {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  location?: string | null;
+  country?: string | null;
+  cover_image_url?: string | null;
+  discipline: string;
+  difficulty_range?: string | null;
+  featured?: boolean;
+  seo_title?: string | null;
+  seo_description?: string | null;
+}): Promise<Collection> {
+  const { rows } = await sql`
+    INSERT INTO collections (
+      id, name, slug, description, location, country, cover_image_url,
+      discipline, difficulty_range, featured, seo_title, seo_description
+    ) VALUES (
+      ${data.id}, ${data.name}, ${data.slug}, ${data.description ?? null},
+      ${data.location ?? null}, ${data.country ?? null}, ${data.cover_image_url ?? null},
+      ${data.discipline}, ${data.difficulty_range ?? null}, ${data.featured ?? false},
+      ${data.seo_title ?? null}, ${data.seo_description ?? null}
+    )
+    RETURNING *
+  `;
+  return rows[0] as Collection;
+}
+
+export async function addRouteToCollection(collectionId: string, routeId: string, displayOrder: number): Promise<void> {
+  await sql`
+    INSERT INTO collection_routes (collection_id, route_id, display_order)
+    VALUES (${collectionId}, ${routeId}, ${displayOrder})
+    ON CONFLICT (collection_id, route_id) DO UPDATE SET display_order = EXCLUDED.display_order
+  `;
+  await sql`
+    UPDATE collections
+    SET total_routes_count = (
+      SELECT COUNT(*) FROM collection_routes WHERE collection_id = ${collectionId}
+    ), updated_at = NOW()
+    WHERE id = ${collectionId}
+  `;
 }

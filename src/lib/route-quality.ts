@@ -2,29 +2,45 @@
  * Route Quality Scoring Module
  *
  * Scores a cycling route 0–100 by querying OpenStreetMap via the Overpass API.
- * Breakdown:
- *   gps_quality_score  (0–20)  – duplicate points, spikes, impossible jumps
- *   surface_score      (0–25)  – road classification & surface suitability
- *   safety_score       (0–35)  – proximity to dangerous roads
- *   scenic_score       (0–20)  – water, forests, peaks, coastline nearby
+ * Breakdown (raw values — normalized to 100 for the total):
+ *   gps_quality_score       (0–20)  – duplicate points, spikes, impossible jumps
+ *   surface_score           (0–25)  – road classification & surface suitability
+ *   safety_score            (0–35)  – proximity to dangerous roads
+ *   scenic_score            (0–20)  – water, forests, peaks, coastline nearby
+ *   traffic_volume_score    (0–15)  – highway classification as traffic proxy
+ *   scenic_diversity_score  (0–10)  – variety of terrain types along route
+ *   waypoint_interest_score (0–10)  – viewpoints, cafes, historic sites within 500m
+ *   gradient_comfort_score  (0–10)  – elevation profile smoothness
+ *   road_continuity_score   (0–5)   – penalise frequent highway type changes
+ *
+ * Max raw = 150 → normalized total = round(rawSum / 150 * 100)
  */
 
-import { validateRouteRules } from "./route-rules";
+import { validateRouteRules, RouteValidationOptions } from "./route-rules";
 
 export type Discipline = "road" | "gravel" | "mtb";
 
 export interface QualityBreakdown {
-  surface_score: number;   // 0–25
-  safety_score: number;    // 0–35
-  scenic_score: number;    // 0–20
-  gps_quality_score: number; // 0–20
+  surface_score: number;           // 0–25
+  safety_score: number;            // 0–35
+  scenic_score: number;            // 0–20
+  gps_quality_score: number;       // 0–20
+  traffic_volume_score: number;    // 0–15
+  scenic_diversity_score: number;  // 0–10
+  waypoint_interest_score: number; // 0–10
+  gradient_comfort_score: number;  // 0–10
+  road_continuity_score: number;   // 0–5
 }
 
+const MAX_RAW_SCORE = 150; // sum of all max breakdown values
+
 export interface QualityScore {
-  total: number;            // 0–100 weighted sum
+  total: number;                               // 0–100 normalized
   breakdown: QualityBreakdown;
-  flags: string[];          // human-readable issues
-  confidence: number;       // 0–1: how much OSM coverage was found
+  flags: string[];                             // human-readable issues
+  confidence: number;                          // 0–1: OSM coverage ratio
+  confidence_level: "high" | "medium" | "low";
+  low_coverage_warning: boolean;               // true if >30% of route unmatched in OSM
   osm_cached: boolean;
 }
 
@@ -180,26 +196,31 @@ function anyWayWithin(
 // ──── Overpass API ───────────────────────────────────────────────────────────
 
 const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
-const OVERPASS_TIMEOUT_S = 25;
+const OVERPASS_TIMEOUT_S = 30;
 
 async function queryOverpass(bbox: BoundingBox): Promise<OsmElement[]> {
   const key = getCacheKey(bbox);
   const cached = osmCache.get(key);
   if (cached && cached.expires > Date.now()) return cached.elements;
 
-  // Single query fetches all relevant data: roads, natural features, waterways
   const { minLat, minLng, maxLat, maxLng } = bbox;
   const bboxStr = `${minLat},${minLng},${maxLat},${maxLng}`;
 
+  // Comprehensive query: roads + scenic + POIs + diversity + fords
   const query = `
 [out:json][timeout:${OVERPASS_TIMEOUT_S}];
 (
   way["highway"](${bboxStr});
-  way["natural"~"water|forest|wood|peak|coastline"](${bboxStr});
+  way["natural"~"water|forest|wood|peak|coastline|scrub|heath|beach"](${bboxStr});
   way["waterway"~"river|stream|canal"](${bboxStr});
-  way["landuse"~"forest|wood|grass|meadow|nature_reserve"](${bboxStr});
+  way["landuse"~"forest|wood|grass|meadow|nature_reserve|vineyard|farmland|orchard|allotments"](${bboxStr});
   way["leisure"="nature_reserve"](${bboxStr});
+  way["ford"="yes"](${bboxStr});
   node["natural"="peak"](${bboxStr});
+  node["ford"="yes"](${bboxStr});
+  node["tourism"="viewpoint"](${bboxStr});
+  node["amenity"~"cafe|restaurant|pub|drinking_water|toilets|fountain"](${bboxStr});
+  node["historic"](${bboxStr});
 );
 out body;
 >;
@@ -210,7 +231,7 @@ out skel qt;
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: `data=${encodeURIComponent(query)}`,
-    signal: AbortSignal.timeout(30_000),
+    signal: AbortSignal.timeout(35_000),
   });
 
   if (!resp.ok) {
@@ -246,6 +267,33 @@ function buildProcessedWays(elements: OsmElement[], nodeMap: OsmNodeMap): Proces
     }
   }
   return ways;
+}
+
+// ──── Elevation helpers ───────────────────────────────────────────────────────
+
+/** Compute total elevation gain from 3-D coordinates. Returns undefined if no elevation data. */
+function computeElevationGain(coords: Coord[]): number | undefined {
+  let gain = 0;
+  let hasElevation = false;
+  for (let i = 1; i < coords.length; i++) {
+    const prev = coords[i - 1][2];
+    const curr = coords[i][2];
+    if (prev !== undefined && curr !== undefined) {
+      hasElevation = true;
+      const diff = (curr as number) - (prev as number);
+      if (diff > 0) gain += diff;
+    }
+  }
+  return hasElevation ? gain : undefined;
+}
+
+/** Compute total distance from 2-D coordinates. */
+function totalDistanceKm(coords: Coord[]): number {
+  let dist = 0;
+  for (let i = 1; i < coords.length; i++) {
+    dist += haversineKm([coords[i - 1][0], coords[i - 1][1]], [coords[i][0], coords[i][1]]);
+  }
+  return dist;
 }
 
 // ──── GPS Quality Scoring (pure, no API) ────────────────────────────────────
@@ -533,11 +581,371 @@ function scoreScenic(
   return { score, flags };
 }
 
+// ──── Traffic Volume Scoring (NEW) ──────────────────────────────────────────
+
+/**
+ * TRAFFIC_VOLUME_SCORE (0–15)
+ * Uses OSM highway classification as a proxy for traffic volume.
+ * Quiet roads score high; busy arterials score low.
+ */
+const TRAFFIC_SCORES: Record<string, number> = {
+  cycleway:       15,
+  path:           14,
+  track:          14,
+  bridleway:      13,
+  footway:        12,
+  living_street:  13,
+  residential:    11,
+  service:        10,
+  unclassified:   10,
+  tertiary_link:   7,
+  tertiary:        7,
+  secondary_link:  4,
+  secondary:       4,
+  primary_link:    2,
+  primary:         2,
+  trunk_link:      0,
+  trunk:           0,
+  motorway_link:   0,
+  motorway:        0,
+};
+
+function scoreTrafficVolume(
+  sampledCoords: Coord[],
+  highwayWays: ProcessedWay[]
+): { score: number; flags: string[] } {
+  const flags: string[] = [];
+  const scores: number[] = [];
+  let busyCount = 0;
+
+  for (const coord of sampledCoords) {
+    const pt: [number, number] = [coord[0], coord[1]];
+    const nearest = findNearestWay(pt, highwayWays, 0.05);
+    if (!nearest) {
+      scores.push(8); // neutral when unmatched
+      continue;
+    }
+    const hw = nearest.tags.highway ?? "";
+    const s = TRAFFIC_SCORES[hw] ?? 8;
+    scores.push(s);
+    if (s <= 4) busyCount++;
+  }
+
+  if (busyCount > sampledCoords.length * 0.2) {
+    flags.push(`${Math.round((busyCount / sampledCoords.length) * 100)}% of route is on busy arterial roads`);
+  }
+
+  const avg = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 8;
+  return { score: Math.round(avg), flags };
+}
+
+// ──── Scenic Diversity Scoring (NEW) ─────────────────────────────────────────
+
+/**
+ * SCENIC_DIVERSITY_SCORE (0–10)
+ * Routes that pass through varied landscapes score higher than monotonous ones.
+ * Each unique terrain type contributes its weight; score is capped at 10.
+ */
+const TERRAIN_WEIGHTS: Record<string, number> = {
+  coastline:      2.5,
+  beach:          2.0,
+  vineyard:       2.0,
+  heath:          1.5,
+  peak:           1.5,
+  nature_reserve: 1.5,
+  scrub:          1.0,
+  water:          1.5,
+  river:          1.5,
+  forest:         1.5,
+  meadow:         1.0,
+  farmland:       1.0,
+  orchard:        1.0,
+  allotments:     0.5,
+};
+
+function scenicDiversityKey(tags: Record<string, string>): string | null {
+  if (tags.natural === "coastline") return "coastline";
+  if (tags.natural === "beach") return "beach";
+  if (tags.landuse === "vineyard") return "vineyard";
+  if (tags.natural === "heath") return "heath";
+  if (tags.natural === "scrub") return "scrub";
+  if (tags.natural === "water" || tags.waterway === "river") return "water";
+  if (tags.waterway === "stream" || tags.waterway === "canal") return "river";
+  if (tags.natural === "forest" || tags.natural === "wood" || tags.landuse === "forest" || tags.landuse === "wood") return "forest";
+  if (tags.landuse === "meadow" || tags.landuse === "grass") return "meadow";
+  if (tags.landuse === "farmland") return "farmland";
+  if (tags.landuse === "orchard") return "orchard";
+  if (tags.landuse === "allotments") return "allotments";
+  if (tags.leisure === "nature_reserve" || tags.landuse === "nature_reserve") return "nature_reserve";
+  return null;
+}
+
+function scoreScenicDiversity(
+  elements: OsmElement[],
+  nodeMap: OsmNodeMap,
+  sampledCoords: Coord[]
+): { score: number; flags: string[] } {
+  const flags: string[] = [];
+
+  // Build terrain ways from all non-highway elements
+  const terrainWays: ProcessedWay[] = [];
+  for (const el of elements) {
+    if (el.type !== "way" || !el.nodes || !el.tags) continue;
+    if (el.tags.highway) continue; // skip roads
+    const key = scenicDiversityKey(el.tags);
+    if (!key) continue;
+    const nodes = el.nodes
+      .map((id) => nodeMap[id])
+      .filter((n): n is { lat: number; lon: number } => n !== undefined);
+    if (nodes.length >= 2) terrainWays.push({ tags: el.tags, nodes });
+  }
+
+  // Check for peaks (nodes)
+  const peakNodes: [number, number][] = elements
+    .filter((el) => el.type === "node" && el.tags?.natural === "peak" && el.lat !== undefined)
+    .map((el) => [el.lat!, el.lon!]);
+
+  const foundTypes = new Set<string>();
+
+  for (const coord of sampledCoords) {
+    const pt: [number, number] = [coord[0], coord[1]];
+
+    // Terrain within 300m
+    const nearby = anyWayWithin(pt, terrainWays, 0.3);
+    if (nearby) {
+      const key = scenicDiversityKey(nearby.tags);
+      if (key) foundTypes.add(key);
+    }
+
+    // Peak within 2km
+    for (const peak of peakNodes) {
+      if (haversineKm(pt, peak) < 2) {
+        foundTypes.add("peak");
+        break;
+      }
+    }
+  }
+
+  let rawScore = 0;
+  for (const type of foundTypes) {
+    rawScore += TERRAIN_WEIGHTS[type] ?? 0.5;
+  }
+
+  const score = Math.min(10, Math.round(rawScore));
+  if (foundTypes.size >= 3) flags.push(`Diverse landscape: ${[...foundTypes].slice(0, 4).join(", ")}`);
+  if (foundTypes.size <= 1 && sampledCoords.length > 10) flags.push("Monotonous terrain — route passes through very similar landscape throughout");
+
+  return { score, flags };
+}
+
+// ──── Waypoint Interest Scoring (NEW) ────────────────────────────────────────
+
+/**
+ * WAYPOINT_INTEREST_SCORE (0–10)
+ * Routes that pass interesting POIs within 500m score higher.
+ */
+const POI_WEIGHTS: Record<string, number> = {
+  viewpoint:      3.0,
+  historic:       2.0,
+  cafe:           1.5,
+  restaurant:     1.0,
+  pub:            1.0,
+  drinking_water: 1.5,
+  toilets:        0.5,
+  fountain:       0.5,
+};
+
+function waypointInterestKey(tags: Record<string, string>): string | null {
+  if (tags.tourism === "viewpoint") return "viewpoint";
+  if (tags.historic) return "historic";
+  if (tags.amenity === "cafe") return "cafe";
+  if (tags.amenity === "restaurant") return "restaurant";
+  if (tags.amenity === "pub") return "pub";
+  if (tags.amenity === "drinking_water") return "drinking_water";
+  if (tags.amenity === "toilets") return "toilets";
+  if (tags.amenity === "fountain") return "fountain";
+  return null;
+}
+
+function scoreWaypointInterest(
+  elements: OsmElement[],
+  sampledCoords: Coord[]
+): { score: number; flags: string[] } {
+  const flags: string[] = [];
+
+  // Collect POI nodes with lat/lon
+  const pois: Array<{ pt: [number, number]; key: string }> = [];
+  for (const el of elements) {
+    if (el.type !== "node" || el.lat === undefined || el.lon === undefined || !el.tags) continue;
+    const key = waypointInterestKey(el.tags);
+    if (key) pois.push({ pt: [el.lat, el.lon], key });
+  }
+
+  if (pois.length === 0) return { score: 5, flags }; // neutral when no POI data
+
+  const foundTypes = new Set<string>();
+
+  for (const coord of sampledCoords) {
+    const pt: [number, number] = [coord[0], coord[1]];
+    for (const poi of pois) {
+      if (haversineKm(pt, poi.pt) < 0.5) { // 500m radius
+        foundTypes.add(poi.key);
+      }
+    }
+  }
+
+  let rawScore = 0;
+  const highlights: string[] = [];
+  for (const key of foundTypes) {
+    rawScore += POI_WEIGHTS[key] ?? 0.5;
+    if (key === "viewpoint") highlights.push("viewpoints");
+    if (key === "historic") highlights.push("historic sites");
+    if (key === "cafe" || key === "restaurant" || key === "pub") highlights.push("cafes/restaurants");
+    if (key === "drinking_water") highlights.push("water stops");
+  }
+
+  const score = Math.min(10, Math.round(rawScore));
+  if (highlights.length > 0) {
+    flags.push(`Route has ${[...new Set(highlights)].join(", ")} nearby`);
+  }
+
+  return { score, flags };
+}
+
+// ──── Gradient Comfort Scoring (NEW) ─────────────────────────────────────────
+
+/**
+ * GRADIENT_COMFORT_SCORE (0–10)
+ * Analyzes the elevation profile for sustained steep gradients.
+ * Gentle, rolling terrain scores high; repeated steep pitches score low.
+ */
+function scoreGradientComfort(coords: Coord[]): { score: number; flags: string[] } {
+  const flags: string[] = [];
+
+  // Check if we have elevation data
+  const hasElev = coords.some((c) => c[2] !== undefined);
+  if (!hasElev) return { score: 5, flags }; // neutral when no elevation
+
+  let score = 10;
+  let steepSegments = 0;
+  let steepDistM = 0;
+  let totalDistM = 0;
+  let sustainedSteepM = 0;
+  let maxSustainedSteepM = 0;
+
+  for (let i = 1; i < coords.length; i++) {
+    const prev = coords[i - 1];
+    const curr = coords[i];
+    if (curr[2] === undefined || prev[2] === undefined) continue;
+
+    const distM = haversineKm([prev[0], prev[1]], [curr[0], curr[1]]) * 1000;
+    const elevDiff = (curr[2] as number) - (prev[2] as number);
+    totalDistM += distM;
+
+    if (distM < 1) continue; // skip noise
+
+    const gradient = (elevDiff / distM) * 100; // %
+    const absGrad = Math.abs(gradient);
+
+    if (absGrad > 10) {
+      steepSegments++;
+      steepDistM += distM;
+      sustainedSteepM += distM;
+    } else {
+      maxSustainedSteepM = Math.max(maxSustainedSteepM, sustainedSteepM);
+      sustainedSteepM = 0;
+    }
+
+    // Severe penalty for very steep sections
+    if (absGrad > 15) score -= 0.5;
+    else if (absGrad > 10) score -= 0.2;
+  }
+  maxSustainedSteepM = Math.max(maxSustainedSteepM, sustainedSteepM);
+
+  // Penalty for long sustained steep sections (>500m at >10%)
+  if (maxSustainedSteepM > 500) {
+    score -= 2;
+    flags.push(`${Math.round(maxSustainedSteepM)}m sustained steep section (>10%)`);
+  }
+
+  // Penalty for high proportion of steep terrain
+  if (totalDistM > 0) {
+    const steepPct = steepDistM / totalDistM;
+    if (steepPct > 0.3) {
+      score -= 2;
+      flags.push(`${Math.round(steepPct * 100)}% of route is steep (>10% gradient)`);
+    }
+  }
+
+  return { score: Math.max(0, Math.min(10, Math.round(score))), flags };
+}
+
+// ──── Road Continuity Scoring (NEW) ──────────────────────────────────────────
+
+/**
+ * ROAD_CONTINUITY_SCORE (0–5)
+ * Penalises routes that frequently change highway type between sampled points.
+ * Smooth, consistent road type = better ride experience.
+ */
+function scoreRoadContinuity(
+  sampledCoords: Coord[],
+  highwayWays: ProcessedWay[]
+): { score: number; flags: string[] } {
+  const flags: string[] = [];
+  const types: string[] = [];
+
+  for (const coord of sampledCoords) {
+    const pt: [number, number] = [coord[0], coord[1]];
+    const nearest = findNearestWay(pt, highwayWays, 0.05);
+    if (nearest) types.push(nearest.tags.highway ?? "unknown");
+  }
+
+  if (types.length < 2) return { score: 5, flags };
+
+  let changes = 0;
+  for (let i = 1; i < types.length; i++) {
+    if (types[i] !== types[i - 1]) changes++;
+  }
+
+  const changeRate = changes / (types.length - 1);
+
+  let score: number;
+  if (changeRate < 0.15) score = 5;
+  else if (changeRate < 0.30) score = 4;
+  else if (changeRate < 0.45) score = 3;
+  else if (changeRate < 0.60) score = 2;
+  else score = 1;
+
+  if (changeRate >= 0.45) {
+    flags.push("Route frequently switches road type — choppy ride experience likely");
+  }
+
+  return { score, flags };
+}
+
+// ──── Composite Confidence (NEW) ─────────────────────────────────────────────
+
+/**
+ * Determine confidence level from OSM coverage ratio.
+ * High: ≥70% of sampled points matched an OSM way
+ * Medium: 30–70%
+ * Low: <30% — warning badge triggered
+ */
+function computeConfidenceLevel(
+  confidence: number
+): { level: "high" | "medium" | "low"; lowCoverageWarning: boolean } {
+  if (confidence >= 0.7) return { level: "high", lowCoverageWarning: false };
+  if (confidence >= 0.3) return { level: "medium", lowCoverageWarning: false };
+  return { level: "low", lowCoverageWarning: true };
+}
+
 // ──── Main Export ─────────────────────────────────────────────────────────────
 
 export interface ScoreRouteOptions {
   /** How many metres between sampled points for OSM checks. Default: 200 */
   sampleIntervalMeters?: number;
+  /** Whether the route is labelled as "minimum climbing" (for elevation sanity rule). */
+  labeledMinClimbing?: boolean;
 }
 
 export async function scoreRoute(
@@ -545,26 +953,49 @@ export async function scoreRoute(
   discipline: Discipline,
   options: ScoreRouteOptions = {}
 ): Promise<QualityScore> {
-  const { sampleIntervalMeters = 200 } = options;
+  const { sampleIntervalMeters = 200, labeledMinClimbing = false } = options;
   const allFlags: string[] = [];
 
-  // 0. Hard rules pre-check (OSM data not yet available at this stage)
-  const rulesResult = validateRouteRules(
+  // 0a. Compute elevation gain and distance from 3-D coordinates
+  const elevationGain = computeElevationGain(coordinates);
+  const distanceKm = totalDistanceKm(coordinates);
+
+  const ruleOptions: RouteValidationOptions = {
+    elevationGain,
+    distanceKm,
+    labeledMinClimbing,
+  };
+
+  // 0b. Hard rules pre-check (GPS-only — fail fast before Overpass)
+  const gpsRulesResult = validateRouteRules(
     coordinates.map((c) => [c[0], c[1]] as [number, number]),
-    discipline
+    discipline,
+    null,
+    ruleOptions
   );
-  if (!rulesResult.passed) {
-    const fatalViolations = rulesResult.violations.filter((v) => v.severity === "fatal");
+  if (!gpsRulesResult.passed) {
+    const fatalViolations = gpsRulesResult.violations.filter((v) => v.severity === "fatal");
     return {
       total: 0,
-      breakdown: { surface_score: 0, safety_score: 0, scenic_score: 0, gps_quality_score: 0 },
+      breakdown: {
+        surface_score: 0,
+        safety_score: 0,
+        scenic_score: 0,
+        gps_quality_score: 0,
+        traffic_volume_score: 0,
+        scenic_diversity_score: 0,
+        waypoint_interest_score: 0,
+        gradient_comfort_score: 0,
+        road_continuity_score: 0,
+      },
       flags: fatalViolations.map((v) => `[${v.rule}] ${v.message}`),
       confidence: 0,
+      confidence_level: "low",
+      low_coverage_warning: true,
       osm_cached: false,
     };
   }
-  // Surface warning violations become flags even when passed
-  for (const v of rulesResult.violations) {
+  for (const v of gpsRulesResult.violations) {
     if (v.severity === "warning") allFlags.push(`[${v.rule}] ${v.message}`);
   }
 
@@ -596,7 +1027,45 @@ export async function scoreRoute(
   const allWays = buildProcessedWays(elements, nodeMap);
   const highwayWays = allWays.filter((w) => !!w.tags.highway);
 
-  // Confidence: ratio of sampled points that matched an OSM way
+  // 3b. OSM-dependent hard rules (now we have the data)
+  if (!overpassFailed && elements.length > 0) {
+    const osmRulesResult = validateRouteRules(
+      coordinates.map((c) => [c[0], c[1]] as [number, number]),
+      discipline,
+      { elements },
+      ruleOptions
+    );
+    if (!osmRulesResult.passed) {
+      const fatalViolations = osmRulesResult.violations.filter((v) => v.severity === "fatal");
+      return {
+        total: 0,
+        breakdown: {
+          surface_score: 0,
+          safety_score: 0,
+          scenic_score: 0,
+          gps_quality_score,
+          traffic_volume_score: 0,
+          scenic_diversity_score: 0,
+          waypoint_interest_score: 0,
+          gradient_comfort_score: 0,
+          road_continuity_score: 0,
+        },
+        flags: [
+          ...allFlags,
+          ...fatalViolations.map((v) => `[${v.rule}] ${v.message}`),
+        ],
+        confidence: 0,
+        confidence_level: "low",
+        low_coverage_warning: true,
+        osm_cached,
+      };
+    }
+    for (const v of osmRulesResult.violations) {
+      if (v.severity === "warning") allFlags.push(`[${v.rule}] ${v.message}`);
+    }
+  }
+
+  // 4. Confidence: ratio of sampled points that matched an OSM highway way
   let matchedCount = 0;
   if (!overpassFailed && highwayWays.length > 0) {
     for (const c of sampled) {
@@ -609,52 +1078,116 @@ export async function scoreRoute(
     ? matchedCount / sampled.length
     : 0;
 
-  // 4. Score each dimension
+  const { level: confidence_level, lowCoverageWarning: low_coverage_warning } =
+    computeConfidenceLevel(confidence);
+
+  if (low_coverage_warning) {
+    allFlags.push("Low OSM coverage (>30% of route unmatched) — scores may be less accurate");
+  }
+
+  // 5. Score each dimension
   let surface_score: number;
   let safety_score: number;
   let scenic_score: number;
+  let traffic_volume_score: number;
+  let scenic_diversity_score: number;
+  let waypoint_interest_score: number;
+  let gradient_comfort_score: number;
+  let road_continuity_score: number;
 
   if (overpassFailed) {
-    // Fallback: neutral scores
+    // Fallback: neutral scores for OSM-dependent dimensions
     surface_score = 15;
     safety_score = 20;
     scenic_score = 10;
+    traffic_volume_score = 8;
+    scenic_diversity_score = 5;
+    waypoint_interest_score = 5;
+    road_continuity_score = 3;
   } else {
     const surf = scoreSurface(sampled, highwayWays, discipline);
     const safe = scoreSafety(sampled, highwayWays);
     const scenic = scoreScenic(bbox, elements, nodeMap, sampled);
+    const traffic = scoreTrafficVolume(sampled, highwayWays);
+    const diversity = scoreScenicDiversity(elements, nodeMap, sampled);
+    const waypoint = scoreWaypointInterest(elements, sampled);
+    const continuity = scoreRoadContinuity(sampled, highwayWays);
 
     surface_score = surf.score;
     safety_score = safe.score;
     scenic_score = scenic.score;
+    traffic_volume_score = traffic.score;
+    scenic_diversity_score = diversity.score;
+    waypoint_interest_score = waypoint.score;
+    road_continuity_score = continuity.score;
 
-    allFlags.push(...surf.flags, ...safe.flags, ...scenic.flags);
+    allFlags.push(
+      ...surf.flags,
+      ...safe.flags,
+      ...scenic.flags,
+      ...traffic.flags,
+      ...diversity.flags,
+      ...waypoint.flags,
+      ...continuity.flags,
+    );
   }
 
-  // 5. Weighted total
-  const total = Math.round(
-    surface_score + safety_score + scenic_score + gps_quality_score
-  );
+  // Gradient comfort is always computed from local elevation data (no Overpass needed)
+  const gradient = scoreGradientComfort(coordinates);
+  gradient_comfort_score = gradient.score;
+  allFlags.push(...gradient.flags);
+
+  // 6. Normalize total to 0–100
+  const rawSum =
+    surface_score +
+    safety_score +
+    scenic_score +
+    gps_quality_score +
+    traffic_volume_score +
+    scenic_diversity_score +
+    waypoint_interest_score +
+    gradient_comfort_score +
+    road_continuity_score;
+
+  const total = Math.max(0, Math.min(100, Math.round((rawSum / MAX_RAW_SCORE) * 100)));
 
   return {
-    total: Math.max(0, Math.min(100, total)),
-    breakdown: { surface_score, safety_score, scenic_score, gps_quality_score },
+    total,
+    breakdown: {
+      surface_score,
+      safety_score,
+      scenic_score,
+      gps_quality_score,
+      traffic_volume_score,
+      scenic_diversity_score,
+      waypoint_interest_score,
+      gradient_comfort_score,
+      road_continuity_score,
+    },
     flags: [...new Set(allFlags)], // deduplicate
     confidence,
+    confidence_level,
+    low_coverage_warning,
     osm_cached,
   };
 }
 
 /** Synchronous GPS-only score (no Overpass) — useful for quick pre-upload checks. */
 export function scoreRouteGpsOnly(coordinates: Coord[]): Pick<QualityScore, "breakdown" | "flags"> {
-  const { score: gps_quality_score, flags } = scoreGpsQuality(coordinates);
+  const { score: gps_quality_score, flags: gpsFlags } = scoreGpsQuality(coordinates);
+  const { score: gradient_comfort_score, flags: gradientFlags } = scoreGradientComfort(coordinates);
   return {
     breakdown: {
       gps_quality_score,
       surface_score: 0,
       safety_score: 0,
       scenic_score: 0,
+      traffic_volume_score: 0,
+      scenic_diversity_score: 0,
+      waypoint_interest_score: 0,
+      gradient_comfort_score,
+      road_continuity_score: 0,
     },
-    flags,
+    flags: [...gpsFlags, ...gradientFlags],
   };
 }

@@ -378,7 +378,52 @@ function checkDeadEnd(coords: [number, number][]): RuleViolation | null {
 }
 
 /**
- * RULE 6: MIN_DISTANCE
+ * RULE 6: OUT_AND_BACK
+ * Fatal if >30% of second-half points are within 200m of any first-half point.
+ * GPS-only check — no OSM data required.
+ *
+ * Split the route by point count (first half vs second half). For each
+ * sampled point in the second half find whether any sampled first-half point
+ * lies within 200 m. If the overlap fraction exceeds 30% the route is
+ * essentially an out-and-back rather than a loop.
+ */
+function checkOutAndBack(coords: [number, number][]): RuleViolation | null {
+  if (coords.length < 20) return null;
+
+  const mid = Math.floor(coords.length / 2);
+  const firstHalf = coords.slice(0, mid);
+  const secondHalf = coords.slice(mid);
+
+  // Sample each half every ~200 m to keep O(n) manageable
+  const sampledFirst = sampleCoords(firstHalf, 200);
+  const sampledSecond = sampleCoords(secondHalf, 200);
+  if (sampledSecond.length === 0) return null;
+
+  const THRESHOLD_KM = 0.2; // 200 m
+  let overlapping = 0;
+
+  for (const sp of sampledSecond) {
+    for (const fp of sampledFirst) {
+      if (haversineKm(sp, fp) <= THRESHOLD_KM) {
+        overlapping++;
+        break;
+      }
+    }
+  }
+
+  const pct = overlapping / sampledSecond.length;
+  if (pct > 0.3) {
+    return {
+      rule: "OUT_AND_BACK",
+      message: `${(pct * 100).toFixed(1)}% of second-half points retrace the first half within 200m — route appears to be out-and-back, not a loop`,
+      severity: "fatal",
+    };
+  }
+  return null;
+}
+
+/**
+ * RULE 7: MIN_DISTANCE
  * Fatal if road <15km, gravel <10km, mtb <5km.
  */
 function checkMinDistance(
@@ -465,6 +510,9 @@ export function validateRouteRules(
 
   const deadEndViolation = checkDeadEnd(coordinates);
   if (deadEndViolation) violations.push(deadEndViolation);
+
+  const outAndBackViolation = checkOutAndBack(coordinates);
+  if (outAndBackViolation) violations.push(outAndBackViolation);
 
   // ── OSM-dependent rules ──────────────────────────────────────────────────
 

@@ -1450,21 +1450,36 @@ export interface CollectionWithRoutes extends Collection {
 
 export async function getCollections(): Promise<Collection[]> {
   const { rows } = await sql`
-    SELECT * FROM collections ORDER BY featured DESC, created_at DESC
+    SELECT c.*, COUNT(cr.route_id)::int AS total_routes_count
+    FROM collections c
+    LEFT JOIN collection_routes cr ON cr.collection_id = c.id
+    GROUP BY c.id
+    ORDER BY c.featured DESC, c.created_at DESC
   `;
   return rows as Collection[];
 }
 
 export async function getFeaturedCollections(): Promise<Collection[]> {
   const { rows } = await sql`
-    SELECT * FROM collections WHERE featured = TRUE ORDER BY created_at DESC LIMIT 6
+    SELECT c.*, COUNT(cr.route_id)::int AS total_routes_count
+    FROM collections c
+    LEFT JOIN collection_routes cr ON cr.collection_id = c.id
+    WHERE c.featured = TRUE
+    GROUP BY c.id
+    ORDER BY c.created_at DESC
+    LIMIT 6
   `;
   return rows as Collection[];
 }
 
 export async function getCollectionBySlug(slug: string): Promise<CollectionWithRoutes | null> {
   const { rows: collRows } = await sql`
-    SELECT * FROM collections WHERE slug = ${slug} LIMIT 1
+    SELECT c.*, COUNT(cr.route_id)::int AS total_routes_count
+    FROM collections c
+    LEFT JOIN collection_routes cr ON cr.collection_id = c.id
+    WHERE c.slug = ${slug}
+    GROUP BY c.id
+    LIMIT 1
   `;
   if (collRows.length === 0) return null;
   const collection = collRows[0] as Collection;

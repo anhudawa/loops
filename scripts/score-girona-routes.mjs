@@ -11,8 +11,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = join(__dirname, '../src/data/girona-collection');
 const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
 
-const SAMPLE_EVERY = 50;  // take every Nth track point
-const RADIUS_M = 30;       // metres radius around each sampled point
+const SAMPLE_EVERY = 100; // take every Nth track point (keep queries small)
+const MAX_SAMPLES = 30;   // hard cap on sampled points per route
+const RADIUS_M = 30;      // metres radius around each sampled point
 
 // Highway types that are cycling-friendly
 const CYCLING_FRIENDLY = new Set([
@@ -50,15 +51,21 @@ function parseGpx(content) {
   return points;
 }
 
-function samplePoints(points, every) {
-  const out = [];
-  for (let i = 0; i < points.length; i += every) out.push(points[i]);
+function samplePoints(points, every, max) {
+  const raw = [];
+  for (let i = 0; i < points.length; i += every) raw.push(points[i]);
+  if (raw.length <= max) return raw;
+  // Evenly thin down to max points
+  const step = raw.length / max;
+  const out = [raw[0]];
+  for (let i = 1; i < max - 1; i++) out.push(raw[Math.round(i * step)]);
+  out.push(raw[raw.length - 1]);
   return out;
 }
 
 // ── Overpass API ─────────────────────────────────────────────────────────────
 
-async function queryOverpass(sampledPoints) {
+async function queryOverpass(sampledPoints, attempt = 1) {
   const parts = sampledPoints
     .map(p => `way(around:${RADIUS_M},${p.lat},${p.lon})[highway];`)
     .join('\n  ');
@@ -69,6 +76,14 @@ async function queryOverpass(sampledPoints) {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: `data=${encodeURIComponent(query)}`,
   });
+
+  if (res.status === 429 || res.status === 504) {
+    if (attempt >= 3) throw new Error(`Overpass ${res.status} after ${attempt} attempts`);
+    const wait = attempt * 10000;
+    process.stdout.write(`[rate-limited, waiting ${wait / 1000}s] `);
+    await sleep(wait);
+    return queryOverpass(sampledPoints, attempt + 1);
+  }
 
   if (!res.ok) throw new Error(`Overpass ${res.status}: ${res.statusText}`);
   return res.json();
@@ -143,7 +158,7 @@ async function main() {
         continue;
       }
 
-      const sampled = samplePoints(points, SAMPLE_EVERY);
+      const sampled = samplePoints(points, SAMPLE_EVERY, MAX_SAMPLES);
       process.stdout.write(`${String(points.length).padStart(5)} pts → ${String(sampled.length).padStart(3)} sampled  `);
 
       const data = await queryOverpass(sampled);
@@ -152,7 +167,7 @@ async function main() {
       console.log(`score=${String(scores.score).padStart(3)}  (${scores.wayCount} ways)`);
       results.push({ name, points: points.length, sampled: sampled.length, ...scores });
 
-      await sleep(1500); // be polite to Overpass
+      await sleep(4000); // be polite to Overpass
     } catch (err) {
       console.log(`ERROR — ${err.message}`);
       results.push({ name, error: err.message });
@@ -208,7 +223,7 @@ Methodology:
   High-speed roads       : motorway, trunk (any link variants), or maxspeed > 80 km/h
   Score formula          : 50 + (cycle% × 0.3) + (surface% × 0.1) − (hi-speed% × 0.5)  [capped 0–100]
 
-  Ways are all highway=* ways within ${RADIUS_M}m of any sampled point (one sample per ${SAMPLE_EVERY} track points).
+  Ways are all highway=* ways within ${RADIUS_M}m of any sampled point (1 per ${SAMPLE_EVERY} pts, max ${MAX_SAMPLES} per route).
   Score reflects road-type mix near the route — not strict per-point attribution.
 `);
 }

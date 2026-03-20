@@ -355,50 +355,49 @@ function checkConnectivity(coords: [number, number][]): RuleViolation | null {
 }
 
 /**
- * RULE 5: DEAD_END
- * Warning if >2km of out-and-back on same segment.
- * Uses a spatial grid to find retraced sections efficiently.
+ * RULE 5: OUT_AND_BACK
+ * Fatal if <15% of the route is on unique roads (not retracing the same path).
+ *
+ * Algorithm: sample every 200m, track all visited points. A point is "unique"
+ * if it is >200m from every previously visited point. Routes with a meaningful
+ * loop section (e.g. coast approach + inland loop) naturally have ≥15% unique
+ * roads. Pure out-and-backs (same road there and back) score near 0%.
  */
 function checkDeadEnd(coords: [number, number][]): RuleViolation | null {
   if (coords.length < 10) return null;
 
-  // Sample route every 100m
-  const sampled = sampleCoords(coords, 100);
-  if (sampled.length < 5) return null;
+  const sampled = sampleCoords(coords, 200);
+  if (sampled.length < 3) return null;
 
-  // Accumulate path distances for each sampled index
-  const pathDist: number[] = [0];
+  const UNIQUE_THRESHOLD_KM = 0.2; // 200m — treat as "new road" if further than this
+
+  let uniqueKm = 0;
+  let totalKm = 0;
+  const visited: [number, number][] = [sampled[0]];
+
   for (let i = 1; i < sampled.length; i++) {
-    pathDist[i] = pathDist[i - 1] + haversineKm(sampled[i - 1], sampled[i]);
+    const segmentKm = haversineKm(sampled[i - 1], sampled[i]);
+    totalKm += segmentKm;
+
+    // A point is unique if it is >200m from all previously visited points
+    const isNew = visited.every((v) => haversineKm(sampled[i], v) > UNIQUE_THRESHOLD_KM);
+    if (isNew) uniqueKm += segmentKm;
+
+    visited.push(sampled[i]);
   }
 
-  const PROXIMITY_KM = 0.03; // 30m — consider as "same road"
-  const MIN_PATH_SEPARATION_KM = 0.5; // must be 500m apart in path to count as out-and-back
-  const RETRACE_THRESHOLD_KM = 2.0;
+  if (totalKm === 0) return null;
 
-  let retracedKm = 0;
+  const uniqueMiddlePct = (uniqueKm / totalKm) * 100;
 
-  // For each point, find if a significantly earlier point is spatially close
-  // (indicating we passed the same location twice with a detour in between)
-  for (let i = 5; i < sampled.length; i++) {
-    const pt = sampled[i];
-    for (let j = 0; j < i - 1; j++) {
-      const pathSep = pathDist[i] - pathDist[j];
-      if (pathSep < MIN_PATH_SEPARATION_KM) continue;
-      if (haversineKm(pt, sampled[j]) < PROXIMITY_KM) {
-        // We retraced approximately (pathDist[i] - pathDist[j]) / 2 km
-        retracedKm += pathSep / 2;
-        break;
-      }
-    }
-    if (retracedKm > RETRACE_THRESHOLD_KM) {
-      return {
-        rule: "DEAD_END",
-        message: `Route contains ~${retracedKm.toFixed(1)}km of out-and-back on the same segment`,
-        severity: "warning",
-      };
-    }
+  if (uniqueMiddlePct < 15) {
+    return {
+      rule: "OUT_AND_BACK",
+      message: `Only ${uniqueMiddlePct.toFixed(1)}% of route is on unique roads — pure out-and-back with no meaningful loop section (minimum: 15%)`,
+      severity: "fatal",
+    };
   }
+
   return null;
 }
 

@@ -7,7 +7,7 @@
  *   1. MIN_DISTANCE   — road <15km, gravel <10km, mtb <5km (fatal)
  *   2. CONNECTIVITY   — any consecutive gap >500m (fatal)
  *   3. LOOP_CLOSURE   — start/end >3km apart (informational)
- *   4. OUT_AND_BACK   — >30% of route retraces same path (fatal)
+ *   4. OUT_AND_BACK   — unique road % <15% (no meaningful loop section) (fatal)
  *
  * Then:
  *   - Adds quality_status column to routes table if it doesn't exist
@@ -95,40 +95,37 @@ function loopClosureGapKm(coords) {
 }
 
 /**
- * Estimate the fraction of the route that retraces its own path.
- * Uses 100m sampled points and a 30m proximity threshold.
+ * Calculate what percentage of total route distance is on unique roads
+ * (never previously visited, >200m from any prior point).
+ *
+ * Routes with a meaningful loop section score ≥15%.
+ * Pure out-and-backs score near 0%.
  * Returns a percentage 0–100.
  */
-function outAndBackPct(coords) {
-  if (coords.length < 10) return 0;
+function uniqueMiddlePct(coords) {
+  if (coords.length < 10) return 100;
 
-  const sampled = sampleCoords(coords, 100);
-  if (sampled.length < 5) return 0;
+  const sampled = sampleCoords(coords, 200);
+  if (sampled.length < 3) return 100;
 
-  // Accumulate path distances
-  const pathDist = [0];
+  const UNIQUE_THRESHOLD_KM = 0.2; // 200m — new road if further than this
+
+  let uniqueKm = 0;
+  let totalKm = 0;
+  const visited = [sampled[0]];
+
   for (let i = 1; i < sampled.length; i++) {
-    pathDist[i] = pathDist[i - 1] + haversineKm(sampled[i - 1], sampled[i]);
+    const segmentKm = haversineKm(sampled[i - 1], sampled[i]);
+    totalKm += segmentKm;
+
+    const isNew = visited.every((v) => haversineKm(sampled[i], v) > UNIQUE_THRESHOLD_KM);
+    if (isNew) uniqueKm += segmentKm;
+
+    visited.push(sampled[i]);
   }
 
-  const PROXIMITY_KM = 0.03;          // 30m — same road
-  const MIN_PATH_SEP_KM = 0.5;        // must be 500m apart in path distance
-  let retracedKm = 0;
-
-  for (let i = 5; i < sampled.length; i++) {
-    const pt = sampled[i];
-    for (let j = 0; j < i - 1; j++) {
-      if (pathDist[i] - pathDist[j] < MIN_PATH_SEP_KM) continue;
-      if (haversineKm(pt, sampled[j]) < PROXIMITY_KM) {
-        retracedKm += (pathDist[i] - pathDist[j]) / 2;
-        break;
-      }
-    }
-  }
-
-  const total = pathDist[pathDist.length - 1];
-  if (total === 0) return 0;
-  return Math.min(100, (retracedKm / total) * 100);
+  if (totalKm === 0) return 100;
+  return (uniqueKm / totalKm) * 100;
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────
@@ -160,7 +157,7 @@ async function main() {
     disc: 7,
     dist: 8,
     loop: 10,
-    oab: 9,
+    unique: 10,
     ok: 8,
     reason: 0,
   };
@@ -169,7 +166,7 @@ async function main() {
     'Disc'.padEnd(COL.disc),
     'Dist(km)'.padEnd(COL.dist),
     'LoopGap'.padEnd(COL.loop),
-    'OAB%'.padEnd(COL.oab),
+    'Unique%'.padEnd(COL.unique),
     'Status'.padEnd(COL.ok),
     'Reason',
   ].join(' | ');
@@ -193,7 +190,7 @@ async function main() {
         discipline: route.discipline,
         distance_km: route.distance_km,
         loopGapKm: null,
-        oabPct: null,
+        uniquePct: null,
       });
       continue;
     }
@@ -207,7 +204,7 @@ async function main() {
         discipline: route.discipline,
         distance_km: route.distance_km,
         loopGapKm: null,
-        oabPct: null,
+        uniquePct: null,
       });
       continue;
     }
@@ -224,11 +221,11 @@ async function main() {
 
     // Informational
     const loopGapKm = loopClosureGapKm(coords);
-    const oabPct = outAndBackPct(coords);
+    const uniquePct = uniqueMiddlePct(coords);
 
-    // Out-and-back > 30% is fatal
-    if (oabPct > 30) {
-      fatalReasons.push(`OUT_AND_BACK: ${oabPct.toFixed(1)}% of route retraces itself`);
+    // Out-and-back: unique road % < 15% is fatal (no meaningful loop section)
+    if (uniquePct < 15) {
+      fatalReasons.push(`OUT_AND_BACK: only ${uniquePct.toFixed(1)}% unique roads — pure out-and-back with no meaningful loop`);
     }
 
     // Loop closure > 3km is a warning (not all routes are loops)
@@ -252,7 +249,7 @@ async function main() {
       discipline: route.discipline,
       distance_km: route.distance_km,
       loopGapKm,
-      oabPct,
+      uniquePct,
     });
 
     // Print table row
@@ -260,10 +257,10 @@ async function main() {
     const disc = (route.discipline || '').padEnd(COL.disc);
     const dist = route.distance_km.toFixed(1).padEnd(COL.dist);
     const loopStr = loopGapKm !== null ? `${loopGapKm.toFixed(1)}km`.padEnd(COL.loop) : 'N/A'.padEnd(COL.loop);
-    const oabStr = oabPct !== null ? `${oabPct.toFixed(1)}%`.padEnd(COL.oab) : 'N/A'.padEnd(COL.oab);
+    const uniqueStr = `${uniquePct.toFixed(1)}%`.padEnd(COL.unique);
     const statusStr = (status === 'approved' ? '✓ PASS' : '✗ FAIL').padEnd(COL.ok);
     const reasonShort = reason.slice(0, 80);
-    console.log(`${nameTrunc} | ${disc} | ${dist} | ${loopStr} | ${oabStr} | ${statusStr} | ${reasonShort}`);
+    console.log(`${nameTrunc} | ${disc} | ${dist} | ${loopStr} | ${uniqueStr} | ${statusStr} | ${reasonShort}`);
   }
 
   // Summary

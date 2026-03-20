@@ -256,7 +256,7 @@ async function buildPostgresDb(connectionString) {
   };
 }
 
-function buildSqliteDb(dbPath) {
+async function buildSqliteDb(dbPath) {
   const BetterSqlite = (await import('better-sqlite3')).default;
   const db = new BetterSqlite(dbPath);
   db.pragma('journal_mode = WAL');

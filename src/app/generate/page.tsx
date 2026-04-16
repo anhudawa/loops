@@ -95,11 +95,17 @@ function downloadGpx(gpx: string, filename: string) {
 
 async function saveGeneratedRoute(
   candidate: GeneratedCandidate,
-  submittedPrompt: string
+  submittedPrompt: string,
+  interpreted: Interpreted | null
 ): Promise<{ ok: true; routeId: string } | { ok: false; error: string }> {
   // Use the rider's prompt as the initial name — they can rename later.
   const rawName = submittedPrompt.slice(0, 80).trim();
   const name = rawName.length > 0 ? rawName : `Generated ${candidate.distance_km} km route`;
+
+  // Use the discipline the LLM parsed from the prompt; fall back to road
+  // only when we have no intent context (shouldn't happen in practice).
+  const discipline = interpreted?.discipline ?? "road";
+
   const res = await fetch("/api/routes/from-generated", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -111,7 +117,9 @@ async function saveGeneratedRoute(
       distance_km: candidate.distance_km,
       elevation_gain_m: candidate.elevation_gain_m,
       elevation_loss_m: candidate.elevation_loss_m,
-      discipline: "road", // generator currently emits road-only; extended later
+      discipline,
+      country: interpreted?.country,
+      region: interpreted?.region,
     }),
   });
   const body = await res.json().catch(() => ({}));
@@ -283,7 +291,12 @@ export default function GeneratePage() {
             </h2>
             <div className="grid gap-4">
               {candidates.map((c, i) => (
-                <CandidateCard key={i} candidate={c} submittedPrompt={submittedPrompt} />
+                <CandidateCard
+                  key={i}
+                  candidate={c}
+                  submittedPrompt={submittedPrompt}
+                  interpreted={interpreted}
+                />
               ))}
             </div>
           </div>
@@ -407,9 +420,11 @@ function ErrorPanel({ error }: { error: { message: string; code?: string } }) {
 function CandidateCard({
   candidate,
   submittedPrompt,
+  interpreted,
 }: {
   candidate: Candidate;
   submittedPrompt: string;
+  interpreted: Interpreted | null;
 }) {
   const router = useRouter();
   const isLibrary = candidate.source === "library";
@@ -433,7 +448,7 @@ function CandidateCard({
     if (isLibrary) return;
     setSaving(true);
     setSaveError(null);
-    const result = await saveGeneratedRoute(candidate, submittedPrompt);
+    const result = await saveGeneratedRoute(candidate, submittedPrompt, interpreted);
     setSaving(false);
     if (result.ok && result.routeId) {
       router.push(`/routes/${result.routeId}`);

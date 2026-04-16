@@ -26,7 +26,11 @@ import {
   sampleRouteElevation,
   elevationGainFromSeries,
 } from "./elevation";
-import { matchLibraryRoutes, type LibraryMatch } from "./route-library";
+import {
+  matchLibraryRoutes,
+  matchLibraryForWorkout,
+  type LibraryMatch,
+} from "./route-library";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -265,6 +269,22 @@ export async function generateRouteCandidates(
   prompt: string
 ): Promise<RouteCandidate[]> {
   const spec = await parseRouteIntent(prompt);
+
+  // ── Workout mode ───────────────────────────────────────────────────────────
+  // A workout is a hard constraint: either the route's segments can host it
+  // or they can't. We do NOT fall through to fresh generation here — fresh
+  // interval-suitable route generation is a separate pipeline (not yet
+  // built). If nothing in the library fits we surface that honestly rather
+  // than shipping a generic route and pretending it matches the workout.
+  if (spec.workout) {
+    const workoutMatches = await matchLibraryForWorkout(spec, 3);
+    if (workoutMatches.length === 0) {
+      throw new Error(
+        "No routes in your area can host this workout. Try a shorter interval duration, a different zone, or a wider start location."
+      );
+    }
+    return workoutMatches.map((m) => ({ source: "library" as const, ...m }));
+  }
 
   // ── Library-first ──────────────────────────────────────────────────────────
   const libraryMatches = await matchLibraryRoutes(spec, 3);

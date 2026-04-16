@@ -98,6 +98,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (message.includes("host this workout")) {
+      return NextResponse.json(
+        { error: message, code: "NO_WORKOUT_MATCH" },
+        { status: 422 }
+      );
+    }
+
     if (message.includes("Overpass")) {
       return NextResponse.json(
         { error: "Could not fetch road network data — please try again in a moment", code: "OVERPASS_ERROR" },

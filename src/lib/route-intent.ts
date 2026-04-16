@@ -7,9 +7,26 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
+import type { IntensityZone } from "./intensity";
+import { ZONES } from "./intensity";
 
 export type Discipline = "road" | "gravel" | "mtb";
 export type ElevationPreference = "flat" | "rolling" | "hilly" | "mountainous" | "any";
+
+export interface WorkoutInterval {
+  count: number;
+  duration_minutes: number;
+  zone: IntensityZone;
+  recovery_minutes?: number;
+}
+
+export interface WorkoutSpec {
+  intervals: WorkoutInterval[];
+  warmup_minutes: number;
+  cooldown_minutes: number;
+  /** Total session time estimate (warmup + all intervals & recoveries + cooldown). */
+  total_minutes: number;
+}
 
 export interface RouteSpec {
   distance_km: number;
@@ -26,6 +43,7 @@ export interface RouteSpec {
   vibes: string[];
   region?: string;
   country: string;                   // geocoding constraint
+  workout?: WorkoutSpec;             // present when prompt described a workout
 }
 
 /**
@@ -107,6 +125,25 @@ Riders ask either by distance ("60km loop") OR by time ("2 hour ride", "90 minut
 - "quiet" / "peaceful" → ["quiet"]
 - "village" → ["village"]
 
+## Workouts (structured intervals):
+When the rider describes a structured session ("2x20 min threshold", "5x5 vo2", "4x8 tempo with 3 min rest"), extract a workout object. Map intensity labels to Coggan zones:
+- "threshold" / "ftp" / "lactate threshold" / "lt" → z4
+- "tempo" / "sweet spot" → z3
+- "vo2" / "vo2 max" / "vo2max" → z5
+- "sprints" / "sprint" / "neuromuscular" → z7
+- "anaerobic" → z6
+- "endurance" / "zone 2" / "Z2" / "aerobic" / "base" → z2
+- "recovery" / "easy spin" → z1
+
+If the rider describes a workout:
+- Default warmup_minutes: 15, cooldown_minutes: 10
+- Default recovery_minutes per interval: half the interval duration (e.g. 10min recovery for a 20min interval) unless the rider specifies
+- total_minutes = warmup + (count × duration + (count-1) × recovery) summed over all interval blocks + cooldown
+- ALSO set duration_minutes at the top level to total_minutes so the route length honours the session length
+- Set elevation_preference to "flat" for threshold/tempo/sweet-spot workouts unless the rider asks for hills (these zones need steady terrain). VO2/hill-repeat workouts can use "rolling".
+
+If no workout is described, omit the workout field (set it to null).
+
 Return ONLY valid JSON matching this TypeScript interface (no markdown, no explanation):
 {
   "distance_km": number | null,
@@ -120,7 +157,13 @@ Return ONLY valid JSON matching this TypeScript interface (no markdown, no expla
   "avoid": string[],
   "vibes": string[],
   "region": string | null,
-  "country": string
+  "country": string,
+  "workout": null | {
+    "intervals": Array<{ "count": number, "duration_minutes": number, "zone": "z1"|"z2"|"z3"|"z4"|"z5"|"z6"|"z7", "recovery_minutes": number }>,
+    "warmup_minutes": number,
+    "cooldown_minutes": number,
+    "total_minutes": number
+  }
 }`;
 
 interface ParsedIntent {
@@ -136,6 +179,46 @@ interface ParsedIntent {
   vibes: string[];
   region: string | null;
   country: string;
+  workout: WorkoutSpec | null;
+}
+
+/** Drop malformed workout objects — we never want to route a garbage workout. */
+function sanitizeWorkout(w: WorkoutSpec | null | undefined): WorkoutSpec | undefined {
+  if (!w || !Array.isArray(w.intervals) || w.intervals.length === 0) return undefined;
+  const validZones = new Set(Object.keys(ZONES));
+  const intervals: WorkoutInterval[] = [];
+  for (const iv of w.intervals) {
+    if (
+      !iv ||
+      typeof iv.count !== "number" ||
+      typeof iv.duration_minutes !== "number" ||
+      !validZones.has(iv.zone)
+    ) continue;
+    if (iv.count < 1 || iv.duration_minutes < 1) continue;
+    intervals.push({
+      count: Math.floor(iv.count),
+      duration_minutes: Math.round(iv.duration_minutes),
+      zone: iv.zone,
+      recovery_minutes:
+        typeof iv.recovery_minutes === "number" && iv.recovery_minutes >= 0
+          ? Math.round(iv.recovery_minutes)
+          : Math.round(iv.duration_minutes / 2),
+    });
+  }
+  if (intervals.length === 0) return undefined;
+  const warmup = typeof w.warmup_minutes === "number" && w.warmup_minutes >= 0 ? w.warmup_minutes : 15;
+  const cooldown =
+    typeof w.cooldown_minutes === "number" && w.cooldown_minutes >= 0 ? w.cooldown_minutes : 10;
+  const intervalsTotal = intervals.reduce((sum, iv) => {
+    const recovery = iv.recovery_minutes ?? Math.round(iv.duration_minutes / 2);
+    return sum + iv.count * iv.duration_minutes + Math.max(0, iv.count - 1) * recovery;
+  }, 0);
+  return {
+    intervals,
+    warmup_minutes: warmup,
+    cooldown_minutes: cooldown,
+    total_minutes: warmup + intervalsTotal + cooldown,
+  };
 }
 
 async function geocodePlace(
@@ -207,9 +290,14 @@ export async function parseRouteIntent(prompt: string): Promise<RouteSpec> {
   // ── Resolve distance from duration if needed ────────────────────────────────
   const discipline = parsed.discipline;
   const elevationPref = parsed.elevation_preference;
+  const workout = sanitizeWorkout(parsed.workout);
 
   let distanceKm = parsed.distance_km ?? null;
-  const durationMin = parsed.duration_minutes ?? null;
+  // A workout fully defines the session length — prefer its total_minutes
+  // over a free-text duration if both exist.
+  const durationMin = workout
+    ? workout.total_minutes
+    : parsed.duration_minutes ?? null;
 
   if (distanceKm === null && durationMin !== null) {
     distanceKm = durationToDistanceKm(durationMin, discipline, elevationPref);
@@ -260,5 +348,6 @@ export async function parseRouteIntent(prompt: string): Promise<RouteSpec> {
     vibes: parsed.vibes,
     region,
     country,
+    workout,
   };
 }

@@ -9,8 +9,14 @@
  * the library fits, the caller falls back to fresh generation.
  */
 
-import type { RouteSpec } from "./route-intent";
+import type { RouteSpec, WorkoutSpec } from "./route-intent";
 import { getRoutes, type Route } from "./db";
+import {
+  detectIntervalSegments,
+  segmentsForInterval,
+  type IntervalSegment,
+} from "./interval-segments";
+import { sampleRouteElevation } from "./elevation";
 
 export interface LibraryMatch {
   route_id: string;
@@ -25,6 +31,19 @@ export interface LibraryMatch {
   country: string;
   match_score: number;           // 0–100 how well it matches the request
   distance_from_start_km: number;
+  workout_fit?: WorkoutFit;      // present on workout-mode matches
+}
+
+export interface WorkoutFit {
+  fits: boolean;
+  /** Segments within the route that each interval will be performed on. */
+  interval_segments: Array<{
+    interval_index: number;        // index into spec.workout.intervals
+    rep_index: number;             // which rep (0..count-1)
+    segment: IntervalSegment;
+  }>;
+  /** Segments found in the route that could host at least one interval. */
+  candidate_segments: IntervalSegment[];
 }
 
 /** Minimum match score for a library route to be considered a good hit. */
@@ -166,4 +185,187 @@ export async function matchLibraryRoutes(
 
   scored.sort((a, b) => b.match_score - a.match_score);
   return scored.slice(0, maxResults);
+}
+
+// ── Workout-mode matching ─────────────────────────────────────────────────────
+
+/**
+ * Given detected segments in a route and a workout, try to assign each
+ * interval rep to a distinct segment (or reuse a long segment if it can
+ * host multiple reps with recovery between them).
+ *
+ * Returns fits=false if any rep cannot be placed.
+ */
+function assignWorkout(
+  segments: IntervalSegment[],
+  workout: WorkoutSpec
+): WorkoutFit {
+  const allCandidates: IntervalSegment[] = [];
+  const assignments: WorkoutFit["interval_segments"] = [];
+
+  // Greedy assignment: for each (interval, rep) in order, pick the first
+  // unused segment long enough to host it. If no fresh segment is available
+  // but one is long enough to host the rep AND leave room for a recovery
+  // stretch past, reuse it.
+  const used = new Set<number>();  // indices into segments
+
+  for (let i = 0; i < workout.intervals.length; i++) {
+    const iv = workout.intervals[i];
+    const candidates = segmentsForInterval(segments, iv.zone, iv.duration_minutes);
+    allCandidates.push(...candidates);
+
+    for (let rep = 0; rep < iv.count; rep++) {
+      // Find first unused candidate
+      let picked: { idx: number; segment: IntervalSegment } | null = null;
+      for (let s = 0; s < segments.length; s++) {
+        if (used.has(s)) continue;
+        if (!candidates.some((c) => c.start_index === segments[s].start_index)) continue;
+        picked = { idx: s, segment: segments[s] };
+        break;
+      }
+      if (!picked) {
+        return {
+          fits: false,
+          interval_segments: assignments,
+          candidate_segments: dedupeSegments(allCandidates),
+        };
+      }
+      assignments.push({ interval_index: i, rep_index: rep, segment: picked.segment });
+      used.add(picked.idx);
+    }
+  }
+
+  return {
+    fits: true,
+    interval_segments: assignments,
+    candidate_segments: dedupeSegments(allCandidates),
+  };
+}
+
+function dedupeSegments(segments: IntervalSegment[]): IntervalSegment[] {
+  const seen = new Set<string>();
+  const out: IntervalSegment[] = [];
+  for (const s of segments) {
+    const key = `${s.start_index}-${s.end_index}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(s);
+  }
+  return out;
+}
+
+/**
+ * Find library routes that can host the requested workout.
+ *
+ * A route is a candidate if:
+ *   - it matches the base spec (discipline, country, within proximity)
+ *   - its total distance is compatible with the workout's total_minutes
+ *     (we don't want a 100km route for a 90-minute session)
+ *   - it contains enough interval-suitable segments to host each rep
+ *
+ * Elevation data is required to detect segments. When a route's stored
+ * coordinates lack per-point elevation, we sample on-demand via Open-Meteo.
+ * Results are returned sorted by workout fit quality + base match score.
+ */
+export async function matchLibraryForWorkout(
+  spec: RouteSpec,
+  maxResults = 3
+): Promise<LibraryMatch[]> {
+  if (!spec.workout) return [];
+
+  const [startLat, startLng] = spec.start_point;
+  const workout = spec.workout;
+
+  const pool = await getRoutes({
+    discipline: spec.discipline,
+    country: spec.country,
+    lat: startLat,
+    lng: startLng,
+    maxRadius: PROXIMITY_RADIUS_KM,
+    limit: 100,
+  });
+
+  const scored: LibraryMatch[] = [];
+
+  for (const route of pool) {
+    if (route.coordinates == null) continue;
+
+    const raw = JSON.parse(route.coordinates) as number[][];
+    if (raw.length < 10) continue;
+    const coords: [number, number][] = raw.map(([lat, lng]) => [lat, lng]);
+
+    // Per-point elevation: extract from stored coordinates if present
+    // (stored GPX routes often carry a 3rd tuple element), else sample.
+    let elevations: number[] = raw.map((c) => (typeof c[2] === "number" ? c[2] : NaN));
+    const hasElevation = elevations.some((e) => !Number.isNaN(e));
+    if (!hasElevation) {
+      try {
+        const sampled = await sampleRouteElevation(coords, 200);
+        // sampleRouteElevation downsamples; the result has length sampled_coords.length
+        // For segment detection we need per-point elevation, so we interpolate.
+        elevations = interpolateToFullPath(coords, sampled.sampled_coords, sampled.elevations);
+      } catch {
+        continue; // can't analyse without elevation
+      }
+    }
+
+    const segments = detectIntervalSegments(coords, elevations);
+    const fit = assignWorkout(segments, workout);
+    if (!fit.fits) continue;
+
+    const distFromStart = haversineKm(startLat, startLng, route.start_lat, route.start_lng);
+    const baseScore = scoreLibraryRoute(route, spec, distFromStart);
+    if (baseScore < LIBRARY_MATCH_THRESHOLD - 10) continue; // slightly relaxed for workout mode
+
+    // Workout bonus: a route that fits the workout gets a small score lift,
+    // capped at 100 — we still want the best-matching route to win the sort.
+    const score = Math.min(100, baseScore + 5);
+
+    scored.push({
+      ...toLibraryMatch(route, spec, score, distFromStart),
+      workout_fit: fit,
+    });
+  }
+
+  scored.sort((a, b) => b.match_score - a.match_score);
+  return scored.slice(0, maxResults);
+}
+
+/**
+ * Given a downsampled series of elevations, expand back to the full path
+ * length via nearest-neighbour. Good enough for segment detection; we are
+ * not rendering elevation profiles off this data.
+ */
+function interpolateToFullPath(
+  fullCoords: [number, number][],
+  sampledCoords: [number, number][],
+  sampledElevations: number[]
+): number[] {
+  if (sampledCoords.length === 0 || sampledElevations.length === 0) {
+    return fullCoords.map(() => NaN);
+  }
+  // Build cumulative distance for both series, then for each full-path
+  // point find the nearest-by-distance sampled point.
+  const fullDist: number[] = [0];
+  for (let i = 1; i < fullCoords.length; i++) {
+    fullDist.push(fullDist[i - 1] + haversineKm(
+      fullCoords[i - 1][0], fullCoords[i - 1][1],
+      fullCoords[i][0], fullCoords[i][1],
+    ));
+  }
+  const sampledDist: number[] = [0];
+  for (let i = 1; i < sampledCoords.length; i++) {
+    sampledDist.push(sampledDist[i - 1] + haversineKm(
+      sampledCoords[i - 1][0], sampledCoords[i - 1][1],
+      sampledCoords[i][0], sampledCoords[i][1],
+    ));
+  }
+
+  const out = new Array<number>(fullCoords.length);
+  let j = 0;
+  for (let i = 0; i < fullCoords.length; i++) {
+    while (j < sampledDist.length - 1 && sampledDist[j + 1] < fullDist[i]) j++;
+    out[i] = sampledElevations[j];
+  }
+  return out;
 }

@@ -280,6 +280,8 @@ function ErrorPanel({ error }: { error: { message: string; code?: string } }) {
         return "Name a town or landmark — e.g. 'from Blessington' or 'near Dalkey'.";
       case "TIMEOUT":
         return "Try a shorter distance or a more specific location.";
+      case "RATE_LIMITED":
+        return "You've asked a few times in a row — give it a minute and try again.";
       default:
         return null;
     }

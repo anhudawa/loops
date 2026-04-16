@@ -2,9 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateRouteCandidates } from "@/lib/route-generator";
 import { getUserBySession } from "@/lib/db";
 import { DEFAULT_SPEED_KMH } from "@/config/constants";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 // Whole pipeline must complete within 30 seconds (Vercel serverless limit)
 const PIPELINE_TIMEOUT_MS = 28000;
+
+/** Each generation hits the LLM + Overpass + BRouter + Open-Meteo. Keep
+ * the per-rider rate low to protect cost and downstream quotas. */
+const RATE_LIMIT_PER_MIN = 5;
+const RATE_LIMIT_WINDOW_MS = 60_000;
 
 /**
  * Gated behind LOOPS_ROUTE_GEN_ENABLED until the library-first match layer
@@ -23,6 +29,33 @@ export async function POST(request: NextRequest) {
         code: "FEATURE_DISABLED",
       },
       { status: 503 }
+    );
+  }
+
+  // Rate-limit per user (signed-in) or per client IP (signed-out, unusual
+  // since /generate is auth-gated, but keeps the endpoint sane if it's
+  // ever called directly).
+  const sessionToken = request.cookies.get("session")?.value;
+  const user = sessionToken ? await getUserBySession(sessionToken) : null;
+  const rateLimitKey = user
+    ? `generate-route:user:${user.id}`
+    : `generate-route:ip:${getClientIp(request)}`;
+
+  const rl = checkRateLimit(rateLimitKey, RATE_LIMIT_PER_MIN, RATE_LIMIT_WINDOW_MS);
+  if (!rl.allowed) {
+    const retrySec = Math.max(1, Math.ceil(rl.resetMs / 1000));
+    return new NextResponse(
+      JSON.stringify({
+        error: `Too many requests. Try again in ${retrySec}s.`,
+        code: "RATE_LIMITED",
+      }),
+      {
+        status: 429,
+        headers: {
+          "Content-Type": "application/json",
+          "Retry-After": String(retrySec),
+        },
+      }
     );
   }
 
@@ -71,12 +104,8 @@ export async function POST(request: NextRequest) {
   try {
     // Personalise the duration → distance conversion with the rider's
     // avg_speed_kmh so "2 hour loop" means the right distance for them.
-    let userSpeedKmh: number | undefined;
-    const sessionToken = request.cookies.get("session")?.value;
-    if (sessionToken) {
-      const user = await getUserBySession(sessionToken);
-      if (user?.avg_speed_kmh) userSpeedKmh = user.avg_speed_kmh;
-    }
+    // The user lookup was already done above for rate limiting.
+    const userSpeedKmh = user?.avg_speed_kmh;
 
     const routes = await Promise.race([
       generateRouteCandidates(trimmedPrompt, {
@@ -131,4 +160,17 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+/** Best-effort client IP extraction for rate limiting. Order matches Vercel's
+ * forwarding chain; any spoofing just gets the spoofer their own bucket. */
+function getClientIp(request: NextRequest): string {
+  const forwardedFor = request.headers.get("x-forwarded-for");
+  if (forwardedFor) {
+    const first = forwardedFor.split(",")[0]?.trim();
+    if (first) return first;
+  }
+  const realIp = request.headers.get("x-real-ip");
+  if (realIp) return realIp;
+  return "unknown";
 }

@@ -10,7 +10,9 @@ import {
   MAX_ROUTE_NAME_LENGTH,
   MAX_ROUTE_DESCRIPTION_LENGTH,
   DEFAULT_COUNTRY,
+  RATE_LIMIT_WRITE,
 } from "@/config/constants";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 /**
  * POST /api/routes/from-generated
@@ -46,6 +48,28 @@ export async function POST(request: NextRequest) {
     const user = await getUserBySession(sessionToken);
     if (!user) {
       return apiError("Sign in to save generated routes", "UNAUTHORIZED", 401);
+    }
+
+    const rl = checkRateLimit(
+      `routes-from-generated:${user.id}`,
+      RATE_LIMIT_WRITE,
+      60_000
+    );
+    if (!rl.allowed) {
+      const retrySec = Math.max(1, Math.ceil(rl.resetMs / 1000));
+      return new NextResponse(
+        JSON.stringify({
+          error: `Too many requests. Try again in ${retrySec}s.`,
+          code: "RATE_LIMITED",
+        }),
+        {
+          status: 429,
+          headers: {
+            "Content-Type": "application/json",
+            "Retry-After": String(retrySec),
+          },
+        }
+      );
     }
 
     let body: Body;

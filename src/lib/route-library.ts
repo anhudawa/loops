@@ -191,12 +191,13 @@ export async function matchLibraryRoutes(
 
 /**
  * Given detected segments in a route and a workout, try to assign each
- * interval rep to a distinct segment (or reuse a long segment if it can
- * host multiple reps with recovery between them).
+ * interval rep to a distinct segment.
  *
- * Returns fits=false if any rep cannot be placed.
+ * Returns fits=false if any rep cannot be placed. Exported for unit
+ * testing — callers should use matchLibraryForWorkout, which wraps this
+ * with the broader matching pipeline.
  */
-function assignWorkout(
+export function assignWorkout(
   segments: IntervalSegment[],
   workout: WorkoutSpec
 ): WorkoutFit {

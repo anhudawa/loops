@@ -1,6 +1,6 @@
 import { sql } from "@vercel/postgres";
 import { v5 as uuidv5 } from "uuid";
-import { readFileSync } from "fs";
+import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 import { parseGpx } from "../src/lib/gpx";
 import { parseFit } from "../src/lib/fit";
@@ -122,31 +122,52 @@ async function seed() {
 
   // 5. Parse GPX files and insert routes
   console.log("\nParsing GPX files and inserting routes...");
-  const routeIds: string[] = [];
+  const routeIds: (string | null)[] = [];
   const routeCreatedAts: Date[] = [];
 
   for (let i = 0; i < manifest.routes.length; i++) {
     const r = manifest.routes[i];
+    const gpxPath = join(DATA_DIR, "gpx", r.gpx);
+
+    // Graceful skip for missing files — the ratings/comments indices still
+    // line up because we push null + a placeholder date for skipped routes.
+    if (!existsSync(gpxPath)) {
+      console.warn(`  ⚠ ${r.name} — skipping, file not found: ${r.gpx}`);
+      routeIds.push(null);
+      routeCreatedAts.push(new Date());
+      continue;
+    }
+
     const routeId = seedUuid(`route:${r.gpx}`);
-    routeIds.push(routeId);
 
     // Parse route file (GPX or FIT)
     const ext = r.gpx.split(".").pop()?.toLowerCase();
     let parsed;
-    if (ext === "fit") {
-      const buf = readFileSync(join(DATA_DIR, "gpx", r.gpx));
-      const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
-      parsed = await parseFit(ab);
-    } else {
-      const gpxContent = readGpx(r.gpx);
-      parsed = parseGpx(gpxContent);
+    try {
+      if (ext === "fit") {
+        const buf = readFileSync(gpxPath);
+        const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+        parsed = await parseFit(ab);
+      } else {
+        const gpxContent = readGpx(r.gpx);
+        parsed = parseGpx(gpxContent);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`  ✗ ${r.name} — failed to parse ${r.gpx}: ${msg}`);
+      routeIds.push(null);
+      routeCreatedAts.push(new Date());
+      continue;
     }
 
     if (parsed.coordinates.length === 0) {
       console.error(`  ✗ ${r.name} — no coordinates found in ${r.gpx}`);
+      routeIds.push(null);
       routeCreatedAts.push(new Date());
       continue;
     }
+
+    routeIds.push(routeId);
 
     const startLat = parsed.coordinates[0][0];
     const startLng = parsed.coordinates[0][1];
@@ -160,32 +181,37 @@ async function seed() {
       return [coord[0], coord[1], Math.round(ele * 10) / 10];
     });
 
+    // Mark seeded routes approved + verified so the library matcher
+    // always picks them up for relevant prompts. The whole point of the
+    // seed is to give the generator a known-good library to serve.
     await sql`
       INSERT INTO routes (
         id, name, description, distance_km,
         elevation_gain_m, elevation_loss_m, surface_type,
         county, country, region, discipline,
         start_lat, start_lng, gpx_filename, coordinates,
-        created_by, created_at
+        created_by, created_at, verified, quality_status
       ) VALUES (
         ${routeId}, ${r.name}, ${r.description}, ${parsed.distance_km},
         ${parsed.elevation_gain_m}, ${parsed.elevation_loss_m}, ${"road"},
         ${r.county}, ${r.country}, ${r.county}, ${"road"},
         ${startLat}, ${startLng}, ${r.gpx}, ${JSON.stringify(coordsWithElevation)},
-        ${createdBy}, ${createdAt.toISOString()}
+        ${createdBy}, ${createdAt.toISOString()}, ${true}, ${"approved"}
       )
     `;
 
     console.log(`  ✓ ${r.name} — ${parsed.distance_km.toFixed(1)}km, ${parsed.elevation_gain_m.toFixed(0)}m gain, ${parsed.coordinates.length} points`);
   }
 
-  // 6. Insert ratings
-  console.log(`\nInserting ${ratingsData.ratings.length} ratings...`);
+  // 6. Insert ratings (skip those for routes that didn't get inserted)
+  console.log(`\nInserting ratings...`);
+  let ratingsInserted = 0;
+  let ratingsSkipped = 0;
   for (const r of ratingsData.ratings) {
     const routeId = routeIds[r.routeIndex];
     const userId = userIds[r.userKey];
     if (!routeId || !userId) {
-      console.error(`  ✗ Missing route[${r.routeIndex}] or user[${r.userKey}]`);
+      ratingsSkipped++;
       continue;
     }
     const ratingId = seedUuid(`rating:${r.routeIndex}:${r.userKey}`);
@@ -196,16 +222,19 @@ async function seed() {
       INSERT INTO ratings (id, route_id, user_id, score, created_at)
       VALUES (${ratingId}, ${routeId}, ${userId}, ${r.score}, ${createdAt.toISOString()})
     `;
+    ratingsInserted++;
   }
-  console.log("  ✓ Done");
+  console.log(`  ✓ ${ratingsInserted} inserted${ratingsSkipped ? `, ${ratingsSkipped} skipped (missing route)` : ""}`);
 
-  // 7. Insert comments
-  console.log(`\nInserting ${commentsData.comments.length} comments...`);
+  // 7. Insert comments (skip those for routes that didn't get inserted)
+  console.log(`\nInserting comments...`);
+  let commentsInserted = 0;
+  let commentsSkipped = 0;
   for (const c of commentsData.comments) {
     const routeId = routeIds[c.routeIndex];
     const userId = userIds[c.userKey];
     if (!routeId || !userId) {
-      console.error(`  ✗ Missing route[${c.routeIndex}] or user[${c.userKey}]`);
+      commentsSkipped++;
       continue;
     }
     const commentId = seedUuid(`comment:${c.routeIndex}:${c.userKey}:${c.daysAfterRoute}`);
@@ -216,12 +245,22 @@ async function seed() {
       INSERT INTO comments (id, route_id, user_id, body, created_at)
       VALUES (${commentId}, ${routeId}, ${userId}, ${c.body}, ${createdAt.toISOString()})
     `;
+    commentsInserted++;
   }
-  console.log("  ✓ Done");
+  console.log(`  ✓ ${commentsInserted} inserted${commentsSkipped ? `, ${commentsSkipped} skipped (missing route)` : ""}`);
 
   // 8. Summary
+  const routesInserted = routeIds.filter((id) => id !== null).length;
+  const routesSkipped = routeIds.length - routesInserted;
   console.log("\n=======================");
-  console.log(`✅ Seeded ${routeIds.length} routes, ${SEED_USERS.length} users, ${ratingsData.ratings.length} ratings, ${commentsData.comments.length} comments`);
+  console.log(
+    `✅ Seeded ${routesInserted}/${manifest.routes.length} routes, ${SEED_USERS.length} users, ${ratingsInserted} ratings, ${commentsInserted} comments`
+  );
+  if (routesSkipped > 0) {
+    console.log(
+      `⚠ ${routesSkipped} routes skipped due to missing/invalid GPX. Drop the missing files into scripts/seed-data/gpx/ and re-run.`
+    );
+  }
 }
 
 seed().catch((err) => {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateRoutes } from "@/lib/route-generator";
+import { generateRouteCandidates } from "@/lib/route-generator";
 
 // Whole pipeline must complete within 30 seconds (Vercel serverless limit)
 const PIPELINE_TIMEOUT_MS = 28000;
@@ -67,7 +67,10 @@ export async function POST(request: NextRequest) {
   );
 
   try {
-    const routes = await Promise.race([generateRoutes(trimmedPrompt), timeoutPromise]);
+    const routes = await Promise.race([
+      generateRouteCandidates(trimmedPrompt),
+      timeoutPromise,
+    ]);
 
     return NextResponse.json({ data: routes });
   } catch (err) {

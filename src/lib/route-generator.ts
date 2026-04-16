@@ -3,11 +3,13 @@
  *
  * Pipeline:
  *   1. Parse intent → RouteSpec
- *   2. Generate waypoint sets → N candidate waypoint arrays
- *   3. Route each via BRouter (cyclist-built, free, elevation-aware)
- *   4. Validate with hard rules
- *   5. Score with quality system
- *   6. Return top 3 ranked routes
+ *   2. Library-first match over verified routes. If any hit, serve them.
+ *   3. Otherwise fresh-generate:
+ *      a. Generate waypoint sets → N candidate waypoint arrays
+ *      b. Route each via BRouter (cyclist-built, free, elevation-aware)
+ *      c. Validate with hard rules
+ *      d. Score with quality system
+ *      e. Return top 3 ranked routes
  *
  * BRouter is the router of choice: cyclist-built, returns elevation per
  * coordinate, supports custom cycling profiles, and can be self-hosted.
@@ -24,6 +26,7 @@ import {
   sampleRouteElevation,
   elevationGainFromSeries,
 } from "./elevation";
+import { matchLibraryRoutes, type LibraryMatch } from "./route-library";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -40,6 +43,15 @@ export interface GeneratedRoute {
   waypoints_used: [number, number][];
   match_score: number;          // 0–100 how well it matches the request
 }
+
+/**
+ * Unified result shape for the /api/generate-route endpoint. The `source`
+ * discriminator lets the UI tell a verified library hit from a fresh build
+ * — important for the "this was hand-verified" trust signal.
+ */
+export type RouteCandidate =
+  | ({ source: "library" } & LibraryMatch)
+  | ({ source: "generated" } & GeneratedRoute);
 
 interface BRouterFeatureCollection {
   type: "FeatureCollection";
@@ -232,8 +244,40 @@ function computeRoadTypeBreakdown(_coords: [number, number][]): Record<string, n
 
 // ── Main export ──────────────────────────────────────────────────────────────
 
+/**
+ * Back-compat: return freshly generated routes only, same shape as before.
+ * Use `generateRouteCandidates` to get the library+generated unified shape.
+ */
 export async function generateRoutes(prompt: string): Promise<GeneratedRoute[]> {
+  const candidates = await generateRouteCandidates(prompt);
+  return candidates
+    .filter((c): c is { source: "generated" } & GeneratedRoute => c.source === "generated")
+    .map(({ source: _source, ...rest }) => rest);
+}
+
+/**
+ * Main pipeline. Always tries the library first. If any verified route
+ * scores above the match threshold, we serve those and skip fresh
+ * generation entirely — a known-good route beats a freshly built one
+ * every time for trust.
+ */
+export async function generateRouteCandidates(
+  prompt: string
+): Promise<RouteCandidate[]> {
   const spec = await parseRouteIntent(prompt);
+
+  // ── Library-first ──────────────────────────────────────────────────────────
+  const libraryMatches = await matchLibraryRoutes(spec, 3);
+  if (libraryMatches.length > 0) {
+    return libraryMatches.map((m) => ({ source: "library" as const, ...m }));
+  }
+
+  // ── Fresh generation ───────────────────────────────────────────────────────
+  const generated = await generateFreshRoutes(spec);
+  return generated.map((g) => ({ source: "generated" as const, ...g }));
+}
+
+async function generateFreshRoutes(spec: RouteSpec): Promise<GeneratedRoute[]> {
   const profile = DISCIPLINE_PROFILE[spec.discipline];
 
   const waypointSets = await generateWaypointSets(spec);

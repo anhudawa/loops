@@ -49,7 +49,8 @@ export interface RouteSpec {
 /**
  * Expected cycling speeds (km/h) by discipline × terrain.
  * Used to convert duration → distance when the rider asks by time.
- * Values are conservative leisure/club-ride pace, not race pace.
+ * Calibrated to a baseline rider with avg_speed_kmh = BASELINE_SPEED_KMH.
+ * Faster or slower riders scale proportionally via userSpeedKmh.
  */
 const SPEED_LOOKUP: Record<Discipline, Record<ElevationPreference, number>> = {
   road:   { flat: 26, rolling: 23, hilly: 19, mountainous: 16, any: 23 },
@@ -57,13 +58,21 @@ const SPEED_LOOKUP: Record<Discipline, Record<ElevationPreference, number>> = {
   mtb:    { flat: 15, rolling: 13, hilly: 11, mountainous: 10, any: 13 },
 };
 
+/** The avg_speed_kmh value the SPEED_LOOKUP table is calibrated against. */
+const BASELINE_SPEED_KMH = 25;
+
 export function durationToDistanceKm(
   durationMinutes: number,
   discipline: Discipline,
-  elevation: ElevationPreference
+  elevation: ElevationPreference,
+  userSpeedKmh: number = BASELINE_SPEED_KMH
 ): number {
-  const speed = SPEED_LOOKUP[discipline][elevation];
-  return Math.round((durationMinutes / 60) * speed);
+  const base = SPEED_LOOKUP[discipline][elevation];
+  // Scale the terrain-aware speed by the rider's pace relative to baseline.
+  // A rider with avg_speed_kmh=30 gets ~20% more distance for the same time
+  // than the 25 km/h baseline, across every terrain bucket.
+  const scaled = base * (userSpeedKmh / BASELINE_SPEED_KMH);
+  return Math.round((durationMinutes / 60) * scaled);
 }
 
 const DEFAULT_COUNTRY = "Ireland";
@@ -258,7 +267,16 @@ function countryToCode(country: string): string {
   return map[normalized] ?? "ie";
 }
 
-export async function parseRouteIntent(prompt: string): Promise<RouteSpec> {
+export interface ParseRouteIntentOptions {
+  /** The rider's average cycling speed in km/h. Falls back to 25 (baseline). */
+  userSpeedKmh?: number;
+}
+
+export async function parseRouteIntent(
+  prompt: string,
+  options: ParseRouteIntentOptions = {}
+): Promise<RouteSpec> {
+  const userSpeedKmh = options.userSpeedKmh ?? BASELINE_SPEED_KMH;
   const client = new Anthropic();
 
   const message = await client.messages.create({
@@ -300,7 +318,7 @@ export async function parseRouteIntent(prompt: string): Promise<RouteSpec> {
     : parsed.duration_minutes ?? null;
 
   if (distanceKm === null && durationMin !== null) {
-    distanceKm = durationToDistanceKm(durationMin, discipline, elevationPref);
+    distanceKm = durationToDistanceKm(durationMin, discipline, elevationPref, userSpeedKmh);
   }
   if (distanceKm === null) {
     distanceKm = DEFAULT_DISTANCE_KM;

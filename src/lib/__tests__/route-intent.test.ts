@@ -30,4 +30,25 @@ describe("durationToDistanceKm", () => {
     // 30 minutes on flat road ≈ 13km
     expect(durationToDistanceKm(30, "road", "flat")).toBe(13);
   });
+
+  it("scales distance up for a faster-than-baseline rider", () => {
+    const baseline = durationToDistanceKm(120, "road", "flat"); // 25 km/h baseline
+    const fast = durationToDistanceKm(120, "road", "flat", 30); // 20% faster
+    expect(fast).toBeGreaterThan(baseline);
+    // Roughly 20% more distance
+    expect(fast / baseline).toBeGreaterThan(1.15);
+    expect(fast / baseline).toBeLessThan(1.25);
+  });
+
+  it("scales distance down for a slower-than-baseline rider", () => {
+    const baseline = durationToDistanceKm(120, "road", "flat");
+    const slow = durationToDistanceKm(120, "road", "flat", 20);
+    expect(slow).toBeLessThan(baseline);
+  });
+
+  it("matches baseline when userSpeedKmh equals baseline", () => {
+    expect(durationToDistanceKm(60, "road", "flat", 25)).toBe(
+      durationToDistanceKm(60, "road", "flat")
+    );
+  });
 });

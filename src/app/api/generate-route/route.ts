@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateRouteCandidates } from "@/lib/route-generator";
+import { getUserBySession } from "@/lib/db";
+import { DEFAULT_SPEED_KMH } from "@/config/constants";
 
 // Whole pipeline must complete within 30 seconds (Vercel serverless limit)
 const PIPELINE_TIMEOUT_MS = 28000;
@@ -67,8 +69,19 @@ export async function POST(request: NextRequest) {
   );
 
   try {
+    // Personalise the duration → distance conversion with the rider's
+    // avg_speed_kmh so "2 hour loop" means the right distance for them.
+    let userSpeedKmh: number | undefined;
+    const sessionToken = request.cookies.get("session")?.value;
+    if (sessionToken) {
+      const user = await getUserBySession(sessionToken);
+      if (user?.avg_speed_kmh) userSpeedKmh = user.avg_speed_kmh;
+    }
+
     const routes = await Promise.race([
-      generateRouteCandidates(trimmedPrompt),
+      generateRouteCandidates(trimmedPrompt, {
+        userSpeedKmh: userSpeedKmh ?? DEFAULT_SPEED_KMH,
+      }),
       timeoutPromise,
     ]);
 

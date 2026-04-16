@@ -258,12 +258,22 @@ function computeRoadTypeBreakdown(_coords: [number, number][]): Record<string, n
 
 // ── Main export ──────────────────────────────────────────────────────────────
 
+export interface GenerateRouteOptions {
+  /** The rider's average cycling speed in km/h. Used to personalise the
+   * duration → distance conversion so "2 hour loop" means the right
+   * distance for that specific rider, not a baseline 25 km/h rider. */
+  userSpeedKmh?: number;
+}
+
 /**
  * Back-compat: return freshly generated routes only, same shape as before.
  * Use `generateRouteCandidates` to get the library+generated unified shape.
  */
-export async function generateRoutes(prompt: string): Promise<GeneratedRoute[]> {
-  const candidates = await generateRouteCandidates(prompt);
+export async function generateRoutes(
+  prompt: string,
+  options: GenerateRouteOptions = {}
+): Promise<GeneratedRoute[]> {
+  const candidates = await generateRouteCandidates(prompt, options);
   return candidates
     .filter((c): c is { source: "generated" } & GeneratedRoute => c.source === "generated")
     .map(({ source: _source, ...rest }) => rest);
@@ -276,9 +286,10 @@ export async function generateRoutes(prompt: string): Promise<GeneratedRoute[]> 
  * every time for trust.
  */
 export async function generateRouteCandidates(
-  prompt: string
+  prompt: string,
+  options: GenerateRouteOptions = {}
 ): Promise<RouteCandidate[]> {
-  const spec = await parseRouteIntent(prompt);
+  const spec = await parseRouteIntent(prompt, { userSpeedKmh: options.userSpeedKmh });
 
   // ── Workout mode ───────────────────────────────────────────────────────────
   // A workout is a hard constraint: either the route's segments can host it

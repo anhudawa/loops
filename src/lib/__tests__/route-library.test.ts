@@ -82,4 +82,31 @@ describe("scoreLibraryRoute", () => {
     expect(score).toBeLessThanOrEqual(80);
     expect(score).toBeGreaterThanOrEqual(70);
   });
+
+  it("soft-penalises elevation mismatch when no max_elevation_gain_m is set", () => {
+    // Spec says 'flat' but no hard cap → soft penalty for a hilly route
+    const spec = makeSpec({ elevation_preference: "flat", max_elevation_gain_m: undefined });
+    const flatRoute = makeRoute({ elevation_gain_m: 100 });  // 2 m/km — flat
+    const hillyRoute = makeRoute({ elevation_gain_m: 800 }); // 16 m/km — hilly
+    const flatScore = scoreLibraryRoute(flatRoute, spec, 0);
+    const hillyScore = scoreLibraryRoute(hillyRoute, spec, 0);
+    expect(hillyScore).toBeLessThan(flatScore);
+  });
+
+  it("rewards a mountain route for a 'hilly' prompt vs a flat one", () => {
+    const spec = makeSpec({ elevation_preference: "hilly", max_elevation_gain_m: undefined });
+    const flatRoute = makeRoute({ elevation_gain_m: 100 });  // 2 m/km — too flat
+    const hillyRoute = makeRoute({ elevation_gain_m: 800 }); // 16 m/km — matches
+    const flatScore = scoreLibraryRoute(flatRoute, spec, 0);
+    const hillyScore = scoreLibraryRoute(hillyRoute, spec, 0);
+    expect(hillyScore).toBeGreaterThan(flatScore);
+  });
+
+  it("clamps score into [0, 100] even for catastrophic mismatches", () => {
+    const spec = makeSpec({ distance_km: 30, max_elevation_gain_m: 100 });
+    const awful = makeRoute({ distance_km: 200, elevation_gain_m: 3000 });
+    const score = scoreLibraryRoute(awful, spec, 100);
+    expect(score).toBeGreaterThanOrEqual(0);
+    expect(score).toBeLessThanOrEqual(100);
+  });
 });

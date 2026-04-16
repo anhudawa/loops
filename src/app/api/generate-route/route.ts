@@ -101,6 +101,7 @@ export async function POST(request: NextRequest) {
     )
   );
 
+  const startedAt = Date.now();
   try {
     // Personalise the duration → distance conversion with the rider's
     // avg_speed_kmh so "2 hour loop" means the right distance for them.
@@ -114,9 +115,37 @@ export async function POST(request: NextRequest) {
       timeoutPromise,
     ]);
 
+    const librarySources = routes.filter((r) => r.source === "library").length;
+    const generatedSources = routes.filter((r) => r.source === "generated").length;
+    // Structured log — greppable in Vercel logs, pipe-safe for later
+    // ingestion into a proper observability store.
+    console.log(
+      JSON.stringify({
+        evt: "generate_route",
+        outcome: "ok",
+        user_id: user?.id ?? null,
+        latency_ms: Date.now() - startedAt,
+        prompt_len: trimmedPrompt.length,
+        result_count: routes.length,
+        library_count: librarySources,
+        generated_count: generatedSources,
+      })
+    );
+
     return NextResponse.json({ data: routes });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
+    const code = classifyErrorCode(message);
+    console.log(
+      JSON.stringify({
+        evt: "generate_route",
+        outcome: "error",
+        code,
+        user_id: user?.id ?? null,
+        latency_ms: Date.now() - startedAt,
+        prompt_len: trimmedPrompt.length,
+      })
+    );
 
     // Surface user-friendly messages for known failure modes
     if (message.includes("timed out")) {
@@ -160,6 +189,17 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+/** Map an error message to the structured code we log. Mirrors the same
+ * checks used for user-facing responses. */
+function classifyErrorCode(message: string): string {
+  if (message.includes("timed out")) return "TIMEOUT";
+  if (message.includes("geocode") || message.includes("location")) return "GEOCODE_FAILED";
+  if (message.includes("No valid routes")) return "NO_ROUTES_FOUND";
+  if (message.includes("host this workout")) return "NO_WORKOUT_MATCH";
+  if (message.includes("Overpass")) return "OVERPASS_ERROR";
+  return "INTERNAL_ERROR";
 }
 
 /** Best-effort client IP extraction for rate limiting. Order matches Vercel's

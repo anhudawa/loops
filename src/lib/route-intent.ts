@@ -2,29 +2,68 @@
  * Route Intent Parser
  *
  * Takes natural language cycling route requests and extracts a structured
- * RouteSpec using Claude. Geocodes place names via Nominatim.
+ * RouteSpec using Claude. Geocodes place names via Nominatim, constrained
+ * to Ireland by default for the v1 launch.
  */
 
 import Anthropic from "@anthropic-ai/sdk";
 
+export type Discipline = "road" | "gravel" | "mtb";
+export type ElevationPreference = "flat" | "rolling" | "hilly" | "mountainous" | "any";
+
 export interface RouteSpec {
   distance_km: number;
   distance_tolerance_km: number;
+  duration_minutes?: number;         // set when user asked by time
   max_elevation_gain_m?: number;
-  elevation_preference: "flat" | "rolling" | "hilly" | "mountainous" | "any";
-  discipline: "road" | "gravel" | "mtb";
-  start_point: [number, number]; // [lat, lng]
-  end_point: [number, number];   // [lat, lng]
+  elevation_preference: ElevationPreference;
+  discipline: Discipline;
+  start_point: [number, number];     // [lat, lng]
+  end_point: [number, number];       // [lat, lng]
   is_loop: boolean;
-  road_preferences: string[];    // OSM highway types: tertiary, unclassified, cycleway, etc
-  avoid: string[];               // motorway, primary, urban, etc
-  vibes: string[];               // scenic, coastal, quiet, forest, vineyard, etc
-  region?: string;               // "Girona", "Dublin", etc
+  road_preferences: string[];        // OSM highway types
+  avoid: string[];
+  vibes: string[];
+  region?: string;
+  country: string;                   // geocoding constraint
 }
+
+/**
+ * Expected cycling speeds (km/h) by discipline × terrain.
+ * Used to convert duration → distance when the rider asks by time.
+ * Values are conservative leisure/club-ride pace, not race pace.
+ */
+const SPEED_LOOKUP: Record<Discipline, Record<ElevationPreference, number>> = {
+  road:   { flat: 26, rolling: 23, hilly: 19, mountainous: 16, any: 23 },
+  gravel: { flat: 20, rolling: 18, hilly: 15, mountainous: 13, any: 18 },
+  mtb:    { flat: 15, rolling: 13, hilly: 11, mountainous: 10, any: 13 },
+};
+
+export function durationToDistanceKm(
+  durationMinutes: number,
+  discipline: Discipline,
+  elevation: ElevationPreference
+): number {
+  const speed = SPEED_LOOKUP[discipline][elevation];
+  return Math.round((durationMinutes / 60) * speed);
+}
+
+const DEFAULT_COUNTRY = "Ireland";
+const DEFAULT_DISTANCE_KM = 50;
+const MIN_DISTANCE_KM = 10;
+const MAX_DISTANCE_KM = 300;
 
 const SYSTEM_PROMPT = `You are a cycling route planning assistant with deep knowledge of OpenStreetMap (OSM) road classifications and cycling terrain.
 
 When given a natural language route request, extract a structured JSON RouteSpec. Use your cycling domain knowledge:
+
+## Distance vs duration:
+Riders ask either by distance ("60km loop") OR by time ("2 hour ride", "90 minutes out"). Extract whichever is explicit.
+- If distance is given → set distance_km, leave duration_minutes null
+- If only duration is given → set duration_minutes (parse "2 hours" = 120, "90 mins" = 90), leave distance_km null (caller resolves)
+- If both given → set both
+- If neither → distance_km = 50, duration_minutes = null
+- distance_tolerance_km = max(5, distance_km * 0.1) — only matters when distance_km is set
 
 ## Road preferences by terrain description:
 - "country lanes" / "quiet roads" / "back roads" → road_preferences: ["tertiary", "unclassified", "residential"]
@@ -36,63 +75,82 @@ When given a natural language route request, extract a structured JSON RouteSpec
 ## Things to avoid:
 - "avoid busy roads" → avoid: ["primary", "secondary", "trunk", "motorway"]
 - "avoid motorways" → avoid: ["motorway", "trunk"]
-- "avoid urban" → avoid: ["residential", "service"] (often means prefer rural)
+- "avoid urban" → avoid: ["residential", "service"]
 - Default: always include avoid: ["motorway", "trunk"] for cycling
 
 ## Elevation preferences:
-- "flat" / "no climbing" / "easy" → elevation_preference: "flat", max_elevation_gain_m: distance_km * 5
-- "minimum climbing" / "as flat as possible" → elevation_preference: "flat", max_elevation_gain_m: distance_km * 5
+- "flat" / "no climbing" / "easy" / "minimal climbing" / "as flat as possible" → elevation_preference: "flat", max_elevation_gain_m: distance_km * 5
 - "rolling" / "some hills" → elevation_preference: "rolling", max_elevation_gain_m: distance_km * 12
 - "hilly" / "challenging" → elevation_preference: "hilly", max_elevation_gain_m: distance_km * 18
 - "mountainous" / "epic climbing" → elevation_preference: "mountainous"
 - not specified → elevation_preference: "any"
 
-## Distance defaults:
-- If no distance given, default to 50km
-- distance_tolerance_km = max(5, distance_km * 0.1)
-
 ## Discipline defaults:
 - "road bike" / "road cycling" → "road"
 - "gravel" / "gravel bike" → "gravel"
 - "mountain bike" / "MTB" / "trail" → "mtb"
-- not specified → "road" (default)
+- not specified → "road"
 
 ## Loops:
-- Most cycling routes are loops (start = end), so is_loop: true by default
-- Only set is_loop: false if explicitly asked for a point-to-point route
+- Most cycling route requests are loops (start = end), so is_loop: true by default
+- Only false if explicitly "point to point" or "A to B"
 
-## Vibes mapping:
-- "scenic" → vibes: ["scenic"]
-- "coastal" → vibes: ["coastal"]
-- "vineyard" / "wine country" → vibes: ["vineyard"]
-- "forest" / "woodland" → vibes: ["forest"]
-- "quiet" / "peaceful" → vibes: ["quiet"]
-- "village" → vibes: ["village"]
+## Region & country:
+- Extract the region/town/city mentioned if any ("Wicklow", "Dublin", "from Blessington"). Set region to that.
+- Always set country to "Ireland" unless another country is explicitly named. This is Ireland-first.
+- If no region is mentioned, set region to null and the caller will use a sensible default.
+
+## Vibes:
+- "scenic" → ["scenic"]
+- "coastal" → ["coastal"]
+- "forest" / "woodland" → ["forest"]
+- "quiet" / "peaceful" → ["quiet"]
+- "village" → ["village"]
 
 Return ONLY valid JSON matching this TypeScript interface (no markdown, no explanation):
 {
-  "distance_km": number,
-  "distance_tolerance_km": number,
+  "distance_km": number | null,
+  "distance_tolerance_km": number | null,
+  "duration_minutes": number | null,
   "max_elevation_gain_m": number | null,
   "elevation_preference": "flat" | "rolling" | "hilly" | "mountainous" | "any",
   "discipline": "road" | "gravel" | "mtb",
-  "start_point": null,
-  "end_point": null,
   "is_loop": boolean,
   "road_preferences": string[],
   "avoid": string[],
   "vibes": string[],
-  "region": string | null
+  "region": string | null,
+  "country": string
+}`;
+
+interface ParsedIntent {
+  distance_km: number | null;
+  distance_tolerance_km: number | null;
+  duration_minutes: number | null;
+  max_elevation_gain_m: number | null;
+  elevation_preference: ElevationPreference;
+  discipline: Discipline;
+  is_loop: boolean;
+  road_preferences: string[];
+  avoid: string[];
+  vibes: string[];
+  region: string | null;
+  country: string;
 }
 
-Set start_point and end_point to null — they will be resolved by geocoding after you return.`;
-
 async function geocodePlace(
-  place: string
+  place: string,
+  country: string
 ): Promise<[number, number] | null> {
-  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(place)}&format=json&limit=1`;
+  const params = new URLSearchParams({
+    q: place,
+    format: "json",
+    limit: "1",
+    countrycodes: countryToCode(country),
+  });
+  const url = `https://nominatim.openstreetmap.org/search?${params.toString()}`;
   const res = await fetch(url, {
-    headers: { "User-Agent": "loops.ie route generator" },
+    headers: { "User-Agent": "loops.ie route generator (https://www.loops.ie)" },
   });
   if (!res.ok) return null;
   const data = await res.json();
@@ -100,62 +158,107 @@ async function geocodePlace(
   return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
 }
 
+function countryToCode(country: string): string {
+  const normalized = country.trim().toLowerCase();
+  const map: Record<string, string> = {
+    ireland: "ie",
+    "united kingdom": "gb",
+    uk: "gb",
+    france: "fr",
+    spain: "es",
+    italy: "it",
+    portugal: "pt",
+    germany: "de",
+    netherlands: "nl",
+    belgium: "be",
+  };
+  return map[normalized] ?? "ie";
+}
+
 export async function parseRouteIntent(prompt: string): Promise<RouteSpec> {
   const client = new Anthropic();
 
   const message = await client.messages.create({
-    model: "claude-opus-4-6",
+    model: "claude-haiku-4-5-20251001",
     max_tokens: 1024,
-    system: SYSTEM_PROMPT,
+    system: [
+      {
+        type: "text",
+        text: SYSTEM_PROMPT,
+        cache_control: { type: "ephemeral" },
+      },
+    ],
     messages: [{ role: "user", content: prompt }],
   });
 
-  const text =
-    message.content[0].type === "text" ? message.content[0].text : "";
+  const text = message.content[0].type === "text" ? message.content[0].text : "";
 
-  let parsed: Omit<RouteSpec, "start_point" | "end_point"> & {
-    start_point: null;
-    end_point: null;
-    max_elevation_gain_m: number | null;
-    region: string | null;
-  };
-
+  let parsed: ParsedIntent;
   try {
     parsed = JSON.parse(text);
   } catch {
-    // Try to extract JSON from response if wrapped in text
     const match = text.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error(`Failed to parse LLM response as JSON: ${text}`);
+    if (!match) {
+      throw new Error(`Failed to parse LLM response as JSON: ${text.slice(0, 200)}`);
+    }
     parsed = JSON.parse(match[0]);
   }
 
-  // Geocode the region/start point
-  let startPoint: [number, number] = [0, 0];
-  if (parsed.region) {
-    const coords = await geocodePlace(parsed.region);
-    if (coords) startPoint = coords;
+  // ── Resolve distance from duration if needed ────────────────────────────────
+  const discipline = parsed.discipline;
+  const elevationPref = parsed.elevation_preference;
+
+  let distanceKm = parsed.distance_km ?? null;
+  const durationMin = parsed.duration_minutes ?? null;
+
+  if (distanceKm === null && durationMin !== null) {
+    distanceKm = durationToDistanceKm(durationMin, discipline, elevationPref);
+  }
+  if (distanceKm === null) {
+    distanceKm = DEFAULT_DISTANCE_KM;
   }
 
-  if (startPoint[0] === 0 && startPoint[1] === 0) {
+  // Clamp to sane bounds — the LLM occasionally emits nonsense for ambiguous prompts
+  distanceKm = Math.max(MIN_DISTANCE_KM, Math.min(MAX_DISTANCE_KM, distanceKm));
+
+  const distanceToleranceKm =
+    parsed.distance_tolerance_km ?? Math.max(5, Math.round(distanceKm * 0.1));
+
+  // ── Resolve country + region → start point ──────────────────────────────────
+  const country = parsed.country || DEFAULT_COUNTRY;
+  const region = parsed.region ?? undefined;
+
+  let startPoint: [number, number] | null = null;
+
+  if (region) {
+    startPoint = await geocodePlace(region, country);
+  }
+
+  // Fall back to a country-level centre when the region couldn't be geocoded
+  if (!startPoint) {
+    startPoint = await geocodePlace(country, country);
+  }
+
+  if (!startPoint) {
     throw new Error(
-      `Could not geocode location from prompt: "${prompt}". Please specify a clear starting location.`
+      `Could not geocode location from prompt: "${prompt}". Please specify a clearer starting location (e.g. "from Dublin" or "near Blessington").`
     );
   }
 
-  const spec: RouteSpec = {
-    distance_km: parsed.distance_km,
-    distance_tolerance_km: parsed.distance_tolerance_km,
+  return {
+    distance_km: distanceKm,
+    distance_tolerance_km: distanceToleranceKm,
+    duration_minutes: durationMin ?? undefined,
     max_elevation_gain_m: parsed.max_elevation_gain_m ?? undefined,
-    elevation_preference: parsed.elevation_preference,
-    discipline: parsed.discipline,
+    elevation_preference: elevationPref,
+    discipline,
     start_point: startPoint,
     end_point: startPoint, // loops return to start
     is_loop: parsed.is_loop,
     road_preferences: parsed.road_preferences,
     avoid: parsed.avoid,
     vibes: parsed.vibes,
-    region: parsed.region ?? undefined,
+    region,
+    country,
   };
-
-  return spec;
 }

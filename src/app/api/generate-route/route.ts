@@ -4,7 +4,26 @@ import { generateRoutes } from "@/lib/route-generator";
 // Whole pipeline must complete within 30 seconds (Vercel serverless limit)
 const PIPELINE_TIMEOUT_MS = 28000;
 
+/**
+ * Gated behind LOOPS_ROUTE_GEN_ENABLED until the library-first match layer
+ * and real-world verification are in place. One bad generated route and
+ * nobody uses this feature again.
+ */
+function isEnabled(): boolean {
+  return process.env.LOOPS_ROUTE_GEN_ENABLED === "true";
+}
+
 export async function POST(request: NextRequest) {
+  if (!isEnabled()) {
+    return NextResponse.json(
+      {
+        error: "Route generation is not yet available.",
+        code: "FEATURE_DISABLED",
+      },
+      { status: 503 }
+    );
+  }
+
   let prompt: string;
 
   try {

@@ -17,9 +17,12 @@
  * production should set BROUTER_URL to a self-hosted instance.
  */
 
-import type { RouteSpec, Discipline } from "./route-intent";
+import type { RouteSpec, Discipline, WorkoutSpec } from "./route-intent";
 import { parseRouteIntent } from "./route-intent";
-import { generateWaypointSets } from "./route-waypoint-generator";
+import {
+  generateWaypointSets,
+  DIRECTIONS_WIDE,
+} from "./route-waypoint-generator";
 import { validateRouteRules } from "./route-rules";
 import { scoreRoute } from "./route-quality";
 import {
@@ -30,7 +33,13 @@ import {
   matchLibraryRoutes,
   matchLibraryForWorkout,
   type LibraryMatch,
+  type WorkoutFit,
 } from "./route-library";
+import {
+  detectIntervalSegments,
+  segmentsForInterval,
+  type IntervalSegment,
+} from "./interval-segments";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -46,6 +55,7 @@ export interface GeneratedRoute {
   gpx_data: string;
   waypoints_used: [number, number][];
   match_score: number;          // 0–100 how well it matches the request
+  workout_fit?: WorkoutFit;     // present on workout-mode generations
 }
 
 /**
@@ -272,18 +282,23 @@ export async function generateRouteCandidates(
 
   // ── Workout mode ───────────────────────────────────────────────────────────
   // A workout is a hard constraint: either the route's segments can host it
-  // or they can't. We do NOT fall through to fresh generation here — fresh
-  // interval-suitable route generation is a separate pipeline (not yet
-  // built). If nothing in the library fits we surface that honestly rather
-  // than shipping a generic route and pretending it matches the workout.
+  // or they can't. Library-first still wins when available (known-good >
+  // freshly built). Only if nothing in the library fits do we attempt a
+  // fresh workout-aware generation. If even that fails we surface the
+  // failure honestly rather than ship a generic route mislabelled as
+  // workout-friendly.
   if (spec.workout) {
     const workoutMatches = await matchLibraryForWorkout(spec, 3);
-    if (workoutMatches.length === 0) {
+    if (workoutMatches.length > 0) {
+      return workoutMatches.map((m) => ({ source: "library" as const, ...m }));
+    }
+    const freshWorkout = await generateFreshWorkoutRoutes(spec, spec.workout);
+    if (freshWorkout.length === 0) {
       throw new Error(
         "No routes in your area can host this workout. Try a shorter interval duration, a different zone, or a wider start location."
       );
     }
-    return workoutMatches.map((m) => ({ source: "library" as const, ...m }));
+    return freshWorkout.map((g) => ({ source: "generated" as const, ...g }));
   }
 
   // ── Library-first ──────────────────────────────────────────────────────────
@@ -295,6 +310,169 @@ export async function generateRouteCandidates(
   // ── Fresh generation ───────────────────────────────────────────────────────
   const generated = await generateFreshRoutes(spec);
   return generated.map((g) => ({ source: "generated" as const, ...g }));
+}
+
+// ── Workout-aware fresh generation ───────────────────────────────────────────
+
+/**
+ * Greedy assignment of workout reps to detected segments.
+ * Mirrors assignWorkout in route-library.ts — duplicated here to avoid a
+ * circular import on a tiny helper.
+ */
+function assignWorkoutToSegments(
+  segments: IntervalSegment[],
+  workout: WorkoutSpec
+): WorkoutFit {
+  const allCandidates: IntervalSegment[] = [];
+  const assignments: WorkoutFit["interval_segments"] = [];
+  const used = new Set<number>();
+
+  for (let i = 0; i < workout.intervals.length; i++) {
+    const iv = workout.intervals[i];
+    const candidates = segmentsForInterval(segments, iv.zone, iv.duration_minutes);
+    allCandidates.push(...candidates);
+
+    for (let rep = 0; rep < iv.count; rep++) {
+      let pickedIdx = -1;
+      for (let s = 0; s < segments.length; s++) {
+        if (used.has(s)) continue;
+        if (!candidates.some((c) => c.start_index === segments[s].start_index)) continue;
+        pickedIdx = s;
+        break;
+      }
+      if (pickedIdx === -1) {
+        return { fits: false, interval_segments: assignments, candidate_segments: dedupe(allCandidates) };
+      }
+      assignments.push({ interval_index: i, rep_index: rep, segment: segments[pickedIdx] });
+      used.add(pickedIdx);
+    }
+  }
+
+  return { fits: true, interval_segments: assignments, candidate_segments: dedupe(allCandidates) };
+}
+
+function dedupe(segments: IntervalSegment[]): IntervalSegment[] {
+  const seen = new Set<string>();
+  const out: IntervalSegment[] = [];
+  for (const s of segments) {
+    const key = `${s.start_index}-${s.end_index}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(s);
+  }
+  return out;
+}
+
+/**
+ * Build a route from a BRouter path (no library / no quality scoring).
+ * Used by the workout generator — for workouts, segment fit is the quality
+ * signal, not OSM road-type breakdowns.
+ */
+async function buildFreshRouteFromPath(
+  path: Awaited<ReturnType<typeof routeViaBRouter>>,
+  waypoints: [number, number][],
+  spec: RouteSpec
+): Promise<GeneratedRoute | null> {
+  if (!path || path.coords.length < 2) return null;
+
+  let elevations = path.elevations;
+  let elevGain = path.elevation_gain_m;
+  let elevLoss: number | null = null;
+
+  const hasElevation = elevations.some((e) => !Number.isNaN(e));
+  if (!hasElevation) {
+    const sampled = await sampleRouteElevation(path.coords, 200);
+    elevations = sampled.elevations;
+    elevGain = sampled.gain_m;
+    elevLoss = sampled.loss_m;
+  } else if (elevGain === null) {
+    elevGain = elevationGainFromSeries(elevations);
+  }
+
+  if (elevLoss === null) {
+    let loss = 0;
+    for (let i = 1; i < elevations.length; i++) {
+      const d = elevations[i] - elevations[i - 1];
+      if (d < 0 && !Number.isNaN(d)) loss += -d;
+    }
+    elevLoss = Math.round(loss);
+  }
+
+  const distKm = path.distance_km;
+  const gain = elevGain ?? 0;
+
+  const rulesResult = validateRouteRules(path.coords, spec.discipline, null, {
+    elevationGain: gain,
+    distanceKm: distKm,
+    labeledMinClimbing:
+      spec.elevation_preference === "flat" &&
+      (spec.max_elevation_gain_m ?? Infinity) < distKm * 6,
+  });
+  if (!rulesResult.passed) return null;
+
+  const gpx = buildGpx(
+    path.coords,
+    elevations,
+    `Generated ${spec.discipline} route — ${Math.round(distKm)}km`,
+    spec.discipline
+  );
+
+  return {
+    coordinates: path.coords,
+    elevations,
+    distance_km: Math.round(distKm * 10) / 10,
+    elevation_gain_m: gain,
+    elevation_loss_m: elevLoss,
+    // Quality scoring is skipped for workout-mode candidates — we're
+    // validating by "can actually host the workout," which is a stricter
+    // signal than road-type breakdowns.
+    quality_score: 0,
+    quality_breakdown: {},
+    road_type_breakdown: { estimated: 100 },
+    gpx_data: gpx,
+    waypoints_used: waypoints,
+    match_score: computeMatchScore(distKm, gain, spec, 50),
+  };
+}
+
+/**
+ * Fresh workout-aware generation. Called only when the library has no
+ * verified route that fits the workout. Widens the candidate net to 8
+ * compass directions and keeps only the routes whose segments can host
+ * every interval rep.
+ */
+async function generateFreshWorkoutRoutes(
+  spec: RouteSpec,
+  workout: WorkoutSpec
+): Promise<GeneratedRoute[]> {
+  const profile = DISCIPLINE_PROFILE[spec.discipline];
+  const waypointSets = await generateWaypointSets(spec, {
+    directions: DIRECTIONS_WIDE,
+  });
+
+  const results = await Promise.allSettled(
+    waypointSets.map(async (waypoints): Promise<GeneratedRoute | null> => {
+      const path = await routeViaBRouter(waypoints, profile);
+      const route = await buildFreshRouteFromPath(path, waypoints, spec);
+      if (!route) return null;
+
+      // Detect segments on the freshly routed path and check workout fit.
+      // If the route can't host the workout, it's useless to us — drop it.
+      const segments = detectIntervalSegments(route.coordinates, route.elevations);
+      const fit = assignWorkoutToSegments(segments, workout);
+      if (!fit.fits) return null;
+
+      return { ...route, workout_fit: fit };
+    })
+  );
+
+  const candidates: GeneratedRoute[] = [];
+  for (const r of results) {
+    if (r.status === "fulfilled" && r.value !== null) candidates.push(r.value);
+  }
+
+  candidates.sort((a, b) => b.match_score - a.match_score);
+  return candidates.slice(0, 3);
 }
 
 async function generateFreshRoutes(spec: RouteSpec): Promise<GeneratedRoute[]> {

@@ -54,6 +54,7 @@ interface GeneratedCandidate {
   quality_score: number;
   gpx_data: string;
   match_score: number;
+  workout_fit?: WorkoutFit;
 }
 
 type Candidate = LibraryCandidate | GeneratedCandidate;
@@ -292,14 +293,14 @@ function CandidateCard({
     ? candidate.name
     : `Generated ${candidate.distance_km} km route`;
 
-  const highlights =
-    isLibrary && candidate.workout_fit?.fits
-      ? candidate.workout_fit.interval_segments.map((a) => ({
-          start_index: a.segment.start_index,
-          end_index: a.segment.end_index,
-          label: `Interval ${a.interval_index + 1}.${a.rep_index + 1}`,
-        }))
-      : [];
+  const workoutFit = candidate.workout_fit;
+  const highlights = workoutFit?.fits
+    ? workoutFit.interval_segments.map((a) => ({
+        start_index: a.segment.start_index,
+        end_index: a.segment.end_index,
+        label: `Interval ${a.interval_index + 1}.${a.rep_index + 1}`,
+      }))
+    : [];
 
   return (
     <article
@@ -345,9 +346,7 @@ function CandidateCard({
             )}
           </dl>
 
-          {isLibrary && candidate.workout_fit?.fits && (
-            <WorkoutAssignment fit={candidate.workout_fit} />
-          )}
+          {workoutFit?.fits && <WorkoutAssignment fit={workoutFit} />}
 
           <div className="flex gap-2 mt-3">
             {isLibrary ? (

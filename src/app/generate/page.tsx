@@ -77,6 +77,32 @@ function downloadGpx(gpx: string, filename: string) {
   URL.revokeObjectURL(url);
 }
 
+async function saveGeneratedRoute(
+  candidate: GeneratedCandidate,
+  submittedPrompt: string
+): Promise<{ ok: true; routeId: string } | { ok: false; error: string }> {
+  // Use the rider's prompt as the initial name — they can rename later.
+  const rawName = submittedPrompt.slice(0, 80).trim();
+  const name = rawName.length > 0 ? rawName : `Generated ${candidate.distance_km} km route`;
+  const res = await fetch("/api/routes/from-generated", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name,
+      description: `Generated from "${submittedPrompt}"`,
+      coordinates: candidate.coordinates,
+      elevations: candidate.elevations,
+      distance_km: candidate.distance_km,
+      elevation_gain_m: candidate.elevation_gain_m,
+      elevation_loss_m: candidate.elevation_loss_m,
+      discipline: "road", // generator currently emits road-only; extended later
+    }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) return { ok: false, error: body?.error ?? "Could not save route." };
+  return { ok: true, routeId: body?.data?.id };
+}
+
 export default function GeneratePage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
@@ -288,10 +314,14 @@ function CandidateCard({
   candidate: Candidate;
   submittedPrompt: string;
 }) {
+  const router = useRouter();
   const isLibrary = candidate.source === "library";
   const title = isLibrary
     ? candidate.name
     : `Generated ${candidate.distance_km} km route`;
+
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const workoutFit = candidate.workout_fit;
   const highlights = workoutFit?.fits
@@ -301,6 +331,19 @@ function CandidateCard({
         label: `Interval ${a.interval_index + 1}.${a.rep_index + 1}`,
       }))
     : [];
+
+  async function handleSave() {
+    if (isLibrary) return;
+    setSaving(true);
+    setSaveError(null);
+    const result = await saveGeneratedRoute(candidate, submittedPrompt);
+    setSaving(false);
+    if (result.ok && result.routeId) {
+      router.push(`/routes/${result.routeId}`);
+    } else if (!result.ok) {
+      setSaveError(result.error);
+    }
+  }
 
   return (
     <article
@@ -348,7 +391,7 @@ function CandidateCard({
 
           {workoutFit?.fits && <WorkoutAssignment fit={workoutFit} />}
 
-          <div className="flex gap-2 mt-3">
+          <div className="flex flex-wrap gap-2 mt-3">
             {isLibrary ? (
               <Link
                 href={`/routes/${candidate.route_id}`}
@@ -358,19 +401,39 @@ function CandidateCard({
                 View route
               </Link>
             ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  const filename = `loops-${submittedPrompt.slice(0, 30).replace(/[^a-z0-9]+/gi, "-")}.gpx`;
-                  downloadGpx(candidate.gpx_data, filename);
-                }}
-                className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider"
-                style={{ background: "var(--accent)", color: "var(--bg)" }}
-              >
-                Download GPX
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider disabled:opacity-50"
+                  style={{ background: "var(--accent)", color: "var(--bg)" }}
+                >
+                  {saving ? "Saving…" : "Save to my routes"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const filename = `loops-${submittedPrompt.slice(0, 30).replace(/[^a-z0-9]+/gi, "-")}.gpx`;
+                    downloadGpx(candidate.gpx_data, filename);
+                  }}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider"
+                  style={{
+                    background: "transparent",
+                    border: "1px solid var(--border)",
+                    color: "var(--text-secondary)",
+                  }}
+                >
+                  Download GPX
+                </button>
+              </>
             )}
           </div>
+          {saveError && (
+            <p className="text-xs mt-2" style={{ color: "#ff6b6b" }}>
+              {saveError}
+            </p>
+          )}
         </div>
       </div>
     </article>

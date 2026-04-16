@@ -59,6 +59,22 @@ interface GeneratedCandidate {
 
 type Candidate = LibraryCandidate | GeneratedCandidate;
 
+interface Interpreted {
+  distance_km: number;
+  duration_minutes?: number;
+  discipline: "road" | "gravel" | "mtb";
+  elevation_preference: "flat" | "rolling" | "hilly" | "mountainous" | "any";
+  region?: string;
+  country: string;
+  is_workout: boolean;
+  workout_summary?: string;
+}
+
+interface GenerateResponse {
+  interpreted: Interpreted;
+  candidates: Candidate[];
+}
+
 const EXAMPLES = [
   "2 hour road loop from Blessington on country lanes, minimal climbing",
   "60km gravel ride near Wicklow, rolling hills, scenic",
@@ -110,6 +126,7 @@ export default function GeneratePage() {
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [interpreted, setInterpreted] = useState<Interpreted | null>(null);
   const [error, setError] = useState<{ message: string; code?: string } | null>(null);
   const [submittedPrompt, setSubmittedPrompt] = useState("");
 
@@ -128,6 +145,7 @@ export default function GeneratePage() {
     setLoading(true);
     setError(null);
     setCandidates([]);
+    setInterpreted(null);
     setSubmittedPrompt(trimmed);
 
     try {
@@ -140,7 +158,15 @@ export default function GeneratePage() {
       if (!res.ok) {
         setError({ message: body?.error ?? "Could not generate a route.", code: body?.code });
       } else {
-        setCandidates(body.data ?? []);
+        const data = body.data as GenerateResponse | Candidate[] | undefined;
+        // Tolerate both the new { interpreted, candidates } shape and the
+        // old array shape in case of a stale worker.
+        if (data && !Array.isArray(data)) {
+          setInterpreted(data.interpreted ?? null);
+          setCandidates(data.candidates ?? []);
+        } else {
+          setCandidates(data ?? []);
+        }
       }
     } catch (err) {
       setError({
@@ -235,6 +261,10 @@ export default function GeneratePage() {
           </div>
         )}
 
+        {!loading && interpreted && (
+          <InterpretedPanel interpreted={interpreted} />
+        )}
+
         {!loading && candidates.length > 0 && (
           <div>
             <h2 className="text-sm font-bold uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>
@@ -263,6 +293,61 @@ export default function GeneratePage() {
       </div>
     </main>
   );
+}
+
+// ── Interpreted panel ─────────────────────────────────────────────────────────
+
+function InterpretedPanel({ interpreted }: { interpreted: Interpreted }) {
+  const duration = interpreted.duration_minutes
+    ? formatDuration(interpreted.duration_minutes)
+    : null;
+
+  const terrainLabel =
+    interpreted.elevation_preference === "any"
+      ? null
+      : interpreted.elevation_preference;
+
+  const locationLabel = interpreted.region
+    ? `from ${interpreted.region}`
+    : `in ${interpreted.country}`;
+
+  const bits = [
+    duration && `${duration} (~${interpreted.distance_km} km)`,
+    !duration && `${interpreted.distance_km} km`,
+    interpreted.discipline,
+    terrainLabel,
+    locationLabel,
+  ].filter(Boolean);
+
+  return (
+    <div
+      className="mb-5 rounded-2xl p-4"
+      style={{
+        background: "var(--bg-card)",
+        border: "1px solid var(--border)",
+      }}
+    >
+      <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>
+        Interpreted as
+      </p>
+      <p className="text-sm" style={{ color: "var(--text)" }}>
+        {bits.join(" · ")}
+      </p>
+      {interpreted.is_workout && interpreted.workout_summary && (
+        <p className="text-xs mt-1" style={{ color: "var(--accent)" }}>
+          Workout: {interpreted.workout_summary}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function formatDuration(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = Math.round(minutes % 60);
+  if (h === 0) return `${m} min`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
 }
 
 // ── Error panel ───────────────────────────────────────────────────────────────

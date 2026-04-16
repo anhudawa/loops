@@ -108,15 +108,15 @@ export async function POST(request: NextRequest) {
     // The user lookup was already done above for rate limiting.
     const userSpeedKmh = user?.avg_speed_kmh;
 
-    const routes = await Promise.race([
+    const result = await Promise.race([
       generateRouteCandidates(trimmedPrompt, {
         userSpeedKmh: userSpeedKmh ?? DEFAULT_SPEED_KMH,
       }),
       timeoutPromise,
     ]);
 
-    const librarySources = routes.filter((r) => r.source === "library").length;
-    const generatedSources = routes.filter((r) => r.source === "generated").length;
+    const librarySources = result.candidates.filter((r) => r.source === "library").length;
+    const generatedSources = result.candidates.filter((r) => r.source === "generated").length;
     // Structured log — greppable in Vercel logs, pipe-safe for later
     // ingestion into a proper observability store.
     console.log(
@@ -126,13 +126,14 @@ export async function POST(request: NextRequest) {
         user_id: user?.id ?? null,
         latency_ms: Date.now() - startedAt,
         prompt_len: trimmedPrompt.length,
-        result_count: routes.length,
+        result_count: result.candidates.length,
         library_count: librarySources,
         generated_count: generatedSources,
+        is_workout: result.interpreted.is_workout,
       })
     );
 
-    return NextResponse.json({ data: routes });
+    return NextResponse.json({ data: result });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     const code = classifyErrorCode(message);

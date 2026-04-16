@@ -67,6 +67,27 @@ export type RouteCandidate =
   | ({ source: "library" } & LibraryMatch)
   | ({ source: "generated" } & GeneratedRoute);
 
+/**
+ * Summary of what the LLM extracted from the user's prompt.
+ * Surfaced in the UI as "Interpreted as: …" so the rider can see why
+ * we returned the routes we did — and re-prompt if we got it wrong.
+ */
+export interface InterpretedIntent {
+  distance_km: number;
+  duration_minutes?: number;
+  discipline: "road" | "gravel" | "mtb";
+  elevation_preference: "flat" | "rolling" | "hilly" | "mountainous" | "any";
+  region?: string;
+  country: string;
+  is_workout: boolean;
+  workout_summary?: string;  // e.g. "2 × 20 min threshold"
+}
+
+export interface GenerateResult {
+  interpreted: InterpretedIntent;
+  candidates: RouteCandidate[];
+}
+
 interface BRouterFeatureCollection {
   type: "FeatureCollection";
   features: Array<{
@@ -267,13 +288,14 @@ export interface GenerateRouteOptions {
 
 /**
  * Back-compat: return freshly generated routes only, same shape as before.
- * Use `generateRouteCandidates` to get the library+generated unified shape.
+ * Use `generateRouteCandidates` to get the library+generated unified shape
+ * with the interpreted-intent summary.
  */
 export async function generateRoutes(
   prompt: string,
   options: GenerateRouteOptions = {}
 ): Promise<GeneratedRoute[]> {
-  const candidates = await generateRouteCandidates(prompt, options);
+  const { candidates } = await generateRouteCandidates(prompt, options);
   return candidates
     .filter((c): c is { source: "generated" } & GeneratedRoute => c.source === "generated")
     .map(({ source: _source, ...rest }) => rest);
@@ -288,8 +310,46 @@ export async function generateRoutes(
 export async function generateRouteCandidates(
   prompt: string,
   options: GenerateRouteOptions = {}
-): Promise<RouteCandidate[]> {
+): Promise<GenerateResult> {
   const spec = await parseRouteIntent(prompt, { userSpeedKmh: options.userSpeedKmh });
+  const interpreted = summariseIntent(spec);
+  const candidates = await candidatesFromSpec(spec);
+  return { interpreted, candidates };
+}
+
+function summariseIntent(spec: RouteSpec): InterpretedIntent {
+  let workout_summary: string | undefined;
+  if (spec.workout) {
+    // e.g. "2 × 20 min threshold, then 3 × 5 min vo2max"
+    workout_summary = spec.workout.intervals
+      .map((iv) => {
+        const zoneName = ({
+          z1: "recovery",
+          z2: "endurance",
+          z3: "tempo",
+          z4: "threshold",
+          z5: "vo2max",
+          z6: "anaerobic",
+          z7: "sprint",
+        } as const)[iv.zone];
+        return `${iv.count} × ${iv.duration_minutes} min ${zoneName}`;
+      })
+      .join(", then ");
+  }
+
+  return {
+    distance_km: spec.distance_km,
+    duration_minutes: spec.duration_minutes,
+    discipline: spec.discipline,
+    elevation_preference: spec.elevation_preference,
+    region: spec.region,
+    country: spec.country,
+    is_workout: !!spec.workout,
+    workout_summary,
+  };
+}
+
+async function candidatesFromSpec(spec: RouteSpec): Promise<RouteCandidate[]> {
 
   // ── Workout mode ───────────────────────────────────────────────────────────
   // A workout is a hard constraint: either the route's segments can host it

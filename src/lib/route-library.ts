@@ -267,6 +267,11 @@ function dedupeSegments(segments: IntervalSegment[]): IntervalSegment[] {
  * coordinates lack per-point elevation, we sample on-demand via Open-Meteo.
  * Results are returned sorted by workout fit quality + base match score.
  */
+/** Max candidates we'll run segment detection over. Each triggers at most
+ * one Open-Meteo elevation call; we parallelise but cap to protect the
+ * Vercel 28s pipeline budget. */
+const WORKOUT_ANALYSIS_CAP = 8;
+
 export async function matchLibraryForWorkout(
   spec: RouteSpec,
   maxResults = 3
@@ -285,48 +290,85 @@ export async function matchLibraryForWorkout(
     limit: 100,
   });
 
-  const scored: LibraryMatch[] = [];
+  // ── Step 1: pre-filter cheaply by base score ────────────────────────────────
+  // Workout analysis (elevation sampling + segment detection) is expensive.
+  // Cut the pool down before touching the network.
+  type Prefiltered = {
+    route: (typeof pool)[number];
+    coords: [number, number][];
+    rawCoords: number[][];
+    distFromStart: number;
+    baseScore: number;
+  };
 
+  const prefiltered: Prefiltered[] = [];
   for (const route of pool) {
     if (route.coordinates == null) continue;
 
-    const raw = JSON.parse(route.coordinates) as number[][];
-    if (raw.length < 10) continue;
-    const coords: [number, number][] = raw.map(([lat, lng]) => [lat, lng]);
-
-    // Per-point elevation: extract from stored coordinates if present
-    // (stored GPX routes often carry a 3rd tuple element), else sample.
-    let elevations: number[] = raw.map((c) => (typeof c[2] === "number" ? c[2] : NaN));
-    const hasElevation = elevations.some((e) => !Number.isNaN(e));
-    if (!hasElevation) {
-      try {
-        const sampled = await sampleRouteElevation(coords, 200);
-        // sampleRouteElevation downsamples; the result has length sampled_coords.length
-        // For segment detection we need per-point elevation, so we interpolate.
-        elevations = interpolateToFullPath(coords, sampled.sampled_coords, sampled.elevations);
-      } catch {
-        continue; // can't analyse without elevation
-      }
+    let rawCoords: number[][];
+    try {
+      rawCoords = JSON.parse(route.coordinates) as number[][];
+    } catch {
+      continue;
     }
+    if (rawCoords.length < 10) continue;
 
-    const segments = detectIntervalSegments(coords, elevations);
-    const fit = assignWorkout(segments, workout);
-    if (!fit.fits) continue;
-
-    const distFromStart = haversineKm(startLat, startLng, route.start_lat, route.start_lng);
+    const distFromStart = haversineKm(
+      startLat,
+      startLng,
+      route.start_lat,
+      route.start_lng
+    );
     const baseScore = scoreLibraryRoute(route, spec, distFromStart);
-    if (baseScore < LIBRARY_MATCH_THRESHOLD - 10) continue; // slightly relaxed for workout mode
+    // Slightly relaxed in workout mode — a route that's a 70/100 base match
+    // and can host the workout is far better than one that's 80/100 but
+    // has no suitable segments.
+    if (baseScore < LIBRARY_MATCH_THRESHOLD - 10) continue;
 
-    // Workout bonus: a route that fits the workout gets a small score lift,
-    // capped at 100 — we still want the best-matching route to win the sort.
-    const score = Math.min(100, baseScore + 5);
-
-    scored.push({
-      ...toLibraryMatch(route, spec, score, distFromStart),
-      workout_fit: fit,
+    prefiltered.push({
+      route,
+      coords: rawCoords.map(([lat, lng]) => [lat, lng]) as [number, number][],
+      rawCoords,
+      distFromStart,
+      baseScore,
     });
   }
 
+  prefiltered.sort((a, b) => b.baseScore - a.baseScore);
+  const topCandidates = prefiltered.slice(0, WORKOUT_ANALYSIS_CAP);
+
+  // ── Step 2: run segment detection in parallel ───────────────────────────────
+  const analysed = await Promise.all(
+    topCandidates.map(async (c): Promise<LibraryMatch | null> => {
+      let elevations: number[] = c.rawCoords.map((p) =>
+        typeof p[2] === "number" ? p[2] : NaN
+      );
+      const hasElevation = elevations.some((e) => !Number.isNaN(e));
+      if (!hasElevation) {
+        try {
+          const sampled = await sampleRouteElevation(c.coords, 200);
+          elevations = interpolateToFullPath(c.coords, sampled.sampled_coords, sampled.elevations);
+        } catch {
+          return null; // can't analyse without elevation
+        }
+      }
+
+      const segments = detectIntervalSegments(c.coords, elevations);
+      const fit = assignWorkout(segments, workout);
+      if (!fit.fits) return null;
+
+      // Small bonus for fitting the workout — the base score already encodes
+      // distance/elevation/proximity so we don't want to drown it out.
+      const score = Math.min(100, c.baseScore + 5);
+
+      return {
+        ...toLibraryMatch(c.route, spec, score, c.distFromStart),
+        workout_fit: fit,
+      };
+    })
+  );
+
+  const scored = analysed.filter((x): x is LibraryMatch => x !== null);
   scored.sort((a, b) => b.match_score - a.match_score);
   return scored.slice(0, maxResults);
 }

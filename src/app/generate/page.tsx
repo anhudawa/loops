@@ -199,13 +199,18 @@ export default function GeneratePage() {
         </div>
 
         <form onSubmit={handleSubmit} className="mb-8">
+          <label htmlFor="plan-prompt" className="sr-only">
+            Describe the ride you want
+          </label>
           <textarea
+            id="plan-prompt"
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             placeholder="e.g. 2 hour loop from Blessington on country lanes, minimal climbing"
             rows={3}
             maxLength={1000}
             disabled={loading}
+            aria-describedby="plan-prompt-hint"
             className="w-full px-4 py-3 rounded-2xl text-sm resize-none"
             style={{
               background: "var(--bg-card)",
@@ -214,6 +219,9 @@ export default function GeneratePage() {
               outline: "none",
             }}
           />
+          <p id="plan-prompt-hint" className="sr-only">
+            Describe distance or duration, terrain, starting point, and optionally a structured interval workout.
+          </p>
 
           <div className="flex flex-wrap gap-2 mt-3">
             {EXAMPLES.map((ex) => (
@@ -237,6 +245,7 @@ export default function GeneratePage() {
           <button
             type="submit"
             disabled={loading || prompt.trim().length < 10}
+            aria-busy={loading}
             className="mt-4 w-full py-3 rounded-xl text-sm font-bold uppercase tracking-wider transition-all disabled:opacity-50"
             style={{
               background: "var(--accent)",
@@ -374,6 +383,7 @@ function ErrorPanel({ error }: { error: { message: string; code?: string } }) {
 
   return (
     <div
+      role="alert"
       className="mb-6 rounded-2xl p-4"
       style={{
         background: "rgba(255, 80, 80, 0.08)",

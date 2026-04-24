@@ -16,6 +16,7 @@ import {
   segmentsForInterval,
   type IntervalSegment,
 } from "./interval-segments";
+import { validateSegments, filterCleanSegments } from "./interval-validation";
 import { sampleRouteElevation } from "./elevation";
 
 export interface LibraryMatch {
@@ -354,8 +355,12 @@ export async function matchLibraryForWorkout(
         }
       }
 
-      const segments = detectIntervalSegments(c.coords, elevations);
-      const fit = assignWorkout(segments, workout);
+      const rawSegments = detectIntervalSegments(c.coords, elevations);
+      // Drop segments with traffic signals or bicycle-restricted roads —
+      // the "no traffic lights" promise for interval work.
+      const validated = await validateSegments(rawSegments, c.coords);
+      const cleanSegments = filterCleanSegments(validated);
+      const fit = assignWorkout(cleanSegments, workout);
       if (!fit.fits) return null;
 
       // Small bonus for fitting the workout — the base score already encodes

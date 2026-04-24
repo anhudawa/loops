@@ -40,6 +40,7 @@ import {
   segmentsForInterval,
   type IntervalSegment,
 } from "./interval-segments";
+import { validateSegments, filterCleanSegments } from "./interval-validation";
 import {
   QUALITY_FLOOR,
   QUALITY_WORLD_CLASS,

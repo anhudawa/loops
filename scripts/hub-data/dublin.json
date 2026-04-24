@@ -1,0 +1,122 @@
+[
+  {
+    "name": "Howth Head Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/30610919",
+    "description": "North Dublin coastal loop around Howth Head. Punchy climbs, sea views, and a cafe stop at the summit. A Dublin cycling classic.",
+    "county": "Dublin",
+    "country": "Ireland",
+    "region": "Dublin",
+    "discipline": "road",
+    "surface_type": "road",
+    "operator_name": "RideWithGPS Community",
+    "operator_url": "https://ridewithgps.com"
+  },
+  {
+    "name": "Dublin to Howth Head",
+    "rwgps_url": "https://ridewithgps.com/routes/27704987",
+    "description": "City centre to Howth Head and back. Flat along the coast to Clontarf, then the climb over Howth summit. Perfect weekday spin.",
+    "county": "Dublin",
+    "country": "Ireland",
+    "region": "Dublin",
+    "discipline": "road",
+    "surface_type": "road",
+    "operator_name": "RideWithGPS Community",
+    "operator_url": "https://ridewithgps.com"
+  },
+  {
+    "name": "Wicklow Gap & Sally Gap Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/2584774",
+    "description": "The classic Wicklow double-gap loop from Glendalough. Sally Gap's exposed moorland followed by the Wicklow Gap descent. Serious climbing.",
+    "county": "Wicklow",
+    "country": "Ireland",
+    "region": "Wicklow",
+    "discipline": "road",
+    "surface_type": "road",
+    "operator_name": "RideWithGPS Community",
+    "operator_url": "https://ridewithgps.com"
+  },
+  {
+    "name": "Roundwood, Wicklow Gap, Blessington & Sally Gap",
+    "rwgps_url": "https://ridewithgps.com/routes/380732",
+    "description": "Epic Wicklow loop linking all the major gap roads. Roundwood to Wicklow Gap, across to Blessington, back via Sally Gap. One of the best long loops in Leinster.",
+    "county": "Wicklow",
+    "country": "Ireland",
+    "region": "Wicklow",
+    "discipline": "road",
+    "surface_type": "road",
+    "operator_name": "RideWithGPS Community",
+    "operator_url": "https://ridewithgps.com"
+  },
+  {
+    "name": "Blessington Lakes & Glendalough Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/30309841",
+    "description": "Blessington Lakes to Glendalough via the scenic Wicklow Mountains. Rolling roads, reservoir views, and the valley approach to Glendalough monastic site.",
+    "county": "Wicklow",
+    "country": "Ireland",
+    "region": "Wicklow",
+    "discipline": "road",
+    "surface_type": "road",
+    "operator_name": "ActiveMe.ie",
+    "operator_url": "https://www.activeme.ie"
+  },
+  {
+    "name": "Glencree & Sally Gap Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/413086",
+    "description": "North Wicklow loop from Bray via Glencree and Sally Gap. Steady climb through the Featherbed, across the gap, and a fast descent back to civilisation.",
+    "county": "Wicklow",
+    "country": "Ireland",
+    "region": "Wicklow",
+    "discipline": "road",
+    "surface_type": "road",
+    "operator_name": "RideWithGPS Community",
+    "operator_url": "https://ridewithgps.com"
+  },
+  {
+    "name": "Dublin to Glenmalure via Sally Gap",
+    "rwgps_url": "https://ridewithgps.com/routes/5208137",
+    "description": "Dublin south to Glenmalure via Sally Gap and Glenmacnass waterfall. Remote military road riding with a dramatic valley finish.",
+    "county": "Wicklow",
+    "country": "Ireland",
+    "region": "Wicklow",
+    "discipline": "road",
+    "surface_type": "road",
+    "operator_name": "RideWithGPS Community",
+    "operator_url": "https://ridewithgps.com"
+  },
+  {
+    "name": "Dublin to Wicklow Gap via Laragh",
+    "rwgps_url": "https://ridewithgps.com/routes/1171356",
+    "description": "100km day ride from Dublin through Laragh to the Wicklow Gap and back via Greystones. Classic south Dublin epic with 1,400m of climbing.",
+    "county": "Wicklow",
+    "country": "Ireland",
+    "region": "Wicklow",
+    "discipline": "road",
+    "surface_type": "road",
+    "operator_name": "RideWithGPS Community",
+    "operator_url": "https://ridewithgps.com"
+  },
+  {
+    "name": "Blessington Lake Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/3194106",
+    "description": "Flat-ish loop around Blessington Lakes. Quiet roads, water views, minimal climbing. Ideal for a steady endurance ride or threshold intervals on the long straights.",
+    "county": "Wicklow",
+    "country": "Ireland",
+    "region": "Wicklow",
+    "discipline": "road",
+    "surface_type": "road",
+    "operator_name": "RideWithGPS Community",
+    "operator_url": "https://ridewithgps.com"
+  },
+  {
+    "name": "Blessington to Glendalough via Military Road",
+    "rwgps_url": "https://ridewithgps.com/routes/4479406",
+    "description": "Full day in the mountains. Blessington, lakes, Glendalough, Military Road, Sally Gap, Blessington, Naas. 100km and 1,400m of climbing.",
+    "county": "Wicklow",
+    "country": "Ireland",
+    "region": "Wicklow",
+    "discipline": "road",
+    "surface_type": "road",
+    "operator_name": "RideWithGPS Community",
+    "operator_url": "https://ridewithgps.com"
+  }
+]

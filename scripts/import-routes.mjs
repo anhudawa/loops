@@ -63,6 +63,35 @@ function parseGpxText(text) {
   return points;
 }
 
+// ── RideWithGPS JSON API ──
+
+function isRwgpsUrl(url) {
+  return /ridewithgps\.com\/(routes|trips)\/\d+/.test(url);
+}
+
+function rwgpsJsonUrl(url) {
+  const match = url.match(/ridewithgps\.com\/(routes|trips)\/(\d+)/);
+  if (!match) return null;
+  return `https://ridewithgps.com/${match[1]}/${match[2]}.json`;
+}
+
+async function fetchRwgpsPoints(url) {
+  const jsonUrl = rwgpsJsonUrl(url);
+  if (!jsonUrl) throw new Error("Invalid RideWithGPS URL");
+  const res = await fetch(jsonUrl, { signal: AbortSignal.timeout(15000) });
+  if (!res.ok) throw new Error(`RWGPS API returned ${res.status}`);
+  const data = await res.json();
+  const rte = data.route || data.trip || data;
+  const tp = rte.track_points || [];
+  return {
+    points: tp.map((p) => ({ lat: p.y, lng: p.x, ele: p.e || 0 })),
+    name: rte.name || null,
+    distanceKm: rte.distance ? Math.round((rte.distance / 1000) * 10) / 10 : null,
+    elevGain: rte.elevation_gain ? Math.round(rte.elevation_gain) : null,
+    elevLoss: rte.elevation_loss ? Math.round(rte.elevation_loss) : null,
+  };
+}
+
 function haversine(lat1, lon1, lat2, lon2) {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -120,14 +149,34 @@ async function main() {
     }
 
     let points;
+    let precomputedStats = null;
+    const sourceUrl = route.gpx_url || route.rwgps_url;
+    if (!sourceUrl) {
+      console.log("FAIL (no gpx_url or rwgps_url)");
+      failed++;
+      continue;
+    }
+
     try {
-      const res = await fetch(route.gpx_url, {
-        headers: { "User-Agent": "loops.ie route importer (https://www.loops.ie)" },
-        signal: AbortSignal.timeout(15000),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const text = await res.text();
-      points = parseGpxText(text);
+      if (isRwgpsUrl(sourceUrl)) {
+        const rwgps = await fetchRwgpsPoints(sourceUrl);
+        points = rwgps.points;
+        if (rwgps.distanceKm && rwgps.elevGain) {
+          precomputedStats = {
+            distanceKm: rwgps.distanceKm,
+            elevGain: rwgps.elevGain,
+            elevLoss: rwgps.elevLoss || rwgps.elevGain,
+          };
+        }
+      } else {
+        const res = await fetch(sourceUrl, {
+          headers: { "User-Agent": "loops.ie route importer (https://www.loops.ie)" },
+          signal: AbortSignal.timeout(15000),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const text = await res.text();
+        points = parseGpxText(text);
+      }
     } catch (err) {
       console.log(`FAIL (fetch: ${err.message})`);
       failed++;
@@ -140,7 +189,7 @@ async function main() {
       continue;
     }
 
-    const stats = computeStats(points);
+    const stats = precomputedStats || computeStats(points);
     const sampled = downsample(points);
     const coords = sampled.map((p) => [
       Math.round(p.lat * 1e6) / 1e6,

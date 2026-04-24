@@ -52,6 +52,7 @@ interface GeneratedCandidate {
   elevation_gain_m: number;
   elevation_loss_m: number;
   quality_score: number;
+  quality_tier?: "excellent" | "good";
   gpx_data: string;
   match_score: number;
   workout_fit?: WorkoutFit;
@@ -475,7 +476,11 @@ function CandidateCard({
                 {isLibrary ? `${candidate.county} · verified` : "Freshly generated"}
               </p>
             </div>
-            <SourceBadge source={candidate.source} score={candidate.match_score} />
+            <SourceBadge
+              source={candidate.source}
+              score={candidate.match_score}
+              qualityTier={!isLibrary ? candidate.quality_tier : undefined}
+            />
           </div>
 
           <dl className="flex flex-wrap gap-x-4 gap-y-1 text-xs mt-1" style={{ color: "var(--text-muted)" }}>
@@ -552,15 +557,35 @@ function CandidateCard({
   );
 }
 
-function SourceBadge({ source, score }: { source: "library" | "generated"; score: number }) {
-  const label = source === "library" ? "Verified" : "Generated";
+function SourceBadge({
+  source,
+  score,
+  qualityTier,
+}: {
+  source: "library" | "generated";
+  score: number;
+  qualityTier?: "excellent" | "good";
+}) {
+  let label: string;
+  let accent: boolean;
+  if (source === "library") {
+    label = "Verified";
+    accent = true;
+  } else if (qualityTier === "excellent") {
+    label = "Excellent";
+    accent = true;
+  } else {
+    label = "Good";
+    accent = false;
+  }
+
   return (
     <div
       className="shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider"
       style={{
-        background: source === "library" ? "var(--accent-glow)" : "var(--bg)",
-        color: source === "library" ? "var(--accent)" : "var(--text-muted)",
-        border: `1px solid ${source === "library" ? "var(--accent)" : "var(--border)"}`,
+        background: accent ? "var(--accent-glow)" : "var(--bg)",
+        color: accent ? "var(--accent)" : "var(--text-muted)",
+        border: `1px solid ${accent ? "var(--accent)" : "var(--border)"}`,
       }}
       title={`Match score ${score}/100`}
     >

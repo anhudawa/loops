@@ -40,8 +40,14 @@ import {
   segmentsForInterval,
   type IntervalSegment,
 } from "./interval-segments";
+import {
+  QUALITY_FLOOR,
+  QUALITY_WORLD_CLASS,
+} from "@/config/constants";
 
 // ── Types ────────────────────────────────────────────────────────────────────
+
+export type QualityTier = "excellent" | "good";
 
 export interface GeneratedRoute {
   coordinates: [number, number][];
@@ -50,6 +56,7 @@ export interface GeneratedRoute {
   elevation_gain_m: number;
   elevation_loss_m: number;
   quality_score: number;
+  quality_tier: QualityTier;
   quality_breakdown: Record<string, number>;
   road_type_breakdown: Record<string, number>;
   gpx_data: string;
@@ -380,6 +387,21 @@ async function candidatesFromSpec(spec: RouteSpec): Promise<RouteCandidate[]> {
 
   // ── Fresh generation ───────────────────────────────────────────────────────
   const generated = await generateFreshRoutes(spec);
+
+  // If none of the fresh builds hit "excellent", try to mix in library
+  // routes as fallback. A verified operator route at "good" match is
+  // better than a generated one at "good" quality — trust signal.
+  const hasExcellent = generated.some((g) => g.quality_tier === "excellent");
+  if (!hasExcellent && generated.length > 0) {
+    const libraryFallbacks = await matchLibraryRoutes(spec, 2);
+    if (libraryFallbacks.length > 0) {
+      return [
+        ...libraryFallbacks.map((m) => ({ source: "library" as const, ...m })),
+        ...generated.slice(0, 1).map((g) => ({ source: "generated" as const, ...g })),
+      ];
+    }
+  }
+
   return generated.map((g) => ({ source: "generated" as const, ...g }));
 }
 
@@ -498,6 +520,7 @@ async function buildFreshRouteFromPath(
     // validating by "can actually host the workout," which is a stricter
     // signal than road-type breakdowns.
     quality_score: 0,
+    quality_tier: "good" as QualityTier,
     quality_breakdown: {},
     road_type_breakdown: { estimated: 100 },
     gpx_data: gpx,
@@ -607,6 +630,11 @@ async function generateFreshRoutes(spec: RouteSpec): Promise<GeneratedRoute[]> {
 
       const matchScore = computeMatchScore(distKm, gain, spec, quality.total);
 
+      // Drop candidates below the quality floor — these are routes on
+      // industrial estates, motorway slip roads, or featureless suburban
+      // laps. Serving one is the "one bad experience" we can't afford.
+      if (quality.total < QUALITY_FLOOR) return null;
+
       const result: GeneratedRoute = {
         coordinates: path.coords,
         elevations,
@@ -614,6 +642,7 @@ async function generateFreshRoutes(spec: RouteSpec): Promise<GeneratedRoute[]> {
         elevation_gain_m: gain,
         elevation_loss_m: elevLoss,
         quality_score: quality.total,
+        quality_tier: quality.total >= QUALITY_WORLD_CLASS ? "excellent" : "good",
         quality_breakdown: quality.breakdown as unknown as Record<string, number>,
         road_type_breakdown: computeRoadTypeBreakdown(path.coords),
         gpx_data: gpx,
@@ -638,7 +667,12 @@ async function generateFreshRoutes(spec: RouteSpec): Promise<GeneratedRoute[]> {
     );
   }
 
+  // Prefer world-class candidates; rank by quality then match accuracy
   candidates.sort((a, b) => {
+    // Tier matters first — an "excellent" route always wins over "good"
+    const aTier = a.quality_tier === "excellent" ? 1 : 0;
+    const bTier = b.quality_tier === "excellent" ? 1 : 0;
+    if (bTier !== aTier) return bTier - aTier;
     if (b.match_score !== a.match_score) return b.match_score - a.match_score;
     if (b.quality_score !== a.quality_score) return b.quality_score - a.quality_score;
     const aDist = Math.abs(a.distance_km - spec.distance_km);

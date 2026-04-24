@@ -29,7 +29,14 @@ export const RATE_LIMIT_UPLOAD = 3;
 export const RATE_LIMIT_WRITE = 10;
 export const RATE_LIMIT_READ = 60;
 
-// ──── Defaults ────
+// ──── Route generation quality thresholds ────
+// Routes below QUALITY_FLOOR are never shown. Between FLOOR and
+// WORLD_CLASS they get a "good" label. At or above WORLD_CLASS they
+// get "excellent." This powers the "good-not-great" fallback: if no
+// candidate hits WORLD_CLASS, we offer the best "good" ones with an
+// honest framing rather than pretending they're world-class.
+export const QUALITY_FLOOR = 50;
+export const QUALITY_WORLD_CLASS = 72;
 export const DEFAULT_COUNTRY = "Ireland";
 
 // ──── Filter system ────

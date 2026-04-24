@@ -1,0 +1,74 @@
+[
+  {
+    "name": "Calpe to Coll de Rates via Callosa & Tarbena",
+    "rwgps_url": "https://ridewithgps.com/routes/37561715",
+    "description": "Inland from Calpe through Callosa d'en Sarrià and Tarbena to the Coll de Rates — the Costa Blanca's most famous climb. Used regularly in the Vuelta and by every pro training camp in the area.",
+    "county": "Alicante",
+    "country": "Spain",
+    "region": "Costa Blanca",
+    "discipline": "road",
+    "surface_type": "road",
+    "operator_name": "RideWithGPS Community",
+    "operator_url": "https://ridewithgps.com"
+  },
+  {
+    "name": "Calpe Coastal & Coll de Rates Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/41048797",
+    "description": "123km coastal route from Calpe combining the seaside road with the Coll de Rates climb. The full Calpe experience in one ride.",
+    "county": "Alicante",
+    "country": "Spain",
+    "region": "Costa Blanca",
+    "discipline": "road",
+    "surface_type": "road",
+    "operator_name": "RideWithGPS Community",
+    "operator_url": "https://ridewithgps.com"
+  },
+  {
+    "name": "Calpe Coll de Rates Direct",
+    "rwgps_url": "https://ridewithgps.com/routes/29251199",
+    "description": "Shortest approach to the Coll de Rates from Calpe. Up and over, through the Jalon Valley, and back via the coast.",
+    "county": "Alicante",
+    "country": "Spain",
+    "region": "Costa Blanca",
+    "discipline": "road",
+    "surface_type": "road",
+    "operator_name": "RideWithGPS Community",
+    "operator_url": "https://ridewithgps.com"
+  },
+  {
+    "name": "Calpe, Benidorm & Finestrat Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/10053479",
+    "description": "Coastal loop south to Benidorm then inland through Finestrat and the Sierra Cortina. Good mix of flat coastal roads and punchy interior climbs.",
+    "county": "Alicante",
+    "country": "Spain",
+    "region": "Costa Blanca",
+    "discipline": "road",
+    "surface_type": "road",
+    "operator_name": "RideWithGPS Community",
+    "operator_url": "https://ridewithgps.com"
+  },
+  {
+    "name": "Calpe 50mi Benidorm & Finestrat",
+    "rwgps_url": "https://ridewithgps.com/routes/6604456",
+    "description": "50-mile training loop from Calpe. South along the coast to Benidorm, inland through Finestrat, and back via the N332. The standard pro-camp Tuesday ride.",
+    "county": "Alicante",
+    "country": "Spain",
+    "region": "Costa Blanca",
+    "discipline": "road",
+    "surface_type": "road",
+    "operator_name": "RideWithGPS Community",
+    "operator_url": "https://ridewithgps.com"
+  },
+  {
+    "name": "Calpe Coll de Rates Loop via Jalon",
+    "rwgps_url": "https://ridewithgps.com/routes/31304628",
+    "description": "77km loop from Calpe over the Coll de Rates returning through the Jalon Valley wine country. Quiet interior roads and a serious climb.",
+    "county": "Alicante",
+    "country": "Spain",
+    "region": "Costa Blanca",
+    "discipline": "road",
+    "surface_type": "road",
+    "operator_name": "RideWithGPS Community",
+    "operator_url": "https://ridewithgps.com"
+  }
+]

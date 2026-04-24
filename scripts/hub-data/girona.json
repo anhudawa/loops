@@ -1,0 +1,74 @@
+[
+  {
+    "name": "Els Angels & Rocacorba Double",
+    "rwgps_url": "https://ridewithgps.com/routes/20871116",
+    "description": "The double-header. Els Angels first, then across to Banyoles and up Rocacorba — 68 miles and 2,000m of climbing. A proper Girona day.",
+    "county": "Girona",
+    "country": "Spain",
+    "region": "Cataluña",
+    "discipline": "road",
+    "surface_type": "road",
+    "operator_name": "RideWithGPS Community",
+    "operator_url": "https://ridewithgps.com"
+  },
+  {
+    "name": "Els Angels, Rocacorba & Mare de Déu del Mont",
+    "rwgps_url": "https://ridewithgps.com/routes/19265845",
+    "description": "The Girona triple crown in one ride. Els Angels, Mare de Déu del Mont, Rocacorba, and back to Girona. Not a day for half measures.",
+    "county": "Girona",
+    "country": "Spain",
+    "region": "Cataluña",
+    "discipline": "road",
+    "surface_type": "road",
+    "operator_name": "RideWithGPS Community",
+    "operator_url": "https://ridewithgps.com"
+  },
+  {
+    "name": "Hincapie Loop — Baix Empordà & Gavarres",
+    "rwgps_url": "https://ridewithgps.com/routes/40807680",
+    "description": "The George Hincapie loop. Els Angels, then south through the medieval villages of Monells, Peratallada, and Santa Pellaia. Quiet roads through cork oak forests.",
+    "county": "Girona",
+    "country": "Spain",
+    "region": "Cataluña",
+    "discipline": "road",
+    "surface_type": "road",
+    "operator_name": "RideWithGPS Community",
+    "operator_url": "https://ridewithgps.com"
+  },
+  {
+    "name": "Els Angels & Medieval Villages",
+    "rwgps_url": "https://ridewithgps.com/routes/29040036",
+    "description": "52km from Girona's stone bridge up Els Angels then rolling through Baix Empordà's medieval villages. The ride that makes Girona Girona.",
+    "county": "Girona",
+    "country": "Spain",
+    "region": "Cataluña",
+    "discipline": "road",
+    "surface_type": "road",
+    "operator_name": "RideWithGPS Community",
+    "operator_url": "https://ridewithgps.com"
+  },
+  {
+    "name": "Gavarres Gravel — River Ter & Els Angels",
+    "rwgps_url": "https://ridewithgps.com/routes/29281925",
+    "description": "70km gravel loop through the Gavarres. River Ter valley, Baix Empordà fire roads, Montnegre tracks, and the climb up to Els Angels on dirt. Where the disciplines blur.",
+    "county": "Girona",
+    "country": "Spain",
+    "region": "Cataluña",
+    "discipline": "gravel",
+    "surface_type": "gravel",
+    "operator_name": "RideWithGPS Community",
+    "operator_url": "https://ridewithgps.com"
+  },
+  {
+    "name": "Rocacorba via Banyoles",
+    "rwgps_url": "https://ridewithgps.com/routes/5837859",
+    "description": "The classic approach to Rocacorba from Girona via the Banyoles lake road. The climb everyone benchmarks against.",
+    "county": "Girona",
+    "country": "Spain",
+    "region": "Cataluña",
+    "discipline": "road",
+    "surface_type": "road",
+    "operator_name": "RideWithGPS Community",
+    "operator_url": "https://ridewithgps.com"
+  }
+]

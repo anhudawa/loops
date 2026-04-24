@@ -12,8 +12,9 @@
  *   waypoint_interest_score (0–10)  – viewpoints, cafes, historic sites within 500m
  *   gradient_comfort_score  (0–10)  – elevation profile smoothness
  *   road_continuity_score   (0–5)   – penalise frequent highway type changes
+ *   bicycle_access_score    (0–15)  – checks for bicycle=no / access=private / access=no
  *
- * Max raw = 150 → normalized total = round(rawSum / 150 * 100)
+ * Max raw = 165 → normalized total = round(rawSum / 165 * 100)
  */
 
 import { validateRouteRules, RouteValidationOptions } from "./route-rules";
@@ -30,9 +31,10 @@ export interface QualityBreakdown {
   waypoint_interest_score: number; // 0–10
   gradient_comfort_score: number;  // 0–10
   road_continuity_score: number;   // 0–5
+  bicycle_access_score: number;    // 0–15
 }
 
-const MAX_RAW_SCORE = 150; // sum of all max breakdown values
+const MAX_RAW_SCORE = 165; // sum of all max breakdown values
 
 export interface QualityScore {
   total: number;                               // 0–100 normalized
@@ -923,6 +925,57 @@ function scoreRoadContinuity(
   return { score, flags };
 }
 
+// ──── Bicycle Access Scoring ─────────────────────────────────────────────
+
+/**
+ * BICYCLE_ACCESS_SCORE (0–15)
+ * Deducts points when the route passes through ways tagged as inaccessible
+ * to cyclists: bicycle=no, access=private, access=no, or
+ * motor_vehicle=designated (implies bicycle-excluded).
+ */
+const RESTRICTED_ACCESS_TAGS: Array<(tags: Record<string, string>) => boolean> = [
+  (t) => t.bicycle === "no",
+  (t) => t.access === "no",
+  (t) => t.access === "private",
+  (t) => t.motor_vehicle === "designated" && !t.bicycle,
+];
+
+function scoreBicycleAccess(
+  sampledCoords: Coord[],
+  highwayWays: ProcessedWay[]
+): { score: number; flags: string[] } {
+  const flags: string[] = [];
+  let restrictedCount = 0;
+
+  for (const coord of sampledCoords) {
+    const pt: [number, number] = [coord[0], coord[1]];
+    const nearest = findNearestWay(pt, highwayWays, 0.05);
+    if (!nearest) continue;
+
+    const tags = nearest.tags;
+    for (const check of RESTRICTED_ACCESS_TAGS) {
+      if (check(tags)) {
+        restrictedCount++;
+        break;
+      }
+    }
+  }
+
+  if (restrictedCount === 0) return { score: 15, flags };
+
+  const pct = restrictedCount / sampledCoords.length;
+  const deduction = Math.min(15, Math.round(pct * 30));
+
+  flags.push(
+    `Route passes through bicycle-restricted road (${restrictedCount} of ${sampledCoords.length} sample points)`
+  );
+  if (pct > 0.5) {
+    flags.push("Majority of route is on roads restricted to cyclists");
+  }
+
+  return { score: Math.max(0, 15 - deduction), flags };
+}
+
 // ──── Composite Confidence (NEW) ─────────────────────────────────────────────
 
 /**
@@ -987,6 +1040,7 @@ export async function scoreRoute(
         waypoint_interest_score: 0,
         gradient_comfort_score: 0,
         road_continuity_score: 0,
+        bicycle_access_score: 0,
       },
       flags: fatalViolations.map((v) => `[${v.rule}] ${v.message}`),
       confidence: 0,
@@ -1049,6 +1103,7 @@ export async function scoreRoute(
           waypoint_interest_score: 0,
           gradient_comfort_score: 0,
           road_continuity_score: 0,
+          bicycle_access_score: 0,
         },
         flags: [
           ...allFlags,
@@ -1094,6 +1149,7 @@ export async function scoreRoute(
   let waypoint_interest_score: number;
   let gradient_comfort_score: number;
   let road_continuity_score: number;
+  let bicycle_access_score: number;
 
   if (overpassFailed) {
     // Fallback: neutral scores for OSM-dependent dimensions
@@ -1104,6 +1160,7 @@ export async function scoreRoute(
     scenic_diversity_score = 5;
     waypoint_interest_score = 5;
     road_continuity_score = 3;
+    bicycle_access_score = 15;
   } else {
     const surf = scoreSurface(sampled, highwayWays, discipline);
     const safe = scoreSafety(sampled, highwayWays);
@@ -1112,6 +1169,7 @@ export async function scoreRoute(
     const diversity = scoreScenicDiversity(elements, nodeMap, sampled);
     const waypoint = scoreWaypointInterest(elements, sampled);
     const continuity = scoreRoadContinuity(sampled, highwayWays);
+    const access = scoreBicycleAccess(sampled, highwayWays);
 
     surface_score = surf.score;
     safety_score = safe.score;
@@ -1120,6 +1178,7 @@ export async function scoreRoute(
     scenic_diversity_score = diversity.score;
     waypoint_interest_score = waypoint.score;
     road_continuity_score = continuity.score;
+    bicycle_access_score = access.score;
 
     allFlags.push(
       ...surf.flags,
@@ -1129,6 +1188,7 @@ export async function scoreRoute(
       ...diversity.flags,
       ...waypoint.flags,
       ...continuity.flags,
+      ...access.flags,
     );
   }
 
@@ -1147,7 +1207,8 @@ export async function scoreRoute(
     scenic_diversity_score +
     waypoint_interest_score +
     gradient_comfort_score +
-    road_continuity_score;
+    road_continuity_score +
+    bicycle_access_score;
 
   const total = Math.max(0, Math.min(100, Math.round((rawSum / MAX_RAW_SCORE) * 100)));
 
@@ -1163,6 +1224,7 @@ export async function scoreRoute(
       waypoint_interest_score,
       gradient_comfort_score,
       road_continuity_score,
+      bicycle_access_score,
     },
     flags: [...new Set(allFlags)], // deduplicate
     confidence,
@@ -1187,6 +1249,7 @@ export function scoreRouteGpsOnly(coordinates: Coord[]): Pick<QualityScore, "bre
       waypoint_interest_score: 0,
       gradient_comfort_score,
       road_continuity_score: 0,
+      bicycle_access_score: 0,
     },
     flags: [...gpsFlags, ...gradientFlags],
   };

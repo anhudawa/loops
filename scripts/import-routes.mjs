@@ -25,7 +25,8 @@
 
 import { createPool } from "@vercel/postgres";
 import { randomUUID } from "crypto";
-import { readFileSync } from "fs";
+import { readFileSync, existsSync } from "fs";
+import { resolve } from "path";
 
 const POSTGRES_URL = process.env.POSTGRES_URL;
 if (!POSTGRES_URL) {
@@ -244,15 +245,35 @@ async function main() {
 
     let points;
     let precomputedStats = null;
+    const localFile = route.file;
     const sourceUrl = route.gpx_url || route.rwgps_url;
-    if (!sourceUrl) {
-      console.log("FAIL (no gpx_url or rwgps_url)");
+
+    if (!localFile && !sourceUrl) {
+      console.log("FAIL (no file, gpx_url, or rwgps_url)");
       failed++;
       continue;
     }
 
     try {
-      if (isRwgpsUrl(sourceUrl)) {
+      if (localFile) {
+        // Local file — resolve relative to repo root
+        const absPath = resolve(localFile);
+        if (!existsSync(absPath)) {
+          console.log(`FAIL (file not found: ${localFile})`);
+          failed++;
+          continue;
+        }
+        const isFit = localFile.toLowerCase().endsWith(".fit");
+        if (isFit) {
+          // FIT files need binary parsing — skip in this importer, use
+          // the dedicated seed.ts which has FIT support via fit-file-parser.
+          console.log("SKIP (FIT file — use npm run seed instead)");
+          skipped++;
+          continue;
+        }
+        const text = readFileSync(absPath, "utf-8");
+        points = parseGpxText(text);
+      } else if (isRwgpsUrl(sourceUrl)) {
         const rwgps = await fetchRwgpsPoints(sourceUrl);
         points = rwgps.points;
         if (rwgps.distanceKm && rwgps.elevGain) {
@@ -272,7 +293,7 @@ async function main() {
         points = parseGpxText(text);
       }
     } catch (err) {
-      console.log(`FAIL (fetch: ${err.message})`);
+      console.log(`FAIL (${err.message})`);
       failed++;
       continue;
     }

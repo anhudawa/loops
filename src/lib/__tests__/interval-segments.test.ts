@@ -79,6 +79,90 @@ describe("detectIntervalSegments", () => {
   });
 });
 
+/**
+ * Build a synthetic path with fine-grained elevation control.
+ * `sections` is an array of { lengthKm, gradient }. Points are placed
+ * every 100m along a due-east line at 53° lat.
+ */
+function syntheticPathFine(
+  sections: { lengthKm: number; gradient: number }[]
+): { coords: [number, number][]; elevations: number[] } {
+  const coords: [number, number][] = [];
+  const elevations: number[] = [];
+  const startLat = 53.35;
+  const startLng = -6.26;
+  const degPerStep = 0.00134; // ≈100m east at 53° lat
+
+  let currentElev = 100;
+  let totalSteps = 0;
+  coords.push([startLat, startLng]);
+  elevations.push(currentElev);
+
+  for (const sec of sections) {
+    const steps = Math.round(sec.lengthKm * 10); // 10 points per km (every 100m)
+    for (let s = 0; s < steps; s++) {
+      totalSteps++;
+      const lng = startLng + totalSteps * degPerStep;
+      // gradient % means dElev/dDist × 100; per 100m step: elevChange = gradient
+      currentElev += sec.gradient;
+      coords.push([startLat, lng]);
+      elevations.push(currentElev);
+    }
+  }
+
+  return { coords, elevations };
+}
+
+describe("descent-during-effort detection", () => {
+  it("z4 does not span a segment with a 50m descent in the middle", () => {
+    // 5km flat → 300m with -50m descent → 5km flat
+    // The descent is ~16.7% downhill over 300m, which is 50m drop —
+    // well over the 30m/500m threshold for z3/z4.
+    const { coords, elevations } = syntheticPathFine([
+      { lengthKm: 5, gradient: 0 },       // flat: 5km
+      { lengthKm: 0.3, gradient: -16.67 }, // descend 50m over 300m (3 steps × -16.67m)
+      { lengthKm: 5, gradient: 0 },        // flat: 5km
+    ]);
+
+    const segs = detectIntervalSegments(coords, elevations, { minLengthKm: 2 });
+
+    // No single z4-suitable segment should span the full ~10.3km.
+    // The descent should split it into two separate segments.
+    const z4Segs = segs.filter((s) => s.suitable_zones.includes("z4"));
+    expect(z4Segs.length).toBeGreaterThanOrEqual(2);
+
+    // Each z4 segment should be shorter than the total route (i.e. the
+    // descent prevents a single long segment).
+    for (const seg of z4Segs) {
+      expect(seg.length_km).toBeLessThan(8);
+    }
+
+    // Verify the two segments are on opposite sides of the descent:
+    // one should end before ~index 50 (the 5km mark) and the next
+    // should start after ~index 53 (past the 300m descent).
+    if (z4Segs.length >= 2) {
+      expect(z4Segs[0].end_index).toBeLessThanOrEqual(55);
+      expect(z4Segs[1].start_index).toBeGreaterThanOrEqual(48);
+    }
+  });
+
+  it("z1/z2 still span across the descent (no descent check for endurance zones)", () => {
+    const { coords, elevations } = syntheticPathFine([
+      { lengthKm: 5, gradient: 0 },
+      { lengthKm: 0.3, gradient: -16.67 },
+      { lengthKm: 5, gradient: 0 },
+    ]);
+
+    const segs = detectIntervalSegments(coords, elevations, { minLengthKm: 2 });
+
+    // z1 and z2 tolerate descents, so at least one segment should include
+    // them and be large (spanning across the descent).
+    const z1Segs = segs.filter((s) => s.suitable_zones.includes("z1"));
+    const anyLargeZ1 = z1Segs.some((s) => s.length_km > 8);
+    expect(anyLargeZ1).toBe(true);
+  });
+});
+
 describe("segmentsForInterval", () => {
   it("filters out segments too short to host the interval", () => {
     const { coords, elevations } = syntheticPath(Array(5).fill(0));

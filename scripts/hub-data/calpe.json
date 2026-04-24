@@ -1,74 +1,74 @@
 [
   {
-    "name": "Calpe to Coll de Rates via Callosa & Tarbena",
-    "rwgps_url": "https://ridewithgps.com/routes/37561715",
-    "description": "Inland from Calpe through Callosa d'en Sarrià and Tarbena to the Coll de Rates — the Costa Blanca's most famous climb. Used regularly in the Vuelta and by every pro training camp in the area.",
+    "file": "scripts/seed-data/gpx/coll-de-rates.fit",
+    "name": "Coll de Rates",
+    "description": "Classic Calpe climb over the Coll de Rates. The most well-known climb on the Costa Blanca, used in the Vuelta and a staple of every pro winter training camp.",
     "county": "Alicante",
     "country": "Spain",
     "region": "Costa Blanca",
     "discipline": "road",
     "surface_type": "road",
-    "operator_name": "RideWithGPS Community",
-    "operator_url": "https://ridewithgps.com"
+    "operator_name": "LOOPS",
+    "operator_url": "https://www.loops.ie"
   },
   {
-    "name": "Calpe Coastal & Coll de Rates Loop",
-    "rwgps_url": "https://ridewithgps.com/routes/41048797",
-    "description": "123km coastal route from Calpe combining the seaside road with the Coll de Rates climb. The full Calpe experience in one ride.",
+    "file": "scripts/seed-data/gpx/guadalest-loop.fit",
+    "name": "Guadalest Loop",
+    "description": "Big day from Calpe inland to Guadalest and Castell de Castells. Serious climbing through the mountains of the Marina Alta.",
     "county": "Alicante",
     "country": "Spain",
     "region": "Costa Blanca",
     "discipline": "road",
     "surface_type": "road",
-    "operator_name": "RideWithGPS Community",
-    "operator_url": "https://ridewithgps.com"
+    "operator_name": "LOOPS",
+    "operator_url": "https://www.loops.ie"
   },
   {
-    "name": "Calpe Coll de Rates Direct",
-    "rwgps_url": "https://ridewithgps.com/routes/29251199",
-    "description": "Shortest approach to the Coll de Rates from Calpe. Up and over, through the Jalon Valley, and back via the coast.",
+    "file": "scripts/seed-data/gpx/bernia-loop.fit",
+    "name": "Bernia Loop",
+    "description": "Short but punchy loop from Calpe around the Sierra de Bernia. Every metre of climbing earned.",
     "county": "Alicante",
     "country": "Spain",
     "region": "Costa Blanca",
     "discipline": "road",
     "surface_type": "road",
-    "operator_name": "RideWithGPS Community",
-    "operator_url": "https://ridewithgps.com"
+    "operator_name": "LOOPS",
+    "operator_url": "https://www.loops.ie"
   },
   {
-    "name": "Calpe, Benidorm & Finestrat Loop",
-    "rwgps_url": "https://ridewithgps.com/routes/10053479",
-    "description": "Coastal loop south to Benidorm then inland through Finestrat and the Sierra Cortina. Good mix of flat coastal roads and punchy interior climbs.",
+    "file": "scripts/seed-data/gpx/alcalali-loop.fit",
+    "name": "Alcalali Loop",
+    "description": "Century loop from Calpe through the Jalon valley via Alcalali. Rolling inland roads with 2,000m of climbing.",
     "county": "Alicante",
     "country": "Spain",
     "region": "Costa Blanca",
     "discipline": "road",
     "surface_type": "road",
-    "operator_name": "RideWithGPS Community",
-    "operator_url": "https://ridewithgps.com"
+    "operator_name": "LOOPS",
+    "operator_url": "https://www.loops.ie"
   },
   {
-    "name": "Calpe 50mi Benidorm & Finestrat",
-    "rwgps_url": "https://ridewithgps.com/routes/6604456",
-    "description": "50-mile training loop from Calpe. South along the coast to Benidorm, inland through Finestrat, and back via the N332. The standard pro-camp Tuesday ride.",
+    "file": "scripts/seed-data/gpx/javea-loop.fit",
+    "name": "Javea Loop",
+    "description": "Coastal ride from Calpe to Javea and back. The easiest of the Calpe loops but still has bite.",
     "county": "Alicante",
     "country": "Spain",
     "region": "Costa Blanca",
     "discipline": "road",
     "surface_type": "road",
-    "operator_name": "RideWithGPS Community",
-    "operator_url": "https://ridewithgps.com"
+    "operator_name": "LOOPS",
+    "operator_url": "https://www.loops.ie"
   },
   {
-    "name": "Calpe Coll de Rates Loop via Jalon",
-    "rwgps_url": "https://ridewithgps.com/routes/31304628",
-    "description": "77km loop from Calpe over the Coll de Rates returning through the Jalon Valley wine country. Quiet interior roads and a serious climb.",
+    "file": "scripts/seed-data/gpx/denia-loop.fit",
+    "name": "Denia Loop",
+    "description": "Calpe to Denia along the coast with an inland return. Great mix of coastal flats and interior climbing.",
     "county": "Alicante",
     "country": "Spain",
     "region": "Costa Blanca",
     "discipline": "road",
     "surface_type": "road",
-    "operator_name": "RideWithGPS Community",
-    "operator_url": "https://ridewithgps.com"
+    "operator_name": "LOOPS",
+    "operator_url": "https://www.loops.ie"
   }
 ]

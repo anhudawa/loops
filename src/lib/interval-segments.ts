@@ -94,15 +94,71 @@ function pointGradients(
 }
 
 /**
+ * Mid-segment descent thresholds by zone (metres of drop over 500m of road).
+ * Zones requiring sustained effort (z3, z4, z5) reject segments that contain
+ * a coast-worthy descent in the middle. Other zones either tolerate rollers
+ * (z1, z2) or are too short to care (z6, z7).
+ */
+const DESCENT_THRESHOLDS: Partial<Record<IntensityZone, number>> = {
+  z3: 30,
+  z4: 30,
+  z5: 50,
+};
+
+/** Scanning window distance for descent detection, in km. */
+const DESCENT_WINDOW_KM = 0.5;
+
+/**
+ * Returns true if the segment between indices [startIdx..endIdx] contains a
+ * sustained descent exceeding `maxDropM` metres over any DESCENT_WINDOW_KM
+ * stretch.
+ *
+ * We slide a distance-based window across the segment and track the maximum
+ * elevation drop (start-of-window minus end-of-window, only when negative =
+ * descent).
+ */
+function hasSignificantDescent(
+  startIdx: number,
+  endIdx: number,
+  smoothedElev: number[],
+  cumDistKm: number[],
+  maxDropM: number
+): boolean {
+  // Slide left pointer `a` across the segment; advance right pointer `b`
+  // until the distance between a and b reaches DESCENT_WINDOW_KM, then
+  // check the elevation drop.
+  let b = startIdx;
+  for (let a = startIdx; a <= endIdx; a++) {
+    // Advance b so that dist(a, b) >= DESCENT_WINDOW_KM
+    while (b < endIdx && cumDistKm[b] - cumDistKm[a] < DESCENT_WINDOW_KM) {
+      b++;
+    }
+    if (cumDistKm[b] - cumDistKm[a] < DESCENT_WINDOW_KM) break; // remaining stretch too short
+
+    const drop = smoothedElev[a] - smoothedElev[b]; // positive when descending
+    if (drop > maxDropM) return true;
+  }
+  return false;
+}
+
+/**
  * Determine which zones a window (from `start` to `end` inclusive) can host,
  * given its terrain characteristics and a candidate duration range.
+ *
+ * `smoothedElev` and `cumDistKm` are the full-route arrays; `startIdx` /
+ * `endIdx` delimit the window being evaluated so we can scan for mid-segment
+ * descents.
  */
 function zonesMatching(
   lengthKm: number,
   avgGradient: number,
   maxGradient: number,
   gradientVariance: number,
-  maxBearingChange: number
+  maxBearingChange: number,
+  startIdx: number,
+  endIdx: number,
+  smoothedElev: number[],
+  cumDistKm: number[]
 ): IntensityZone[] {
   const out: IntensityZone[] = [];
   // A sharp bearing change (≥ 90°) implies a junction / town; unsuitable
@@ -116,7 +172,19 @@ function zonesMatching(
       // minSegmentLengthKm; here we check the window can host at least
       // 1 minute of interval at this zone, which is always true for
       // segments > ~0.35 km.
-      if (lengthKm >= req.min_length_km_per_minute) out.push(zone);
+      if (lengthKm < req.min_length_km_per_minute) continue;
+
+      // Descent-during-effort check: reject sustained zones that contain
+      // a significant descent in the middle of the segment.
+      const threshold = DESCENT_THRESHOLDS[zone];
+      if (
+        threshold != null &&
+        hasSignificantDescent(startIdx, endIdx, smoothedElev, cumDistKm, threshold)
+      ) {
+        continue;
+      }
+
+      out.push(zone);
     }
   }
   return out;
@@ -203,7 +271,7 @@ export function detectIntervalSegments(
       const maxG = maxAbs(slice);
       const varG = stdev(slice);
 
-      const zonesOk = zonesMatching(lengthKm, avgG, maxG, varG, maxBearingDelta);
+      const zonesOk = zonesMatching(lengthKm, avgG, maxG, varG, maxBearingDelta, i, j, smoothed, cumDist);
       if (zonesOk.length > 0 && lengthKm >= minLengthKm) {
         bestEnd = j;
         bestAnyZoneMatch = true;
@@ -220,7 +288,7 @@ export function detectIntervalSegments(
       const avgG = mean(slice);
       const maxG = maxAbs(slice);
       const varG = stdev(slice);
-      const suitable = zonesMatching(lengthKm, avgG, maxG, varG, maxBearingDelta);
+      const suitable = zonesMatching(lengthKm, avgG, maxG, varG, maxBearingDelta, i, bestEnd, smoothed, cumDist);
       if (suitable.length > 0 && lengthKm >= minLengthKm) {
         segments.push({
           start_index: i,

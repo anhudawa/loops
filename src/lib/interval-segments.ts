@@ -99,14 +99,14 @@ function pointGradients(
  * a coast-worthy descent in the middle. Other zones either tolerate rollers
  * (z1, z2) or are too short to care (z6, z7).
  */
-const DESCENT_THRESHOLDS: Partial<Record<IntensityZone, number>> = {
+export const DESCENT_THRESHOLDS: Partial<Record<IntensityZone, number>> = {
   z3: 30,
   z4: 30,
   z5: 50,
 };
 
 /** Scanning window distance for descent detection, in km. */
-const DESCENT_WINDOW_KM = 0.5;
+export const DESCENT_WINDOW_KM = 0.5;
 
 /**
  * Returns true if the segment between indices [startIdx..endIdx] contains a
@@ -117,7 +117,7 @@ const DESCENT_WINDOW_KM = 0.5;
  * elevation drop (start-of-window minus end-of-window, only when negative =
  * descent).
  */
-function hasSignificantDescent(
+export function hasSignificantDescent(
   startIdx: number,
   endIdx: number,
   smoothedElev: number[],

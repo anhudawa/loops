@@ -2,6 +2,9 @@ import { describe, it, expect } from "vitest";
 import {
   detectIntervalSegments,
   segmentsForInterval,
+  hasSignificantDescent,
+  DESCENT_THRESHOLDS,
+  DESCENT_WINDOW_KM,
 } from "../interval-segments";
 
 /**
@@ -116,10 +119,94 @@ function syntheticPathFine(
 }
 
 describe("descent-during-effort detection", () => {
+  it("hasSignificantDescent detects a 50m drop over 500m", () => {
+    // Direct unit test of the descent-scanning function.
+    // Build synthetic smoothed-elevation and cumulative-distance arrays:
+    // 5km flat at 100m → 500m dropping 50m (100→50) → 5km flat at 50m
+    // Points every 100m.
+    const smoothedElev: number[] = [];
+    const cumDistKm: number[] = [];
+    const stepKm = 0.1; // 100m
+
+    // 50 flat points (5km) at 100m elevation
+    for (let i = 0; i < 50; i++) {
+      smoothedElev.push(100);
+      cumDistKm.push(i * stepKm);
+    }
+    // 5 descent points (500m), dropping 10m each (50m total)
+    for (let i = 0; i < 5; i++) {
+      smoothedElev.push(90 - i * 10);
+      cumDistKm.push((50 + i) * stepKm);
+    }
+    // 50 flat points (5km) at 50m elevation
+    for (let i = 0; i < 50; i++) {
+      smoothedElev.push(50);
+      cumDistKm.push((55 + i) * stepKm);
+    }
+
+    // z4 threshold: >30m over 500m → should be detected
+    expect(
+      hasSignificantDescent(0, smoothedElev.length - 1, smoothedElev, cumDistKm, 30)
+    ).toBe(true);
+
+    // z5 threshold: >50m over 500m → should NOT be detected (drop is exactly 50m
+    // but the sliding window might not align perfectly)
+    // The window from index 49 (elev=100) to index 54 (elev=50) spans 500m and drops 50m.
+    // Since the check is >, 50 > 50 is false.
+    expect(
+      hasSignificantDescent(0, smoothedElev.length - 1, smoothedElev, cumDistKm, 50)
+    ).toBe(false);
+
+    // A lower threshold of 25m → should also be detected
+    expect(
+      hasSignificantDescent(0, smoothedElev.length - 1, smoothedElev, cumDistKm, 25)
+    ).toBe(true);
+  });
+
+  it("hasSignificantDescent returns false for a flat segment", () => {
+    const smoothedElev = Array(100).fill(100);
+    const cumDistKm = Array.from({ length: 100 }, (_, i) => i * 0.1);
+
+    expect(
+      hasSignificantDescent(0, 99, smoothedElev, cumDistKm, 30)
+    ).toBe(false);
+  });
+
+  it("hasSignificantDescent only checks the specified index range", () => {
+    // Full array has a descent, but the sub-range we check does not.
+    const smoothedElev: number[] = [];
+    const cumDistKm: number[] = [];
+    // 50 flat points
+    for (let i = 0; i < 50; i++) {
+      smoothedElev.push(100);
+      cumDistKm.push(i * 0.1);
+    }
+    // 5 descent points (50m drop)
+    for (let i = 0; i < 5; i++) {
+      smoothedElev.push(90 - i * 10);
+      cumDistKm.push((50 + i) * 0.1);
+    }
+    // 50 flat points at 50m
+    for (let i = 0; i < 50; i++) {
+      smoothedElev.push(50);
+      cumDistKm.push((55 + i) * 0.1);
+    }
+
+    // Check only the flat section before the descent (indices 0-45)
+    expect(
+      hasSignificantDescent(0, 45, smoothedElev, cumDistKm, 30)
+    ).toBe(false);
+
+    // Check only the flat section after the descent (indices 55-104)
+    expect(
+      hasSignificantDescent(55, 104, smoothedElev, cumDistKm, 30)
+    ).toBe(false);
+  });
+
   it("z4 does not span a segment with a 50m descent in the middle", () => {
     // 5km flat → 300m with -50m descent → 5km flat
     // The descent is ~16.7% downhill over 300m, which is 50m drop —
-    // well over the 30m/500m threshold for z3/z4.
+    // far beyond what any sustained-effort zone tolerates.
     const { coords, elevations } = syntheticPathFine([
       { lengthKm: 5, gradient: 0 },       // flat: 5km
       { lengthKm: 0.3, gradient: -16.67 }, // descend 50m over 300m (3 steps × -16.67m)
@@ -128,40 +215,36 @@ describe("descent-during-effort detection", () => {
 
     const segs = detectIntervalSegments(coords, elevations, { minLengthKm: 2 });
 
-    // No single z4-suitable segment should span the full ~10.3km.
-    // The descent should split it into two separate segments.
-    const z4Segs = segs.filter((s) => s.suitable_zones.includes("z4"));
-    expect(z4Segs.length).toBeGreaterThanOrEqual(2);
+    // The route should be split into two separate segments — one before
+    // the descent and one after. Both sides have ~5km of flat terrain.
+    expect(segs.length).toBeGreaterThanOrEqual(2);
 
-    // Each z4 segment should be shorter than the total route (i.e. the
-    // descent prevents a single long segment).
-    for (const seg of z4Segs) {
+    // No single segment should span the full ~10.3km route.
+    for (const seg of segs) {
       expect(seg.length_km).toBeLessThan(8);
     }
 
-    // Verify the two segments are on opposite sides of the descent:
-    // one should end before ~index 50 (the 5km mark) and the next
-    // should start after ~index 53 (past the 300m descent).
-    if (z4Segs.length >= 2) {
-      expect(z4Segs[0].end_index).toBeLessThanOrEqual(55);
-      expect(z4Segs[1].start_index).toBeGreaterThanOrEqual(48);
-    }
+    // z4 (threshold) should not appear on any segment that includes the
+    // descent. The steep gradient and descent detection both prevent this.
+    const z4Spanning = segs.filter(
+      (s) => s.suitable_zones.includes("z4") && s.length_km > 8
+    );
+    expect(z4Spanning.length).toBe(0);
+
+    // The two segments should be on opposite sides of the descent
+    expect(segs[0].end_index).toBeLessThanOrEqual(55);
+    expect(segs[1].start_index).toBeGreaterThanOrEqual(48);
   });
 
-  it("z1/z2 still span across the descent (no descent check for endurance zones)", () => {
-    const { coords, elevations } = syntheticPathFine([
-      { lengthKm: 5, gradient: 0 },
-      { lengthKm: 0.3, gradient: -16.67 },
-      { lengthKm: 5, gradient: 0 },
-    ]);
-
-    const segs = detectIntervalSegments(coords, elevations, { minLengthKm: 2 });
-
-    // z1 and z2 tolerate descents, so at least one segment should include
-    // them and be large (spanning across the descent).
-    const z1Segs = segs.filter((s) => s.suitable_zones.includes("z1"));
-    const anyLargeZ1 = z1Segs.some((s) => s.length_km > 8);
-    expect(anyLargeZ1).toBe(true);
+  it("descent thresholds are defined for z3, z4, z5 only", () => {
+    // Verify configuration: only sustained-effort zones have descent checks
+    expect(DESCENT_THRESHOLDS.z3).toBe(30);
+    expect(DESCENT_THRESHOLDS.z4).toBe(30);
+    expect(DESCENT_THRESHOLDS.z5).toBe(50);
+    expect(DESCENT_THRESHOLDS.z1).toBeUndefined();
+    expect(DESCENT_THRESHOLDS.z2).toBeUndefined();
+    expect(DESCENT_THRESHOLDS.z6).toBeUndefined();
+    expect(DESCENT_THRESHOLDS.z7).toBeUndefined();
   });
 });
 

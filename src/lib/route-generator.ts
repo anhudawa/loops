@@ -551,10 +551,10 @@ async function generateFreshWorkoutRoutes(
       const route = await buildFreshRouteFromPath(path, waypoints, spec);
       if (!route) return null;
 
-      // Detect segments on the freshly routed path and check workout fit.
-      // If the route can't host the workout, it's useless to us — drop it.
-      const segments = detectIntervalSegments(route.coordinates, route.elevations);
-      const fit = assignWorkoutToSegments(segments, workout);
+      const rawSegments = detectIntervalSegments(route.coordinates, route.elevations);
+      const validated = await validateSegments(rawSegments, route.coordinates);
+      const cleanSegments = filterCleanSegments(validated);
+      const fit = assignWorkoutToSegments(cleanSegments, workout);
       if (!fit.fits) return null;
 
       return { ...route, workout_fit: fit };

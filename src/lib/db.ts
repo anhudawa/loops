@@ -251,6 +251,10 @@ export async function migrateDb() {
   await sql`ALTER TABLE routes ADD COLUMN IF NOT EXISTS quality_status TEXT DEFAULT 'pending'`;
   await sql`CREATE INDEX IF NOT EXISTS idx_routes_quality_status ON routes(quality_status)`;
 
+  // Operator attribution — whose routes these are (e.g. "Eat Sleep Cycle")
+  await sql`ALTER TABLE routes ADD COLUMN IF NOT EXISTS operator_name TEXT`;
+  await sql`ALTER TABLE routes ADD COLUMN IF NOT EXISTS operator_url TEXT`;
+
 }
 
 // ──── Types ────
@@ -274,6 +278,8 @@ export interface Route {
   created_at: string;
   strava_activity_id: number | null;
   quality_status: "approved" | "failed" | "pending" | null;
+  operator_name: string | null;
+  operator_url: string | null;
 }
 
 export interface RouteFilters {
@@ -539,8 +545,8 @@ export async function getRoute(id: string): Promise<(Route & { is_verified?: num
 
 export async function insertRoute(route: Omit<Route, "created_at">): Promise<Route> {
   await sql`
-    INSERT INTO routes (id, name, description, distance_km, elevation_gain_m, elevation_loss_m, surface_type, county, country, region, discipline, start_lat, start_lng, gpx_filename, coordinates, created_by, strava_activity_id)
-    VALUES (${route.id}, ${route.name}, ${route.description}, ${route.distance_km}, ${route.elevation_gain_m}, ${route.elevation_loss_m}, ${route.surface_type}, ${route.county}, ${route.country}, ${route.region}, ${route.discipline}, ${route.start_lat}, ${route.start_lng}, ${route.gpx_filename}, ${route.coordinates}, ${route.created_by}, ${route.strava_activity_id ?? null})
+    INSERT INTO routes (id, name, description, distance_km, elevation_gain_m, elevation_loss_m, surface_type, county, country, region, discipline, start_lat, start_lng, gpx_filename, coordinates, created_by, strava_activity_id, operator_name, operator_url)
+    VALUES (${route.id}, ${route.name}, ${route.description}, ${route.distance_km}, ${route.elevation_gain_m}, ${route.elevation_loss_m}, ${route.surface_type}, ${route.county}, ${route.country}, ${route.region}, ${route.discipline}, ${route.start_lat}, ${route.start_lng}, ${route.gpx_filename}, ${route.coordinates}, ${route.created_by}, ${route.strava_activity_id ?? null}, ${route.operator_name ?? null}, ${route.operator_url ?? null})
   `;
   return (await getRoute(route.id))!;
 }

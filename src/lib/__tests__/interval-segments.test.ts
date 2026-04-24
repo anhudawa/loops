@@ -16,20 +16,22 @@ function syntheticPath(gradientsPerKm: number[]): {
   const coords: [number, number][] = [];
   const elevations: number[] = [];
 
-  // 1 degree of longitude ≈ 111.32 km at the equator; at 53° lat (Ireland)
-  // it's ≈ 66.9 km. Use a constant ~111m per 0.001 degree for simplicity.
+  // At 53° lat, 1° longitude ≈ 66.9 km, so 0.0015° ≈ 100m.
   const startLat = 53.35;
   const startLng = -6.26;
+  const degPerStep = 0.0015; // ≈100m east at 53° lat
   let currentElev = 100;
 
   coords.push([startLat, startLng]);
   elevations.push(currentElev);
 
+  let totalSteps = 0;
   for (let km = 0; km < gradientsPerKm.length; km++) {
     const g = gradientsPerKm[km];
-    // 10 points per km (every 100m)
+    // 10 points per km (every ~100m)
     for (let step = 1; step <= 10; step++) {
-      const lng = startLng + (km + step / 10) * 0.00134; // ≈100m east in deg at 53° lat
+      totalSteps++;
+      const lng = startLng + totalSteps * degPerStep;
       currentElev += g; // +g metres per 100m if gradient is % (g% × 100m = g metres)
       coords.push([startLat, lng]);
       elevations.push(currentElev);
@@ -91,7 +93,7 @@ function syntheticPathFine(
   const elevations: number[] = [];
   const startLat = 53.35;
   const startLng = -6.26;
-  const degPerStep = 0.00134; // ≈100m east at 53° lat
+  const degPerStep = 0.0015; // ≈100m east at 53° lat
 
   let currentElev = 100;
   let totalSteps = 0;

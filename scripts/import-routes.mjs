@@ -304,6 +304,18 @@ async function main() {
       continue;
     }
 
+    // ── Loop check: start and end must be within 3km ──────────────────
+    // Set "allow_non_loop": true in the manifest entry for iconic
+    // point-to-point routes that are intentionally not loops.
+    const startPt = points[0];
+    const endPt = points[points.length - 1];
+    const gapKm = haversine(startPt.lat, startPt.lng, endPt.lat, endPt.lng);
+    if (gapKm > 3 && !route.allow_non_loop) {
+      console.log(`REJECT (not a loop — start/end ${gapKm.toFixed(1)}km apart)`);
+      failed++;
+      continue;
+    }
+
     const stats = precomputedStats || computeStats(points);
     const sampled = downsample(points);
     const coords = sampled.map((p) => [

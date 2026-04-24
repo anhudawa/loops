@@ -108,18 +108,6 @@
     "operator_url": "https://epicroadrides.com"
   },
   {
-    "file": "src/data/girona-collection/via-verde-carrilet.gpx",
-    "name": "Via Verde del Carrilet",
-    "description": "Former railway line converted to greenway. Flat, traffic-free, perfect for families or recovery rides. Girona to Olot through volcanic countryside.",
-    "county": "Girona",
-    "country": "Spain",
-    "region": "Cataluña",
-    "discipline": "road",
-    "surface_type": "mixed",
-    "operator_name": "Epic Road Rides",
-    "operator_url": "https://epicroadrides.com"
-  },
-  {
     "file": "src/data/girona-collection/la-traka-100.gpx",
     "name": "La Traka 100",
     "description": "The La Traka gravel race route. 100km of Girona's best gravel through the Gavarres, Empordà, and volcanic zone. Race-validated.",

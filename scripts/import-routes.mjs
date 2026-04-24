@@ -41,6 +41,15 @@ if (!manifestPath) {
 
 const pool = createPool({ connectionString: POSTGRES_URL });
 
+// ── Quality thresholds ──
+// Routes must pass a basic safety + surface check via Overpass before
+// insertion. This isn't the full 9-dimension quality scoring (that runs
+// in the Next.js runtime) — it's a fast gate that catches dangerous or
+// nonsensical routes before they enter the library.
+const QUALITY_FLOOR = 50; // matches src/config/constants.ts
+const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
+const OVERPASS_TIMEOUT_MS = 15000;
+
 // ── GPX parsing (no xml2js dependency — regex-based like existing scripts) ──
 
 function parseGpxText(text) {
@@ -125,6 +134,91 @@ function downsample(points, max = 8000) {
   return out;
 }
 
+// ── Quick quality scoring (safety + surface via Overpass) ────────────────────
+
+const HIGHWAY_SCORES = {
+  cycleway: 25, path: 18, track: 15, bridleway: 12,
+  residential: 20, unclassified: 22, tertiary: 22, tertiary_link: 20,
+  secondary: 15, secondary_link: 14, primary: 8, primary_link: 8,
+  trunk: 2, trunk_link: 2, motorway: 0, motorway_link: 0,
+};
+
+async function scoreRouteQuick(coords, discipline) {
+  // Sample 10 evenly-spaced points along the route
+  const sampleCount = Math.min(10, coords.length);
+  const step = Math.max(1, Math.floor(coords.length / sampleCount));
+  const samples = [];
+  for (let i = 0; i < coords.length; i += step) {
+    samples.push(coords[i]);
+    if (samples.length >= sampleCount) break;
+  }
+
+  // Bounding box
+  let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+  for (const [lat, lng] of samples) {
+    if (lat < minLat) minLat = lat;
+    if (lat > maxLat) maxLat = lat;
+    if (lng < minLng) minLng = lng;
+    if (lng > maxLng) maxLng = lng;
+  }
+  const pad = 0.005;
+
+  const query = `
+[out:json][timeout:12];
+way["highway"](${minLat - pad},${minLng - pad},${maxLat + pad},${maxLng + pad});
+out tags;
+`.trim();
+
+  let ways;
+  try {
+    const res = await fetch(OVERPASS_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: `data=${encodeURIComponent(query)}`,
+      signal: AbortSignal.timeout(OVERPASS_TIMEOUT_MS),
+    });
+    if (!res.ok) return 60; // Overpass down — pass with neutral score
+    const json = await res.json();
+    ways = json.elements || [];
+  } catch {
+    return 60; // network issue — don't block on Overpass
+  }
+
+  if (ways.length === 0) return 60; // no data — neutral
+
+  // Score: average highway classification in the bbox
+  let totalScore = 0;
+  let count = 0;
+  let hasDanger = false;
+  for (const way of ways) {
+    const hw = way.tags?.highway;
+    if (!hw) continue;
+    const s = HIGHWAY_SCORES[hw];
+    if (s !== undefined) {
+      totalScore += s;
+      count++;
+      if (hw === "motorway" || hw === "trunk") hasDanger = true;
+    }
+  }
+
+  if (count === 0) return 60;
+  let score = Math.round((totalScore / count) * 4); // scale 0-25 → 0-100
+  score = Math.min(100, score);
+
+  // Hard penalty if motorways/trunks are present in the bbox
+  if (hasDanger) score = Math.max(0, score - 25);
+
+  // Discipline adjustment: gravel/mtb get a bonus for tracks/paths
+  if (discipline === "gravel" || discipline === "mtb") {
+    const offroad = ways.filter((w) =>
+      ["track", "path", "bridleway"].includes(w.tags?.highway)
+    ).length;
+    if (offroad > ways.length * 0.2) score = Math.min(100, score + 10);
+  }
+
+  return score;
+}
+
 // ── Main ───────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -197,6 +291,14 @@ async function main() {
       Math.round(p.ele * 10) / 10,
     ]);
 
+    // ── Quality gate: check safety + surface via Overpass ─────────────
+    const qualityScore = await scoreRouteQuick(coords, route.discipline || "road");
+    if (qualityScore < QUALITY_FLOOR) {
+      console.log(`REJECT (quality ${qualityScore}/100 < floor ${QUALITY_FLOOR})`);
+      failed++;
+      continue;
+    }
+
     const id = randomUUID();
     try {
       await pool.query(
@@ -234,7 +336,7 @@ async function main() {
           route.operator_url || null,
         ]
       );
-      console.log(`OK (${stats.distanceKm} km, +${stats.elevGain}m, ${coords.length} pts)`);
+      console.log(`OK (${stats.distanceKm} km, +${stats.elevGain}m, ${coords.length} pts, quality=${qualityScore})`);
       inserted++;
     } catch (err) {
       console.log(`FAIL (db: ${err.message})`);

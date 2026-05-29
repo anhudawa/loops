@@ -543,7 +543,10 @@ export async function getRoute(id: string): Promise<(Route & { is_verified?: num
   return rows[0] as (Route & { is_verified?: number; creator_name?: string | null; creator_avatar?: string | null; creator_rating?: number; creator_rating_count?: number }) | undefined;
 }
 
-export async function insertRoute(route: Omit<Route, "created_at">): Promise<Route> {
+export async function insertRoute(
+  route: Omit<Route, "created_at" | "quality_status" | "operator_name" | "operator_url"> &
+    Partial<Pick<Route, "quality_status" | "operator_name" | "operator_url">>
+): Promise<Route> {
   await sql`
     INSERT INTO routes (id, name, description, distance_km, elevation_gain_m, elevation_loss_m, surface_type, county, country, region, discipline, start_lat, start_lng, gpx_filename, coordinates, created_by, strava_activity_id, operator_name, operator_url)
     VALUES (${route.id}, ${route.name}, ${route.description}, ${route.distance_km}, ${route.elevation_gain_m}, ${route.elevation_loss_m}, ${route.surface_type}, ${route.county}, ${route.country}, ${route.region}, ${route.discipline}, ${route.start_lat}, ${route.start_lng}, ${route.gpx_filename}, ${route.coordinates}, ${route.created_by}, ${route.strava_activity_id ?? null}, ${route.operator_name ?? null}, ${route.operator_url ?? null})

@@ -41,6 +41,8 @@ function makeRoute(overrides: Partial<Route> = {}): Route {
     created_at: new Date().toISOString(),
     strava_activity_id: null,
     quality_status: "approved",
+    operator_name: null,
+    operator_url: null,
     ...overrides,
   };
 }

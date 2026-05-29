@@ -79,11 +79,11 @@ interface GenerateResponse {
 }
 
 const EXAMPLES = [
-  "2 hour road loop from Blessington on country lanes, minimal climbing",
-  "60km gravel ride near Wicklow, rolling hills, scenic",
-  "2 x 20 min threshold intervals from Rathfarnham",
-  "5 x 5 min vo2 max intervals from Howth",
-  "90 min easy spin from Dun Laoghaire, coastal",
+  "2 hour ride with a few rolling hills on quiet lanes",
+  "90 min Zone 2 endurance ride, flat and steady",
+  "2 x 20 min threshold intervals, somewhere safe",
+  "5 x 5 min VO2 max efforts on a steady climb",
+  "60km gravel ride, scenic, rolling hills",
 ];
 
 function downloadGpx(gpx: string, filename: string) {
@@ -140,13 +140,35 @@ export default function GeneratePage() {
   const [interpreted, setInterpreted] = useState<Interpreted | null>(null);
   const [error, setError] = useState<{ message: string; code?: string } | null>(null);
   const [submittedPrompt, setSubmittedPrompt] = useState("");
+  const [useMyLocation, setUseMyLocation] = useState(false);
+
+  const voice = useVoiceInput();
+  const geo = useGeolocation();
 
   useEffect(() => {
     if (!authLoading && !user) router.push("/login?returnTo=/generate");
   }, [user, authLoading, router]);
 
+  function toggleVoice() {
+    if (voice.listening) {
+      voice.stop();
+    } else {
+      voice.start((text) => setPrompt(text));
+    }
+  }
+
+  async function toggleLocation() {
+    if (useMyLocation) {
+      setUseMyLocation(false);
+      return;
+    }
+    const coords = await geo.request();
+    if (coords) setUseMyLocation(true);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (voice.listening) voice.stop();
     const trimmed = prompt.trim();
     if (trimmed.length < 10) {
       setError({ message: "Describe the route you want in a bit more detail.", code: "TOO_SHORT" });
@@ -159,11 +181,15 @@ export default function GeneratePage() {
     setInterpreted(null);
     setSubmittedPrompt(trimmed);
 
+    // Send current location when the rider opted in — used as the start
+    // point if their prompt doesn't name a place.
+    const origin = useMyLocation ? geo.coords : null;
+
     try {
       const res = await fetch("/api/generate-route", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: trimmed }),
+        body: JSON.stringify({ prompt: trimmed, ...(origin ? { origin } : {}) }),
       });
       const body = await res.json();
       if (!res.ok) {
@@ -204,8 +230,9 @@ export default function GeneratePage() {
             Plan a ride
           </h1>
           <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-            Describe what you want and we'll match it to a route. Ask for distance or duration,
-            terrain, starting point, or a structured workout.
+            Type or talk. Ask for distance or duration, terrain, or a structured
+            workout — tap the mic to dictate, and turn on your location to start
+            from where you are.
           </p>
         </div>
 
@@ -213,26 +240,92 @@ export default function GeneratePage() {
           <label htmlFor="plan-prompt" className="sr-only">
             Describe the ride you want
           </label>
-          <textarea
-            id="plan-prompt"
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            placeholder="e.g. 2 hour loop from Blessington on country lanes, minimal climbing"
-            rows={3}
-            maxLength={1000}
-            disabled={loading}
-            aria-describedby="plan-prompt-hint"
-            className="w-full px-4 py-3 rounded-2xl text-sm resize-none"
-            style={{
-              background: "var(--bg-card)",
-              border: "1px solid var(--border)",
-              color: "var(--text)",
-              outline: "none",
-            }}
-          />
+          <div className="relative">
+            <textarea
+              id="plan-prompt"
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              placeholder="e.g. 2 hour loop on country lanes with a few rolling hills"
+              rows={3}
+              maxLength={1000}
+              disabled={loading}
+              aria-describedby="plan-prompt-hint"
+              className="w-full px-4 py-3 pr-14 rounded-2xl text-sm resize-none"
+              style={{
+                background: "var(--bg-card)",
+                border: voice.listening ? "1px solid var(--accent)" : "1px solid var(--border)",
+                color: "var(--text)",
+                outline: "none",
+              }}
+            />
+            {voice.supported && (
+              <button
+                type="button"
+                onClick={toggleVoice}
+                disabled={loading}
+                aria-label={voice.listening ? "Stop voice input" : "Start voice input"}
+                aria-pressed={voice.listening}
+                className="absolute top-3 right-3 w-9 h-9 rounded-full flex items-center justify-center transition-all"
+                style={{
+                  background: voice.listening ? "var(--accent)" : "var(--bg-raised)",
+                  color: voice.listening ? "var(--bg)" : "var(--text-muted)",
+                  border: "1px solid var(--border)",
+                }}
+              >
+                {voice.listening ? (
+                  <span className="relative flex items-center justify-center">
+                    <span
+                      className="absolute w-9 h-9 rounded-full animate-ping"
+                      style={{ background: "var(--accent)", opacity: 0.3 }}
+                      aria-hidden="true"
+                    />
+                    <svg className="w-4 h-4 relative" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <rect x="7" y="7" width="10" height="10" rx="1.5" />
+                    </svg>
+                  </span>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+                  </svg>
+                )}
+              </button>
+            )}
+          </div>
           <p id="plan-prompt-hint" className="sr-only">
-            Describe distance or duration, terrain, starting point, and optionally a structured interval workout.
+            Describe distance or duration, terrain, starting point, and optionally a structured interval workout. You can also dictate with the microphone.
           </p>
+
+          {voice.listening && (
+            <p className="text-xs mt-2" style={{ color: "var(--accent)" }}>
+              Listening… speak your route, then tap the mic to stop.
+            </p>
+          )}
+          {voice.error && (
+            <p className="text-xs mt-2" style={{ color: "#ff6b6b" }}>{voice.error}</p>
+          )}
+
+          {/* Use my location toggle — the "I'm here now, give me a ride" path */}
+          <button
+            type="button"
+            onClick={toggleLocation}
+            disabled={loading || geo.loading}
+            aria-pressed={useMyLocation}
+            className="mt-3 inline-flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-full transition-all"
+            style={{
+              background: useMyLocation ? "var(--accent-glow)" : "var(--bg-card)",
+              border: `1px solid ${useMyLocation ? "var(--accent)" : "var(--border)"}`,
+              color: useMyLocation ? "var(--accent)" : "var(--text-muted)",
+            }}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+            </svg>
+            {geo.loading ? "Locating…" : useMyLocation ? "Starting from my location" : "Start from my location"}
+          </button>
+          {geo.error && (
+            <p className="text-xs mt-2" style={{ color: "#ff6b6b" }}>{geo.error}</p>
+          )}
 
           <div className="flex flex-wrap gap-2 mt-3">
             {EXAMPLES.map((ex) => (

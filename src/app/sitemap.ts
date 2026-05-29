@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { getAllRoutesForSitemap, getCountries, getRegions, getCollections } from "@/lib/db";
 import { slugify } from "@/lib/seo";
+import { getAllPosts } from "@/lib/blog";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const [routes, countries, collections] = await Promise.all([
@@ -12,6 +13,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticPages: MetadataRoute.Sitemap = [
     { url: "https://loops.ie", changeFrequency: "weekly", priority: 1.0 },
     { url: "https://loops.ie/collections", changeFrequency: "weekly", priority: 0.9 },
+    { url: "https://loops.ie/blog", changeFrequency: "weekly", priority: 0.8 },
     { url: "https://loops.ie/login", changeFrequency: "monthly", priority: 0.3 },
     { url: "https://loops.ie/about", changeFrequency: "monthly", priority: 0.2 },
     { url: "https://loops.ie/privacy", changeFrequency: "monthly", priority: 0.2 },
@@ -51,5 +53,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }
   }
 
-  return [...staticPages, ...collectionPages, ...routePages, ...countryPages, ...regionPages];
+  const blogPages: MetadataRoute.Sitemap = getAllPosts().map((post) => ({
+    url: `https://loops.ie/blog/${post.slug}`,
+    lastModified: new Date(post.updated ?? post.date),
+    changeFrequency: "monthly",
+    priority: 0.7,
+  }));
+
+  return [
+    ...staticPages,
+    ...collectionPages,
+    ...blogPages,
+    ...routePages,
+    ...countryPages,
+    ...regionPages,
+  ];
 }

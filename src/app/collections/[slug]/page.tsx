@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { getCollectionBySlug } from "@/lib/db";
 import RouteCard from "@/components/RouteCard";
 import JsonLd from "@/components/JsonLd";
-import { generateCollectionJsonLd } from "@/lib/seo";
+import { generateCollectionJsonLd, generateBreadcrumbJsonLd } from "@/lib/seo";
 import Link from "next/link";
 
 interface Props {
@@ -61,9 +61,16 @@ export default async function CollectionPage({ params }: Props) {
   const disc = DISCIPLINE_LABELS[collection.discipline] ?? DISCIPLINE_LABELS.mixed;
   const locationText = [collection.location, collection.country].filter(Boolean).join(", ");
 
+  const breadcrumbJsonLd = generateBreadcrumbJsonLd([
+    { name: "Home", url: "https://loops.ie" },
+    { name: "Collections", url: "https://loops.ie/collections" },
+    { name: collection.name },
+  ]);
+
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
       <JsonLd data={generateCollectionJsonLd(collection)} />
+      <JsonLd data={breadcrumbJsonLd} />
 
       {/* Header */}
       <header className="sticky top-0 z-40 border-b" style={{ background: "var(--bg)", borderColor: "var(--border)" }}>

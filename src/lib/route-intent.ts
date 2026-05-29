@@ -270,6 +270,12 @@ function countryToCode(country: string): string {
 export interface ParseRouteIntentOptions {
   /** The rider's average cycling speed in km/h. Falls back to 25 (baseline). */
   userSpeedKmh?: number;
+  /**
+   * The rider's current location [lat, lng] from the browser. Used as the
+   * start point when the prompt does not name a place — the "I'm here now,
+   * give me a ride" case. A place named in the prompt always wins over this.
+   */
+  origin?: [number, number];
 }
 
 export async function parseRouteIntent(
@@ -277,6 +283,7 @@ export async function parseRouteIntent(
   options: ParseRouteIntentOptions = {}
 ): Promise<RouteSpec> {
   const userSpeedKmh = options.userSpeedKmh ?? BASELINE_SPEED_KMH;
+  const origin = options.origin;
   const client = new Anthropic();
 
   const message = await client.messages.create({
@@ -336,18 +343,26 @@ export async function parseRouteIntent(
 
   let startPoint: [number, number] | null = null;
 
+  // A place named in the prompt always wins ("ride in Girona" while sitting
+  // in Dublin should plan Girona).
   if (region) {
     startPoint = await geocodePlace(region, country);
   }
 
-  // Fall back to a country-level centre when the region couldn't be geocoded
+  // No place named (or it failed to geocode) → use the rider's current
+  // location. This is the core "I'm here now, give me a ride" path.
+  if (!startPoint && origin) {
+    startPoint = origin;
+  }
+
+  // Last resort: country centre. Better than failing, but a poor start.
   if (!startPoint) {
     startPoint = await geocodePlace(country, country);
   }
 
   if (!startPoint) {
     throw new Error(
-      `Could not geocode location from prompt: "${prompt}". Please specify a clearer starting location (e.g. "from Dublin" or "near Blessington").`
+      `Could not work out where to start. Allow location access, or name a starting point (e.g. "from Dublin" or "near Blessington").`
     );
   }
 

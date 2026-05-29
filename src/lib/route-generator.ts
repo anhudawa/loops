@@ -292,6 +292,9 @@ export interface GenerateRouteOptions {
    * duration → distance conversion so "2 hour loop" means the right
    * distance for that specific rider, not a baseline 25 km/h rider. */
   userSpeedKmh?: number;
+  /** The rider's current location [lat, lng] from the browser, used as the
+   * start point when the prompt doesn't name a place. */
+  origin?: [number, number];
 }
 
 /**
@@ -319,7 +322,10 @@ export async function generateRouteCandidates(
   prompt: string,
   options: GenerateRouteOptions = {}
 ): Promise<GenerateResult> {
-  const spec = await parseRouteIntent(prompt, { userSpeedKmh: options.userSpeedKmh });
+  const spec = await parseRouteIntent(prompt, {
+    userSpeedKmh: options.userSpeedKmh,
+    origin: options.origin,
+  });
   const interpreted = summariseIntent(spec);
   const candidates = await candidatesFromSpec(spec);
   return { interpreted, candidates };

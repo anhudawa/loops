@@ -60,10 +60,22 @@ export async function POST(request: NextRequest) {
   }
 
   let prompt: string;
+  let origin: [number, number] | undefined;
 
   try {
     const body = await request.json();
     prompt = body?.prompt;
+    // Optional browser location [lat, lng] — used as start point when the
+    // prompt doesn't name a place ("I'm here now, give me a ride").
+    if (Array.isArray(body?.origin) && body.origin.length === 2) {
+      const [lat, lng] = body.origin;
+      if (
+        typeof lat === "number" && typeof lng === "number" &&
+        lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180
+      ) {
+        origin = [lat, lng];
+      }
+    }
   } catch {
     return NextResponse.json(
       { error: "Invalid JSON body", code: "INVALID_BODY" },
@@ -111,6 +123,7 @@ export async function POST(request: NextRequest) {
     const result = await Promise.race([
       generateRouteCandidates(trimmedPrompt, {
         userSpeedKmh: userSpeedKmh ?? DEFAULT_SPEED_KMH,
+        origin,
       }),
       timeoutPromise,
     ]);

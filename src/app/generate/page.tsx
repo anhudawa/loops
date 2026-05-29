@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import RoutePreviewSvg from "@/components/RoutePreviewSvg";
+import { useVoiceInput } from "@/lib/useVoiceInput";
+import { useGeolocation } from "@/lib/useGeolocation";
 
 // ── Types mirror the /api/generate-route unified response ───────────────────
 

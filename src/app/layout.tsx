@@ -5,6 +5,7 @@ import { ToastProvider } from "@/components/Toast";
 import { CapacitorProvider } from "@/components/CapacitorProvider";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import Footer from "@/components/Footer";
+import InstallPrompt from "@/components/InstallPrompt";
 import JsonLd from "@/components/JsonLd";
 import { generateOrganizationJsonLd, generateWebSiteJsonLd } from "@/lib/seo";
 import "./globals.css";
@@ -55,6 +56,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={outfit.variable}>
+      <head>
+        <link rel="manifest" href="/manifest.json" />
+      </head>
       <body className="antialiased">
         <JsonLd data={generateWebSiteJsonLd()} />
         <JsonLd data={generateOrganizationJsonLd()} />
@@ -64,6 +68,7 @@ export default function RootLayout({
               <AuthProvider>
                 {children}
                 <Footer />
+                <InstallPrompt />
               </AuthProvider>
             </CapacitorProvider>
           </ToastProvider>

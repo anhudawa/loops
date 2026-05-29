@@ -1,0 +1,22 @@
+{
+  "name": "LOOPS — Plan a Ride",
+  "short_name": "LOOPS",
+  "start_url": "/generate",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#0a0a0a",
+  "description": "Voice-powered cycling route planner. Describe the ride you want and we'll build it.",
+  "categories": ["sports", "fitness", "navigation"],
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "192x192",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "/favicon.ico",
+      "sizes": "512x512",
+      "type": "image/x-icon"
+    }
+  ]
+}

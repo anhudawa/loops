@@ -51,6 +51,19 @@ const DIRECTIONS: Array<{ name: string; bearingDeg: number }> = [
   { name: "west", bearingDeg: 270 },
 ];
 
+// Wider 8-direction set used when we need more candidates (e.g. workout
+// mode, where fit constraints are tight and we want a larger pool).
+export const DIRECTIONS_WIDE: Array<{ name: string; bearingDeg: number }> = [
+  { name: "north", bearingDeg: 0 },
+  { name: "northeast", bearingDeg: 45 },
+  { name: "east", bearingDeg: 90 },
+  { name: "southeast", bearingDeg: 135 },
+  { name: "south", bearingDeg: 180 },
+  { name: "southwest", bearingDeg: 225 },
+  { name: "west", bearingDeg: 270 },
+  { name: "northwest", bearingDeg: 315 },
+];
+
 // OSM tags for interesting anchor points
 const INTERESTING_NODE_TAGS: Record<string, string[]> = {
   place: ["village", "hamlet", "town"],
@@ -379,13 +392,24 @@ function buildWaypointSet(
 
 // ── Main export ──────────────────────────────────────────────────────────────
 
+export interface WaypointSetOptions {
+  /** Override the default 5-direction compass for candidate generation. */
+  directions?: Array<{ name: string; bearingDeg: number }>;
+}
+
 /**
- * Generate 5 candidate waypoint sets for the given RouteSpec.
- * Each set covers a different direction from the start point.
+ * Generate candidate waypoint sets for the given RouteSpec.
+ * Each set covers a different compass direction from the start point.
+ *
+ * Default behaviour: 5 candidates across N/NE/E/S/W.
+ * Pass DIRECTIONS_WIDE (exported) via options.directions for 8 candidates
+ * when fit constraints are tight (workout mode).
  */
 export async function generateWaypointSets(
-  spec: RouteSpec
+  spec: RouteSpec,
+  options: WaypointSetOptions = {}
 ): Promise<Array<[number, number][]>> {
+  const directions = options.directions ?? DIRECTIONS;
   const [startLat, startLon] = spec.start_point;
   const radiusKm = spec.distance_km / (2 * Math.PI);
 
@@ -407,7 +431,7 @@ export async function generateWaypointSets(
   );
 
   // Generate one waypoint set per direction
-  return DIRECTIONS.map((direction) =>
+  return directions.map((direction) =>
     buildWaypointSet(spec, direction, anchors)
   );
 }

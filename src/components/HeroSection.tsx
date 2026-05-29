@@ -99,22 +99,22 @@ export default function HeroSection({ onExplore }: { onExplore: () => void }) {
 
         {/* CTAs */}
         <div className="flex items-center justify-center gap-3 mb-8 md:mb-14">
-          <button
-            onClick={onExplore}
+          <Link
+            href="/generate"
             className="btn-accent px-5 md:px-8 py-3 md:py-3.5 rounded-xl font-bold text-xs md:text-sm uppercase tracking-wider whitespace-nowrap"
           >
-            Explore Loops
-          </button>
-          <Link
-            href="/upload"
+            Plan a Ride
+          </Link>
+          <button
+            onClick={onExplore}
             className="px-5 md:px-8 py-3 md:py-3.5 rounded-xl font-bold text-xs md:text-sm uppercase tracking-wider transition-all hover:border-[rgba(200,255,0,0.5)] whitespace-nowrap"
             style={{
               border: "1px solid var(--border-light)",
               color: "var(--text-secondary)",
             }}
           >
-            Share a Loop
-          </Link>
+            Explore Loops
+          </button>
         </div>
 
         {/* Stats */}

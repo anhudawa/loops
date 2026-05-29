@@ -1,6 +1,13 @@
 import type { Metadata } from "next";
 import { getRoute, getRouteRating } from "@/lib/db";
-import { generateRouteJsonLd, generateBreadcrumbJsonLd, slugify } from "@/lib/seo";
+import {
+  generateRouteJsonLd,
+  generateBreadcrumbJsonLd,
+  generateSportsActivityLocationJsonLd,
+  generateFaqJsonLd,
+  buildRouteFaqs,
+  slugify,
+} from "@/lib/seo";
 import JsonLd from "@/components/JsonLd";
 
 export async function generateMetadata({
@@ -87,10 +94,39 @@ export default async function RouteLayout({
 
   const breadcrumbJsonLd = generateBreadcrumbJsonLd(breadcrumbItems);
 
+  const sportsActivityJsonLd = generateSportsActivityLocationJsonLd({
+    id: route.id,
+    name: route.name,
+    description: route.description,
+    start_lat: route.start_lat,
+    start_lng: route.start_lng,
+    county: route.county,
+    country: route.country,
+    region: route.region,
+    distance_km: route.distance_km,
+    elevation_gain_m: route.elevation_gain_m,
+    surface_type: route.surface_type,
+    discipline: route.discipline,
+    rating: { average: rating.average, count: rating.count },
+  });
+
+  // FAQPage JSON-LD mirrors the visible <RouteFaq> block exactly (same builder).
+  const faqJsonLd = generateFaqJsonLd(
+    buildRouteFaqs({
+      name: route.name,
+      distance_km: route.distance_km,
+      elevation_gain_m: route.elevation_gain_m,
+      surface_type: route.surface_type,
+      discipline: route.discipline,
+    })
+  );
+
   return (
     <>
       <JsonLd data={routeJsonLd} />
+      <JsonLd data={sportsActivityJsonLd} />
       <JsonLd data={breadcrumbJsonLd} />
+      <JsonLd data={faqJsonLd} />
       {children}
     </>
   );

@@ -1,0 +1,122 @@
+[
+  {
+    "file": "src/data/girona-collection/costa-brava-sant-grau.gpx",
+    "name": "Costa Brava Coastline via Sant Grau",
+    "description": "Classic Girona loop to the Costa Brava coastline through Sant Grau. 6.3km climb to the monastery, stunning coastal roads past Tossa de Mar, returning via quiet country lanes.",
+    "county": "Girona",
+    "country": "Spain",
+    "region": "Cataluña",
+    "discipline": "road",
+    "surface_type": "road",
+    "operator_name": "Epic Road Rides",
+    "operator_url": "https://epicroadrides.com"
+  },
+  {
+    "file": "src/data/girona-collection/els-angels.gpx",
+    "name": "Els Àngels Loop",
+    "description": "The classic climb to Santuari dels Àngels where Dalí married. Two climbs through woodland and medieval villages in the Gavarres.",
+    "county": "Girona",
+    "country": "Spain",
+    "region": "Cataluña",
+    "discipline": "road",
+    "surface_type": "road",
+    "operator_name": "Epic Road Rides",
+    "operator_url": "https://epicroadrides.com"
+  },
+  {
+    "file": "src/data/girona-collection/mare-de-deu-del-mont.gpx",
+    "name": "Mare de Déu del Mont",
+    "description": "18km averaging 5.4% with sections hitting 14%. Quiet rolling countryside, forest terrain, and panoramic summit views. Returns via Banyoles lake.",
+    "county": "Girona",
+    "country": "Spain",
+    "region": "Cataluña",
+    "discipline": "road",
+    "surface_type": "road",
+    "operator_name": "Epic Road Rides",
+    "operator_url": "https://epicroadrides.com"
+  },
+  {
+    "file": "src/data/girona-collection/sant-hilari-susqueda.gpx",
+    "name": "Sant Hilari Sacalm & Susqueda Dam",
+    "description": "Punchy loop with 1,710m of climbing. 20km climb to Sant Hilari Sacalm, twisting forest descents, and the dramatic Susqueda dam.",
+    "county": "Girona",
+    "country": "Spain",
+    "region": "Cataluña",
+    "discipline": "road",
+    "surface_type": "road",
+    "operator_name": "Epic Road Rides",
+    "operator_url": "https://epicroadrides.com"
+  },
+  {
+    "file": "src/data/girona-collection/coll-de-bracons.gpx",
+    "name": "Coll de Bracons",
+    "description": "Remote Catalan mountain pass north of Vic. Quiet roads through farmland rising to a serious climb with Pyrenean views.",
+    "county": "Girona",
+    "country": "Spain",
+    "region": "Cataluña",
+    "discipline": "road",
+    "surface_type": "road",
+    "operator_name": "Epic Road Rides",
+    "operator_url": "https://epicroadrides.com"
+  },
+  {
+    "file": "src/data/girona-collection/emporda-plain.gpx",
+    "name": "Empordà Plain",
+    "description": "Flat and rolling through the Empordà agricultural plain. Medieval villages, vineyards, and very little traffic. Perfect for steady-state or tempo work.",
+    "county": "Girona",
+    "country": "Spain",
+    "region": "Cataluña",
+    "discipline": "road",
+    "surface_type": "road",
+    "operator_name": "Epic Road Rides",
+    "operator_url": "https://epicroadrides.com"
+  },
+  {
+    "file": "src/data/girona-collection/gravel-rocacorba.gpx",
+    "name": "Rocacorba Gravel",
+    "description": "The gravel approach to Rocacorba through the Gavarres fire roads. Where discipline boundaries blur.",
+    "county": "Girona",
+    "country": "Spain",
+    "region": "Cataluña",
+    "discipline": "gravel",
+    "surface_type": "gravel",
+    "operator_name": "Epic Road Rides",
+    "operator_url": "https://epicroadrides.com"
+  },
+  {
+    "file": "src/data/girona-collection/les-gavarres.gpx",
+    "name": "Les Gavarres",
+    "description": "Deep in the Gavarres cork oak hills. Rolling terrain on quiet roads through one of Catalonia's least-visited corners.",
+    "county": "Girona",
+    "country": "Spain",
+    "region": "Cataluña",
+    "discipline": "road",
+    "surface_type": "road",
+    "operator_name": "Epic Road Rides",
+    "operator_url": "https://epicroadrides.com"
+  },
+  {
+    "file": "src/data/girona-collection/turo-de-lhome.gpx",
+    "name": "Turó de l'Home",
+    "description": "Highest point in the Montseny massif. Serious climbing through dense forest to a radio tower summit with views to Barcelona.",
+    "county": "Girona",
+    "country": "Spain",
+    "region": "Cataluña",
+    "discipline": "road",
+    "surface_type": "road",
+    "operator_name": "Epic Road Rides",
+    "operator_url": "https://epicroadrides.com"
+  },
+  {
+    "file": "src/data/girona-collection/la-traka-100.gpx",
+    "name": "La Traka 100",
+    "description": "The La Traka gravel race route. 100km of Girona's best gravel through the Gavarres, Empordà, and volcanic zone. Race-validated.",
+    "county": "Girona",
+    "country": "Spain",
+    "region": "Cataluña",
+    "discipline": "gravel",
+    "surface_type": "gravel",
+    "operator_name": "La Traka",
+    "operator_url": "https://latraka.cc"
+  }
+]

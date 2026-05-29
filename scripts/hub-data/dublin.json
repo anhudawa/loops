@@ -1,0 +1,51 @@
+[
+  {
+    "file": "scripts/seed-data/gpx/skerries-loop.gpx",
+    "name": "Skerries Loop",
+    "description": "North Dublin coastal loop out to Skerries and back. Flat and fast with sea views.",
+    "county": "Dublin",
+    "country": "Ireland",
+    "region": "Dublin",
+    "discipline": "road",
+    "surface_type": "road",
+    "operator_name": "LOOPS",
+    "operator_url": "https://www.loops.ie"
+  },
+  {
+    "file": "scripts/seed-data/gpx/skerries-via-the-lanes.gpx",
+    "name": "Skerries via the Lanes",
+    "description": "The long way to Skerries through the country lanes. Rolling north Dublin roads with a coastal finish.",
+    "county": "Dublin",
+    "country": "Ireland",
+    "region": "Dublin",
+    "discipline": "road",
+    "surface_type": "road",
+    "operator_name": "LOOPS",
+    "operator_url": "https://www.loops.ie"
+  },
+  {
+    "file": "scripts/seed-data/gpx/dublin-canal-ride.gpx",
+    "name": "Dublin Canal Ride",
+    "description": "Flat loop following the canals west to Celbridge and back. Perfect Sunday spin or interval-friendly for threshold work on the towpath straights.",
+    "county": "Dublin",
+    "country": "Ireland",
+    "region": "Dublin",
+    "discipline": "road",
+    "surface_type": "road",
+    "operator_name": "LOOPS",
+    "operator_url": "https://www.loops.ie"
+  },
+  {
+    "file": "scripts/seed-data/gpx/wicklow-200.gpx",
+    "name": "Wicklow 200",
+    "description": "200km through the Wicklow Mountains via Gorey. 3,400m of climbing. The sportive route that defines Irish road cycling.",
+    "county": "Wicklow",
+    "country": "Ireland",
+    "region": "Wicklow",
+    "discipline": "road",
+    "surface_type": "road",
+    "operator_name": "LOOPS",
+    "operator_url": "https://www.loops.ie",
+    "allow_non_loop": true
+  }
+]

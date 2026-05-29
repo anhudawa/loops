@@ -166,8 +166,8 @@ async function insertRoute(route) {
   const uuid = randomUUID();
 
   await pool.query(
-    `INSERT INTO routes (id, name, description, distance_km, elevation_gain_m, elevation_loss_m, surface_type, county, country, region, discipline, start_lat, start_lng, gpx_filename, coordinates, created_by, verified)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
+    `INSERT INTO routes (id, name, description, difficulty, distance_km, elevation_gain_m, elevation_loss_m, surface_type, county, country, region, discipline, start_lat, start_lng, gpx_filename, coordinates, created_by, verified, operator_name, operator_url)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)`,
     [
       uuid,
       route.name,
@@ -187,6 +187,8 @@ async function insertRoute(route) {
       JSON.stringify(coordsWithEle),
       null,
       true,
+      "Wikiloc Community",
+      "https://www.wikiloc.com",
     ]
   );
 

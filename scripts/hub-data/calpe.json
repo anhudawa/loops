@@ -1,0 +1,74 @@
+[
+  {
+    "file": "scripts/seed-data/gpx/coll-de-rates.fit",
+    "name": "Coll de Rates",
+    "description": "Classic Calpe climb over the Coll de Rates. The most well-known climb on the Costa Blanca, used in the Vuelta and a staple of every pro winter training camp.",
+    "county": "Alicante",
+    "country": "Spain",
+    "region": "Costa Blanca",
+    "discipline": "road",
+    "surface_type": "road",
+    "operator_name": "LOOPS",
+    "operator_url": "https://www.loops.ie"
+  },
+  {
+    "file": "scripts/seed-data/gpx/guadalest-loop.fit",
+    "name": "Guadalest Loop",
+    "description": "Big day from Calpe inland to Guadalest and Castell de Castells. Serious climbing through the mountains of the Marina Alta.",
+    "county": "Alicante",
+    "country": "Spain",
+    "region": "Costa Blanca",
+    "discipline": "road",
+    "surface_type": "road",
+    "operator_name": "LOOPS",
+    "operator_url": "https://www.loops.ie"
+  },
+  {
+    "file": "scripts/seed-data/gpx/bernia-loop.fit",
+    "name": "Bernia Loop",
+    "description": "Short but punchy loop from Calpe around the Sierra de Bernia. Every metre of climbing earned.",
+    "county": "Alicante",
+    "country": "Spain",
+    "region": "Costa Blanca",
+    "discipline": "road",
+    "surface_type": "road",
+    "operator_name": "LOOPS",
+    "operator_url": "https://www.loops.ie"
+  },
+  {
+    "file": "scripts/seed-data/gpx/alcalali-loop.fit",
+    "name": "Alcalali Loop",
+    "description": "Century loop from Calpe through the Jalon valley via Alcalali. Rolling inland roads with 2,000m of climbing.",
+    "county": "Alicante",
+    "country": "Spain",
+    "region": "Costa Blanca",
+    "discipline": "road",
+    "surface_type": "road",
+    "operator_name": "LOOPS",
+    "operator_url": "https://www.loops.ie"
+  },
+  {
+    "file": "scripts/seed-data/gpx/javea-loop.fit",
+    "name": "Javea Loop",
+    "description": "Coastal ride from Calpe to Javea and back. The easiest of the Calpe loops but still has bite.",
+    "county": "Alicante",
+    "country": "Spain",
+    "region": "Costa Blanca",
+    "discipline": "road",
+    "surface_type": "road",
+    "operator_name": "LOOPS",
+    "operator_url": "https://www.loops.ie"
+  },
+  {
+    "file": "scripts/seed-data/gpx/denia-loop.fit",
+    "name": "Denia Loop",
+    "description": "Calpe to Denia along the coast with an inland return. Great mix of coastal flats and interior climbing.",
+    "county": "Alicante",
+    "country": "Spain",
+    "region": "Costa Blanca",
+    "discipline": "road",
+    "surface_type": "road",
+    "operator_name": "LOOPS",
+    "operator_url": "https://www.loops.ie"
+  }
+]

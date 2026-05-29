@@ -2,6 +2,7 @@ import type { MetadataRoute } from "next";
 import { getAllRoutesForSitemap, getCountries, getRegions, getCollections } from "@/lib/db";
 import { slugify } from "@/lib/seo";
 import { getAllPosts } from "@/lib/blog";
+import { getAllDestinationSlugs } from "@/content/destinations";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const [routes, countries, collections] = await Promise.all([
@@ -60,9 +61,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.7,
   }));
 
+  const destinationPages: MetadataRoute.Sitemap = getAllDestinationSlugs().map((slug) => ({
+    url: `https://loops.ie/cycling/${slug}`,
+    changeFrequency: "monthly",
+    priority: 0.8,
+  }));
+
   return [
     ...staticPages,
     ...collectionPages,
+    ...destinationPages,
     ...blogPages,
     ...routePages,
     ...countryPages,

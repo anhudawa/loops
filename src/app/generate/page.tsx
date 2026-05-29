@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import RoutePreviewSvg from "@/components/RoutePreviewSvg";
+import ShareButton from "@/components/ShareButton";
 import { useVoiceInput } from "@/lib/useVoiceInput";
 import { useGeolocation } from "@/lib/useGeolocation";
 
@@ -624,13 +625,20 @@ function CandidateCard({
 
           <div className="flex flex-wrap gap-2 mt-3">
             {isLibrary ? (
-              <Link
-                href={`/routes/${candidate.route_id}`}
-                className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider"
-                style={{ background: "var(--accent)", color: "var(--bg)" }}
-              >
-                View route
-              </Link>
+              <>
+                <Link
+                  href={`/routes/${candidate.route_id}`}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider"
+                  style={{ background: "var(--accent)", color: "var(--bg)" }}
+                >
+                  View route
+                </Link>
+                <ShareButton
+                  routeId={candidate.route_id}
+                  title={candidate.name}
+                  distance={candidate.distance_km}
+                />
+              </>
             ) : (
               <>
                 <button

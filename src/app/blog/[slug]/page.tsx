@@ -65,9 +65,9 @@ function articleJsonLd(post: BlogPost) {
       "@type": "Organization",
       name: "LOOPS",
       url: "https://www.loops.ie",
-      logo: { "@type": "ImageObject", url: "https://www.loops.ie/icon-512.png" },
     },
-    ...(post.coverImage && { image: [post.coverImage] }),
+    // Fall back to the site OG image when a post has no dedicated cover.
+    image: [post.coverImage ?? "https://www.loops.ie/api/og"],
   };
 }
 

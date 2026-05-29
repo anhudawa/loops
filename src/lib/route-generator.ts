@@ -59,6 +59,8 @@ export interface GeneratedRoute {
   quality_score: number;
   quality_tier: QualityTier;
   quality_breakdown: Record<string, number>;
+  /** Positive highlights from quality scoring: landscape, POIs, surface. */
+  highlights: string[];
   road_type_breakdown: Record<string, number>;
   gpx_data: string;
   waypoints_used: [number, number][];
@@ -280,6 +282,32 @@ function computeMatchScore(
   return Math.max(0, Math.min(100, Math.round(score)));
 }
 
+/**
+ * Pick the positive, rider-facing highlights from the quality flags.
+ * Quality flags include both warnings ("Route near trunk") and positive
+ * signals ("Diverse landscape: coast, water"). We show only the good ones.
+ */
+function extractHighlights(flags: string[]): string[] {
+  const positivePatterns = [
+    /^Diverse landscape/i,
+    /viewpoint/i,
+    /^Near café/i,
+    /^Near restaurant/i,
+    /^Near pub/i,
+    /drinking.water/i,
+    /historic/i,
+    /castle/i,
+    /village/i,
+    /coast/i,
+    /lake/i,
+    /forest/i,
+    /peak/i,
+  ];
+  return flags
+    .filter((f) => positivePatterns.some((p) => p.test(f)))
+    .slice(0, 5);
+}
+
 function computeRoadTypeBreakdown(_coords: [number, number][]): Record<string, number> {
   // Detailed road-type analysis is already done in scoreRoute via Overpass.
   return { estimated: 100 };
@@ -326,15 +354,32 @@ export async function generateRouteCandidates(
     userSpeedKmh: options.userSpeedKmh,
     origin: options.origin,
   });
-  const interpreted = summariseIntent(spec);
+  const interpreted = await summariseIntent(spec);
   const candidates = await candidatesFromSpec(spec);
   return { interpreted, candidates };
 }
 
-function summariseIntent(spec: RouteSpec): InterpretedIntent {
+async function reverseGeocode(lat: number, lng: number): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&zoom=14`,
+      {
+        headers: { "User-Agent": "loops.ie route generator (https://www.loops.ie)" },
+        signal: AbortSignal.timeout(5000),
+      }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const addr = data.address;
+    return addr?.suburb || addr?.town || addr?.city || addr?.village || addr?.county || null;
+  } catch {
+    return null;
+  }
+}
+
+async function summariseIntent(spec: RouteSpec): Promise<InterpretedIntent> {
   let workout_summary: string | undefined;
   if (spec.workout) {
-    // e.g. "2 × 20 min threshold, then 3 × 5 min vo2max"
     workout_summary = spec.workout.intervals
       .map((iv) => {
         const zoneName = ({
@@ -351,12 +396,21 @@ function summariseIntent(spec: RouteSpec): InterpretedIntent {
       .join(", then ");
   }
 
+  // When the start point came from browser GPS (no region in prompt),
+  // reverse-geocode it so the "Interpreted as" panel shows a place name
+  // instead of raw coordinates.
+  let region = spec.region;
+  if (!region && spec.start_point) {
+    const placeName = await reverseGeocode(spec.start_point[0], spec.start_point[1]);
+    if (placeName) region = placeName;
+  }
+
   return {
     distance_km: spec.distance_km,
     duration_minutes: spec.duration_minutes,
     discipline: spec.discipline,
     elevation_preference: spec.elevation_preference,
-    region: spec.region,
+    region,
     country: spec.country,
     is_workout: !!spec.workout,
     workout_summary,
@@ -529,6 +583,7 @@ async function buildFreshRouteFromPath(
     quality_score: 0,
     quality_tier: "good" as QualityTier,
     quality_breakdown: {},
+    highlights: [],
     road_type_breakdown: { estimated: 100 },
     gpx_data: gpx,
     waypoints_used: waypoints,
@@ -651,6 +706,7 @@ async function generateFreshRoutes(spec: RouteSpec): Promise<GeneratedRoute[]> {
         quality_score: quality.total,
         quality_tier: quality.total >= QUALITY_WORLD_CLASS ? "excellent" : "good",
         quality_breakdown: quality.breakdown as unknown as Record<string, number>,
+        highlights: extractHighlights(quality.flags),
         road_type_breakdown: computeRoadTypeBreakdown(path.coords),
         gpx_data: gpx,
         waypoints_used: waypoints,

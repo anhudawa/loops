@@ -55,6 +55,7 @@ interface GeneratedCandidate {
   elevation_loss_m: number;
   quality_score: number;
   quality_tier?: "excellent" | "good";
+  highlights?: string[];
   gpx_data: string;
   match_score: number;
   workout_fit?: WorkoutFit;
@@ -600,6 +601,24 @@ function CandidateCard({
               </div>
             )}
           </dl>
+
+          {!isLibrary && candidate.highlights && candidate.highlights.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {candidate.highlights.map((h, i) => (
+                <span
+                  key={i}
+                  className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                  style={{
+                    background: "var(--accent-glow)",
+                    color: "var(--accent)",
+                    border: "1px solid rgba(200,255,0,0.2)",
+                  }}
+                >
+                  {h}
+                </span>
+              ))}
+            </div>
+          )}
 
           {workoutFit?.fits && <WorkoutAssignment fit={workoutFit} />}
 

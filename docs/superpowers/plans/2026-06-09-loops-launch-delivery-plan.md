@@ -4,6 +4,9 @@
 **For:** Anthony Walsh, Roadman Cycling
 **Date:** 2026-06-09
 **Status:** Dev team response — timeline, sequencing, resourcing, spike plan
+**Update 2026-06-09:** Anthony's decisions received — see "Decisions received"
+addendum at the end of this document. The validator-partner model in Section 1
+is superseded by `2026-06-09-route-sourcing-validation.md`.
 
 ---
 
@@ -289,3 +292,28 @@ hours.
 | 7 | Golden suite in CI | Weeks 8–9 |
 | 8 | Beta tooling | Weeks 8–9 |
 | 9 | Launch gate report | Week 12 |
+
+---
+
+## Addendum — Decisions received from Anthony (2026-06-09)
+
+1. **Route validation:** no local partners exist. Validation switches to
+   sourcing routes that credible local operators already publish (e.g. Eat
+   Sleep Cycle's public Girona route library), imported with attribution and
+   gated by our automated quality scoring. Full model:
+   `2026-06-09-route-sourcing-validation.md`. This removes the biggest
+   external dependency from the critical path.
+2. **Product status:** treat the product as pre-live. Rebuild where needed to
+   execute the plan — no obligation to preserve existing behaviour.
+3. **Social features:** no preference. Per the spec's out-of-scope list, hide
+   comments/ratings from curated destination route pages at launch; code stays.
+4. **Final 10 destinations (research-confirmed, popularity-ranked):**
+   Mallorca, Girona, Málaga/Costa del Sol, Calpe/Costa Blanca, Tenerife,
+   Gran Canaria, Lanzarote, Algarve, Lucca/Tuscany, Nice/Côte d'Azur.
+   Changes from the spec's proposed list: Lake Garda, Annecy, Flanders and
+   Dublin/Wicklow drop out of the 10 (Dublin/Wicklow stays as home-turf
+   coverage and the session-builder geography); Málaga, Gran Canaria,
+   Lanzarote and the Algarve come in — these rank higher on the
+   winter-training-camp circuit Roadman's audience actually books.
+   Implemented in `src/content/destinations.ts` (`LAUNCH_DESTINATION_SLUGS`).
+5. **Garmin Connect API application** remains a week-1 action (unchanged).

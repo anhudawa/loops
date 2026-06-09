@@ -46,11 +46,11 @@ describe("generateRouteJsonLd", () => {
     discipline: "gravel",
   };
 
-  it("generates valid SportsActivityLocation schema", () => {
+  it("generates valid ExerciseAction schema", () => {
     const result = generateRouteJsonLd(baseRoute);
-    expect(result["@type"]).toBe("SportsActivityLocation");
+    expect(result["@type"]).toBe("ExerciseAction");
     expect(result.url).toBe("https://loops.ie/routes/abc123");
-    expect(result.sport).toBe("Cycling");
+    expect(result.exerciseType).toBe("Gravel");
   });
 
   it("includes aggregateRating only when count > 0", () => {
@@ -66,8 +66,8 @@ describe("generateRouteJsonLd", () => {
 
   it("falls back to county when region is null", () => {
     const result = generateRouteJsonLd({ ...baseRoute, region: null });
-    const address = result.address as { addressRegion: string };
-    expect(address.addressRegion).toBe("Cork");
+    const location = result.location as { address: { addressRegion: string } };
+    expect(location.address.addressRegion).toBe("Cork");
   });
 });
 

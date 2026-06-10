@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import RoutePreviewSvg from "@/components/RoutePreviewSvg";
+import RideDisclaimer from "@/components/RideDisclaimer";
 import ShareButton from "@/components/ShareButton";
 import { useVoiceInput } from "@/lib/useVoiceInput";
 import { useGeolocation } from "@/lib/useGeolocation";
@@ -179,7 +180,10 @@ export default function GeneratePage() {
       setError({ message: "Describe the route you want in a bit more detail.", code: "TOO_SHORT" });
       return;
     }
+    await runGeneration(trimmed);
+  }
 
+  async function runGeneration(trimmed: string) {
     setLoading(true);
     setError(null);
     setCandidates([]);
@@ -366,6 +370,14 @@ export default function GeneratePage() {
         </form>
 
         {error && <ErrorPanel error={error} />}
+        {error?.code === "PARSE_FAILED" && (
+          <FallbackForm
+            onSubmit={(text) => {
+              setPrompt(text);
+              runGeneration(text);
+            }}
+          />
+        )}
 
         {loading && (
           <div className="grid gap-4">
@@ -401,6 +413,7 @@ export default function GeneratePage() {
                 />
               ))}
             </div>
+            <RideDisclaimer />
           </div>
         )}
 
@@ -523,6 +536,85 @@ function ErrorPanel({ error }: { error: { message: string; code?: string } }) {
         </p>
       )}
     </div>
+  );
+}
+
+// ── Fallback form ─────────────────────────────────────────────────────────────
+
+/**
+ * Structured fallback when natural-language parsing fails (launch spec
+ * resilience: fall back to a form instead of a dead end). Composes a
+ * clean prompt from the fields and reruns generation.
+ */
+function FallbackForm({ onSubmit }: { onSubmit: (text: string) => void }) {
+  const [hours, setHours] = useState("2");
+  const [discipline, setDiscipline] = useState("road");
+  const [terrain, setTerrain] = useState("rolling");
+  const [place, setPlace] = useState("");
+
+  const selectStyle = {
+    background: "var(--bg-card)",
+    border: "1px solid var(--border)",
+    color: "var(--text)",
+  } as const;
+
+  return (
+    <form
+      className="mb-6 rounded-2xl p-4 grid gap-3"
+      style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+      onSubmit={(e) => {
+        e.preventDefault();
+        const placePart = place.trim() ? ` from ${place.trim()}` : "";
+        onSubmit(
+          `${hours} hour ${discipline} loop, ${terrain} terrain${placePart}`
+        );
+      }}
+    >
+      <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+        Quick form
+      </p>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+          Hours
+          <select value={hours} onChange={(e) => setHours(e.target.value)} className="w-full mt-1 rounded-lg px-2 py-2 text-sm" style={selectStyle}>
+            {["1", "1.5", "2", "3", "4", "5"].map((h) => <option key={h} value={h}>{h}</option>)}
+          </select>
+        </label>
+        <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+          Bike
+          <select value={discipline} onChange={(e) => setDiscipline(e.target.value)} className="w-full mt-1 rounded-lg px-2 py-2 text-sm" style={selectStyle}>
+            <option value="road">Road</option>
+            <option value="gravel">Gravel</option>
+            <option value="mtb">MTB</option>
+          </select>
+        </label>
+        <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+          Terrain
+          <select value={terrain} onChange={(e) => setTerrain(e.target.value)} className="w-full mt-1 rounded-lg px-2 py-2 text-sm" style={selectStyle}>
+            <option value="flat">Flat</option>
+            <option value="rolling">Rolling</option>
+            <option value="hilly">Hilly</option>
+          </select>
+        </label>
+        <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+          Start (optional)
+          <input
+            value={place}
+            onChange={(e) => setPlace(e.target.value)}
+            placeholder="e.g. Skerries"
+            className="w-full mt-1 rounded-lg px-2 py-2 text-sm"
+            style={selectStyle}
+          />
+        </label>
+      </div>
+      <button
+        type="submit"
+        className="justify-self-start font-bold text-sm px-4 py-2 rounded-lg"
+        style={{ background: "var(--accent)", color: "var(--bg)" }}
+      >
+        Find me a route
+      </button>
+    </form>
   );
 }
 

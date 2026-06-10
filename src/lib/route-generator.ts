@@ -542,9 +542,7 @@ async function candidatesFromSpecInner(
     }
     const freshWorkout = await generateFreshWorkoutRoutes(spec, spec.workout);
     if (freshWorkout.length === 0) {
-      throw new Error(
-        "No routes in your area can host this workout. Try a shorter interval duration, a different zone, or a wider start location."
-      );
+      throw new Error(workoutDeclineMessage(spec.workout));
     }
     return freshWorkout.map((g) => ({ source: "generated" as const, ...g }));
   }
@@ -573,6 +571,25 @@ async function candidatesFromSpecInner(
   }
 
   return generated.map((g) => ({ source: "generated" as const, ...g }));
+}
+
+/**
+ * Honest decline with a concrete alternative (launch spec: never silently
+ * serve a compromised segment — say so and suggest what would work).
+ * Splitting the longest interval in half is the most common fix: a clean
+ * 10-minute stretch is far easier to find than a clean 20.
+ */
+function workoutDeclineMessage(workout: WorkoutSpec): string {
+  const longest = workout.intervals.reduce(
+    (max, iv) => (iv.duration_minutes > max.duration_minutes ? iv : max),
+    workout.intervals[0]
+  );
+  const base = `I couldn't find roads near your start point that can hold ${longest.count} × ${longest.duration_minutes} min uninterrupted at that intensity.`;
+  if (longest.duration_minutes >= 12) {
+    const half = Math.round(longest.duration_minutes / 2);
+    return `${base} Splitting it into ${longest.count * 2} × ${half} min would be much easier to place — or try a different start location.`;
+  }
+  return `${base} Try a different start location, or a slightly shorter interval.`;
 }
 
 // ── Workout-aware fresh generation ───────────────────────────────────────────

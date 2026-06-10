@@ -93,6 +93,7 @@ npm test                  # Vitest unit suite
 npx tsc --noEmit          # Typecheck
 npm run build             # Production build (passes without DB — fail-soft)
 npx playwright test tests/loops-comprehensive.spec.ts --project=chromium
+npm run golden            # Golden route suite (needs ANTHROPIC_API_KEY)
 node scripts/import-routes.mjs scripts/hub-data/girona-eat-sleep-cycle.json --dry-run
 ```
 
@@ -103,7 +104,8 @@ node scripts/import-routes.mjs scripts/hub-data/girona-eat-sleep-cycle.json --dr
   with segment validation; anchor-first is the upgrade
 - Garmin Connect API push + Whisper voice fallback — need external
   accounts/keys
-- Golden route test suite (spec §6) not yet wired into CI
+- Golden route suite: harness + 30 cases at `npm run golden` (needs
+  ANTHROPIC_API_KEY + network); expand to 100 cases and wire into CI
 - BRouter public demo is rate-limited — set BROUTER_URL before launch
 - Gran Canaria manifest has 7 routes (bar is 8)
 - No CSRF tokens; cookie-only sessions; locale hardcoded en-IE

@@ -183,9 +183,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (message.includes("host this workout")) {
+    if (message.includes("host this workout") || message.includes("uninterrupted at that intensity")) {
       return NextResponse.json(
         { error: message, code: "NO_WORKOUT_MATCH" },
+        { status: 422 }
+      );
+    }
+
+    if (message.includes("Failed to parse LLM response")) {
+      return NextResponse.json(
+        {
+          error: "I couldn't fully understand that — use the quick form below and I'll take it from there.",
+          code: "PARSE_FAILED",
+        },
         { status: 422 }
       );
     }
@@ -211,7 +221,8 @@ function classifyErrorCode(message: string): string {
   if (message.includes("timed out")) return "TIMEOUT";
   if (message.includes("geocode") || message.includes("location")) return "GEOCODE_FAILED";
   if (message.includes("No valid routes")) return "NO_ROUTES_FOUND";
-  if (message.includes("host this workout")) return "NO_WORKOUT_MATCH";
+  if (message.includes("host this workout") || message.includes("uninterrupted at that intensity")) return "NO_WORKOUT_MATCH";
+  if (message.includes("Failed to parse LLM response")) return "PARSE_FAILED";
   if (message.includes("Overpass")) return "OVERPASS_ERROR";
   return "INTERNAL_ERROR";
 }

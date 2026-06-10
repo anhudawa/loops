@@ -11,6 +11,7 @@ import Comments from "@/components/Comments";
 import PhotoGallery from "@/components/PhotoGallery";
 import ConditionReports from "@/components/ConditionReports";
 import RideActions from "@/components/RideActions";
+import RideDisclaimer from "@/components/RideDisclaimer";
 import ShareRide from "@/components/ShareRide";
 import WeatherCard from "@/components/WeatherCard";
 import { useAuth } from "@/components/AuthProvider";
@@ -506,6 +507,7 @@ export default function RouteDetail() {
         {/* Ride Actions */}
         <div className="mb-6">
           <RideActions routeId={route.id} routeName={route.name} />
+          <RideDisclaimer />
         </div>
 
         {/* Elevation Profile — full width */}

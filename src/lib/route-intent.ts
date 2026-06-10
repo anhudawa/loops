@@ -314,7 +314,7 @@ export function parseBasicIntent(prompt: string): ParsedIntent | null {
   const hourMatch = p.match(/(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)\b/);
   const minMatch = p.match(/(\d+)\s*(?:minutes?|mins?)\b/);
   if (hourMatch) duration = Math.round(parseFloat(hourMatch[1]) * 60);
-  else if (minMatch) duration = parseInt(minMatch[1], 10);
+  if (minMatch) duration = (duration ?? 0) + parseInt(minMatch[1], 10);
 
   // Distance: "60km", "40 mile"
   let distance: number | null = null;
@@ -328,11 +328,14 @@ export function parseBasicIntent(prompt: string): ParsedIntent | null {
   const discipline: Discipline =
     /\bgravel\b/.test(p) ? "gravel" : /\bmtb|mountain bike\b/.test(p) ? "mtb" : "road";
 
+  // Strip "mountain bike" before terrain matching so the discipline
+  // phrase doesn't read as mountainous terrain.
+  const pTerrain = p.replace(/mountain\s*bike/g, "");
   const elevation_preference: ElevationPreference =
-    /\bflat\b|no (?:big )?climb/.test(p) ? "flat"
-    : /\brolling\b/.test(p) ? "rolling"
-    : /\bhilly\b|climbing\b/.test(p) ? "hilly"
-    : /mountain(?:ous)?\b/.test(p) ? "mountainous"
+    /\bflat\b|no (?:big )?climb/.test(pTerrain) ? "flat"
+    : /\brolling\b/.test(pTerrain) ? "rolling"
+    : /\bhilly\b|\bhills\b|climbing\b/.test(pTerrain) ? "hilly"
+    : /mountain(?:ous)?\b/.test(pTerrain) ? "mountainous"
     : "any";
 
   let wind: string = "none";
@@ -344,7 +347,7 @@ export function parseBasicIntent(prompt: string): ParsedIntent | null {
 
   // "from <place>" — stop at punctuation or terrain/wind keywords
   let region: string | null = null;
-  const fromMatch = prompt.match(/\bfrom\s+([A-Za-zÀ-ÿ''. -]{3,40}?)(?:[,.;]|\s+(?:with|on|in|and|tailwind|headwind)\b|$)/i);
+  const fromMatch = prompt.match(/\bfrom\s+([A-Za-zÀ-ÿ''. -]{3,40}?)(?:[,.;]|\s+(?:with|on|in|and|tailwind|headwind)\b|\s+\d|$)/i);
   if (fromMatch) region = fromMatch[1].trim();
 
   return {

@@ -71,6 +71,8 @@ export interface GeneratedRoute {
   /** Positive highlights from quality scoring: landscape, POIs, surface. */
   highlights: string[];
   road_type_breakdown: Record<string, number>;
+  /** Paved/unpaved/unknown share — "know before you go". */
+  surface_breakdown?: { paved_pct: number; unpaved_pct: number; unknown_pct: number };
   gpx_data: string;
   waypoints_used: [number, number][];
   match_score: number;          // 0–100 how well it matches the request
@@ -834,7 +836,8 @@ async function buildLoopAroundCorridor(
     quality_tier: quality.total >= QUALITY_WORLD_CLASS ? "excellent" : "good",
     quality_breakdown: quality.breakdown as unknown as Record<string, number>,
     highlights: extractHighlights(quality.flags),
-    road_type_breakdown: computeRoadTypeBreakdown(coords),
+    road_type_breakdown: quality.road_class_breakdown ?? computeRoadTypeBreakdown(coords),
+    surface_breakdown: quality.surface_breakdown,
     gpx_data: buildGpx(
       coords,
       elevations,
@@ -1145,7 +1148,8 @@ async function generateFreshRoutes(
         quality_tier: quality.total >= QUALITY_WORLD_CLASS ? "excellent" : "good",
         quality_breakdown: quality.breakdown as unknown as Record<string, number>,
         highlights: extractHighlights(quality.flags),
-        road_type_breakdown: computeRoadTypeBreakdown(path.coords),
+        road_type_breakdown: quality.road_class_breakdown ?? computeRoadTypeBreakdown(path.coords),
+        surface_breakdown: quality.surface_breakdown,
         gpx_data: gpx,
         waypoints_used: waypoints,
         match_score: matchScore,

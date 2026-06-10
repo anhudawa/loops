@@ -137,7 +137,12 @@ function LoginPage() {
   const error = manualError || urlError;
 
   useEffect(() => {
-    fetch("/api/stats").then((r) => r.json()).then(setStats).catch(() => {});
+    fetch("/api/stats")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data && typeof data.routes === "number") setStats(data);
+      })
+      .catch(() => {});
   }, []);
 
   // Sticky nav transition
@@ -207,7 +212,7 @@ function LoginPage() {
             Routes Worth Riding
           </h1>
           <p className="text-base md:text-lg max-w-lg mx-auto leading-relaxed" style={{ color: "var(--text-muted)" }}>
-            Real routes from real riders. No paywall, no algorithm, no&nbsp;lock&#8209;in. Just&nbsp;GPX&nbsp;files you can use anywhere.
+            World-class loops, wind-smart planning. No paywall, no&nbsp;lock&#8209;in. Just&nbsp;GPX&nbsp;files you can use anywhere.
           </p>
 
           {/* CTA */}
@@ -290,8 +295,8 @@ function LoginPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498l4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 00-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0z" />
                 </svg>
               ),
-              title: "Human-Curated Routes",
-              desc: "Every route uploaded by a real rider who's actually ridden it. No algorithm-generated paths down motorways.",
+              title: "Routes You Can Trust",
+              desc: "A verified library of the world's best cycling roads, plus wind-aware route generation with hard safety guardrails. Never a motorway, never surprise gravel.",
             },
             {
               icon: (
@@ -300,7 +305,7 @@ function LoginPage() {
                 </svg>
               ),
               title: "Your Data, Your GPX",
-              desc: "Download any route as a GPX file, instantly. No paywall. No subscription. It's your data.",
+              desc: "Download any route as a GPX file with a free account. No paywall, no premium tiers. No subscription. It's your data.",
             },
             {
               icon: (
@@ -358,7 +363,7 @@ function LoginPage() {
                     {/* Cover */}
                     <div className="aspect-[16/9] relative overflow-hidden" style={{ background: "var(--bg-raised)" }}>
                       <img
-                        src={route.cover_photo ? `/photos/${route.cover_photo}` : `/api/og/${route.id}`}
+                        src={route.cover_photo ? (route.cover_photo.startsWith("http") ? route.cover_photo : `/photos/${route.cover_photo}`) : `/api/og/${route.id}`}
                         alt=""
                         className="w-full h-full object-cover"
                         loading="lazy"
@@ -455,8 +460,8 @@ function LoginPage() {
           </p>
           <div className="grid grid-cols-1 gap-3">
             {[
-              { them: "Routes behind a paywall", us: "Every route free to download" },
-              { them: "AI routes down busy roads", us: "Human-ridden, human-shared" },
+              { them: "Device sync behind a paywall", us: "Every route free to download" },
+              { them: "Routes down busy roads", us: "Quality-scored, quiet-road loops" },
               { them: "Locked into one ecosystem", us: "Open GPX — use any app" },
               { them: "Bloated with features you don't use", us: "Simple: find loops, ride loops" },
             ].map((item, i) => (

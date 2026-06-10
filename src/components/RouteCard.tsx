@@ -114,8 +114,14 @@ export default function RouteCard({ route, showDistance }: RouteCardProps) {
 
         {/* Content */}
         <div className="p-2.5 md:p-4">
-          {/* Mobile: location + rating */}
+          {/* Mobile: name + distance + location + rating */}
           <div className="md:hidden">
+            <h3 className="text-sm font-bold truncate mb-0.5" style={{ color: "var(--text)" }}>
+              {route.name}
+            </h3>
+            <p className="text-[11px] mb-1" style={{ color: "var(--text-secondary)" }}>
+              {route.distance_km} km · {route.elevation_gain_m} m climbing
+            </p>
             <div className="flex items-center justify-between">
               <span className="text-xs" style={{ color: "var(--text-muted)" }}>
                 {locationText}{countryText}

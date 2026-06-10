@@ -44,8 +44,12 @@ export default function HeroSection({ onExplore }: { onExplore: () => void }) {
 
   useEffect(() => {
     fetch("/api/stats")
-      .then((r) => r.json())
-      .then(setStats);
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        // Guard against error bodies — never animate NaN into the hero.
+        if (data && typeof data.routes === "number") setStats(data);
+      })
+      .catch(() => {});
   }, []);
 
   return (

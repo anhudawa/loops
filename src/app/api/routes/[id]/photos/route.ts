@@ -54,8 +54,27 @@ export async function POST(
     const ext = file.type.split("/")[1] === "jpeg" ? "jpg" : file.type.split("/")[1];
     const filename = `${photoId}.${ext}`;
 
-    // TODO: Use Vercel Blob for file storage in production
-    await insertPhoto(photoId, routeId, user.id, filename, caption?.trim() || null);
+    // Store the bytes in Vercel Blob and persist the public URL. Without
+    // BLOB_READ_WRITE_TOKEN we fail honestly instead of recording a photo
+    // that can never render.
+    let storedUrl: string;
+    try {
+      const { put } = await import("@vercel/blob");
+      const blob = await put(`route-photos/${filename}`, file, {
+        access: "public",
+        contentType: file.type,
+      });
+      storedUrl = blob.url;
+    } catch (err) {
+      console.error("[photos] blob upload failed:", err);
+      return apiError(
+        "Photo storage is unavailable right now — please try again later",
+        "STORAGE_UNAVAILABLE",
+        503
+      );
+    }
+
+    await insertPhoto(photoId, routeId, user.id, storedUrl, caption?.trim() || null);
     const photos = await getRoutePhotos(routeId);
     return NextResponse.json(photos, { status: 201 });
   } catch (err) {

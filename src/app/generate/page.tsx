@@ -59,6 +59,7 @@ interface GeneratedCandidate {
   quality_score: number;
   quality_tier?: "excellent" | "good";
   highlights?: string[];
+  surface_breakdown?: { paved_pct: number; unpaved_pct: number; unknown_pct: number };
   gpx_data: string;
   match_score: number;
   workout_fit?: WorkoutFit;
@@ -152,7 +153,7 @@ export default function GeneratePage() {
   const geo = useGeolocation();
 
   useEffect(() => {
-    if (!authLoading && !user) router.push("/login?returnTo=/generate");
+    if (!authLoading && !user) router.push("/login?redirect=/generate");
   }, [user, authLoading, router]);
 
   function toggleVoice() {
@@ -768,6 +769,14 @@ function CandidateCard({
                 </span>
               ))}
             </div>
+          )}
+
+          {!isLibrary && candidate.surface_breakdown && candidate.surface_breakdown.unknown_pct < 100 && (
+            <p className="text-xs mt-2 font-semibold" style={{ color: candidate.surface_breakdown.unpaved_pct > 5 ? "#f0a050" : "var(--text-secondary)" }}>
+              {candidate.surface_breakdown.paved_pct >= 99
+                ? "✓ 100% paved"
+                : `${candidate.surface_breakdown.paved_pct}% paved · ${candidate.surface_breakdown.unpaved_pct}% unpaved${candidate.surface_breakdown.unknown_pct > 10 ? ` · ${candidate.surface_breakdown.unknown_pct}% unknown` : ""}`}
+            </p>
           )}
 
           {candidate.wind_note && (

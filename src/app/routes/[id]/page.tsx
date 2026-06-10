@@ -578,6 +578,9 @@ export default function RouteDetail() {
         )}
       </div>
 
+      {/* Spacer so the sticky CTA never covers the footer/content */}
+      {!user && !authLoading && <div className="h-24" aria-hidden="true" />}
+
       {/* Sticky bottom CTA for unauthenticated users */}
       {!user && !authLoading && (
         <div

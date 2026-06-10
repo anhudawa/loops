@@ -54,7 +54,19 @@ export default async function CollectionPage({ params }: Props) {
   try {
     collection = await getCollectionBySlug(slug);
   } catch {
-    notFound();
+    // DB outage is not a 404 — show an honest degraded state.
+    return (
+      <main className="min-h-screen flex items-center justify-center px-4" style={{ background: "var(--bg)" }}>
+        <div className="text-center max-w-md">
+          <h1 className="text-xl font-bold mb-2" style={{ color: "var(--text)" }}>
+            This collection is taking a breather
+          </h1>
+          <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+            We couldn&apos;t load it just now. Give it a minute and refresh.
+          </p>
+        </div>
+      </main>
+    );
   }
   if (!collection) notFound();
 

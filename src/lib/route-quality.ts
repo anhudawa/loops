@@ -44,6 +44,10 @@ export interface QualityScore {
   confidence_level: "high" | "medium" | "low";
   low_coverage_warning: boolean;               // true if >30% of route unmatched in OSM
   osm_cached: boolean;
+  /** Paved/unpaved/unknown share of sampled points ("know before you go"). */
+  surface_breakdown?: { paved_pct: number; unpaved_pct: number; unknown_pct: number };
+  /** Road-class share (% of sampled points per OSM highway class). */
+  road_class_breakdown?: Record<string, number>;
 }
 
 // ──── Types for OSM data ────────────────────────────────────────────────────
@@ -496,28 +500,66 @@ function disciplineIndex(d: Discipline): 0 | 1 | 2 {
   return d === "road" ? 0 : d === "gravel" ? 1 : 2;
 }
 
+/** Surfaces that mean tarmac/sealed for a road bike. */
+const PAVED_SURFACE_SET = new Set([
+  "asphalt", "paved", "concrete", "concrete:plates", "concrete:lanes",
+  "paving_stones", "sett", "metal", "wood",
+]);
+const UNPAVED_SURFACE_SET = new Set([
+  "unpaved", "gravel", "fine_gravel", "compacted", "dirt", "earth", "grass",
+  "ground", "mud", "sand", "woodchips", "pebblestone", "rock", "cobblestone",
+]);
+/** Highway classes assumed paved when no surface tag exists. */
+const PAVED_CLASS_SET = new Set([
+  "motorway", "motorway_link", "trunk", "trunk_link", "primary", "primary_link",
+  "secondary", "secondary_link", "tertiary", "tertiary_link", "residential",
+  "service", "living_street", "cycleway",
+]);
+const UNPAVED_CLASS_SET = new Set(["track", "path", "bridleway"]);
+
+export interface SurfaceBreakdown {
+  paved_pct: number;
+  unpaved_pct: number;
+  unknown_pct: number;
+}
+
 function scoreSurface(
   sampledCoords: Coord[],
   highwayWays: ProcessedWay[],
   discipline: Discipline
-): { score: number; flags: string[] } {
+): {
+  score: number;
+  flags: string[];
+  surface: SurfaceBreakdown;
+  roadClasses: Record<string, number>;
+} {
   const flags: string[] = [];
   const di = disciplineIndex(discipline);
   const scores: number[] = [];
   let motorwayCount = 0;
   let unmatchedCount = 0;
+  let paved = 0, unpaved = 0, unknown = 0;
+  const classCounts: Record<string, number> = {};
 
   for (const coord of sampledCoords) {
     const pt: [number, number] = [coord[0], coord[1]];
     const nearest = findNearestWay(pt, highwayWays, 0.05);
     if (!nearest) {
       unmatchedCount++;
+      unknown++;
       scores.push(15); // neutral for unmatched
       continue;
     }
 
     const hw = nearest.tags.highway ?? "";
     const surface = nearest.tags.surface ?? "";
+
+    classCounts[hw || "unknown"] = (classCounts[hw || "unknown"] ?? 0) + 1;
+    if (PAVED_SURFACE_SET.has(surface)) paved++;
+    else if (UNPAVED_SURFACE_SET.has(surface)) unpaved++;
+    else if (PAVED_CLASS_SET.has(hw)) paved++;
+    else if (UNPAVED_CLASS_SET.has(hw)) unpaved++;
+    else unknown++;
 
     const weights = HIGHWAY_WEIGHTS[hw];
     let baseScore = weights ? weights[di] : 15;
@@ -544,7 +586,19 @@ function scoreSurface(
   }
 
   const avg = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 15;
-  return { score: Math.round(avg), flags };
+  const total = Math.max(1, paved + unpaved + unknown);
+  const pct = (n: number) => Math.round((n / total) * 100);
+  const roadClasses: Record<string, number> = {};
+  const classTotal = Math.max(1, Object.values(classCounts).reduce((a, b) => a + b, 0));
+  for (const [k, v] of Object.entries(classCounts)) {
+    roadClasses[k] = Math.round((v / classTotal) * 100);
+  }
+  return {
+    score: Math.round(avg),
+    flags,
+    surface: { paved_pct: pct(paved), unpaved_pct: pct(unpaved), unknown_pct: pct(unknown) },
+    roadClasses,
+  };
 }
 
 // ──── Safety Scoring ─────────────────────────────────────────────────────────
@@ -1252,6 +1306,8 @@ export async function scoreRoute(
   }
 
   // 5. Score each dimension
+  let surfaceBreakdown: QualityScore["surface_breakdown"];
+  let roadClassBreakdown: QualityScore["road_class_breakdown"];
   let surface_score: number;
   let safety_score: number;
   let scenic_score: number;
@@ -1274,6 +1330,8 @@ export async function scoreRoute(
     bicycle_access_score = 15;
   } else {
     const surf = scoreSurface(sampled, highwayWays, discipline);
+    surfaceBreakdown = surf.surface;
+    roadClassBreakdown = surf.roadClasses;
     const safe = scoreSafety(sampled, highwayWays);
     const scenic = scoreScenic(bbox, elements, nodeMap, sampled);
     const traffic = scoreTrafficVolume(sampled, highwayWays);
@@ -1338,6 +1396,8 @@ export async function scoreRoute(
       bicycle_access_score,
     },
     flags: [...new Set(allFlags)], // deduplicate
+    surface_breakdown: surfaceBreakdown,
+    road_class_breakdown: roadClassBreakdown,
     confidence,
     confidence_level,
     low_coverage_warning,

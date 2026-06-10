@@ -58,6 +58,7 @@ export default function RootLayout({
     <html lang="en" className={outfit.variable}>
       <head>
         <link rel="manifest" href="/manifest.json" />
+        <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
       </head>
       <body className="antialiased">
         <JsonLd data={generateWebSiteJsonLd()} />

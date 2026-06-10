@@ -16,7 +16,12 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const route = await getRoute(id);
+  let route: Awaited<ReturnType<typeof getRoute>> = undefined;
+  try {
+    route = await getRoute(id);
+  } catch {
+    return { title: "Cycling Route | LOOPS" };
+  }
 
   if (!route) {
     return { title: "Route Not Found - LOOPS" };
@@ -58,11 +63,18 @@ export default async function RouteLayout({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const route = await getRoute(id);
+  // Fail soft: without the DB we render the page shell (the client page
+  // shows its own retry UI) and just skip the JSON-LD enrichment.
+  let route: Awaited<ReturnType<typeof getRoute>> = undefined;
+  let rating = { average: 0, count: 0 };
+  try {
+    route = await getRoute(id);
+    if (route) rating = await getRouteRating(id);
+  } catch {
+    return children;
+  }
 
   if (!route) return children;
-
-  const rating = await getRouteRating(id);
 
   const routeJsonLd = generateRouteJsonLd({
     id: route.id,

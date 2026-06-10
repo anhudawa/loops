@@ -220,15 +220,19 @@ out skel qt;
       signal: AbortSignal.timeout(30000),
     });
 
-  let res = await doFetch();
-  if (res.status === 429 || res.status >= 500) {
-    // Transient load on the public API — one retry after a short backoff.
+  let res: Response | null = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      res = await doFetch();
+    } catch {
+      res = null; // network/timeout — treat like a 5xx and retry once
+    }
+    if (res && res.status !== 429 && res.status < 500) break;
     await new Promise((r) => setTimeout(r, 2500 + Math.random() * 2500));
-    res = await doFetch();
   }
 
-  if (!res.ok) {
-    throw new Error(`Overpass API error: HTTP ${res.status}`);
+  if (!res || !res.ok) {
+    throw new Error(`Overpass API error: ${res ? `HTTP ${res.status}` : "network timeout"}`);
   }
 
   return res.json();
@@ -477,22 +481,24 @@ export async function generateWaypointSets(
   const [startLat, startLon] = spec.start_point;
   const radiusKm = spec.distance_km / LOOP_PERIMETER_FACTOR;
 
-  // Query Overpass for the surrounding road network
-  const osmData = await queryOverpass(
-    startLat,
-    startLon,
-    radiusKm * 1.2, // slightly larger to capture edges
-    spec.road_preferences
-  );
-
-  // Extract anchor points from OSM data
-  const anchors = extractAnchorPoints(
-    osmData.elements,
-    startLat,
-    startLon,
-    radiusKm,
-    spec
-  );
+  // Query Overpass for the surrounding road network. Fail soft: with no
+  // road data we fall back to plain compass waypoints — the island-retry
+  // and rules layers still guard the output, and a degraded attempt
+  // beats a guaranteed failure.
+  let anchors: AnchorPoint[] = [];
+  try {
+    const osmData = await queryOverpass(
+      startLat,
+      startLon,
+      radiusKm * 1.2, // slightly larger to capture edges
+      spec.road_preferences
+    );
+    anchors = extractAnchorPoints(osmData.elements, startLat, startLon, radiusKm, spec);
+  } catch (err) {
+    console.error(
+      `[waypoints] Overpass unavailable — using geometric waypoints (${err instanceof Error ? err.message : err})`
+    );
+  }
 
   // Choose bearings by anchor support instead of a fixed compass: count
   // anchors in a ±30° sector beyond 35% of the radius for each of 12

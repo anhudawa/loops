@@ -91,6 +91,79 @@ function pointToSegmentKm(
   return haversineKm(pt, [ay + t * dy, ax + t * dx]);
 }
 
+
+// ──── Spatial index ──────────────────────────────────────────────────────────
+//
+// findNearestWay/anyWayWithin are called for hundreds of sampled points
+// against thousands of ways. The naive scan is O(samples × segments) and
+// burned 60-90s of sync CPU per generation, blocking the event loop (and
+// the pipeline timeout with it). A coarse grid index makes each lookup
+// touch only nearby segments. Indexes are cached per ways-array identity,
+// so call sites stay unchanged.
+
+interface IndexedSegment {
+  a: [number, number];
+  b: [number, number];
+  way: ProcessedWay;
+}
+
+const GRID_CELL_DEG = 0.005; // ≈ 550 m of latitude
+
+class SegmentGrid {
+  private cells = new Map<string, IndexedSegment[]>();
+
+  constructor(ways: ProcessedWay[]) {
+    for (const way of ways) {
+      for (let i = 0; i + 1 < way.nodes.length; i++) {
+        const a: [number, number] = [way.nodes[i].lat, way.nodes[i].lon];
+        const b: [number, number] = [way.nodes[i + 1].lat, way.nodes[i + 1].lon];
+        const seg: IndexedSegment = { a, b, way };
+        const minX = Math.floor(Math.min(a[1], b[1]) / GRID_CELL_DEG);
+        const maxX = Math.floor(Math.max(a[1], b[1]) / GRID_CELL_DEG);
+        const minY = Math.floor(Math.min(a[0], b[0]) / GRID_CELL_DEG);
+        const maxY = Math.floor(Math.max(a[0], b[0]) / GRID_CELL_DEG);
+        for (let x = minX; x <= maxX; x++) {
+          for (let y = minY; y <= maxY; y++) {
+            const key = `${x},${y}`;
+            const list = this.cells.get(key);
+            if (list) list.push(seg);
+            else this.cells.set(key, [seg]);
+          }
+        }
+      }
+    }
+  }
+
+  /** Segments in all cells overlapping a maxKm neighbourhood of pt. */
+  near(pt: [number, number], maxKm: number): IndexedSegment[] {
+    const degLat = maxKm / 111;
+    const degLng = maxKm / (111 * Math.max(0.2, Math.cos((pt[0] * Math.PI) / 180)));
+    const minX = Math.floor((pt[1] - degLng) / GRID_CELL_DEG);
+    const maxX = Math.floor((pt[1] + degLng) / GRID_CELL_DEG);
+    const minY = Math.floor((pt[0] - degLat) / GRID_CELL_DEG);
+    const maxY = Math.floor((pt[0] + degLat) / GRID_CELL_DEG);
+    const out: IndexedSegment[] = [];
+    for (let x = minX; x <= maxX; x++) {
+      for (let y = minY; y <= maxY; y++) {
+        const list = this.cells.get(`${x},${y}`);
+        if (list) out.push(...list);
+      }
+    }
+    return out;
+  }
+}
+
+const gridCache = new WeakMap<ProcessedWay[], SegmentGrid>();
+
+function gridFor(ways: ProcessedWay[]): SegmentGrid {
+  let grid = gridCache.get(ways);
+  if (!grid) {
+    grid = new SegmentGrid(ways);
+    gridCache.set(ways, grid);
+  }
+  return grid;
+}
+
 /** Find the nearest way within maxKm, returning it or null. */
 function findNearestWay(
   pt: [number, number],
@@ -99,15 +172,11 @@ function findNearestWay(
 ): ProcessedWay | null {
   let bestDist = maxKm;
   let bestWay: ProcessedWay | null = null;
-  for (const way of ways) {
-    for (let i = 0; i + 1 < way.nodes.length; i++) {
-      const a: [number, number] = [way.nodes[i].lat, way.nodes[i].lon];
-      const b: [number, number] = [way.nodes[i + 1].lat, way.nodes[i + 1].lon];
-      const d = pointToSegmentKm(pt, a, b);
-      if (d < bestDist) {
-        bestDist = d;
-        bestWay = way;
-      }
+  for (const seg of gridFor(ways).near(pt, maxKm)) {
+    const d = pointToSegmentKm(pt, seg.a, seg.b);
+    if (d < bestDist) {
+      bestDist = d;
+      bestWay = seg.way;
     }
   }
   return bestWay;
@@ -119,12 +188,8 @@ function anyWayWithin(
   ways: ProcessedWay[],
   maxKm: number
 ): ProcessedWay | null {
-  for (const way of ways) {
-    for (let i = 0; i + 1 < way.nodes.length; i++) {
-      const a: [number, number] = [way.nodes[i].lat, way.nodes[i].lon];
-      const b: [number, number] = [way.nodes[i + 1].lat, way.nodes[i + 1].lon];
-      if (pointToSegmentKm(pt, a, b) < maxKm) return way;
-    }
+  for (const seg of gridFor(ways).near(pt, maxKm)) {
+    if (pointToSegmentKm(pt, seg.a, seg.b) < maxKm) return seg.way;
   }
   return null;
 }

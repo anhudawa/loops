@@ -25,7 +25,12 @@ export async function generateMetadata({
   params: Promise<{ country: string }>;
 }): Promise<Metadata> {
   const { country: countrySlug } = await params;
-  const stats = await getCountryStats(countrySlug);
+  let stats: Awaited<ReturnType<typeof getCountryStats>> = null;
+  try {
+    stats = await getCountryStats(countrySlug);
+  } catch {
+    return { title: "Cycling Routes | LOOPS" };
+  }
   if (!stats) return { title: "Not Found - LOOPS" };
 
   const title = `Cycling Routes in ${stats.displayName} — ${stats.routeCount} Routes | LOOPS`;
@@ -59,10 +64,18 @@ export default async function CountryPage({
   params: Promise<{ country: string }>;
 }) {
   const { country: countrySlug } = await params;
-  const stats = await getCountryStats(countrySlug);
+  // Fail soft: a DB outage shows an honest message, never a crash page.
+  let stats: Awaited<ReturnType<typeof getCountryStats>> = null;
+  let routes: Awaited<ReturnType<typeof getRoutesByCountrySlug>> = [];
+  let dbDown = false;
+  try {
+    stats = await getCountryStats(countrySlug);
+    if (stats) routes = await getRoutesByCountrySlug(countrySlug);
+  } catch {
+    dbDown = true;
+  }
+  if (dbDown) return <RoutesUnavailable />;
   if (!stats) notFound();
-
-  const routes = await getRoutesByCountrySlug(countrySlug);
   const featuredRoutes = routes.slice(0, 6);
 
   const breadcrumbItems = [
@@ -198,5 +211,22 @@ export default async function CountryPage({
         </div>
       </div>
     </div>
+  );
+}
+
+
+function RoutesUnavailable() {
+  return (
+    <main className="min-h-screen flex items-center justify-center px-4" style={{ background: "var(--bg)" }}>
+      <div className="text-center max-w-md">
+        <h1 className="text-xl font-bold mb-2" style={{ color: "var(--text)" }}>
+          Routes are taking a breather
+        </h1>
+        <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+          We couldn&apos;t load the route library just now. Give it a minute and
+          refresh — the roads aren&apos;t going anywhere.
+        </p>
+      </div>
+    </main>
   );
 }

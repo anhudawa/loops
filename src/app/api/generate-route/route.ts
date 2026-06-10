@@ -4,8 +4,12 @@ import { getUserBySession } from "@/lib/db";
 import { DEFAULT_SPEED_KMH } from "@/config/constants";
 import { checkRateLimit } from "@/lib/rate-limit";
 
-// Whole pipeline must complete within 30 seconds (Vercel serverless limit)
-const PIPELINE_TIMEOUT_MS = 28000;
+/** Allow up to 60s on Vercel (fluid compute / Pro); clamped lower on hobby. */
+export const maxDuration = 60;
+
+// The pipeline must finish inside the serverless budget with margin to
+// return an honest error instead of a platform-level cut-off.
+const PIPELINE_TIMEOUT_MS = 55_000;
 
 /** Each generation hits the LLM + Overpass + BRouter + Open-Meteo. Keep
  * the per-rider rate low to protect cost and downstream quotas. */
@@ -13,12 +17,13 @@ const RATE_LIMIT_PER_MIN = 5;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 
 /**
- * Gated behind LOOPS_ROUTE_GEN_ENABLED until the library-first match layer
- * and real-world verification are in place. One bad generated route and
- * nobody uses this feature again.
+ * Generation is ON by default — library-first matching, hard guardrails,
+ * quality floor and live verification are all in place. The env var is
+ * kept as an emergency kill-switch: set LOOPS_ROUTE_GEN_ENABLED=false to
+ * disable without a deploy.
  */
 function isEnabled(): boolean {
-  return process.env.LOOPS_ROUTE_GEN_ENABLED === "true";
+  return process.env.LOOPS_ROUTE_GEN_ENABLED !== "false";
 }
 
 export async function POST(request: NextRequest) {

@@ -101,13 +101,18 @@ out skel qt;
       signal: AbortSignal.timeout(30_000),
     });
 
-  let res = await doFetch();
-  for (const backoffMs of [3000, 8000]) {
+  let res: Response | null = null;
+  for (const backoffMs of [0, 3000, 8000]) {
+    if (backoffMs > 0) await new Promise((r) => setTimeout(r, backoffMs + Math.random() * 2000));
+    try {
+      res = await doFetch();
+    } catch {
+      res = null; // network/timeout — retry
+      continue;
+    }
     if (res.status !== 429 && res.status < 500) break;
-    await new Promise((r) => setTimeout(r, backoffMs + Math.random() * 2000));
-    res = await doFetch();
   }
-  if (!res.ok) throw new Error(`Overpass API error: HTTP ${res.status}`);
+  if (!res || !res.ok) throw new Error(`Overpass API error: ${res ? `HTTP ${res.status}` : "network timeout"}`);
   const json = (await res.json()) as { elements: Array<Record<string, unknown>> };
 
   const nodes = new Map<number, OsmNode>();

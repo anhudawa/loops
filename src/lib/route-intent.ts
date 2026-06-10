@@ -300,38 +300,119 @@ export interface ParseRouteIntentOptions {
   origin?: [number, number];
 }
 
+/**
+ * Deterministic fallback parser — no LLM. Handles the structured-form
+ * prompt format and simple free text so that a total LLM outage degrades
+ * to "plain requests still work" instead of "the product is down".
+ * Workouts are NOT parsed here (they need the LLM); plain rides only.
+ */
+export function parseBasicIntent(prompt: string): ParsedIntent | null {
+  const p = prompt.toLowerCase();
+
+  // Duration: "2 hour", "1.5 hours", "90 min"
+  let duration: number | null = null;
+  const hourMatch = p.match(/(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)\b/);
+  const minMatch = p.match(/(\d+)\s*(?:minutes?|mins?)\b/);
+  if (hourMatch) duration = Math.round(parseFloat(hourMatch[1]) * 60);
+  else if (minMatch) duration = parseInt(minMatch[1], 10);
+
+  // Distance: "60km", "40 mile"
+  let distance: number | null = null;
+  const kmMatch = p.match(/(\d+(?:\.\d+)?)\s*(?:km|kilometres?|kilometers?)\b/);
+  const miMatch = p.match(/(\d+(?:\.\d+)?)\s*(?:miles?|mi)\b/);
+  if (kmMatch) distance = Math.round(parseFloat(kmMatch[1]));
+  else if (miMatch) distance = Math.round(parseFloat(miMatch[1]) * 1.609);
+
+  if (duration === null && distance === null) return null; // too vague
+
+  const discipline: Discipline =
+    /\bgravel\b/.test(p) ? "gravel" : /\bmtb|mountain bike\b/.test(p) ? "mtb" : "road";
+
+  const elevation_preference: ElevationPreference =
+    /\bflat\b|no (?:big )?climb/.test(p) ? "flat"
+    : /\brolling\b/.test(p) ? "rolling"
+    : /\bhilly\b|climbing\b/.test(p) ? "hilly"
+    : /mountain(?:ous)?\b/.test(p) ? "mountainous"
+    : "any";
+
+  let wind: string = "none";
+  if (/tailwind (?:on the way |coming |)home|tailwind back|wind at my back .*(home|back)|headwind (?:out|first)/.test(p)) {
+    wind = "tailwind_home";
+  } else if (/tailwind (?:out|to start|first)/.test(p)) {
+    wind = "tailwind_out";
+  }
+
+  // "from <place>" — stop at punctuation or terrain/wind keywords
+  let region: string | null = null;
+  const fromMatch = prompt.match(/\bfrom\s+([A-Za-zÀ-ÿ''. -]{3,40}?)(?:[,.;]|\s+(?:with|on|in|and|tailwind|headwind)\b|$)/i);
+  if (fromMatch) region = fromMatch[1].trim();
+
+  return {
+    distance_km: distance,
+    distance_tolerance_km: null,
+    duration_minutes: duration,
+    max_elevation_gain_m:
+      elevation_preference === "flat" && distance ? distance * 5 : null,
+    elevation_preference,
+    discipline,
+    is_loop: !/point to point|a to b/.test(p),
+    road_preferences: ["tertiary", "unclassified", "residential"],
+    avoid: ["motorway", "trunk"],
+    vibes: [],
+    region,
+    country: DEFAULT_COUNTRY,
+    wind_strategy: wind,
+    workout: null,
+  };
+}
+
 export async function parseRouteIntent(
   prompt: string,
   options: ParseRouteIntentOptions = {}
 ): Promise<RouteSpec> {
   const userSpeedKmh = options.userSpeedKmh ?? BASELINE_SPEED_KMH;
   const origin = options.origin;
-  const client = new Anthropic();
-
-  const message = await client.messages.create({
-    model: "claude-haiku-4-5-20251001",
-    max_tokens: 1024,
-    system: [
-      {
-        type: "text",
-        text: SYSTEM_PROMPT,
-        cache_control: { type: "ephemeral" },
-      },
-    ],
-    messages: [{ role: "user", content: prompt }],
-  });
-
-  const text = message.content[0].type === "text" ? message.content[0].text : "";
 
   let parsed: ParsedIntent;
   try {
-    parsed = JSON.parse(text);
-  } catch {
-    const match = text.match(/\{[\s\S]*\}/);
-    if (!match) {
-      throw new Error(`Failed to parse LLM response as JSON: ${text.slice(0, 200)}`);
+    // Constructed inside the try: with no API key the SDK throws at
+    // construction, and that must hit the basic-parser fallback too.
+    const client = new Anthropic();
+    const message = await client.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 1024,
+      system: [
+        {
+          type: "text",
+          text: SYSTEM_PROMPT,
+          cache_control: { type: "ephemeral" },
+        },
+      ],
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    const text = message.content[0].type === "text" ? message.content[0].text : "";
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      const match = text.match(/\{[\s\S]*\}/);
+      if (!match) {
+        throw new Error(`Failed to parse LLM response as JSON: ${text.slice(0, 200)}`);
+      }
+      parsed = JSON.parse(match[0]);
     }
-    parsed = JSON.parse(match[0]);
+  } catch (err) {
+    // LLM unavailable or returned garbage: try the deterministic parser
+    // for simple requests (and the structured form's format) so a model
+    // outage never takes the whole product down.
+    const basic = parseBasicIntent(prompt);
+    if (!basic) {
+      throw err instanceof Error && err.message.startsWith("Failed to parse LLM response")
+        ? err
+        : new Error("Failed to parse LLM response: model unavailable");
+    }
+    console.error("[route-intent] LLM unavailable — using basic parser");
+    parsed = basic;
   }
 
   // ── Resolve distance from duration if needed ────────────────────────────────

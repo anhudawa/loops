@@ -75,5 +75,16 @@
     "county": "Gran Canaria",
     "country": "Spain",
     "region": "Gran Canaria"
+  },
+  {
+    "name": "Las Palmas, Teror and the Green North",
+    "rwgps_url": "https://ridewithgps.com/routes/49594839",
+    "description": "The other Gran Canaria: 56 km from Las Palmas into the green north via the pilgrimage town of Teror — steeper, lusher and quieter than the southern resorts.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "moderate",
+    "county": "Gran Canaria",
+    "country": "Spain",
+    "region": "Gran Canaria"
   }
 ]

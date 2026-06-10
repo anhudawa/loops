@@ -13,7 +13,8 @@
     "cap:android": "npx cap open android",
     "test": "vitest run",
     "test:watch": "vitest",
-    "golden": "tsx scripts/run-golden-routes.mts"
+    "golden": "tsx scripts/run-golden-routes.mts",
+    "utterances": "tsx scripts/run-utterance-suite.mts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",

@@ -143,6 +143,15 @@ export async function POST(request: NextRequest) {
         library_count: librarySources,
         generated_count: generatedSources,
         is_workout: result.interpreted.is_workout,
+        wind_strategy: result.interpreted.wind_strategy ?? null,
+        // Score corpus (launch spec §4): how the served candidates rated.
+        scores: result.candidates.map((r) => ({
+          source: r.source,
+          match: r.match_score,
+          quality: r.source === "generated" ? r.quality_score : null,
+          wind: r.source === "generated" ? r.wind_alignment_score ?? null : null,
+          km: r.distance_km,
+        })),
       })
     );
 

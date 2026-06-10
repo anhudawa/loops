@@ -8,7 +8,7 @@
     "difficulty": "easy",
     "county": "Gran Canaria",
     "country": "Spain",
-    "region": "Islas Canarias"
+    "region": "Gran Canaria"
   },
   {
     "name": "Fataga and Santa Lucía Loop",
@@ -19,7 +19,7 @@
     "difficulty": "moderate",
     "county": "Gran Canaria",
     "country": "Spain",
-    "region": "Islas Canarias"
+    "region": "Gran Canaria"
   },
   {
     "name": "Puerto de Mogán Loop",
@@ -30,7 +30,7 @@
     "difficulty": "moderate",
     "county": "Gran Canaria",
     "country": "Spain",
-    "region": "Islas Canarias"
+    "region": "Gran Canaria"
   },
   {
     "name": "Soria and Veneguera Loop",
@@ -41,7 +41,7 @@
     "difficulty": "hard",
     "county": "Gran Canaria",
     "country": "Spain",
-    "region": "Islas Canarias"
+    "region": "Gran Canaria"
   },
   {
     "name": "Cruz Grande and Pico de las Nieves Loop",
@@ -52,7 +52,7 @@
     "difficulty": "hard",
     "county": "Gran Canaria",
     "country": "Spain",
-    "region": "Islas Canarias"
+    "region": "Gran Canaria"
   },
   {
     "name": "Pico de las Nieves Big Day",
@@ -63,7 +63,7 @@
     "difficulty": "hard",
     "county": "Gran Canaria",
     "country": "Spain",
-    "region": "Islas Canarias"
+    "region": "Gran Canaria"
   },
   {
     "name": "Playa de Mogán and San Nicolás Viewpoint",
@@ -74,6 +74,6 @@
     "difficulty": "hard",
     "county": "Gran Canaria",
     "country": "Spain",
-    "region": "Islas Canarias"
+    "region": "Gran Canaria"
   }
 ]

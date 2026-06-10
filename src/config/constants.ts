@@ -64,3 +64,10 @@ export const SURFACE_LABELS: Record<string, string> = {
   "Trail": "trail",
   "Mixed": "mixed",
 };
+
+/**
+ * Launch scope: public comments, ratings and condition reports are out of
+ * scope for the consumer launch (launch build spec §7). Flip to true to
+ * restore them post-launch — all components are kept intact.
+ */
+export const SOCIAL_FEATURES_ENABLED = false;

@@ -8,7 +8,7 @@
     "difficulty": "moderate",
     "county": "Tenerife",
     "country": "Spain",
-    "region": "Islas Canarias"
+    "region": "Tenerife"
   },
   {
     "name": "Vilaflor Loop",
@@ -19,7 +19,7 @@
     "difficulty": "moderate",
     "county": "Tenerife",
     "country": "Spain",
-    "region": "Islas Canarias"
+    "region": "Tenerife"
   },
   {
     "name": "Teide via Vilaflor and Chío",
@@ -30,7 +30,7 @@
     "difficulty": "hard",
     "county": "Tenerife",
     "country": "Spain",
-    "region": "Islas Canarias"
+    "region": "Tenerife"
   },
   {
     "name": "Masca Loop",
@@ -41,7 +41,7 @@
     "difficulty": "hard",
     "county": "Tenerife",
     "country": "Spain",
-    "region": "Islas Canarias"
+    "region": "Tenerife"
   },
   {
     "name": "Montaña Negra Loop",
@@ -52,7 +52,7 @@
     "difficulty": "moderate",
     "county": "Tenerife",
     "country": "Spain",
-    "region": "Islas Canarias"
+    "region": "Tenerife"
   },
   {
     "name": "Anaga Loop",
@@ -63,7 +63,7 @@
     "difficulty": "hard",
     "county": "Tenerife",
     "country": "Spain",
-    "region": "Islas Canarias"
+    "region": "Tenerife"
   },
   {
     "name": "Vilaflor Easy Loop",
@@ -74,7 +74,7 @@
     "difficulty": "moderate",
     "county": "Tenerife",
     "country": "Spain",
-    "region": "Islas Canarias"
+    "region": "Tenerife"
   },
   {
     "name": "Teide Gentle Loop",
@@ -85,6 +85,6 @@
     "difficulty": "hard",
     "county": "Tenerife",
     "country": "Spain",
-    "region": "Islas Canarias"
+    "region": "Tenerife"
   }
 ]

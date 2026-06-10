@@ -19,6 +19,7 @@ import Breadcrumbs from "@/components/Breadcrumbs";
 import RouteFaq from "@/components/RouteFaq";
 import RelatedRoutes from "@/components/RelatedRoutes";
 import { slugify } from "@/lib/seo";
+import { SOCIAL_FEATURES_ENABLED } from "@/config/constants";
 import { detectClimbs, haversine, CATEGORY_COLORS, type Climb } from "@/lib/climb-detection";
 
 const MapView = dynamic(() => import("@/components/MapView"), { ssr: false });
@@ -407,9 +408,11 @@ export default function RouteDetail() {
           </div>
           {mutationError && <p className="text-xs mt-1" style={{ color: "var(--danger)" }}>{mutationError}</p>}
 
-          <div className="mb-4">
-            <StarRating routeId={route.id} />
-          </div>
+          {SOCIAL_FEATURES_ENABLED && (
+            <div className="mb-4">
+              <StarRating routeId={route.id} />
+            </div>
+          )}
 
           {/* Stats row */}
           <div className="grid grid-cols-4 gap-3 pt-4 border-t" style={{ borderColor: "var(--border)" }}>
@@ -559,14 +562,18 @@ export default function RouteDetail() {
         </div>
 
         {/* Trail Conditions */}
-        <div className="rounded-2xl p-4 md:p-6 mb-3 md:mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-          <ConditionReports routeId={route.id} />
-        </div>
+        {SOCIAL_FEATURES_ENABLED && (
+          <div className="rounded-2xl p-4 md:p-6 mb-3 md:mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+            <ConditionReports routeId={route.id} />
+          </div>
+        )}
 
         {/* Comments */}
-        <div className="rounded-2xl p-4 md:p-6 mb-6 md:mb-8" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-          <Comments routeId={route.id} />
-        </div>
+        {SOCIAL_FEATURES_ENABLED && (
+          <div className="rounded-2xl p-4 md:p-6 mb-6 md:mb-8" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+            <Comments routeId={route.id} />
+          </div>
+        )}
       </div>
 
       {/* Sticky bottom CTA for unauthenticated users */}

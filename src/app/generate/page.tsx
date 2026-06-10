@@ -369,6 +369,7 @@ export default function GeneratePage() {
 
         {loading && (
           <div className="grid gap-4">
+            <LoadingStages />
             {[0, 1, 2].map((i) => (
               <div
                 key={i}
@@ -521,6 +522,50 @@ function ErrorPanel({ error }: { error: { message: string; code?: string } }) {
           {hint}
         </p>
       )}
+    </div>
+  );
+}
+
+// ── Loading stages ────────────────────────────────────────────────────────────
+
+/**
+ * Honest progress narration while generation runs (launch spec: perceived
+ * quality is quality). Stages mirror the real pipeline order; timings are
+ * approximations of where the time actually goes.
+ */
+const LOADING_STAGES = [
+  { at: 0, label: "Reading your request…" },
+  { at: 2000, label: "Checking the library of verified routes…" },
+  { at: 4500, label: "Plotting candidate loops…" },
+  { at: 8000, label: "Checking road quality and safety…" },
+  { at: 12000, label: "Scoring and ranking the best options…" },
+];
+
+function LoadingStages() {
+  const [stage, setStage] = useState(0);
+
+  useEffect(() => {
+    const timers = LOADING_STAGES.map((s, i) =>
+      setTimeout(() => setStage(i), s.at)
+    );
+    return () => timers.forEach(clearTimeout);
+  }, []);
+
+  return (
+    <div
+      className="rounded-2xl p-4 flex items-center gap-3"
+      style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+      role="status"
+      aria-live="polite"
+    >
+      <span
+        className="inline-block w-4 h-4 rounded-full border-2 border-t-transparent animate-spin shrink-0"
+        style={{ borderColor: "var(--accent)", borderTopColor: "transparent" }}
+        aria-hidden="true"
+      />
+      <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+        {LOADING_STAGES[stage].label}
+      </p>
     </div>
   );
 }

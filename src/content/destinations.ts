@@ -21,11 +21,16 @@ export interface Destination {
   faqs: DestinationFaq[];
   /** Slug for the matching /collections page, or null if none exists. */
   collectionSlug: string | null;
+  /** Country/region used to link to this destination's route library pages. */
+  routesCountry?: string;
+  routesRegion?: string;
 }
 
 export const destinations: Destination[] = [
   {
     slug: "girona",
+    routesCountry: "Spain",
+    routesRegion: "Cataluña",
     name: "Girona",
     tagline: "Where the pros train and the roads stay quiet",
     country: "Spain",
@@ -84,6 +89,8 @@ export const destinations: Destination[] = [
 
   {
     slug: "mallorca",
+    routesCountry: "Spain",
+    routesRegion: "Islas Baleares",
     name: "Mallorca",
     tagline: "The original spring training island",
     country: "Spain",
@@ -142,6 +149,8 @@ export const destinations: Destination[] = [
 
   {
     slug: "dublin",
+    routesCountry: "Ireland",
+    routesRegion: "Dublin",
     name: "Dublin",
     tagline: "City rides, coastal roads, and mountains on the doorstep",
     country: "Ireland",
@@ -200,6 +209,8 @@ export const destinations: Destination[] = [
 
   {
     slug: "calpe",
+    routesCountry: "Spain",
+    routesRegion: "Costa Blanca",
     name: "Calpe",
     tagline: "Sun, climbs, and pro-team winter camps on the Costa Blanca",
     country: "Spain",
@@ -258,6 +269,8 @@ export const destinations: Destination[] = [
 
   {
     slug: "wicklow",
+    routesCountry: "Ireland",
+    routesRegion: "Wicklow",
     name: "Wicklow",
     tagline: "Ireland's mountain playground, 30 minutes from Dublin",
     country: "Ireland",
@@ -316,6 +329,8 @@ export const destinations: Destination[] = [
 
   {
     slug: "tenerife",
+    routesCountry: "Spain",
+    routesRegion: "Tenerife",
     name: "Tenerife",
     tagline: "Volcanic altitude and year-round sunshine for serious climbing",
     country: "Spain",
@@ -374,6 +389,8 @@ export const destinations: Destination[] = [
 
   {
     slug: "malaga",
+    routesCountry: "Spain",
+    routesRegion: "Andalucía",
     name: "Málaga / Costa del Sol",
     tagline: "Winter sun, mountain roads ten minutes from the beach",
     country: "Spain",
@@ -432,6 +449,8 @@ export const destinations: Destination[] = [
 
   {
     slug: "gran-canaria",
+    routesCountry: "Spain",
+    routesRegion: "Gran Canaria",
     name: "Gran Canaria",
     tagline: "A volcano of switchbacks with summer all winter",
     country: "Spain",
@@ -490,6 +509,8 @@ export const destinations: Destination[] = [
 
   {
     slug: "lanzarote",
+    routesCountry: "Spain",
+    routesRegion: "Lanzarote",
     name: "Lanzarote",
     tagline: "Volcanic roads, honest wind, triathlon hardness",
     country: "Spain",
@@ -548,6 +569,8 @@ export const destinations: Destination[] = [
 
   {
     slug: "algarve",
+    routesCountry: "Portugal",
+    routesRegion: "Algarve",
     name: "Algarve",
     tagline: "Portugal's quiet-road winter playground",
     country: "Portugal",
@@ -606,6 +629,8 @@ export const destinations: Destination[] = [
 
   {
     slug: "lucca",
+    routesCountry: "Italy",
+    routesRegion: "Toscana",
     name: "Lucca / Tuscany",
     tagline: "Renaissance walls, pro test climbs and Italy's finest riding",
     country: "Italy",
@@ -664,6 +689,8 @@ export const destinations: Destination[] = [
 
   {
     slug: "nice",
+    routesCountry: "France",
+    routesRegion: "Côte d'Azur",
     name: "Nice / Côte d'Azur",
     tagline: "Where the pro peloton lives — cols rising straight from the sea",
     country: "France",

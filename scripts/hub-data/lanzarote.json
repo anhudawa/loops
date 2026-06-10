@@ -8,7 +8,7 @@
     "difficulty": "moderate",
     "county": "Lanzarote",
     "country": "Spain",
-    "region": "Islas Canarias"
+    "region": "Lanzarote"
   },
   {
     "name": "Costa Teguise to Mirador del Río",
@@ -19,7 +19,7 @@
     "difficulty": "moderate",
     "county": "Lanzarote",
     "country": "Spain",
-    "region": "Islas Canarias"
+    "region": "Lanzarote"
   },
   {
     "name": "Northern Lanzarote Big Loop",
@@ -30,7 +30,7 @@
     "difficulty": "hard",
     "county": "Lanzarote",
     "country": "Spain",
-    "region": "Islas Canarias"
+    "region": "Lanzarote"
   },
   {
     "name": "El Golfo and La Geria Loop",
@@ -41,7 +41,7 @@
     "difficulty": "moderate",
     "county": "Lanzarote",
     "country": "Spain",
-    "region": "Islas Canarias"
+    "region": "Lanzarote"
   },
   {
     "name": "La Geria and Janubio Salt Flats",
@@ -52,7 +52,7 @@
     "difficulty": "moderate",
     "county": "Lanzarote",
     "country": "Spain",
-    "region": "Islas Canarias"
+    "region": "Lanzarote"
   },
   {
     "name": "La Geria and Timanfaya Loop",
@@ -63,7 +63,7 @@
     "difficulty": "moderate",
     "county": "Lanzarote",
     "country": "Spain",
-    "region": "Islas Canarias"
+    "region": "Lanzarote"
   },
   {
     "name": "Timanfaya and Femés 100",
@@ -74,7 +74,7 @@
     "difficulty": "hard",
     "county": "Lanzarote",
     "country": "Spain",
-    "region": "Islas Canarias"
+    "region": "Lanzarote"
   },
   {
     "name": "Vuelta a Lanzarote",
@@ -85,6 +85,6 @@
     "difficulty": "hard",
     "county": "Lanzarote",
     "country": "Spain",
-    "region": "Islas Canarias"
+    "region": "Lanzarote"
   }
 ]

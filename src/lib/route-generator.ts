@@ -173,11 +173,53 @@ function escapeXml(str: string): string {
     .replace(/'/g, "&apos;");
 }
 
+interface GpxWaypoint {
+  lat: number;
+  lng: number;
+  name: string;
+  desc?: string;
+}
+
+/**
+ * Course points for a workout: a waypoint at the start and end of every
+ * effort segment so head units (Garmin/Wahoo) fire alerts on course.
+ * Names are kept short — some units truncate around 16 characters.
+ */
+function workoutCoursePoints(
+  coords: [number, number][],
+  fit: WorkoutFit,
+  workout: WorkoutSpec
+): GpxWaypoint[] {
+  const points: GpxWaypoint[] = [];
+  let effortNum = 0;
+  for (const a of fit.interval_segments) {
+    effortNum += 1;
+    const iv = workout.intervals[a.interval_index];
+    const zone = iv ? iv.zone.toUpperCase() : "EFFORT";
+    const mins = iv ? `${iv.duration_minutes}min` : "";
+    const start = coords[a.segment.start_index];
+    const end = coords[a.segment.end_index];
+    if (!start || !end) continue;
+    points.push({
+      lat: start[0], lng: start[1],
+      name: `EFFORT ${effortNum} GO`,
+      desc: `${mins} ${zone}`.trim(),
+    });
+    points.push({
+      lat: end[0], lng: end[1],
+      name: `EFFORT ${effortNum} END`,
+      desc: "Recover",
+    });
+  }
+  return points;
+}
+
 function buildGpx(
   coords: [number, number][],
   elevations: number[] | null,
   name: string,
-  discipline: string
+  discipline: string,
+  waypoints: GpxWaypoint[] = []
 ): string {
   const now = new Date().toISOString();
   const trkpts = coords
@@ -187,6 +229,13 @@ function buildGpx(
         : "";
       return `    <trkpt lat="${lat.toFixed(6)}" lon="${lng.toFixed(6)}">${ele}</trkpt>`;
     })
+    .join("\n");
+
+  const wpts = waypoints
+    .map(
+      (w) =>
+        `  <wpt lat="${w.lat.toFixed(6)}" lon="${w.lng.toFixed(6)}"><name>${escapeXml(w.name)}</name>${w.desc ? `<desc>${escapeXml(w.desc)}</desc>` : ""}<sym>Flag, Blue</sym></wpt>`
+    )
     .join("\n");
 
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -199,7 +248,7 @@ function buildGpx(
     <author><name>loops.ie</name></author>
     <time>${now}</time>
   </metadata>
-  <trk>
+${wpts ? wpts + "\n" : ""}  <trk>
     <name>${escapeXml(name)}</name>
     <type>${escapeXml(discipline)}</type>
     <trkseg>
@@ -678,7 +727,17 @@ async function generateFreshWorkoutRoutes(
       const fit = assignWorkoutToSegments(cleanSegments, workout);
       if (!fit.fits) return null;
 
-      return { ...route, workout_fit: fit };
+      // Rebuild the GPX with effort course points so head units alert
+      // at the start and end of every interval.
+      const gpxWithEfforts = buildGpx(
+        route.coordinates,
+        route.elevations,
+        `Workout ${spec.discipline} route — ${Math.round(route.distance_km)}km`,
+        spec.discipline,
+        workoutCoursePoints(route.coordinates, fit, workout)
+      );
+
+      return { ...route, workout_fit: fit, gpx_data: gpxWithEfforts };
     })
   );
 

@@ -403,8 +403,6 @@ function LoginPage() {
               <div className="flex items-center justify-center gap-6 mt-8">
                 {[
                   { value: stats.community.riders, label: "Riders" },
-                  { value: stats.community.comments, label: "Comments" },
-                  { value: stats.community.ratings, label: "Ratings" },
                 ].map((s) => (
                   <div key={s.label} className="text-center">
                     <p className="text-sm font-extrabold" style={{ color: "var(--text-secondary)" }}>

@@ -1,129 +1,116 @@
-# LOOPS - Cycling Route Discovery Platform
+# LOOPS - Route Intelligence for Serious Cyclists
 
 ## What This Is
-A Next.js web app for discovering cycling routes (road, gravel, MTB). Pre-launch, targeting friends & cycling club first, then expanding. Login-gated for lead gen.
+A Next.js web app for cycling route discovery and AI route generation
+(road, gravel, MTB). Three pillars (per the June 2026 launch build spec):
+1. **Curated destination libraries** — 10 iconic cycling destinations with
+   ready-to-import route sets
+2. **Voice-prompted route generation** — natural language → wind-aware,
+   quality-scored loops
+3. **Session-aware loop building** — structured workouts mapped onto roads
+   that can hold the efforts
 
-**Live at**: https://www.loops.ie/
+Pre-launch. Login-gated. Owner: Anthony Walsh, Roadman Cycling.
+
+**Domain**: https://www.loops.ie/
 **Repo**: https://github.com/anhudawa/loops
+**Spec**: `docs/superpowers/specs/2026-06-09-loops-launch-build-spec.md`
+**Delivery plan + decisions**: `docs/superpowers/plans/2026-06-09-loops-launch-delivery-plan.md`
+**Route sourcing model**: `docs/superpowers/plans/2026-06-09-route-sourcing-validation.md`
 
 ## Tech Stack
-- Next.js 16 + React 19 + TypeScript
+- Next.js 16 + React 19 + TypeScript (App Router)
 - Tailwind CSS 4
-- Vercel Postgres (database)
+- Vercel Postgres (database; PostGIS planned for road intelligence)
 - Vercel Blob (file storage)
 - Leaflet + React-Leaflet (maps)
-- Capacitor (mobile app bridge)
-- Resend (email)
-- Auth: Google OAuth + Magic Links
-- Strava (data import only, not auth)
+- Anthropic API (route intent parsing — claude-haiku)
+- BRouter (routing engine; public demo in dev, self-host via BROUTER_URL for prod)
+- Open-Meteo (weather + wind forecasts, elevation backfill)
+- Overpass/OSM (route quality scoring)
+- Capacitor (mobile bridge), Resend (email)
+- Auth: Google OAuth + Magic Links; Strava import only (not auth)
 
 ## Project Structure
 ```
 src/
-  app/           # Next.js App Router pages & API routes
-    admin/       # Admin dashboard
-    api/         # API routes (auth, routes, messages, profile, stats, push, strava)
-    login/       # Login page (landing)
-    messages/    # User messaging
-    profile/     # User profile redirect (→ /profile/[id] or /login)
-    routes/[id]/ # Route detail pages
-    upload/      # Route upload (GPX, FIT, TCX, RideWithGPS URL, Strava import)
-  components/    # React components
-    Footer.tsx         # Site-wide footer
-    SkeletonCard.tsx   # Loading skeleton for route cards
-    FilterSidebar.tsx  # Discipline/country/distance filters with mobile drawer
-    RouteCard.tsx      # Route card display
-    MapView.tsx        # Leaflet map with route markers
-    HeroSection.tsx    # Landing hero with CTAs
-    StravaConnectButton.tsx # Strava connect/disconnect button
-    StravaActivityBrowser.tsx # Strava activity browser with import
-    + 10 more components
-  lib/           # Utilities
-    db.ts              # All database queries (single source of truth)
-    gpx.ts             # GPX file parsing
-    fit.ts             # FIT file parsing
-    tcx.ts             # TCX file parsing
-    ridewithgps.ts     # RideWithGPS URL import
-    route-parser.ts    # Unified route file parser (dispatches to gpx/fit/tcx)
-    strava-api.ts      # Strava OAuth & API client (token refresh, activity fetching)
-    geo-utils.ts       # Geospatial utilities
-    email.ts           # Resend email
-    admin.ts           # Admin functions
-    capacitor.ts       # Mobile bridge
-middleware.ts    # Auth middleware - session cookie check
-tests/           # Playwright test suite
+  app/
+    api/generate-route/  # Voice/text → route generation endpoint
+    generate/            # Generation UI (voice input, staged loading, wind notes)
+    cycling/[destination]/ # SEO destination guides (12: 10 launch + Dublin/Wicklow)
+    routes/[id]/         # Route detail pages
+    routes/country/...   # Country/region route listings (fail-soft static params)
+    admin/ blog/ collections/ login/ messages/ profile/ upload/ share/
+  components/            # Flat component dir
+  config/constants.ts    # Quality thresholds, SOCIAL_FEATURES_ENABLED flag
+  content/destinations.ts # Destination guide content + LAUNCH_DESTINATION_SLUGS
+  lib/
+    route-intent.ts      # Claude NL parser → RouteSpec (incl. workout + wind_strategy)
+    route-generator.ts   # Orchestrator: library-first → candidates → guardrails → scoring
+    route-library.ts     # Library matching (verified routes beat fresh generation)
+    route-quality.ts     # 10-factor 0-100 scoring via Overpass
+    route-rules.ts       # Hard guardrails (auto-reject)
+    wind.ts              # Wind forecast + bearing alignment ("tailwind home")
+    interval-segments.ts # Workout segment detection
+    interval-validation.ts
+    intensity.ts         # Zone definitions
+    db.ts                # All database queries (single source of truth)
+    gpx.ts fit.ts tcx.ts ridewithgps.ts route-parser.ts
+scripts/
+  import-routes.mjs      # Manifest → DB importer (supports --dry-run, RWGPS URLs)
+  hub-data/*.json        # Route manifests for all 10 launch destinations
+tests/                   # Playwright suite
+src/lib/__tests__/       # Vitest unit tests (npm test)
 ```
 
-## Database Schema (Vercel Postgres)
-12 tables: users, magic_links, follows, routes, route_ratings, route_comments, route_photos, route_conditions, route_downloads, conversations, messages, user_follows
+## Launch Destinations (research-confirmed 2026-06-09)
+Mallorca, Girona, Málaga, Calpe, Tenerife, Gran Canaria, Lanzarote,
+Algarve, Lucca, Nice — see `LAUNCH_DESTINATION_SLUGS`. Dublin/Wicklow stay
+as home-turf pages outside the count. Route manifests for all 10 are in
+`scripts/hub-data/` (dry-run validated; import with
+`node --env-file=.env.local scripts/import-routes.mjs <manifest> [--dry-run]`).
 
-Routes have: name, description, distance_km, elevation_gain_m, surface_type, country, county, discipline (road/gravel/mtb), coordinates (JSON), cover_photo_url, verified flag, strava_activity_id (optional, for Strava imports)
+## Key Owner Decisions (2026-06-09)
+- **No public route attribution** — routes are facts; operator_name/url in
+  the DB are private provenance only, never displayed.
+- **No validator partners** — validation = sourcing from credible local
+  operators' public routes + automated quality scoring + guardrails.
+- **Social features hidden for launch** (`SOCIAL_FEATURES_ENABLED=false` in
+  config/constants.ts) — comments/ratings/condition reports kept intact,
+  out of launch scope per spec §7.
+- **Stack stays** Next.js 16 + Vercel Postgres (not Supabase per spec).
 
-## Current State (dev branch)
-- All 18 items from site audit fixed (commit c41112a)
-- Discipline filters working (15 road, 4 gravel routes)
-- Mobile layout working (filter drawer, responsive stacking, full-width map)
-- Nav auth state correct (Sign in vs Sign out)
-- Profile redirect working (/profile → /profile/[id] or /login)
-- Footer, skeleton loading cards, accessibility labels added
-- Upload expanded: GPX, FIT, TCX files + RideWithGPS URL + Strava activity import
-- Consistent branding and titles across pages
-- Canonical URLs and SEO meta tags
+## Honesty Principles (from spec — enforced in code)
+- Wind under 8 km/h → say it's not worth planning around (src/lib/wind.ts)
+- Forecast down → generate without wind and say so
+- No clean interval segment → decline with alternatives, never serve a
+  compromised one
+- Quality floor (QUALITY_FLOOR) — candidates below it are never surfaced
 
----
-
-## Launch Plan
-
-Full design spec: `docs/superpowers/specs/2026-03-13-loops-launch-plan-design.md`
-
-### Completed (Phase 1 & 2)
-All critical bugs and high-priority UX fixes from the site audit are done on `dev`.
-
-### Phase 3: Technical Hardening (NEXT)
-
-1. **Error handling** — Error boundaries, standardized API errors, try/catch in all handlers
-2. **Input validation** — File size limits, GPX/FIT/TCX schema validation, server-side comment/condition validation, MIME type checks
-3. **Rate limiting** — Protect API endpoints (auth 5/min, writes 10/min, reads 60/min, uploads 3/min)
-4. **Pagination** — Route lists (20/page), comments (10/page), conditions (10/page)
-5. **Code cleanup** — Remove console.logs, extract hardcoded values to config/constants.ts
-6. **Optimistic UI updates** — Instant feedback on comments/ratings/favorites
-
-### Phase 4: Launch Polish
-
-7. Verify auth flows end-to-end (Google OAuth, magic links)
-8. Mobile UX pass (touch targets, map interactions)
-9. Admin tools (route management, moderation, stats)
-
-### Phase 5: Post-Launch (based on user feedback)
-- User-submitted routes (approval workflow)
-- Multi-discipline tagging (route can be road AND gravel)
-- Search by name/region
-- Ride coordination, activity feed
-- Public route pages for SEO, performance, i18n
-
----
-
-## Test Suite
-
-62-test Playwright suite at `tests/loops-comprehensive.spec.ts`.
-
+## Commands
 ```bash
+npm test                  # Vitest unit suite
+npx tsc --noEmit          # Typecheck
+npm run build             # Production build (passes without DB — fail-soft)
 npx playwright test tests/loops-comprehensive.spec.ts --project=chromium
+node scripts/import-routes.mjs scripts/hub-data/girona-eat-sleep-cycle.json --dry-run
 ```
 
-## Known Technical Debt
-- No CSRF tokens
-- Session management is cookie-only, no refresh tokens
-- Some N+1 query patterns (comment/photo fetches)
-- No database indexes documented for filtered queries
-- Locale hardcoded to "en-IE"
-- Strava rate limits not tracked globally (100/15min, 1000/day)
+## Known Technical Debt / Open Items
+- DB credential leaked in git history (removed from files) — MUST be
+  rotated in the Vercel/Neon dashboard
+- Anchor-first session assembly (spec §3) — current flow is route-first
+  with segment validation; anchor-first is the upgrade
+- Garmin Connect API push + Whisper voice fallback — need external
+  accounts/keys
+- Golden route test suite (spec §6) not yet wired into CI
+- BRouter public demo is rate-limited — set BROUTER_URL before launch
+- Gran Canaria manifest has 7 routes (bar is 8)
+- No CSRF tokens; cookie-only sessions; locale hardcoded en-IE
 
 ## Conventions
-- App Router (not Pages Router)
-- Server components by default, "use client" only when needed
-- API routes in src/app/api/
-- Database queries in src/lib/db.ts (single source of truth)
-- All components in src/components/ (flat structure)
-- Route file parsing through src/lib/route-parser.ts (dispatches to format-specific parsers)
+- Server components by default; "use client" only when needed
+- DB queries only in src/lib/db.ts
+- Route parsing through src/lib/route-parser.ts
 - API responses: `{ data: T } | { error: string, code: string }`
+- Build-time DB access must fail soft (try/catch → degraded render)

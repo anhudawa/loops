@@ -1,0 +1,68 @@
+[
+  {
+    "name": "Galé and Albufeira Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/54845099",
+    "description": "The easy western spin from Albufeira: 45 km of rolling coastal lanes via Galé with under 500 m of climbing. A recovery-day staple.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "easy",
+    "county": "Algarve",
+    "country": "Portugal",
+    "region": "Algarve"
+  },
+  {
+    "name": "Albufeira to Alte Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/53891895",
+    "description": "65 km inland to the spring-fed village of Alte through the rolling Algarve backroads — quiet lanes, cork oak and a proper café stop.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "moderate",
+    "county": "Algarve",
+    "country": "Portugal",
+    "region": "Algarve"
+  },
+  {
+    "name": "Albufeira to Portimão Coastal Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/55011174",
+    "description": "93 km west along the coast to Portimão and back — flat to rolling with the Atlantic never far away.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "moderate",
+    "county": "Algarve",
+    "country": "Portugal",
+    "region": "Algarve"
+  },
+  {
+    "name": "Monchique and Fóia Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/54807683",
+    "description": "87 km from Lagoa up into the Serra de Monchique and the Fóia climb — the Algarve's highest road at 902 m with views to both coasts.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "hard",
+    "county": "Algarve",
+    "country": "Portugal",
+    "region": "Algarve"
+  },
+  {
+    "name": "Monchique and Fóia from Lagos",
+    "rwgps_url": "https://ridewithgps.com/routes/54344813",
+    "description": "The western big day: 106 km from Lagos through the foothills to Monchique, up Fóia and home through the quiet inland lanes.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "hard",
+    "county": "Algarve",
+    "country": "Portugal",
+    "region": "Algarve"
+  },
+  {
+    "name": "Alto do Malhão Big Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/55163268",
+    "description": "The full inland epic: 134 km through the Serra do Caldeirão taking in Salir, Barranco do Velho and the famous Volta ao Algarve wall finish at Alto do Malhão.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "hard",
+    "county": "Algarve",
+    "country": "Portugal",
+    "region": "Algarve"
+  }
+]

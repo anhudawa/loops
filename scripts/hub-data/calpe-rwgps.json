@@ -1,0 +1,35 @@
+[
+  {
+    "name": "Coll de Rates Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/54158164",
+    "description": "The standard Calpe training loop: 64 km over the Costa Blanca's most famous climb, a Vuelta regular and the benchmark of every winter camp.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "moderate",
+    "county": "Alicante",
+    "country": "Spain",
+    "region": "Costa Blanca"
+  },
+  {
+    "name": "Coll de Rates Classic Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/53342658",
+    "description": "82 km taking the classic inland circuit over Coll de Rates with the Jalón valley run home.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "moderate",
+    "county": "Alicante",
+    "country": "Spain",
+    "region": "Costa Blanca"
+  },
+  {
+    "name": "Coll de Rates and Port de Bèrnia Big Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/55217522",
+    "description": "The Costa Blanca big day: 119 km and 2,250 m combining Coll de Rates with the brutal Port de Bèrnia.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "hard",
+    "county": "Alicante",
+    "country": "Spain",
+    "region": "Costa Blanca"
+  }
+]

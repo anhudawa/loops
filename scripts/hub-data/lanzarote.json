@@ -1,0 +1,68 @@
+[
+  {
+    "name": "Teguise and Mirador del Río",
+    "rwgps_url": "https://ridewithgps.com/routes/54851300",
+    "description": "The compact northern classic from Teguise: the Tabayesco valley climb and the cliff-edge finish at Mirador del Río with views to La Graciosa. 67 km.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "moderate",
+    "county": "Lanzarote",
+    "country": "Spain",
+    "region": "Islas Canarias"
+  },
+  {
+    "name": "Costa Teguise to Mirador del Río",
+    "rwgps_url": "https://ridewithgps.com/routes/54367931",
+    "description": "80 km from Costa Teguise through Teguise and the Haría valley to the island's northern tip and back — the standard Lanzarote north loop.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "moderate",
+    "county": "Lanzarote",
+    "country": "Spain",
+    "region": "Islas Canarias"
+  },
+  {
+    "name": "Northern Lanzarote Big Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/55115710",
+    "description": "The full north from Puerto del Carmen: Tabayesco, Mirador del Río and the wild west coast return. 92 km of everything Lanzarote does best.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "hard",
+    "county": "Lanzarote",
+    "country": "Spain",
+    "region": "Islas Canarias"
+  },
+  {
+    "name": "El Golfo and La Geria Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/55206518",
+    "description": "65 km through the black-ash vineyards of La Geria to the green lagoon at El Golfo and the southern volcanic coast — the island's signature scenery.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "moderate",
+    "county": "Lanzarote",
+    "country": "Spain",
+    "region": "Islas Canarias"
+  },
+  {
+    "name": "La Geria and Janubio Salt Flats",
+    "rwgps_url": "https://ridewithgps.com/routes/55424143",
+    "description": "From Playa Blanca through the wine country to the Janubio salt flats — 70 km of rolling volcanic roads with barely 750 m of climbing. Wind is the difficulty here.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "moderate",
+    "county": "Lanzarote",
+    "country": "Spain",
+    "region": "Islas Canarias"
+  },
+  {
+    "name": "La Geria and Timanfaya Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/54120882",
+    "description": "77 km from Costa Teguise across the island to the edge of Timanfaya's volcanic badlands and back through La Geria — smooth tarmac through fields of lava.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "moderate",
+    "county": "Lanzarote",
+    "country": "Spain",
+    "region": "Islas Canarias"
+  }
+]

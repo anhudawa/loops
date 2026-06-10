@@ -1,0 +1,68 @@
+[
+  {
+    "name": "Ayagaures Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/55321719",
+    "description": "The steady local climb from the southern resorts into the Ayagaures valley — 34 km with one beautifully graded ascent, ideal for a first ride or structured efforts.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "easy",
+    "county": "Gran Canaria",
+    "country": "Spain",
+    "region": "Islas Canarias"
+  },
+  {
+    "name": "Fataga and Santa Lucía Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/55359385",
+    "description": "The most photographed road on the island: up through the Fataga ravine's switchbacks to San Bartolomé and back via Santa Lucía. 70 km of classic Gran Canaria.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "moderate",
+    "county": "Gran Canaria",
+    "country": "Spain",
+    "region": "Islas Canarias"
+  },
+  {
+    "name": "Puerto de Mogán Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/54685129",
+    "description": "West along the coast to Puerto de Mogán and up the Barranco de Mogán — 80 km of rolling coast road and a steady valley climb.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "moderate",
+    "county": "Gran Canaria",
+    "country": "Spain",
+    "region": "Islas Canarias"
+  },
+  {
+    "name": "Soria and Veneguera Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/55462162",
+    "description": "Into the island's wild west: the long Soria valley climb to the reservoir, over to Veneguera and back along the coast. 87 km with 1,800 m of climbing.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "hard",
+    "county": "Gran Canaria",
+    "country": "Spain",
+    "region": "Islas Canarias"
+  },
+  {
+    "name": "Cruz Grande and Pico de las Nieves Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/55444849",
+    "description": "The mountain classic: up the Degollada de Cruz Grande to Pico de las Nieves, the island's roof at 1,920 m. 76 km, over 2,000 m of climbing, views over the cloud sea to Teide.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "hard",
+    "county": "Gran Canaria",
+    "country": "Spain",
+    "region": "Islas Canarias"
+  },
+  {
+    "name": "Pico de las Nieves Big Day",
+    "rwgps_url": "https://ridewithgps.com/routes/54218495",
+    "description": "The full island summit day from the south: 114 km and nearly 2,800 m, taking in Fataga, the high centre and the long run back down. Gran Canaria's benchmark big ride.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "hard",
+    "county": "Gran Canaria",
+    "country": "Spain",
+    "region": "Islas Canarias"
+  }
+]

@@ -1,0 +1,46 @@
+[
+  {
+    "name": "Monte Serra Short Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/55240502",
+    "description": "The direct route to Tuscany's test climb: 53 km from Lucca up Monte Serra and back. The benchmark effort of every pro who has lived here.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "moderate",
+    "county": "Lucca",
+    "country": "Italy",
+    "region": "Toscana"
+  },
+  {
+    "name": "Monte Serra Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/54953197",
+    "description": "The standard Monte Serra circuit: 70 km from Lucca over the climb with the full descent and valley return.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "moderate",
+    "county": "Lucca",
+    "country": "Italy",
+    "region": "Toscana"
+  },
+  {
+    "name": "Monte Serra Extended Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/54656781",
+    "description": "The long way round: 94 km and over 1,700 m taking in Monte Serra and the surrounding hills — a proper Tuscan training day.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "hard",
+    "county": "Lucca",
+    "country": "Italy",
+    "region": "Toscana"
+  },
+  {
+    "name": "Pizzorne from Villa Basilica",
+    "rwgps_url": "https://ridewithgps.com/routes/53718492",
+    "description": "Lucca's plateau climb: 57 km with the switchback ascent of the Pizzorne from Villa Basilica — 1,300 m of climbing straight out of the plain.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "hard",
+    "county": "Lucca",
+    "country": "Italy",
+    "region": "Toscana"
+  }
+]

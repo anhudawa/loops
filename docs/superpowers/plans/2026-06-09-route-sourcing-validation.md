@@ -75,24 +75,31 @@ from an environment with Overpass access so the quality gate actually bites.
 Verified = we have confirmed a public route library exists. Others are
 candidates to confirm during the sourcing sprint.
 
-| Destination | Source candidates | Status |
-|---|---|---|
-| Girona | **Eat Sleep Cycle** — public route library on RideWithGPS (org 13026) | **Manifest built**: `scripts/hub-data/girona-eat-sleep-cycle.json`, 20 routes, dry-run validated |
-| Mallorca | **Epic Road Rides** — public RideWithGPS event library (their tried-and-tested top 6); also HC Bike Tours and Berganti Bikes publish free GPX | **Manifest built**: `scripts/hub-data/mallorca-epic-road-rides.json`, 6 routes, dry-run validated; needs 2+ more routes to hit the 8-route launch bar |
-| Málaga | Local hire/guide operators in Málaga and Fuengirola; Andalusian cycling tourism boards publish GPX | To confirm |
-| Calpe / Costa Blanca | Calpe/Altea/Dénia camp operators and hire shops (pro-camp territory, several publish routes) | To confirm |
-| Tenerife | Bike Point Tenerife and similar hire operators; Teide route guides | To confirm |
-| Gran Canaria | Free Motion and other Maspalomas hire operators publish route guides | To confirm |
-| Lanzarote | Club La Santa publishes training routes; Ironman Lanzarote course is public | To confirm |
-| Algarve | Algarve Bike Holidays / Loulé-area operators; Volta ao Algarve stage routes are public | To confirm |
-| Lucca | Lucca cycling hotels and Tuscany tour operators | To confirm |
-| Nice | Côte d'Azur guide operators; classic col routes are extensively documented | To confirm |
+All 10 destinations now have dry-run-validated manifests in
+`scripts/hub-data/`. Routes were selected against each destination's
+documented classic rides (see `src/content/destinations.ts` climbs), with
+loop closure and trace density checked per route. Counts vs the 8-route
+launch bar:
 
-Fallback for thin destinations: build routes ourselves along the documented
-classic roads (every destination above has famous, well-documented climbs and
-loops), run them through scoring, and label them "Loops verified" instead of
-operator-attributed. The launch spec's bar of 8 routes per destination is
-reachable this way even where no operator cooperates.
+| Destination | Manifest(s) | Routes | vs 8-route bar |
+|---|---|---|---|
+| Girona | `girona-eat-sleep-cycle.json` + `girona.json` | 20 + 10 | ✓ |
+| Mallorca | `mallorca-epic-road-rides.json` | 6 | needs 2+ |
+| Calpe / Costa Blanca | `calpe.json` (local files) + `calpe-rwgps.json` | 6 + 3 | ✓ |
+| Málaga | `malaga.json` | 5 | needs 3 |
+| Tenerife | `tenerife.json` | 6 | needs 2 |
+| Gran Canaria | `gran-canaria.json` | 6 | needs 2 |
+| Lanzarote | `lanzarote.json` | 6 | needs 2 |
+| Algarve | `algarve.json` | 6 | needs 2 |
+| Lucca | `lucca.json` | 4 | needs 4 |
+| Nice | `nice.json` | 5 | needs 3 |
+
+Gap-filling to reach 8 everywhere: each destination's remaining slots
+should prioritise (a) one true leisure/recovery spin under 40 km, and
+(b) one 150 km+ epic where missing — the spec's required spread. Find via
+the same RideWithGPS search method (loop closure < 3 km, dense traces,
+starts at the destination's main base town) or trace our own along the
+documented classics.
 
 ## Library shape per destination (from the launch spec)
 

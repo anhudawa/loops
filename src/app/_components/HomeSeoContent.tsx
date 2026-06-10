@@ -4,10 +4,18 @@ import { slugify, generateItemListJsonLd } from "@/lib/seo";
 import JsonLd from "@/components/JsonLd";
 
 export default async function HomeSeoContent() {
-  const [countries, featuredRoutes] = await Promise.all([
-    getCountries(),
-    getRoutes({ limit: 20 }),
-  ]);
+  // Fail soft: a DB outage degrades this SEO section to its static copy
+  // instead of taking down the homepage (or the build).
+  let countries: string[] = [];
+  let featuredRoutes: Awaited<ReturnType<typeof getRoutes>> = [];
+  try {
+    [countries, featuredRoutes] = await Promise.all([
+      getCountries(),
+      getRoutes({ limit: 20 }),
+    ]);
+  } catch {
+    // render without dynamic data
+  }
 
   return (
     <section className="max-w-5xl mx-auto px-4 md:px-6 py-12 mt-8" style={{ borderTop: "1px solid var(--border)" }}>

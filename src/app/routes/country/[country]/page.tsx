@@ -9,8 +9,14 @@ import Breadcrumbs from "@/components/Breadcrumbs";
 export const revalidate = 3600;
 
 export async function generateStaticParams() {
-  const countries = await getCountries();
-  return countries.map((country) => ({ country: slugify(country) }));
+  // Fail soft: if the DB is unreachable at build time, render on demand
+  // instead of failing the whole build.
+  try {
+    const countries = await getCountries();
+    return countries.map((country) => ({ country: slugify(country) }));
+  } catch {
+    return [];
+  }
 }
 
 export async function generateMetadata({

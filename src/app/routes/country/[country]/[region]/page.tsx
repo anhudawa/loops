@@ -9,15 +9,21 @@ import Breadcrumbs from "@/components/Breadcrumbs";
 export const revalidate = 3600;
 
 export async function generateStaticParams() {
-  const countries = await getCountries();
-  const params: { country: string; region: string }[] = [];
-  for (const country of countries) {
-    const regions = await getRegions(country);
-    for (const region of regions) {
-      params.push({ country: slugify(country), region: slugify(region) });
+  // Fail soft: if the DB is unreachable at build time, render on demand
+  // instead of failing the whole build.
+  try {
+    const countries = await getCountries();
+    const params: { country: string; region: string }[] = [];
+    for (const country of countries) {
+      const regions = await getRegions(country);
+      for (const region of regions) {
+        params.push({ country: slugify(country), region: slugify(region) });
+      }
     }
+    return params;
+  } catch {
+    return [];
   }
-  return params;
 }
 
 export async function generateMetadata({

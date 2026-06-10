@@ -61,9 +61,11 @@ import { thresholdIntervals } from "@/content/blog/where-to-do-threshold-interva
 import { vo2max } from "@/content/blog/vo2-max-intervals-complete-outdoor-guide";
 import { aiRoutePlanning } from "@/content/blog/how-to-plan-a-cycling-route-with-ai";
 import { wicklow } from "@/content/blog/cycling-in-wicklow-dublins-mountain-playground";
+import { komootAlternative } from "@/content/blog/komoot-alternative-for-road-cyclists";
 
 /** All posts. Newest-first ordering is applied by helpers. */
 const POSTS: BlogPost[] = [
+  komootAlternative,
   girona,
   mallorca,
   winterCamps,

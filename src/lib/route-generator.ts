@@ -81,6 +81,8 @@ export interface GeneratedRoute {
   wind_note?: string;
   /** 0–100 fit against the requested wind strategy (50 = neutral). */
   wind_alignment_score?: number;
+  /** The forecast used, for wind-painting the preview. */
+  wind_forecast?: { direction_deg: number; speed_kmh: number };
 }
 
 /**
@@ -545,6 +547,10 @@ export async function candidatesFromSpec(spec: RouteSpec): Promise<RouteCandidat
         c.wind_note = analysis.note;
         if (c.source === "generated") {
           c.wind_alignment_score = analysis.alignment_score;
+          c.wind_forecast = {
+            direction_deg: forecast.direction_deg,
+            speed_kmh: forecast.speed_kmh,
+          };
         }
       } else {
         c.wind_note =

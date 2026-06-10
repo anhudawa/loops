@@ -17,14 +17,32 @@ interface HighlightRange {
 interface RoutePreviewSvgProps {
   coordinates: [number, number][];
   highlights?: HighlightRange[];
+  /** Forecast wind: paints the line head/tail/crosswind and draws an arrow. */
+  wind?: { direction_deg: number; speed_kmh: number };
   width?: number;
   height?: number;
   className?: string;
 }
 
+function bearingDeg(a: [number, number], b: [number, number]): number {
+  const p1 = (a[0] * Math.PI) / 180;
+  const p2 = (b[0] * Math.PI) / 180;
+  const dLon = ((b[1] - a[1]) * Math.PI) / 180;
+  const y = Math.sin(dLon) * Math.cos(p2);
+  const x = Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dLon);
+  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+}
+
+const WIND_COLORS = {
+  tail: "#4ade80",  // green — wind at your back
+  head: "#f87171",  // red — into it
+  cross: "#94a3b8", // grey — crosswind
+};
+
 export default function RoutePreviewSvg({
   coordinates,
   highlights = [],
+  wind,
   width = 320,
   height = 200,
   className,
@@ -98,16 +116,32 @@ export default function RoutePreviewSvg({
         border: "1px solid var(--border)",
       }}
     >
-      {/* Base route line */}
-      <path
-        d={pathD}
-        fill="none"
-        stroke="var(--text-muted)"
-        strokeOpacity={0.5}
-        strokeWidth={2}
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
+      {/* Base route line — wind-painted when forecast is meaningful */}
+      {wind && wind.speed_kmh >= 8 ? (
+        <WindPaintedLine coordinates={coordinates} projected={projected} windDeg={wind.direction_deg} />
+      ) : (
+        <path
+          d={pathD}
+          fill="none"
+          stroke="var(--text-muted)"
+          strokeOpacity={0.5}
+          strokeWidth={2}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+      )}
+
+      {/* Wind arrow + speed, top-right (points where the wind blows TO) */}
+      {wind && wind.speed_kmh >= 8 && (
+        <g transform={`translate(${width - 24}, 20)`} aria-label={`Wind ${Math.round(wind.speed_kmh)} km/h`}>
+          <g transform={`rotate(${(wind.direction_deg + 180) % 360})`}>
+            <path d="M0,-9 L4,3 L0,0.5 L-4,3 Z" fill="var(--text-secondary)" />
+          </g>
+          <text y={18} textAnchor="middle" fontSize={8} fill="var(--text-muted)">
+            {Math.round(wind.speed_kmh)}km/h
+          </text>
+        </g>
+      )}
 
       {/* Highlighted segments (interval reps) on top */}
       {highlights.map((h, i) => {
@@ -140,5 +174,56 @@ export default function RoutePreviewSvg({
         strokeWidth={2}
       />
     </svg>
+  );
+}
+
+
+/**
+ * Paints the route in chunks coloured by wind alignment: green tailwind,
+ * red headwind, grey crosswind. Chunked every ~12 points to keep the DOM
+ * small on long routes.
+ */
+function WindPaintedLine({
+  coordinates,
+  projected,
+  windDeg,
+}: {
+  coordinates: [number, number][];
+  projected: number[][];
+  windDeg: number;
+}) {
+  const windTo = (windDeg + 180) % 360;
+  const CHUNK = 12;
+  const chunks: Array<{ d: string; color: string }> = [];
+
+  for (let s = 0; s + 1 < coordinates.length; s += CHUNK) {
+    const e = Math.min(s + CHUNK, coordinates.length - 1);
+    const brg = bearingDeg(coordinates[s], coordinates[e]);
+    let delta = Math.abs(brg - windTo);
+    if (delta > 180) delta = 360 - delta;
+    const cos = Math.cos((delta * Math.PI) / 180);
+    const color = cos > 0.34 ? WIND_COLORS.tail : cos < -0.34 ? WIND_COLORS.head : WIND_COLORS.cross;
+    const d = projected
+      .slice(s, e + 1)
+      .map(([x, y], j) => `${j === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`)
+      .join(" ");
+    chunks.push({ d, color });
+  }
+
+  return (
+    <g>
+      {chunks.map((c, i) => (
+        <path
+          key={i}
+          d={c.d}
+          fill="none"
+          stroke={c.color}
+          strokeOpacity={0.85}
+          strokeWidth={2.5}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+      ))}
+    </g>
   );
 }

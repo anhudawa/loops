@@ -58,12 +58,14 @@ interface GeneratedCandidate {
   elevation_loss_m: number;
   quality_score: number;
   quality_tier?: "excellent" | "good";
+  quality_breakdown?: Record<string, number>;
   highlights?: string[];
   surface_breakdown?: { paved_pct: number; unpaved_pct: number; unknown_pct: number };
   gpx_data: string;
   match_score: number;
   workout_fit?: WorkoutFit;
   wind_note?: string;
+  wind_forecast?: { direction_deg: number; speed_kmh: number };
 }
 
 type Candidate = LibraryCandidate | GeneratedCandidate;
@@ -711,7 +713,13 @@ function CandidateCard({
       style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
     >
       <div className="grid grid-cols-[auto_1fr] gap-4 p-4">
-        <RoutePreviewSvg coordinates={candidate.coordinates} highlights={highlights} width={180} height={140} />
+        <RoutePreviewSvg
+          coordinates={candidate.coordinates}
+          highlights={highlights}
+          wind={!isLibrary ? candidate.wind_forecast : undefined}
+          width={180}
+          height={140}
+        />
 
         <div className="flex flex-col">
           <div className="flex items-start justify-between gap-3 mb-2">
@@ -779,13 +787,17 @@ function CandidateCard({
             </p>
           )}
 
+          {!isLibrary && candidate.quality_breakdown && (
+            <QualityFactors breakdown={candidate.quality_breakdown} />
+          )}
+
           {candidate.wind_note && (
             <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>
               🌬 {candidate.wind_note}
             </p>
           )}
 
-          {workoutFit?.fits && <WorkoutAssignment fit={workoutFit} />}
+          {workoutFit?.fits && <WorkoutAssignment fit={workoutFit} coordinates={candidate.coordinates} />}
 
           <div className="flex flex-wrap gap-2 mt-3">
             {isLibrary ? (
@@ -880,22 +892,91 @@ function SourceBadge({
   );
 }
 
-function WorkoutAssignment({ fit }: { fit: WorkoutFit }) {
+/**
+ * Itemised quality factors — an opaque 0-100 earns no trust; named
+ * factors do. Shows the three riders care about most.
+ */
+const FACTOR_MAX: Record<string, { label: string; max: number }> = {
+  safety_score: { label: "Quiet & safe roads", max: 35 },
+  surface_score: { label: "Surface", max: 25 },
+  scenic_score: { label: "Scenery", max: 20 },
+};
+
+function QualityFactors({ breakdown }: { breakdown: Record<string, number> }) {
+  const rows = Object.entries(FACTOR_MAX)
+    .filter(([k]) => typeof breakdown[k] === "number")
+    .map(([k, meta]) => ({ ...meta, pct: Math.round((breakdown[k] / meta.max) * 100) }));
+  if (rows.length === 0) return null;
+  return (
+    <div className="mt-2 space-y-1">
+      {rows.map((r) => (
+        <div key={r.label} className="flex items-center gap-2">
+          <span className="text-[10px] w-28 shrink-0" style={{ color: "var(--text-muted)" }}>{r.label}</span>
+          <span className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: "var(--bg-raised)" }}>
+            <span
+              className="block h-full rounded-full"
+              style={{ width: `${Math.min(100, r.pct)}%`, background: r.pct >= 70 ? "var(--accent)" : r.pct >= 45 ? "#f0c050" : "#f08050" }}
+            />
+          </span>
+          <span className="text-[10px] w-8 text-right" style={{ color: "var(--text-secondary)" }}>{r.pct}%</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function haversineKmUI(a: [number, number], b: [number, number]): number {
+  const R = 6371;
+  const dLat = ((b[0] - a[0]) * Math.PI) / 180;
+  const dLon = ((b[1] - a[1]) * Math.PI) / 180;
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((a[0] * Math.PI) / 180) * Math.cos((b[0] * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+/**
+ * Plain-language session sheet (spec §3): where each effort starts, how
+ * long it runs, what the road does. Distances computed from the route
+ * geometry so they match the head unit.
+ */
+function WorkoutAssignment({
+  fit,
+  coordinates,
+}: {
+  fit: WorkoutFit;
+  coordinates: [number, number][];
+}) {
+  // Cumulative km at each coordinate index (computed once per render —
+  // candidate cards are small and static).
+  const cum: number[] = [0];
+  for (let i = 1; i < coordinates.length; i++) {
+    cum.push(cum[i - 1] + haversineKmUI(coordinates[i - 1], coordinates[i]));
+  }
+  const atKm = (idx: number) => (cum[Math.min(idx, cum.length - 1)] ?? 0).toFixed(1);
+
+  const gradWord = (g: number) =>
+    g > 1.5 ? `a steady ${g}% climb` : g < -1.5 ? `a gentle ${Math.abs(g)}% descent` : "flat road";
+
   return (
     <div
-      className="mt-2 p-2 rounded-lg"
+      className="mt-2 p-2.5 rounded-lg"
       style={{ background: "var(--accent-glow)", border: "1px solid var(--accent)" }}
     >
-      <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: "var(--accent)" }}>
-        Interval segments
+      <p className="text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--accent)" }}>
+        Your session, on the road
       </p>
-      <ul className="space-y-0.5">
+      <ul className="space-y-1">
         {fit.interval_segments.map((a, i) => (
-          <li key={i} className="text-xs" style={{ color: "var(--text)" }}>
-            Rep {a.interval_index + 1}.{a.rep_index + 1}: {a.segment.length_km} km @ {a.segment.avg_gradient_pct}% avg
+          <li key={i} className="text-xs leading-relaxed" style={{ color: "var(--text)" }}>
+            <span className="font-bold">Effort {i + 1}</span> — starts {atKm(a.segment.start_index)} km in:
+            {" "}{a.segment.length_km} km on {gradWord(a.segment.avg_gradient_pct)}, ends at {atKm(a.segment.end_index)} km.
           </li>
         ))}
       </ul>
+      <p className="text-[10px] mt-1.5" style={{ color: "var(--text-muted)" }}>
+        Effort start/end markers are in the GPX — your head unit will alert you on course.
+      </p>
     </div>
   );
 }

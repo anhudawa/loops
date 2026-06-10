@@ -669,7 +669,31 @@ async function buildLoopAroundCorridor(
   const A = corridor.coords[0];
   const B = corridor.coords[corridor.coords.length - 1];
 
-  const warmupLeg = await routeViaBRouter([spec.start_point, A], profile);
+  // Spec §3: minimum 15 minutes riding before effort 1. If the corridor
+  // is close, detour the warm-up leg to make up the time.
+  const warmupNeedKm = (Math.max(15, workout.warmup_minutes) / 60) * 24; // easy pace
+  let warmupLeg = await routeViaBRouter([spec.start_point, A], profile);
+  if (warmupLeg && warmupLeg.distance_km < warmupNeedKm * 0.7) {
+    const deficit = warmupNeedKm - warmupLeg.distance_km;
+    const brg = ((Math.atan2(
+      Math.sin(((A[1] - spec.start_point[1]) * Math.PI) / 180) * Math.cos((A[0] * Math.PI) / 180),
+      Math.cos((spec.start_point[0] * Math.PI) / 180) * Math.sin((A[0] * Math.PI) / 180) -
+        Math.sin((spec.start_point[0] * Math.PI) / 180) * Math.cos((A[0] * Math.PI) / 180) *
+          Math.cos(((A[1] - spec.start_point[1]) * Math.PI) / 180)
+    ) * 180) / Math.PI + 360) % 360;
+    // Detour point ~120° off the direct line, half the deficit out
+    const detourBrg = ((brg + 120) * Math.PI) / 180;
+    const dKm = deficit / 2;
+    const detour: [number, number] = [
+      spec.start_point[0] + (dKm / 111.32) * Math.cos(detourBrg),
+      spec.start_point[1] + (dKm / (111.32 * Math.cos((spec.start_point[0] * Math.PI) / 180))) * Math.sin(detourBrg),
+    ];
+    const extended = await routeViaBRouter([spec.start_point, detour, A], profile);
+    if (extended && extended.distance_km > warmupLeg.distance_km) {
+      genDebug(`anchor-first: warm-up extended ${warmupLeg.distance_km.toFixed(1)}km → ${extended.distance_km.toFixed(1)}km (need ~${warmupNeedKm.toFixed(1)}km)`);
+      warmupLeg = extended;
+    }
+  }
   if (!warmupLeg || warmupLeg.coords.length < 2) {
     genDebug("anchor-first: no warm-up leg to corridor");
     return null;

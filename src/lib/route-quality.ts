@@ -279,7 +279,9 @@ let overpassActive = 0;
 const overpassQueue: Array<() => void> = [];
 
 async function overpassGate(run: () => Promise<Response>): Promise<Response> {
-  if (overpassActive >= OVERPASS_MAX_CONCURRENT) {
+  // Loop, don't assume: a woken waiter must re-check the limit, otherwise
+  // a freshly arriving caller can slip in alongside it.
+  while (overpassActive >= OVERPASS_MAX_CONCURRENT) {
     await new Promise<void>((resolve) => overpassQueue.push(resolve));
   }
   overpassActive++;

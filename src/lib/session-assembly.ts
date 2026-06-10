@@ -153,6 +153,8 @@ out skel qt;
 interface StitchedCorridor {
   nodeIds: number[];
   classes: Set<string>;
+  /** OSM way ids the corridor is built from — excluded from crossing counts. */
+  wayIds: Set<number>;
 }
 
 /**
@@ -247,7 +249,7 @@ export function stitchCorridors(
     }
 
     if (chainLengthKm(chain) >= needKm) {
-      corridors.push({ nodeIds: chain, classes });
+      corridors.push({ nodeIds: chain, classes, wayIds: usedWays });
       seedUsed.add(seed.id);
     }
   }
@@ -269,12 +271,18 @@ function countMinorJunctions(
   chain: number[],
   ways: OsmWay[],
   controlNodes: Set<number>,
-  yieldNodes: Set<number>
+  yieldNodes: Set<number>,
+  corridorWayIds: Set<number>
 ): { minor: number; controls: number } {
   const chainSet = new Set(chain);
-  // node id → classes of OTHER ways for which this node is interior
+  // node id → classes of OTHER (non-corridor) ways passing THROUGH the
+  // node. Excluding the corridor's own ways by id is essential: at seam
+  // nodes where two stitched ways join, the corridor contributes zero
+  // interior usages, so a count-based heuristic hides real crossings —
+  // including disqualifying primary-road crossings.
   const crossings = new Map<number, string[]>();
   for (const w of ways) {
+    if (corridorWayIds.has(w.id)) continue;
     if (!JUNCTION_CLASSES.has(w.tags.highway)) continue;
     for (let i = 1; i < w.nodes.length - 1; i++) {
       const nid = w.nodes[i];
@@ -287,7 +295,6 @@ function countMinorJunctions(
   let minor = 0;
   let controls = 0;
   const interior = chain.slice(1, -1);
-  const interiorSet = new Set(interior);
   for (const nid of interior) {
     if (controlNodes.has(nid)) {
       controls++;
@@ -299,16 +306,9 @@ function countMinorJunctions(
     }
     const crossing = crossings.get(nid);
     if (!crossing || crossing.length === 0) continue;
-    // The corridor's own ways register here too (the node is interior to
-    // them) — only count classes when more ways use the node than the
-    // corridor itself contributes. Corridor contributes exactly 1
-    // interior usage per node, so >1 usages = a real crossing.
-    const others = crossing.length - 1;
-    if (others <= 0) continue;
     if (crossing.some((c) => c === "trunk" || c === "primary")) controls++;
     else minor++;
   }
-  void interiorSet;
   return { minor, controls };
 }
 
@@ -371,7 +371,7 @@ export async function findEffortCorridors(
         .map((nid) => nodes.get(nid))
         .filter((n): n is OsmNode => !!n)
         .map((n) => [n.lat, n.lon] as [number, number]);
-      const { minor, controls } = countMinorJunctions(c.nodeIds, ways, controlNodes, yieldNodes);
+      const { minor, controls } = countMinorJunctions(c.nodeIds, ways, controlNodes, yieldNodes, c.wayIds);
       const nearEndFirst =
         haversineKm(start, coords[0]) <= haversineKm(start, coords[coords.length - 1]);
       const ordered = nearEndFirst ? coords : [...coords].reverse();

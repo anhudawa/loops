@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
   // Wrap in a timeout race so the serverless function never hangs
   const timeoutPromise = new Promise<never>((_, reject) =>
     setTimeout(
-      () => reject(new Error("Route generation timed out after 28 seconds")),
+      () => reject(new Error(`Route generation timed out after ${Math.round(PIPELINE_TIMEOUT_MS / 1000)} seconds`)),
       PIPELINE_TIMEOUT_MS
     )
   );

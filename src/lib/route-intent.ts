@@ -309,6 +309,13 @@ export interface ParseRouteIntentOptions {
 export function parseBasicIntent(prompt: string): ParsedIntent | null {
   const p = prompt.toLowerCase();
 
+  // Workout prompts need the LLM — stripping the session and serving a
+  // plain ride would silently compromise it. Decline so the caller
+  // surfaces PARSE_FAILED and the structured form.
+  if (/\d\s*[x×]\s*\d|\binterval|\bthreshold\b|\btempo\b|\bvo2|sweet\s*spot|\bzone\s*[1-7]\b|\bz[1-7]\b/.test(p)) {
+    return null;
+  }
+
   // Duration: "2 hour", "1.5 hours", "90 min"
   let duration: number | null = null;
   const hourMatch = p.match(/(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)\b/);
@@ -318,7 +325,8 @@ export function parseBasicIntent(prompt: string): ParsedIntent | null {
 
   // Distance: "60km", "40 mile"
   let distance: number | null = null;
-  const kmMatch = p.match(/(\d+(?:\.\d+)?)\s*(?:km|kilometres?|kilometers?)\b/);
+  // Negative lookahead: "30km/h" is a pace, not a distance.
+  const kmMatch = p.match(/(\d+(?:\.\d+)?)\s*(?:km|kilometres?|kilometers?)\b(?!\s*\/?\s*h\b)/);
   const miMatch = p.match(/(\d+(?:\.\d+)?)\s*(?:miles?|mi)\b/);
   if (kmMatch) distance = Math.round(parseFloat(kmMatch[1]));
   else if (miMatch) distance = Math.round(parseFloat(miMatch[1]) * 1.609);

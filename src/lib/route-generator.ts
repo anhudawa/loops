@@ -674,7 +674,6 @@ async function buildLoopAroundCorridor(
   profile: string
 ): Promise<GeneratedRoute | null> {
   const A = corridor.coords[0];
-  const B = corridor.coords[corridor.coords.length - 1];
 
   // Spec §3: minimum 15 minutes riding before effort 1. If the corridor
   // is close, detour the warm-up leg to make up the time.
@@ -705,23 +704,59 @@ async function buildLoopAroundCorridor(
     genDebug("anchor-first: no warm-up leg to corridor");
     return null;
   }
-  const homeLeg = await routeViaBRouter([B, spec.end_point], profile);
-  if (!homeLeg || homeLeg.coords.length < 2) {
-    genDebug("anchor-first: no leg home from corridor");
-    return null;
-  }
 
   // Assemble: warm-up → [effort A→B, spin back B→A] × (reps−1) → final
   // effort A→B → home. All efforts run the same direction, so the
   // qualified gradient profile applies to every rep.
   const coords: [number, number][] = [];
   const elevations: number[] = [];
-  const reverseCoords = [...corridor.coords].reverse();
-  const reverseElev = [...corridor.elevations].reverse();
+
+  // Truncate the traversal to the longest rep's needed distance plus a
+  // short roll-off: a 30-second effort must not drag the rider down an
+  // 8 km corridor end to end on every rep.
+  let maxNeedKm = 0;
+  for (const iv of workout.intervals) {
+    const km = ZONES[iv.zone].terrain.min_length_km_per_minute * iv.duration_minutes;
+    if (km > maxNeedKm) maxNeedKm = km;
+  }
+  const traverseKm = Math.min(corridor.length_km, maxNeedKm + 0.4);
+  let cut = corridor.coords.length;
+  {
+    let cum = 0;
+    for (let i = 1; i < corridor.coords.length; i++) {
+      cum += haversineKm(
+        corridor.coords[i - 1][0], corridor.coords[i - 1][1],
+        corridor.coords[i][0], corridor.coords[i][1]
+      );
+      if (cum >= traverseKm) {
+        cut = i + 1;
+        break;
+      }
+    }
+  }
+  const corridorCoords = corridor.coords.slice(0, cut);
+  const corridorElev = corridor.elevations.slice(0, cut);
+  const reverseCoords = [...corridorCoords].reverse();
+  const reverseElev = [...corridorElev].reverse();
+
+  const B = corridorCoords[corridorCoords.length - 1];
+  const homeLeg = await routeViaBRouter([B, spec.end_point], profile);
+  if (!homeLeg || homeLeg.coords.length < 2) {
+    genDebug("anchor-first: no leg home from corridor");
+    return null;
+  }
 
   const push = (cs: [number, number][], es: number[]) => {
-    // Skip the first point when it duplicates the current tail
-    const start = coords.length > 0 ? 1 : 0;
+    // Skip the first point only when it actually duplicates the tail
+    // (~1 m tolerance) — BRouter legs snap to slightly different points,
+    // and unconditionally dropping a real point left a gap in effort 1.
+    let start = 0;
+    if (coords.length > 0 && cs.length > 0) {
+      const tail = coords[coords.length - 1];
+      if (Math.abs(tail[0] - cs[0][0]) < 1e-5 && Math.abs(tail[1] - cs[0][1]) < 1e-5) {
+        start = 1;
+      }
+    }
     for (let i = start; i < cs.length; i++) {
       coords.push(cs[i]);
       elevations.push(es[i]);
@@ -748,7 +783,7 @@ async function buildLoopAroundCorridor(
       ZONES[plan.zone as keyof typeof ZONES].terrain.min_length_km_per_minute * plan.duration;
 
     const effortStartIdx = coords.length - 1;
-    push(corridor.coords, corridor.elevations);
+    push(corridorCoords, corridorElev);
 
     // Find where the rep's needed distance is reached within the traverse
     let cum = 0;

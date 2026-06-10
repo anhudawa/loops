@@ -77,5 +77,38 @@
     "allow_non_loop": true,
     "operator_name": "Epic Road Rides",
     "operator_url": "https://epicroadrides.com"
+  },
+  {
+    "name": "Sa Calobra Epic",
+    "rwgps_url": "https://ridewithgps.com/routes/55516101",
+    "description": "The ride everyone comes for: 105 km from Alcúdia over the Coll de Femenia to the top of Sa Calobra, down the famous snake road and back up its 26 hairpins.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "hard",
+    "county": "Mallorca",
+    "country": "Spain",
+    "region": "Islas Baleares"
+  },
+  {
+    "name": "Cap de Formentor",
+    "rwgps_url": "https://ridewithgps.com/routes/55515860",
+    "description": "56 km from Alcúdia to the lighthouse at Mallorca's wild northern tip and back — cliff-edge corners, tunnels and the island's most famous photo stop.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "moderate",
+    "county": "Mallorca",
+    "country": "Spain",
+    "region": "Islas Baleares"
+  },
+  {
+    "name": "Pollença Bay Flat Triangle",
+    "rwgps_url": "https://ridewithgps.com/routes/54347969",
+    "description": "The easy spin: 29 km on the flat triangle between Pollença, Port de Pollença and Alcúdia. Recovery-day perfection with café stops everywhere.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "easy",
+    "county": "Mallorca",
+    "country": "Spain",
+    "region": "Islas Baleares"
   }
 ]

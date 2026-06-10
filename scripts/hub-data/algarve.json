@@ -64,5 +64,27 @@
     "county": "Algarve",
     "country": "Portugal",
     "region": "Algarve"
+  },
+  {
+    "name": "Carvoeiro and Albufeira Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/53793141",
+    "description": "65 km of rolling coastal countryside between Albufeira and Carvoeiro — the relaxed middle-distance option.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "moderate",
+    "county": "Algarve",
+    "country": "Portugal",
+    "region": "Algarve"
+  },
+  {
+    "name": "Malhão 80",
+    "rwgps_url": "https://ridewithgps.com/routes/55227924",
+    "description": "The direct hit: 81 km inland with the famous Alto do Malhão wall as the centrepiece — the Volta ao Algarve finish climb without the full epic distance.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "moderate",
+    "county": "Algarve",
+    "country": "Portugal",
+    "region": "Algarve"
   }
 ]

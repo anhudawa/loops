@@ -42,5 +42,49 @@
     "county": "Lucca",
     "country": "Italy",
     "region": "Toscana"
+  },
+  {
+    "name": "Lucca to Pisa Easy Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/54929529",
+    "description": "48 km of flat valley riding from Lucca's walls to Pisa and back — the classic recovery spin with a leaning tower halfway.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "easy",
+    "county": "Lucca",
+    "country": "Italy",
+    "region": "Toscana"
+  },
+  {
+    "name": "Lucca to Viareggio Easy Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/55356309",
+    "description": "73 km out to the coast at Viareggio and back across the plain — flat tempo riding with a seafront espresso at the turn.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "easy",
+    "county": "Lucca",
+    "country": "Italy",
+    "region": "Toscana"
+  },
+  {
+    "name": "Montecarlo Vineyards Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/55153359",
+    "description": "66 km through the rolling vineyard hills east of Lucca via the walled village of Montecarlo — punchy climbs and Tuscan postcard views.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "moderate",
+    "county": "Lucca",
+    "country": "Italy",
+    "region": "Toscana"
+  },
+  {
+    "name": "Garfagnana and Abetone Epic",
+    "rwgps_url": "https://ridewithgps.com/routes/55386724",
+    "description": "The Apennine monster: 148 km and over 3,200 m through the Garfagnana valley to Castelnuovo and the Abetone climbs. A full day in the high mountains.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "hard",
+    "county": "Lucca",
+    "country": "Italy",
+    "region": "Toscana"
   }
 ]

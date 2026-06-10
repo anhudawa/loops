@@ -64,5 +64,27 @@
     "county": "Tenerife",
     "country": "Spain",
     "region": "Islas Canarias"
+  },
+  {
+    "name": "Vilaflor Easy Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/18677043",
+    "description": "The gentlest way up: 47 km to Vilaflor at a steady gradient — as close to an easy day as the south of Tenerife offers.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "moderate",
+    "county": "Tenerife",
+    "country": "Spain",
+    "region": "Islas Canarias"
+  },
+  {
+    "name": "Teide Gentle Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/32397693",
+    "description": "92 km circuit of the volcano's southern flank using the steadier gradients — the Teide experience without the steepest ramps.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "hard",
+    "county": "Tenerife",
+    "country": "Spain",
+    "region": "Islas Canarias"
   }
 ]

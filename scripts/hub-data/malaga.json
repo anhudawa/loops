@@ -53,5 +53,38 @@
     "county": "Málaga",
     "country": "Spain",
     "region": "Andalucía"
+  },
+  {
+    "name": "Torre del Mar Flat Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/54662067",
+    "description": "The easy day: 63 km east along the coast to Torre del Mar and back with barely 400 m of climbing — recovery spinning with sea views.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "easy",
+    "county": "Málaga",
+    "country": "Spain",
+    "region": "Andalucía"
+  },
+  {
+    "name": "Benagalbón Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/54662026",
+    "description": "40 km with one gentle climb to the village of Benagalbón — the short option when the legs need persuading.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "easy",
+    "county": "Málaga",
+    "country": "Spain",
+    "region": "Andalucía"
+  },
+  {
+    "name": "Comares Hard Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/54663584",
+    "description": "90 km and 1,850 m into the Axarquía with the full climb to the balcony village of Comares — one of Málaga's toughest regular loops.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "hard",
+    "county": "Málaga",
+    "country": "Spain",
+    "region": "Andalucía"
   }
 ]

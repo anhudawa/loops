@@ -84,22 +84,20 @@ launch bar:
 | Destination | Manifest(s) | Routes | vs 8-route bar |
 |---|---|---|---|
 | Girona | `girona-eat-sleep-cycle.json` + `girona.json` | 20 + 10 | ✓ |
-| Mallorca | `mallorca-epic-road-rides.json` | 6 | needs 2+ |
+| Mallorca | `mallorca-epic-road-rides.json` | 9 | ✓ (incl. Sa Calobra, Formentor, flat spin) |
 | Calpe / Costa Blanca | `calpe.json` (local files) + `calpe-rwgps.json` | 6 + 3 | ✓ |
-| Málaga | `malaga.json` | 5 | needs 3 |
-| Tenerife | `tenerife.json` | 6 | needs 2 |
-| Gran Canaria | `gran-canaria.json` | 6 | needs 2 |
-| Lanzarote | `lanzarote.json` | 6 | needs 2 |
-| Algarve | `algarve.json` | 6 | needs 2 |
-| Lucca | `lucca.json` | 4 | needs 4 |
-| Nice | `nice.json` | 5 | needs 3 |
+| Málaga | `malaga.json` | 8 | ✓ |
+| Tenerife | `tenerife.json` | 8 | ✓ (no true easy day exists in the south — flagged) |
+| Gran Canaria | `gran-canaria.json` | 7 | 1 short — south coast lacks an 8th distinct loop; add a northern (Las Palmas) route or trace one |
+| Lanzarote | `lanzarote.json` | 8 | ✓ (incl. 175 km island lap) |
+| Algarve | `algarve.json` | 8 | ✓ |
+| Lucca | `lucca.json` | 8 | ✓ (incl. Pisa/Viareggio easy spins, Garfagnana epic) |
+| Nice | `nice.json` | 8 | ✓ |
 
-Gap-filling to reach 8 everywhere: each destination's remaining slots
-should prioritise (a) one true leisure/recovery spin under 40 km, and
-(b) one 150 km+ epic where missing — the spec's required spread. Find via
-the same RideWithGPS search method (loop closure < 3 km, dense traces,
-starts at the destination's main base town) or trace our own along the
-documented classics.
+Every route was dry-run validated: fetched, parsed, loop closure < 3 km
+(or flagged point-to-point), trace density checked. Real imports must run
+from an environment with Overpass access so the quality gate scores
+properly (dry runs here returned the neutral fallback).
 
 ## Library shape per destination (from the launch spec)
 

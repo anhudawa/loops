@@ -64,5 +64,27 @@
     "county": "Lanzarote",
     "country": "Spain",
     "region": "Islas Canarias"
+  },
+  {
+    "name": "Timanfaya and Femés 100",
+    "rwgps_url": "https://ridewithgps.com/routes/53119736",
+    "description": "101 km around the south: the Timanfaya volcanic park, the Femés climb and the southern coast — Lanzarote's hard southern century.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "hard",
+    "county": "Lanzarote",
+    "country": "Spain",
+    "region": "Islas Canarias"
+  },
+  {
+    "name": "Vuelta a Lanzarote",
+    "rwgps_url": "https://ridewithgps.com/routes/43302750",
+    "description": "The island lap: 175 km around the whole of Lanzarote from Arrecife. The local rite of passage — start early and respect the wind.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "hard",
+    "county": "Lanzarote",
+    "country": "Spain",
+    "region": "Islas Canarias"
   }
 ]

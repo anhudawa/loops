@@ -53,5 +53,38 @@
     "county": "Alpes-Maritimes",
     "country": "France",
     "region": "Côte d'Azur"
+  },
+  {
+    "name": "Villefranche, Èze and Cap Ferrat",
+    "rwgps_url": "https://ridewithgps.com/routes/48295403",
+    "description": "The short classic: 32 km around Villefranche, up to Èze village and around the Cap Ferrat peninsula — small distance, big views.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "easy",
+    "county": "Alpes-Maritimes",
+    "country": "France",
+    "region": "Côte d'Azur"
+  },
+  {
+    "name": "Cap d'Ail, Madone and Èze",
+    "rwgps_url": "https://ridewithgps.com/routes/55262367",
+    "description": "62 km from Cap d'Ail combining the Col de la Madone with Èze — a condensed hit of the area's two most famous climbs.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "hard",
+    "county": "Alpes-Maritimes",
+    "country": "France",
+    "region": "Côte d'Azur"
+  },
+  {
+    "name": "Madone d'Utelle Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/54450489",
+    "description": "110 km and 2,500 m from Nice up the Var valley to the sanctuary summit of the Madone d'Utelle — a dead-end climb with the best view on the Côte d'Azur.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "hard",
+    "county": "Alpes-Maritimes",
+    "country": "France",
+    "region": "Côte d'Azur"
   }
 ]

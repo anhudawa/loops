@@ -64,5 +64,16 @@
     "county": "Gran Canaria",
     "country": "Spain",
     "region": "Islas Canarias"
+  },
+  {
+    "name": "Playa de Mogán and San Nicolás Viewpoint",
+    "rwgps_url": "https://ridewithgps.com/routes/54670802",
+    "description": "90 km along the dramatic west: Playa de Mogán, the cliff road towards San Nicolás and 2,000 m of climbing on the island's wildest tarmac.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "hard",
+    "county": "Gran Canaria",
+    "country": "Spain",
+    "region": "Islas Canarias"
   }
 ]

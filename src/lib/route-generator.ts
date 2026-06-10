@@ -52,6 +52,8 @@ import {
   type WindForecast,
   type WindStrategy,
 } from "./wind";
+import { findEffortCorridors, type EffortCorridor } from "./session-assembly";
+import { ZONES } from "./intensity";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -564,6 +566,12 @@ async function candidatesFromSpecInner(
     if (workoutMatches.length > 0) {
       return workoutMatches.map((m) => ({ source: "library" as const, ...m }));
     }
+    // Anchor-first (spec §3): find the effort road, build the loop
+    // around it. Falls back to route-first wide search, then declines.
+    const anchored = await assembleAnchorFirstWorkout(spec, spec.workout);
+    if (anchored.length > 0) {
+      return anchored.map((g) => ({ source: "generated" as const, ...g }));
+    }
     const freshWorkout = await generateFreshWorkoutRoutes(spec, spec.workout);
     if (freshWorkout.length === 0) {
       throw new Error(workoutDeclineMessage(spec.workout));
@@ -596,6 +604,219 @@ async function candidatesFromSpecInner(
   }
 
   return generated.map((g) => ({ source: "generated" as const, ...g }));
+}
+
+/**
+ * Anchor-first session assembly (launch spec §3): find a qualifying
+ * effort corridor near the start FIRST, then build the loop around it —
+ * warm-up leg out, efforts as laps of the corridor (ride the stretch,
+ * spin back, repeat), cool-down home. Efforts are engineered onto a road
+ * that can hold them, not hoped for.
+ */
+async function assembleAnchorFirstWorkout(
+  spec: RouteSpec,
+  workout: WorkoutSpec
+): Promise<GeneratedRoute[]> {
+  const profile = DISCIPLINE_PROFILE[spec.discipline];
+
+  // Corridor must hold the most demanding block (longest distance need).
+  let needBlock = workout.intervals[0];
+  let needKm = 0;
+  for (const iv of workout.intervals) {
+    const km = ZONES[iv.zone].terrain.min_length_km_per_minute * iv.duration_minutes;
+    if (km > needKm) {
+      needKm = km;
+      needBlock = iv;
+    }
+  }
+  const totalReps = workout.intervals.reduce((s, iv) => s + iv.count, 0);
+
+  let corridors: EffortCorridor[];
+  try {
+    corridors = await findEffortCorridors(
+      spec.start_point,
+      needBlock.zone,
+      needBlock.duration_minutes,
+      { limit: 2 }
+    );
+  } catch (err) {
+    genDebug(`anchor-first: corridor search failed — ${err instanceof Error ? err.message : err}`);
+    return [];
+  }
+  genDebug(`anchor-first: ${corridors.length} qualifying corridor(s)`);
+
+  const results: GeneratedRoute[] = [];
+  for (const corridor of corridors) {
+    try {
+      const route = await buildLoopAroundCorridor(spec, workout, corridor, totalReps, profile);
+      if (route) results.push(route);
+    } catch (err) {
+      genDebug(`anchor-first: assembly failed — ${err instanceof Error ? err.message : err}`);
+    }
+    if (results.length >= 2) break;
+  }
+  results.sort((a, b) => b.match_score - a.match_score);
+  return results;
+}
+
+async function buildLoopAroundCorridor(
+  spec: RouteSpec,
+  workout: WorkoutSpec,
+  corridor: EffortCorridor,
+  totalReps: number,
+  profile: string
+): Promise<GeneratedRoute | null> {
+  const A = corridor.coords[0];
+  const B = corridor.coords[corridor.coords.length - 1];
+
+  const warmupLeg = await routeViaBRouter([spec.start_point, A], profile);
+  if (!warmupLeg || warmupLeg.coords.length < 2) {
+    genDebug("anchor-first: no warm-up leg to corridor");
+    return null;
+  }
+  const homeLeg = await routeViaBRouter([B, spec.end_point], profile);
+  if (!homeLeg || homeLeg.coords.length < 2) {
+    genDebug("anchor-first: no leg home from corridor");
+    return null;
+  }
+
+  // Assemble: warm-up → [effort A→B, spin back B→A] × (reps−1) → final
+  // effort A→B → home. All efforts run the same direction, so the
+  // qualified gradient profile applies to every rep.
+  const coords: [number, number][] = [];
+  const elevations: number[] = [];
+  const reverseCoords = [...corridor.coords].reverse();
+  const reverseElev = [...corridor.elevations].reverse();
+
+  const push = (cs: [number, number][], es: number[]) => {
+    // Skip the first point when it duplicates the current tail
+    const start = coords.length > 0 ? 1 : 0;
+    for (let i = start; i < cs.length; i++) {
+      coords.push(cs[i]);
+      elevations.push(es[i]);
+    }
+  };
+
+  push(warmupLeg.coords, warmupLeg.elevations);
+
+  // Effort segment bounds (by traversal): efforts occupy the corridor up
+  // to the zone's required distance; any remainder is roll-off.
+  const intervalPlan: Array<{ interval_index: number; rep_index: number; zone: string; duration: number }> = [];
+  workout.intervals.forEach((iv, ii) => {
+    for (let r = 0; r < iv.count; r++) {
+      intervalPlan.push({ interval_index: ii, rep_index: r, zone: iv.zone, duration: iv.duration_minutes });
+    }
+  });
+
+  const segments: WorkoutFit["interval_segments"] = [];
+  const candidateSegments: IntervalSegment[] = [];
+
+  for (let rep = 0; rep < totalReps; rep++) {
+    const plan = intervalPlan[rep];
+    const needRepKm =
+      ZONES[plan.zone as keyof typeof ZONES].terrain.min_length_km_per_minute * plan.duration;
+
+    const effortStartIdx = coords.length - 1;
+    push(corridor.coords, corridor.elevations);
+
+    // Find where the rep's needed distance is reached within the traverse
+    let cum = 0;
+    let effortEndIdx = coords.length - 1;
+    for (let i = effortStartIdx + 1; i < coords.length; i++) {
+      cum += haversineKm(coords[i - 1][0], coords[i - 1][1], coords[i][0], coords[i][1]);
+      if (cum >= needRepKm) {
+        effortEndIdx = i;
+        break;
+      }
+    }
+
+    const seg: IntervalSegment = {
+      start_index: effortStartIdx,
+      end_index: effortEndIdx,
+      length_km: Math.round(Math.min(cum, corridor.length_km) * 10) / 10,
+      avg_gradient_pct: corridor.avg_gradient_pct,
+      max_gradient_pct: corridor.max_gradient_pct,
+      gradient_variance: corridor.gradient_variance,
+      suitable_zones: [plan.zone as IntervalSegment["suitable_zones"][number]],
+    };
+    segments.push({ interval_index: plan.interval_index, rep_index: plan.rep_index, segment: seg });
+    if (rep === 0) candidateSegments.push(seg);
+
+    // Spin back for the next rep (not after the last)
+    if (rep < totalReps - 1) {
+      push(reverseCoords, reverseElev);
+    }
+  }
+
+  push(homeLeg.coords, homeLeg.elevations);
+
+  // Elevation gaps from BRouter legs: backfill NaNs by interpolation
+  for (let i = 0; i < elevations.length; i++) {
+    if (Number.isNaN(elevations[i])) {
+      let j = i + 1;
+      while (j < elevations.length && Number.isNaN(elevations[j])) j++;
+      const prev = i > 0 ? elevations[i - 1] : elevations[j] ?? 0;
+      const next = j < elevations.length ? elevations[j] : prev;
+      for (let k = i; k < j; k++) {
+        elevations[k] = prev + ((next - prev) * (k - i + 1)) / (j - i + 1);
+      }
+    }
+  }
+
+  const distKm = totalDistanceKm(coords);
+  let gain = 0;
+  let loss = 0;
+  for (let i = 1; i < elevations.length; i++) {
+    const d = elevations[i] - elevations[i - 1];
+    if (d > 0) gain += d;
+    else loss += -d;
+  }
+
+  const rulesResult = validateRouteRules(coords, spec.discipline, null, {
+    elevationGain: Math.round(gain),
+    distanceKm: distKm,
+  });
+  if (!rulesResult.passed) {
+    genDebug(`anchor-first: assembled loop failed rules — ${rulesResult.violations?.map((v) => v.rule).join("; ")}`);
+    return null;
+  }
+
+  const quality = await scoreRoute(coords, spec.discipline);
+  if (quality.total < QUALITY_FLOOR) {
+    genDebug(`anchor-first: assembled loop quality ${quality.total} < ${QUALITY_FLOOR}`);
+    return null;
+  }
+
+  const fit: WorkoutFit = {
+    fits: true,
+    interval_segments: segments,
+    candidate_segments: candidateSegments,
+  };
+
+  const matchScore = computeMatchScore(distKm, Math.round(gain), spec, quality.total);
+
+  return {
+    coordinates: coords,
+    elevations,
+    distance_km: Math.round(distKm * 10) / 10,
+    elevation_gain_m: Math.round(gain),
+    elevation_loss_m: Math.round(loss),
+    quality_score: quality.total,
+    quality_tier: quality.total >= QUALITY_WORLD_CLASS ? "excellent" : "good",
+    quality_breakdown: quality.breakdown as unknown as Record<string, number>,
+    highlights: extractHighlights(quality.flags),
+    road_type_breakdown: computeRoadTypeBreakdown(coords),
+    gpx_data: buildGpx(
+      coords,
+      elevations,
+      `Workout ${spec.discipline} route — ${Math.round(distKm)}km`,
+      spec.discipline,
+      workoutCoursePoints(coords, fit, workout)
+    ),
+    waypoints_used: [spec.start_point, A, B],
+    match_score: matchScore,
+    workout_fit: fit,
+  };
 }
 
 /**

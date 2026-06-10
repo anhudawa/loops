@@ -51,6 +51,7 @@ src/
     route-quality.ts     # 10-factor 0-100 scoring via Overpass
     route-rules.ts       # Hard guardrails (auto-reject)
     wind.ts              # Wind forecast + bearing alignment ("tailwind home")
+    session-assembly.ts  # Anchor-first corridor finder (spec §3)
     interval-segments.ts # Workout segment detection
     interval-validation.ts
     intensity.ts         # Zone definitions
@@ -100,8 +101,9 @@ node scripts/import-routes.mjs scripts/hub-data/girona-eat-sleep-cycle.json --dr
 ## Known Technical Debt / Open Items
 - DB credential leaked in git history (removed from files) — MUST be
   rotated in the Vercel/Neon dashboard
-- Anchor-first session assembly (spec §3) — current flow is route-first
-  with segment validation; anchor-first is the upgrade
+- Anchor-first session assembly SHIPPED (src/lib/session-assembly.ts +
+  assembleAnchorFirstWorkout in route-generator) — corridor finder live-
+  verified from Skerries; route-first wide search remains the fallback
 - Garmin Connect API push + Whisper voice fallback — need external
   accounts/keys
 - Golden route suite: harness + 30 cases at `npm run golden` (needs

@@ -9,14 +9,16 @@ routes from what local experts already publish).
 
 ## The model in one paragraph
 
-We don't have local partners to sign off routes, so validation comes from
-**provenance plus automated checking**: a route enters the launch library only
-if (1) it was published by a named, credible local operator — a bike shop,
-tour company or camp organiser whose business depends on recommending good
-roads — and (2) it passes our own automated quality scoring and hard
-guardrails (`route-quality.ts`, `route-rules.ts`). The operator's name and a
-link to the original appear on the route page ("Route by Eat Sleep Cycle,
-Girona"), which is honest attribution and free marketing for them.
+A route enters the launch library only if (1) it follows roads that named,
+credible local operators — bike shops, tour companies, camp organisers whose
+business depends on recommending good roads — publish and ride themselves,
+and (2) it passes our own automated quality scoring and hard guardrails
+(`route-quality.ts`, `route-rules.ts`). Routes are presented as Loops
+routes with no public attribution (owner decision, 2026-06-09: routes are
+facts, no credit shown). The `operator_name`/`operator_url` fields are
+retained as **private provenance only** — internal bookkeeping so we know
+where each route's intelligence came from when re-checking freshness. They
+are not displayed anywhere in the UI.
 
 ## Why this works as validation
 
@@ -28,17 +30,14 @@ quality scorer (surface, traffic proximity, bicycle access, road class via
 OpenStreetMap) and anything that fails the guardrails is rejected regardless
 of source.
 
-## Licensing — do this first per destination
+## Licensing position (owner decision, 2026-06-09)
 
-A published GPX is still the operator's work. Before importing any
-operator's routes at volume, send a short permission email: we want to
-feature their routes with name, logo and link on a free route-discovery
-platform. Expect most to say yes — it is free customer acquisition for them.
-Keep replies in a folder; record consent in the `route_sources` notes. Where
-no reply, prefer (a) routes the operator distributes explicitly for public
-download, (b) rebuilding the same roads as our own GPX (roads are facts and
-not copyrightable; the operator is then credited as "route intelligence"
-rather than file source).
+Routes are treated as facts — roads, distances and elevations are not
+copyrightable, and no permission emails or public credit are required.
+Names and descriptions are written by us, never copied from the source.
+Route geometry is sourced from publicly downloadable tracks. If an operator
+ever objects, the fallback is trivial: re-trace the same public roads with
+our own router, which produces an equivalent route from facts alone.
 
 ## The pipeline (all pieces already exist in the codebase)
 
@@ -47,7 +46,7 @@ Operator's public route (RideWithGPS / GPX download / Wikiloc)
   → import via src/lib/ridewithgps.ts or src/lib/route-parser.ts (GPX/FIT/TCX)
   → quality score + hard guardrails (route-quality.ts, route-rules.ts)
   → reject below threshold or on any guardrail violation
-  → insertRoute with operator_name + operator_url attribution (db.ts)
+  → insertRoute with operator_name + operator_url as private provenance (db.ts)
   → route appears in the destination library and in library-first matching
     for generated requests (route-library.ts)
 ```

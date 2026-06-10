@@ -299,10 +299,11 @@ hours.
 
 1. **Route validation:** no local partners exist. Validation switches to
    sourcing routes that credible local operators already publish (e.g. Eat
-   Sleep Cycle's public Girona route library), imported with attribution and
-   gated by our automated quality scoring. Full model:
-   `2026-06-09-route-sourcing-validation.md`. This removes the biggest
-   external dependency from the critical path.
+   Sleep Cycle's public Girona route library), gated by our automated
+   quality scoring. Owner decision (2026-06-09): routes are facts — no
+   public attribution or permission process; source kept as private
+   provenance only. Full model: `2026-06-09-route-sourcing-validation.md`.
+   This removes the biggest external dependency from the critical path.
 2. **Product status:** treat the product as pre-live. Rebuild where needed to
    execute the plan — no obligation to preserve existing behaviour.
 3. **Social features:** no preference. Per the spec's out-of-scope list, hide

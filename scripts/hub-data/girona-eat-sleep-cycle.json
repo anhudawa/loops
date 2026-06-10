@@ -2,7 +2,7 @@
   {
     "name": "Els Àngels and Santa Pelaia (Road - Intermediate)",
     "rwgps_url": "https://ridewithgps.com/routes/45936026",
-    "description": "Girona's two essential road climbs in one loop: the steady switchbacks of Els Àngels followed by the rolling Gavarres traverse over Santa Pelaia. The classic intermediate day out, straight from the city. Route by Eat Sleep Cycle, Girona.",
+    "description": "Girona's two essential road climbs in one loop: the steady switchbacks of Els Àngels followed by the rolling Gavarres traverse over Santa Pelaia. The classic intermediate day out, straight from the city.",
     "discipline": "road",
     "surface_type": "road",
     "difficulty": "moderate",
@@ -15,7 +15,7 @@
   {
     "name": "The Rupit Loop (Road - Epic)",
     "rwgps_url": "https://ridewithgps.com/routes/45936028",
-    "description": "The big one: 187 km and over 3,000 m of climbing through the volcanic Garrotxa to the clifftop village of Rupit and back. Eat Sleep Cycle's signature epic — bring food, lights and respect.",
+    "description": "The big one: 187 km and over 3,000 m of climbing through the volcanic Garrotxa to the clifftop village of Rupit and back. The region's signature epic — bring food, lights and respect.",
     "discipline": "road",
     "surface_type": "road",
     "difficulty": "hard",
@@ -28,7 +28,7 @@
   {
     "name": "Costa Brava Classic (Road - Advanced)",
     "rwgps_url": "https://ridewithgps.com/routes/45936030",
-    "description": "Out to the Mediterranean and back: coastal corniche roads, fishing villages and the punchy climbs of the Gavarres on the return. The ride that shows why Girona's pros never move away. Route by Eat Sleep Cycle.",
+    "description": "Out to the Mediterranean and back: coastal corniche roads, fishing villages and the punchy climbs of the Gavarres on the return. The ride that shows why Girona's pros never move away.",
     "discipline": "road",
     "surface_type": "road",
     "difficulty": "hard",
@@ -41,7 +41,7 @@
   {
     "name": "Les Serres + Mas Lunes (Road - Intermediate)",
     "rwgps_url": "https://ridewithgps.com/routes/45936033",
-    "description": "A rolling mid-week loop south of Girona over Les Serres with quiet lanes and steady climbing — the kind of honest 2-3 hour ride locals actually do. Route by Eat Sleep Cycle.",
+    "description": "A rolling mid-week loop south of Girona over Les Serres with quiet lanes and steady climbing — the kind of honest 2-3 hour ride locals actually do.",
     "discipline": "road",
     "surface_type": "road",
     "difficulty": "moderate",
@@ -54,7 +54,7 @@
   {
     "name": "Sant Andreu Salou Lanes (Road - Leisure)",
     "rwgps_url": "https://ridewithgps.com/routes/45936035",
-    "description": "Flat-to-rolling recovery spin through the farm lanes south of the city. Minimal traffic, gentle gradients, café at the end. Route by Eat Sleep Cycle, Girona.",
+    "description": "Flat-to-rolling recovery spin through the farm lanes south of the city. Minimal traffic, gentle gradients, café at the end.",
     "discipline": "road",
     "surface_type": "road",
     "difficulty": "easy",
@@ -65,9 +65,9 @@
     "operator_url": "https://www.eatsleepcycle.com"
   },
   {
-    "name": "MAAP x Eat Sleep Cycle Girona",
+    "name": "Girona Big Day Out",
     "rwgps_url": "https://ridewithgps.com/routes/48238949",
-    "description": "The collaboration route: 114 km and nearly 2,000 m of the best roads within reach of Girona, built for a proper big day out. Route by Eat Sleep Cycle.",
+    "description": "114 km and nearly 2,000 m of the best roads within reach of Girona, built for a proper big day out.",
     "discipline": "road",
     "surface_type": "road",
     "difficulty": "hard",
@@ -78,9 +78,9 @@
     "operator_url": "https://www.eatsleepcycle.com"
   },
   {
-    "name": "ESC Banyoles Leisure Route",
+    "name": "Banyoles Lake Leisure Loop",
     "rwgps_url": "https://ridewithgps.com/routes/46230265",
-    "description": "The easy spin to Lake Banyoles and back — flat roads, lake views and a coffee stop by the water. Eat Sleep Cycle's standard leisure tour.",
+    "description": "The easy spin to Lake Banyoles and back — flat roads, lake views and a coffee stop by the water.",
     "discipline": "road",
     "surface_type": "road",
     "difficulty": "easy",
@@ -91,9 +91,9 @@
     "operator_url": "https://www.eatsleepcycle.com"
   },
   {
-    "name": "ESC Bonmati via Mas Llunes Leisure Route",
+    "name": "Bonmatí via Mas Llunes Leisure Loop",
     "rwgps_url": "https://ridewithgps.com/routes/46230270",
-    "description": "Gentle loop west along the Ter valley to Bonmatí via the Mas Llunes lanes. Quiet, mostly flat, ideal first ride in Girona. Route by Eat Sleep Cycle.",
+    "description": "Gentle loop west along the Ter valley to Bonmatí via the Mas Llunes lanes. Quiet, mostly flat, ideal first ride in Girona.",
     "discipline": "road",
     "surface_type": "road",
     "difficulty": "easy",
@@ -104,9 +104,9 @@
     "operator_url": "https://www.eatsleepcycle.com"
   },
   {
-    "name": "ESC Canet d'Adri Leisure",
+    "name": "Canet d'Adri Leisure Loop",
     "rwgps_url": "https://ridewithgps.com/routes/46230271",
-    "description": "Short rolling loop into the volcanic foothills at Canet d'Adri — under 30 km with one gentle climb, perfect for an easy hour and a half. Route by Eat Sleep Cycle.",
+    "description": "Short rolling loop into the volcanic foothills at Canet d'Adri — under 30 km with one gentle climb, perfect for an easy hour and a half.",
     "discipline": "road",
     "surface_type": "road",
     "difficulty": "easy",
@@ -117,9 +117,9 @@
     "operator_url": "https://www.eatsleepcycle.com"
   },
   {
-    "name": "ESC Cassa de la Selva Leisure",
+    "name": "Cassà de la Selva Leisure Loop",
     "rwgps_url": "https://ridewithgps.com/routes/46230273",
-    "description": "Flat leisure loop south to Cassà de la Selva on quiet lanes — an easy recovery option from the city. Route by Eat Sleep Cycle.",
+    "description": "Flat leisure loop south to Cassà de la Selva on quiet lanes — an easy recovery option from the city.",
     "discipline": "road",
     "surface_type": "road",
     "difficulty": "easy",
@@ -130,9 +130,9 @@
     "operator_url": "https://www.eatsleepcycle.com"
   },
   {
-    "name": "ESC Els Angels Leisure Tour",
+    "name": "Els Àngels Leisure Climb",
     "rwgps_url": "https://ridewithgps.com/routes/46230275",
-    "description": "The shortest way to Girona's signature climb: up Els Àngels at your own pace and back down, under 30 km door to door. Route by Eat Sleep Cycle.",
+    "description": "The shortest way to Girona's signature climb: up Els Àngels at your own pace and back down, under 30 km door to door.",
     "discipline": "road",
     "surface_type": "road",
     "difficulty": "easy",
@@ -143,9 +143,9 @@
     "operator_url": "https://www.eatsleepcycle.com"
   },
   {
-    "name": "ESC Montcal Leisure",
+    "name": "Montcal Leisure Loop",
     "rwgps_url": "https://ridewithgps.com/routes/46358925",
-    "description": "Short and quiet loop over the Montcal lanes northwest of the city — an easy 25 km leg-stretcher. Route by Eat Sleep Cycle.",
+    "description": "Short and quiet loop over the Montcal lanes northwest of the city — an easy 25 km leg-stretcher.",
     "discipline": "road",
     "surface_type": "road",
     "difficulty": "easy",
@@ -158,7 +158,7 @@
   {
     "name": "El Monstre de Banyoles (Gravel - Intermediate)",
     "rwgps_url": "https://ridewithgps.com/routes/45936024",
-    "description": "Gravel loop to Lake Banyoles the interesting way: farm tracks, forest sectors and the lake circuit. A Girona gravel staple. Route by Eat Sleep Cycle.",
+    "description": "Gravel loop to Lake Banyoles the interesting way: farm tracks, forest sectors and the lake circuit. A Girona gravel staple.",
     "discipline": "gravel",
     "surface_type": "gravel",
     "difficulty": "moderate",
@@ -171,7 +171,7 @@
   {
     "name": "La Via Verda d'Amer (Gravel - Leisure)",
     "rwgps_url": "https://ridewithgps.com/routes/45936034",
-    "description": "The old railway line to Amer: smooth car-free greenway gravel along the Ter valley. The gentlest off-road day Girona offers. Route by Eat Sleep Cycle.",
+    "description": "The old railway line to Amer: smooth car-free greenway gravel along the Ter valley. The gentlest off-road day Girona offers.",
     "discipline": "gravel",
     "surface_type": "gravel",
     "difficulty": "easy",
@@ -184,7 +184,7 @@
   {
     "name": "Raid Empordà (Gravel - Epic)",
     "rwgps_url": "https://ridewithgps.com/routes/45936036",
-    "description": "135 km of Empordà gravel: vineyard tracks, medieval villages and long open sectors towards the coast. Eat Sleep Cycle's gravel epic.",
+    "description": "135 km of Empordà gravel: vineyard tracks, medieval villages and long open sectors towards the coast. The region's gravel epic.",
     "discipline": "gravel",
     "surface_type": "gravel",
     "difficulty": "hard",
@@ -197,7 +197,7 @@
   {
     "name": "The Gravel Lanes (Gravel - Leisure)",
     "rwgps_url": "https://ridewithgps.com/routes/45936037",
-    "description": "Easy-going gravel on quiet lanes and farm tracks close to the city — flat terrain and peaceful countryside, ideal for a first gravel outing. Route by Eat Sleep Cycle.",
+    "description": "Easy-going gravel on quiet lanes and farm tracks close to the city — flat terrain and peaceful countryside, ideal for a first gravel outing.",
     "discipline": "gravel",
     "surface_type": "gravel",
     "difficulty": "easy",
@@ -210,7 +210,7 @@
   {
     "name": "Rocacorba Dust (Gravel - Advanced)",
     "rwgps_url": "https://ridewithgps.com/routes/45936040",
-    "description": "The gravel take on Girona's most famous climb — forest tracks and punchy unpaved ramps on the flanks of Rocacorba. Nearly 1,900 m of climbing. Route by Eat Sleep Cycle.",
+    "description": "The gravel take on Girona's most famous climb — forest tracks and punchy unpaved ramps on the flanks of Rocacorba. Nearly 1,900 m of climbing.",
     "discipline": "gravel",
     "surface_type": "gravel",
     "difficulty": "hard",
@@ -223,7 +223,7 @@
   {
     "name": "Sant Hilari (Gravel - Advanced)",
     "rwgps_url": "https://ridewithgps.com/routes/45936041",
-    "description": "A long climb into the Guilleries forest towards Sant Hilari Sacalm: 100 km with sustained unpaved climbing and a wild, remote feel. Route by Eat Sleep Cycle.",
+    "description": "A long climb into the Guilleries forest towards Sant Hilari Sacalm: 100 km with sustained unpaved climbing and a wild, remote feel.",
     "discipline": "gravel",
     "surface_type": "gravel",
     "difficulty": "hard",
@@ -236,7 +236,7 @@
   {
     "name": "Dos Kiwis (Gravel - Intermediate)",
     "rwgps_url": "https://ridewithgps.com/routes/45936043",
-    "description": "Intermediate gravel through the rolling countryside south of Girona — shaded lanes, farm tracks and gentle climbs. Route by Eat Sleep Cycle.",
+    "description": "Intermediate gravel through the rolling countryside south of Girona — shaded lanes, farm tracks and gentle climbs.",
     "discipline": "gravel",
     "surface_type": "gravel",
     "difficulty": "moderate",
@@ -247,9 +247,9 @@
     "operator_url": "https://www.eatsleepcycle.com"
   },
   {
-    "name": "ESC Gavarres MTB Tour",
+    "name": "Gavarres MTB Loop",
     "rwgps_url": "https://ridewithgps.com/routes/46230277",
-    "description": "Short, punchy mountain bike loop into the Gavarres massif — forest singletrack and steep fire-road climbs right from the city edge. Route by Eat Sleep Cycle.",
+    "description": "Short, punchy mountain bike loop into the Gavarres massif — forest singletrack and steep fire-road climbs right from the city edge.",
     "discipline": "mtb",
     "surface_type": "trail",
     "difficulty": "moderate",

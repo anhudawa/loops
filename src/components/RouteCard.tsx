@@ -187,14 +187,6 @@ export default function RouteCard({ route, showDistance }: RouteCardProps) {
               <span className="capitalize">{route.surface_type}</span>
               <span style={{ color: "var(--border-light)" }} aria-hidden="true">·</span>
               <span>{locationText}{countryText}</span>
-              {route.operator_name && (
-                <>
-                  <span style={{ color: "var(--border-light)" }} aria-hidden="true">·</span>
-                  <span className="font-bold" style={{ color: "var(--text)" }}>
-                    by {route.operator_name}
-                  </span>
-                </>
-              )}
             </div>
           </div>
         </div>

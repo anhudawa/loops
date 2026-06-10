@@ -142,11 +142,16 @@ function genDebug(msg: string): void {
   if (process.env.GENERATE_DEBUG) console.error(`[generate] ${msg}`);
 }
 
-/** BRouter profile per discipline. `trekking` is the safest default. */
+/**
+ * BRouter profile per discipline (all verified live on brouter.de).
+ * fastbike-lowtraffic = paved-only and quiet-road-preferring — exactly
+ * the road product promise. Previously everything used `trekking`,
+ * which happily routes a road bike onto dirt tracks.
+ */
 const DISCIPLINE_PROFILE: Record<Discipline, string> = {
-  road: "trekking",
-  gravel: "trekking",
-  mtb: "trekking",
+  road: "fastbike-lowtraffic",
+  gravel: "gravel",
+  mtb: "mtb",
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

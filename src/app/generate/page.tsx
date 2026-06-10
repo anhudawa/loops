@@ -80,6 +80,7 @@ interface Interpreted {
   is_workout: boolean;
   workout_summary?: string;
   wind_strategy?: "tailwind_home" | "tailwind_out" | "headwind_out";
+  cafe_stop?: boolean;
 }
 
 interface GenerateResponse {
@@ -466,6 +467,7 @@ function InterpretedPanel({ interpreted }: { interpreted: Interpreted }) {
     terrainLabel,
     locationLabel,
     windLabel,
+    interpreted.cafe_stop && "café stop",
   ].filter(Boolean);
 
   return (

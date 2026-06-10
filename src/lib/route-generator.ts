@@ -110,6 +110,7 @@ export interface InterpretedIntent {
   workout_summary?: string;  // e.g. "2 × 20 min threshold"
   /** Present when the rider asked for wind-aware routing ("tailwind home"). */
   wind_strategy?: WindStrategy;
+  cafe_stop?: boolean;
 }
 
 export interface GenerateResult {
@@ -508,6 +509,7 @@ async function summariseIntent(spec: RouteSpec): Promise<InterpretedIntent> {
     is_workout: !!spec.workout,
     workout_summary,
     wind_strategy: spec.wind_strategy !== "none" ? spec.wind_strategy : undefined,
+    cafe_stop: spec.cafe_stop || undefined,
   };
 }
 
@@ -1169,6 +1171,13 @@ async function generateFreshRoutes(
       if (windForecast && spec.wind_strategy !== "none") {
         const ws = windAlignmentScore(path.coords, windForecast, spec.wind_strategy);
         matchScore = Math.round(matchScore * 0.85 + ws * 0.15);
+      }
+
+      // Café stop requested: prefer candidates whose quality scan found
+      // cafés/restaurants along the way (a nudge, never a rescue).
+      if (spec.cafe_stop) {
+        const hasCafe = quality.flags.some((f) => /caf|restaurant|pub/i.test(f));
+        matchScore = Math.min(100, Math.round(matchScore + (hasCafe ? 6 : -4)));
       }
 
       // Drop candidates below the quality floor — these are routes on

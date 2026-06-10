@@ -46,6 +46,7 @@ export interface RouteSpec {
   country: string;                   // geocoding constraint
   workout?: WorkoutSpec;             // present when prompt described a workout
   wind_strategy: WindStrategy;       // "tailwind home" etc.; "none" by default
+  cafe_stop?: boolean;               // rider asked for a café stop
 }
 
 /**
@@ -155,6 +156,10 @@ If the rider describes a workout:
 
 If no workout is described, omit the workout field (set it to null).
 
+## Café stop:
+- "with a café stop" / "coffee stop" / "stop for coffee halfway" → cafe_stop: true
+- otherwise → cafe_stop: false
+
 ## Wind strategy:
 Riders often plan loops around the wind. Extract:
 - "tailwind home" / "wind at my back on the way back" / "tailwind on the return" / "headwind out" / "into the wind first" → wind_strategy: "tailwind_home" (headwind out and tailwind home are the same loop orientation; default to "tailwind_home" unless the rider's emphasis is clearly only the outbound leg)
@@ -177,6 +182,7 @@ Return ONLY valid JSON matching this TypeScript interface (no markdown, no expla
   "region": string | null,
   "country": string,
   "wind_strategy": "tailwind_home" | "tailwind_out" | "headwind_out" | "none",
+  "cafe_stop": boolean,
   "workout": null | {
     "intervals": Array<{ "count": number, "duration_minutes": number, "zone": "z1"|"z2"|"z3"|"z4"|"z5"|"z6"|"z7", "recovery_minutes": number }>,
     "warmup_minutes": number,
@@ -199,6 +205,7 @@ interface ParsedIntent {
   region: string | null;
   country: string;
   wind_strategy?: string;
+  cafe_stop?: boolean;
   workout: WorkoutSpec | null;
 }
 
@@ -353,6 +360,8 @@ export function parseBasicIntent(prompt: string): ParsedIntent | null {
     wind = "tailwind_out";
   }
 
+  const cafe_stop = /\bcaf[eé]\b|coffee\s+stop|stop\s+for\s+coffee/.test(p);
+
   // "from <place>" — stop at punctuation or terrain/wind keywords
   let region: string | null = null;
   const fromMatch = prompt.match(/\bfrom\s+([A-Za-zÀ-ÿ''. -]{3,40}?)(?:[,.;]|\s+(?:with|on|in|and|tailwind|headwind)\b|\s+\d|$)/i);
@@ -373,6 +382,7 @@ export function parseBasicIntent(prompt: string): ParsedIntent | null {
     region,
     country: DEFAULT_COUNTRY,
     wind_strategy: wind,
+    cafe_stop,
     workout: null,
   };
 }
@@ -497,5 +507,6 @@ export async function parseRouteIntent(
     country,
     workout,
     wind_strategy: sanitizeWindStrategy(parsed.wind_strategy),
+    cafe_stop: parsed.cafe_stop === true,
   };
 }

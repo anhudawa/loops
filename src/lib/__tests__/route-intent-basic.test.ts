@@ -250,6 +250,7 @@ describe("parseBasicIntent — structured fallback form", () => {
       region: "Skerries",
       country: "Ireland",
       wind_strategy: "none",
+      cafe_stop: false,
       workout: null,
     });
   });

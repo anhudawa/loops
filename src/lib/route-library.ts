@@ -33,6 +33,8 @@ export interface LibraryMatch {
   match_score: number;           // 0–100 how well it matches the request
   distance_from_start_km: number;
   workout_fit?: WorkoutFit;      // present on workout-mode matches
+  /** Rider-facing wind summary; set by the generator when wind was requested. */
+  wind_note?: string;
 }
 
 export interface WorkoutFit {

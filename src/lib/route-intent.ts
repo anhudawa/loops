@@ -9,6 +9,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { IntensityZone } from "./intensity";
 import { ZONES } from "./intensity";
+import type { WindStrategy } from "./wind";
 
 export type Discipline = "road" | "gravel" | "mtb";
 export type ElevationPreference = "flat" | "rolling" | "hilly" | "mountainous" | "any";
@@ -44,6 +45,7 @@ export interface RouteSpec {
   region?: string;
   country: string;                   // geocoding constraint
   workout?: WorkoutSpec;             // present when prompt described a workout
+  wind_strategy: WindStrategy;       // "tailwind home" etc.; "none" by default
 }
 
 /**
@@ -153,6 +155,13 @@ If the rider describes a workout:
 
 If no workout is described, omit the workout field (set it to null).
 
+## Wind strategy:
+Riders often plan loops around the wind. Extract:
+- "tailwind home" / "wind at my back on the way back" / "tailwind on the return" / "headwind out" / "into the wind first" → wind_strategy: "tailwind_home" (headwind out and tailwind home are the same loop orientation; default to "tailwind_home" unless the rider's emphasis is clearly only the outbound leg)
+- "tailwind out" / "wind behind me to start" → wind_strategy: "tailwind_out"
+- explicitly only about riding out into the wind with no mention of the return → wind_strategy: "headwind_out"
+- no wind mention → wind_strategy: "none"
+
 Return ONLY valid JSON matching this TypeScript interface (no markdown, no explanation):
 {
   "distance_km": number | null,
@@ -167,6 +176,7 @@ Return ONLY valid JSON matching this TypeScript interface (no markdown, no expla
   "vibes": string[],
   "region": string | null,
   "country": string,
+  "wind_strategy": "tailwind_home" | "tailwind_out" | "headwind_out" | "none",
   "workout": null | {
     "intervals": Array<{ "count": number, "duration_minutes": number, "zone": "z1"|"z2"|"z3"|"z4"|"z5"|"z6"|"z7", "recovery_minutes": number }>,
     "warmup_minutes": number,
@@ -188,7 +198,19 @@ interface ParsedIntent {
   vibes: string[];
   region: string | null;
   country: string;
+  wind_strategy?: string;
   workout: WorkoutSpec | null;
+}
+
+const WIND_STRATEGIES: ReadonlySet<string> = new Set([
+  "tailwind_home",
+  "tailwind_out",
+  "headwind_out",
+  "none",
+]);
+
+function sanitizeWindStrategy(value: string | undefined): WindStrategy {
+  return value && WIND_STRATEGIES.has(value) ? (value as WindStrategy) : "none";
 }
 
 /** Drop malformed workout objects — we never want to route a garbage workout. */
@@ -382,5 +404,6 @@ export async function parseRouteIntent(
     region,
     country,
     workout,
+    wind_strategy: sanitizeWindStrategy(parsed.wind_strategy),
   };
 }

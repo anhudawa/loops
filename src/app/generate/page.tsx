@@ -45,6 +45,7 @@ interface LibraryCandidate {
   match_score: number;
   distance_from_start_km: number;
   workout_fit?: WorkoutFit;
+  wind_note?: string;
 }
 
 interface GeneratedCandidate {
@@ -60,6 +61,7 @@ interface GeneratedCandidate {
   gpx_data: string;
   match_score: number;
   workout_fit?: WorkoutFit;
+  wind_note?: string;
 }
 
 type Candidate = LibraryCandidate | GeneratedCandidate;
@@ -73,6 +75,7 @@ interface Interpreted {
   country: string;
   is_workout: boolean;
   workout_summary?: string;
+  wind_strategy?: "tailwind_home" | "tailwind_out" | "headwind_out";
 }
 
 interface GenerateResponse {
@@ -431,12 +434,21 @@ function InterpretedPanel({ interpreted }: { interpreted: Interpreted }) {
     ? `from ${interpreted.region}`
     : `in ${interpreted.country}`;
 
+  const windLabel = interpreted.wind_strategy
+    ? {
+        tailwind_home: "wind-planned for the run home",
+        tailwind_out: "tailwind to start",
+        headwind_out: "into the wind first",
+      }[interpreted.wind_strategy]
+    : null;
+
   const bits = [
     duration && `${duration} (~${interpreted.distance_km} km)`,
     !duration && `${interpreted.distance_km} km`,
     interpreted.discipline,
     terrainLabel,
     locationLabel,
+    windLabel,
   ].filter(Boolean);
 
   return (
@@ -619,6 +631,12 @@ function CandidateCard({
                 </span>
               ))}
             </div>
+          )}
+
+          {candidate.wind_note && (
+            <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>
+              🌬 {candidate.wind_note}
+            </p>
           )}
 
           {workoutFit?.fits && <WorkoutAssignment fit={workoutFit} />}

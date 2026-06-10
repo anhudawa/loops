@@ -45,6 +45,13 @@ import {
   QUALITY_FLOOR,
   QUALITY_WORLD_CLASS,
 } from "@/config/constants";
+import {
+  fetchWindForecast,
+  analyzeWind,
+  alignmentScore as windAlignmentScore,
+  type WindForecast,
+  type WindStrategy,
+} from "./wind";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -66,6 +73,10 @@ export interface GeneratedRoute {
   waypoints_used: [number, number][];
   match_score: number;          // 0–100 how well it matches the request
   workout_fit?: WorkoutFit;     // present on workout-mode generations
+  /** Rider-facing wind summary; present when the request had a wind strategy. */
+  wind_note?: string;
+  /** 0–100 fit against the requested wind strategy (50 = neutral). */
+  wind_alignment_score?: number;
 }
 
 /**
@@ -91,6 +102,8 @@ export interface InterpretedIntent {
   country: string;
   is_workout: boolean;
   workout_summary?: string;  // e.g. "2 × 20 min threshold"
+  /** Present when the rider asked for wind-aware routing ("tailwind home"). */
+  wind_strategy?: WindStrategy;
 }
 
 export interface GenerateResult {
@@ -414,10 +427,57 @@ async function summariseIntent(spec: RouteSpec): Promise<InterpretedIntent> {
     country: spec.country,
     is_workout: !!spec.workout,
     workout_summary,
+    wind_strategy: spec.wind_strategy !== "none" ? spec.wind_strategy : undefined,
   };
 }
 
+/** Rough ride duration for forecasting which hour the rider is on each leg. */
+function estimateDurationMinutes(spec: RouteSpec): number {
+  return spec.duration_minutes ?? Math.round((spec.distance_km / 25) * 60);
+}
+
+/**
+ * Wind wrapper around candidate selection. Fetches the forecast for the
+ * ride window once, lets generation use it for ranking, then annotates
+ * every served candidate (library or generated) with an honest wind note.
+ * Forecast failure or light wind never blocks generation — we degrade
+ * and say so, per the launch spec.
+ */
 async function candidatesFromSpec(spec: RouteSpec): Promise<RouteCandidate[]> {
+  const forecast =
+    spec.wind_strategy !== "none"
+      ? await fetchWindForecast(
+          spec.start_point,
+          new Date(),
+          estimateDurationMinutes(spec),
+          spec.wind_strategy
+        )
+      : null;
+
+  const candidates = await candidatesFromSpecInner(spec, forecast);
+
+  if (spec.wind_strategy !== "none") {
+    for (const c of candidates) {
+      if (forecast) {
+        const analysis = analyzeWind(c.coordinates, forecast, spec.wind_strategy);
+        c.wind_note = analysis.note;
+        if (c.source === "generated") {
+          c.wind_alignment_score = analysis.alignment_score;
+        }
+      } else {
+        c.wind_note =
+          "Couldn't reach the wind forecast — this route isn't wind-optimised.";
+      }
+    }
+  }
+
+  return candidates;
+}
+
+async function candidatesFromSpecInner(
+  spec: RouteSpec,
+  windForecast: WindForecast | null
+): Promise<RouteCandidate[]> {
 
   // ── Workout mode ───────────────────────────────────────────────────────────
   // A workout is a hard constraint: either the route's segments can host it
@@ -447,7 +507,7 @@ async function candidatesFromSpec(spec: RouteSpec): Promise<RouteCandidate[]> {
   }
 
   // ── Fresh generation ───────────────────────────────────────────────────────
-  const generated = await generateFreshRoutes(spec);
+  const generated = await generateFreshRoutes(spec, windForecast);
 
   // If none of the fresh builds hit "excellent", try to mix in library
   // routes as fallback. A verified operator route at "good" match is
@@ -631,7 +691,10 @@ async function generateFreshWorkoutRoutes(
   return candidates.slice(0, 3);
 }
 
-async function generateFreshRoutes(spec: RouteSpec): Promise<GeneratedRoute[]> {
+async function generateFreshRoutes(
+  spec: RouteSpec,
+  windForecast: WindForecast | null = null
+): Promise<GeneratedRoute[]> {
   const profile = DISCIPLINE_PROFILE[spec.discipline];
 
   const waypointSets = await generateWaypointSets(spec);
@@ -690,7 +753,16 @@ async function generateFreshRoutes(spec: RouteSpec): Promise<GeneratedRoute[]> {
         spec.discipline
       );
 
-      const matchScore = computeMatchScore(distKm, gain, spec, quality.total);
+      let matchScore = computeMatchScore(distKm, gain, spec, quality.total);
+
+      // Wind alignment shapes the ranking: a loop oriented for the
+      // requested tailwind beats an equally good one that ignores it.
+      // 15% weight — wind helps pick between good routes, it never
+      // rescues a bad one.
+      if (windForecast && spec.wind_strategy !== "none") {
+        const ws = windAlignmentScore(path.coords, windForecast, spec.wind_strategy);
+        matchScore = Math.round(matchScore * 0.85 + ws * 0.15);
+      }
 
       // Drop candidates below the quality floor — these are routes on
       // industrial estates, motorway slip roads, or featureless suburban

@@ -511,7 +511,7 @@ function checkDangerousJunctionDensity(
   if (per10km > 3) {
     return {
       rule: "DANGEROUS_JUNCTION_DENSITY",
-      message: `${junctionCentres.length} crossings of high-speed roads (≥80 km/h) over ${distKm.toFixed(1)}km — ${per10km.toFixed(1)} per 10km (limit: 3)`,
+      message: `${junctionCentres.length} crossings of major roads (trunk/primary or 100 km/h+) over ${distKm.toFixed(1)}km — ${per10km.toFixed(1)} per 10km (limit: 3)`,
       severity: "fatal",
     };
   }

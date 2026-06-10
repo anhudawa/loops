@@ -2,7 +2,11 @@ import { createPool } from "@vercel/postgres";
 import { randomUUID } from "crypto";
 import { readFileSync } from "fs";
 
-const POSTGRES_URL = "postgresql://neondb_owner:npg_NmxMEVUs4b9n@ep-square-violet-abmzjihi-pooler.eu-west-2.aws.neon.tech/neondb?channel_binding=require&sslmode=require";
+const POSTGRES_URL = process.env.POSTGRES_URL;
+if (!POSTGRES_URL) {
+  console.error("POSTGRES_URL not set. Run with: node --env-file=.env.local " + process.argv[1]);
+  process.exit(1);
+}
 const pool = createPool({ connectionString: POSTGRES_URL });
 
 const DOWNLOADS = "/Users/anthonywalsh/Downloads";

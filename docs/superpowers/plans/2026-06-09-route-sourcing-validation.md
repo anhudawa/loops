@@ -56,6 +56,21 @@ Per-route manual sense check before publish: does the distance/elevation
 match the operator's description, does it start somewhere a visitor can
 actually start (town, resort, café), is the discipline tag right.
 
+### Running an import
+
+```bash
+# Validate a manifest without touching the database (no env needed):
+node scripts/import-routes.mjs scripts/hub-data/girona-eat-sleep-cycle.json --dry-run
+
+# Real import (needs POSTGRES_URL in .env.local):
+node --env-file=.env.local scripts/import-routes.mjs scripts/hub-data/girona-eat-sleep-cycle.json
+```
+
+Note: the dry-run quality score shows 60 (neutral) when the Overpass/OSM
+service is unreachable — the importer is deliberately fail-open on scoring
+and fail-closed on guardrails (loop check, point count). Re-run real imports
+from an environment with Overpass access so the quality gate actually bites.
+
 ## Source candidates by destination
 
 Verified = we have confirmed a public route library exists. Others are
@@ -63,8 +78,8 @@ candidates to confirm during the sourcing sprint.
 
 | Destination | Source candidates | Status |
 |---|---|---|
-| Girona | **Eat Sleep Cycle** — public route libraries on RideWithGPS (org account) and Wikiloc, plus café-route pages on their site | Verified public libraries exist |
-| Mallorca | Cycling-dedicated hotels and camps (e.g. Bicycle Holidays Max Hürzeler, Pollença-based hire shops); Mallorca 312 sportive routes | To confirm |
+| Girona | **Eat Sleep Cycle** — public route library on RideWithGPS (org 13026) | **Manifest built**: `scripts/hub-data/girona-eat-sleep-cycle.json`, 20 routes, dry-run validated |
+| Mallorca | **Epic Road Rides** — public RideWithGPS event library (their tried-and-tested top 6); also HC Bike Tours and Berganti Bikes publish free GPX | **Manifest built**: `scripts/hub-data/mallorca-epic-road-rides.json`, 6 routes, dry-run validated; needs 2+ more routes to hit the 8-route launch bar |
 | Málaga | Local hire/guide operators in Málaga and Fuengirola; Andalusian cycling tourism boards publish GPX | To confirm |
 | Calpe / Costa Blanca | Calpe/Altea/Dénia camp operators and hire shops (pro-camp territory, several publish routes) | To confirm |
 | Tenerife | Bike Point Tenerife and similar hire operators; Teide route guides | To confirm |

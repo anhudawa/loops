@@ -198,6 +198,34 @@ function anyWayWithin(
 // ──── Overpass API ───────────────────────────────────────────────────────────
 
 const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
+
+/**
+ * Overpass etiquette gate: the public API allows ~2 concurrent requests
+ * per client. Without this, scoring 15-30 candidates in parallel gets
+ * most of them rate-limited and silently dropped — fewer, worse routes.
+ * Retries once on 429 after a short backoff.
+ */
+const OVERPASS_MAX_CONCURRENT = 2;
+let overpassActive = 0;
+const overpassQueue: Array<() => void> = [];
+
+async function overpassGate(run: () => Promise<Response>): Promise<Response> {
+  if (overpassActive >= OVERPASS_MAX_CONCURRENT) {
+    await new Promise<void>((resolve) => overpassQueue.push(resolve));
+  }
+  overpassActive++;
+  try {
+    let resp = await run();
+    if (resp.status === 429) {
+      await new Promise((r) => setTimeout(r, 2000 + Math.random() * 2000));
+      resp = await run();
+    }
+    return resp;
+  } finally {
+    overpassActive--;
+    overpassQueue.shift()?.();
+  }
+}
 const OVERPASS_TIMEOUT_S = 30;
 
 async function queryOverpass(bbox: BoundingBox): Promise<OsmElement[]> {
@@ -229,12 +257,14 @@ out body;
 out skel qt;
 `.trim();
 
-  const resp = await fetch(OVERPASS_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: `data=${encodeURIComponent(query)}`,
-    signal: AbortSignal.timeout(35_000),
-  });
+  const resp = await overpassGate(async () =>
+    fetch(OVERPASS_URL, {
+      method: "POST",
+      headers: { "User-Agent": "loops.ie route generator (https://www.loops.ie)", "Content-Type": "application/x-www-form-urlencoded" },
+      body: `data=${encodeURIComponent(query)}`,
+      signal: AbortSignal.timeout(35_000),
+    })
+  );
 
   if (!resp.ok) {
     throw new Error(`Overpass API error: ${resp.status} ${resp.statusText}`);

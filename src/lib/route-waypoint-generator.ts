@@ -42,6 +42,15 @@ interface AnchorPoint {
 
 const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
 
+/**
+ * Loop radius scaling. The waypoint pattern is start → mid(0.55R, −30°)
+ * → far(R) → mid(0.55R, +30°) → start: a diamond with straight-line
+ * perimeter ≈ 2.28R, not a circle (2πR). Roads add ~30% over straight
+ * lines (measured on Irish road network), giving ridden distance ≈ 3.0R.
+ * The old 2π divisor produced loops at HALF the requested distance.
+ */
+const LOOP_PERIMETER_FACTOR = 3.0;
+
 // Compass directions for spreading 5 candidate routes
 const DIRECTIONS: Array<{ name: string; bearingDeg: number }> = [
   { name: "north", bearingDeg: 0 },
@@ -110,6 +119,16 @@ function haversineKm(
 }
 
 /** Move `distKm` from (lat, lon) in direction `bearingDeg`. */
+/** Bearing from point 1 to point 2 in degrees (0..360). */
+function bearingDeg(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const p1 = (lat1 * Math.PI) / 180;
+  const p2 = (lat2 * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const y = Math.sin(dLon) * Math.cos(p2);
+  const x = Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dLon);
+  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+}
+
 function destinationPoint(
   lat: number,
   lon: number,
@@ -193,12 +212,20 @@ out body;
 out skel qt;
 `.trim();
 
-  const res = await fetch(OVERPASS_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: `data=${encodeURIComponent(query)}`,
-    signal: AbortSignal.timeout(30000),
-  });
+  const doFetch = () =>
+    fetch(OVERPASS_URL, {
+      method: "POST",
+      headers: { "User-Agent": "loops.ie route generator (https://www.loops.ie)", "Content-Type": "application/x-www-form-urlencoded" },
+      body: `data=${encodeURIComponent(query)}`,
+      signal: AbortSignal.timeout(30000),
+    });
+
+  let res = await doFetch();
+  if (res.status === 429 || res.status >= 500) {
+    // Transient load on the public API — one retry after a short backoff.
+    await new Promise((r) => setTimeout(r, 2500 + Math.random() * 2500));
+    res = await doFetch();
+  }
 
   if (!res.ok) {
     throw new Error(`Overpass API error: HTTP ${res.status}`);
@@ -323,8 +350,7 @@ function buildWaypointSet(
 ): [number, number][] {
   const [startLat, startLon] = spec.start_point;
 
-  // Radius = distance / (2π) — circle circumference equals target distance
-  const radiusKm = spec.distance_km / (2 * Math.PI);
+  const radiusKm = spec.distance_km / LOOP_PERIMETER_FACTOR;
 
   // Furthest point in the chosen direction
   const [fpLat, fpLon] = destinationPoint(
@@ -373,7 +399,45 @@ function buildWaypointSet(
       }
     }
 
-    return best ? [best.lat, best.lon] : [lat, lon];
+    if (best) return [best.lat, best.lon];
+
+    // No anchor within snap range: the synthetic point is likely in
+    // water or a roadless area (coastal starts aim half the compass at
+    // the sea). Fall back to an anchor that preserves the loop shape:
+    // same compass sector from the start (±60°), at least 35% of the
+    // intended radius out, closest to where the synthetic point was.
+    // Anchors are real OSM nodes near roads, so they are routable.
+    const intendedBearing = bearingDeg(startLat, startLon, lat, lon);
+    const intendedDist = haversineKm(startLat, startLon, lat, lon);
+    let fallback: AnchorPoint | null = null;
+    let fallbackDist = Infinity;
+    for (const anchor of anchors) {
+      const fromStart = haversineKm(startLat, startLon, anchor.lat, anchor.lon);
+      if (fromStart < intendedDist * 0.35) continue;
+      const ab = bearingDeg(startLat, startLon, anchor.lat, anchor.lon);
+      let delta = Math.abs(ab - intendedBearing);
+      if (delta > 180) delta = 360 - delta;
+      if (delta > 60) continue;
+      const dist = haversineKm(lat, lon, anchor.lat, anchor.lon);
+      if (dist < fallbackDist) {
+        fallbackDist = dist;
+        fallback = anchor;
+      }
+    }
+    if (fallback) return [fallback.lat, fallback.lon];
+
+    // Sector is empty (pure sea) — nearest anchor anywhere keeps the
+    // waypoint on land; the set may still route, just less directional.
+    let nearest: AnchorPoint | null = null;
+    let nearestDist = Infinity;
+    for (const anchor of anchors) {
+      const dist = haversineKm(lat, lon, anchor.lat, anchor.lon);
+      if (dist < nearestDist) {
+        nearestDist = dist;
+        nearest = anchor;
+      }
+    }
+    return nearest ? [nearest.lat, nearest.lon] : [lat, lon];
   }
 
   const snappedMid1 = snapToAnchor(mid1Lat, mid1Lon);
@@ -411,7 +475,7 @@ export async function generateWaypointSets(
 ): Promise<Array<[number, number][]>> {
   const directions = options.directions ?? DIRECTIONS;
   const [startLat, startLon] = spec.start_point;
-  const radiusKm = spec.distance_km / (2 * Math.PI);
+  const radiusKm = spec.distance_km / LOOP_PERIMETER_FACTOR;
 
   // Query Overpass for the surrounding road network
   const osmData = await queryOverpass(
@@ -430,8 +494,66 @@ export async function generateWaypointSets(
     spec
   );
 
-  // Generate one waypoint set per direction
-  return directions.map((direction) =>
-    buildWaypointSet(spec, direction, anchors)
+  // Choose bearings by anchor support instead of a fixed compass: count
+  // anchors in a ±30° sector beyond 35% of the radius for each of 12
+  // bearings, and aim candidates at the best-supported ones. Coastal
+  // starts stop wasting half their candidates pointing out to sea.
+  const supported = rankBearingsByAnchorSupport(
+    startLat,
+    startLon,
+    radiusKm,
+    anchors,
+    directions.length
   );
+  const chosen =
+    supported.length >= 2
+      ? supported.map((bearingDegVal, i) => ({
+          name: `auto-${Math.round(bearingDegVal)}`,
+          bearingDeg: bearingDegVal,
+        }))
+      : directions; // sparse anchor data — fall back to the fixed compass
+
+  // Generate one waypoint set per direction
+  return chosen.map((direction) => buildWaypointSet(spec, direction, anchors));
+}
+
+/**
+ * Rank 12 compass bearings (every 30°) by how many anchors sit in their
+ * ±30° sector at a useful distance from the start, and return the top
+ * `count` bearings with non-zero support, spaced at least 45° apart so
+ * candidates stay diverse.
+ */
+function rankBearingsByAnchorSupport(
+  startLat: number,
+  startLon: number,
+  radiusKm: number,
+  anchors: AnchorPoint[],
+  count: number
+): number[] {
+  const candidates: Array<{ bearing: number; support: number }> = [];
+  for (let b = 0; b < 360; b += 30) {
+    let support = 0;
+    for (const a of anchors) {
+      const dist = haversineKm(startLat, startLon, a.lat, a.lon);
+      if (dist < radiusKm * 0.35) continue;
+      const ab = bearingDeg(startLat, startLon, a.lat, a.lon);
+      let delta = Math.abs(ab - b);
+      if (delta > 180) delta = 360 - delta;
+      if (delta <= 30) support++;
+    }
+    if (support > 0) candidates.push({ bearing: b, support });
+  }
+  candidates.sort((x, y) => y.support - x.support);
+
+  const picked: number[] = [];
+  for (const c of candidates) {
+    const tooClose = picked.some((p) => {
+      let d = Math.abs(p - c.bearing);
+      if (d > 180) d = 360 - d;
+      return d < 45;
+    });
+    if (!tooClose) picked.push(c.bearing);
+    if (picked.length >= count) break;
+  }
+  return picked;
 }

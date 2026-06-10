@@ -135,6 +135,11 @@ const BROUTER_URL =
   process.env.BROUTER_URL?.replace(/\/$/, "") ?? "https://brouter.de/brouter";
 const BROUTER_TIMEOUT_MS = 15000;
 
+/** Stage-by-stage rejection logging for generation triage (GENERATE_DEBUG=1). */
+function genDebug(msg: string): void {
+  if (process.env.GENERATE_DEBUG) console.error(`[generate] ${msg}`);
+}
+
 /** BRouter profile per discipline. `trekking` is the safest default. */
 const DISCIPLINE_PROFILE: Record<Discipline, string> = {
   road: "trekking",
@@ -269,7 +274,8 @@ interface RoutedPath {
 
 async function routeViaBRouter(
   waypoints: [number, number][],       // [lat, lng]
-  profile: string
+  profile: string,
+  retried = false
 ): Promise<RoutedPath | null> {
   // BRouter expects lonlats as "lng,lat|lng,lat|..."
   const lonlats = waypoints.map(([lat, lng]) => `${lng},${lat}`).join("|");
@@ -284,7 +290,21 @@ async function routeViaBRouter(
   } catch {
     return null;
   }
-  if (!res.ok) return null;
+  if (!res.ok) {
+    // "target island detected for section N" = waypoint N+1 is unreachable
+    // (offshore island, private estate, sea). Drop it and retry once —
+    // a triangle loop beats a dead candidate.
+    if (res.status === 400 && !retried && waypoints.length > 3) {
+      const body = await res.text().catch(() => "");
+      const match = body.match(/island detected for section (\d+)/);
+      if (match) {
+        const badIdx = Math.min(parseInt(match[1], 10) + 1, waypoints.length - 2);
+        const pruned = waypoints.filter((_, i) => i !== badIdx);
+        return routeViaBRouter(pruned, profile, true);
+      }
+    }
+    return null;
+  }
 
   let json: BRouterFeatureCollection;
   try {
@@ -492,7 +512,11 @@ function estimateDurationMinutes(spec: RouteSpec): number {
  * Forecast failure or light wind never blocks generation — we degrade
  * and say so, per the launch spec.
  */
-async function candidatesFromSpec(spec: RouteSpec): Promise<RouteCandidate[]> {
+/**
+ * Generate candidates from an already-built RouteSpec — used by the smoke
+ * test and any future structured (non-LLM) entry points.
+ */
+export async function candidatesFromSpec(spec: RouteSpec): Promise<RouteCandidate[]> {
   const forecast =
     spec.wind_strategy !== "none"
       ? await fetchWindForecast(
@@ -536,7 +560,7 @@ async function candidatesFromSpecInner(
   // failure honestly rather than ship a generic route mislabelled as
   // workout-friendly.
   if (spec.workout) {
-    const workoutMatches = await matchLibraryForWorkout(spec, 3);
+    const workoutMatches = await matchLibraryForWorkout(spec, 3).catch(() => []);
     if (workoutMatches.length > 0) {
       return workoutMatches.map((m) => ({ source: "library" as const, ...m }));
     }
@@ -548,7 +572,8 @@ async function candidatesFromSpecInner(
   }
 
   // ── Library-first ──────────────────────────────────────────────────────────
-  const libraryMatches = await matchLibraryRoutes(spec, 3);
+  // Fail soft: a DB outage must never block fresh generation.
+  const libraryMatches = await matchLibraryRoutes(spec, 3).catch(() => []);
   if (libraryMatches.length > 0) {
     return libraryMatches.map((m) => ({ source: "library" as const, ...m }));
   }
@@ -561,7 +586,7 @@ async function candidatesFromSpecInner(
   // better than a generated one at "good" quality — trust signal.
   const hasExcellent = generated.some((g) => g.quality_tier === "excellent");
   if (!hasExcellent && generated.length > 0) {
-    const libraryFallbacks = await matchLibraryRoutes(spec, 2);
+    const libraryFallbacks = await matchLibraryRoutes(spec, 2).catch(() => []);
     if (libraryFallbacks.length > 0) {
       return [
         ...libraryFallbacks.map((m) => ({ source: "library" as const, ...m })),
@@ -778,7 +803,10 @@ async function generateFreshRoutes(
   const candidateResults = await Promise.allSettled(
     waypointSets.map(async (waypoints) => {
       const path = await routeViaBRouter(waypoints, profile);
-      if (!path || path.coords.length < 2) return null;
+      if (!path || path.coords.length < 2) {
+        genDebug("candidate dropped: BRouter returned no path");
+        return null;
+      }
 
       // Backfill elevation from Open-Meteo if BRouter didn't return any (rare
       // but possible if the profile skips SRTM). This is the safety net for
@@ -818,9 +846,18 @@ async function generateFreshRoutes(
           spec.elevation_preference === "flat" &&
           (spec.max_elevation_gain_m ?? Infinity) < distKm * 6,
       });
-      if (!rulesResult.passed) return null;
+      if (!rulesResult.passed) {
+        genDebug(`candidate dropped: rules — ${rulesResult.violations?.map((v) => v.rule).join("; ") ?? "failed"} (${Math.round(distKm)}km)`);
+        return null;
+      }
 
-      const quality = await scoreRoute(path.coords, spec.discipline);
+      let quality;
+      try {
+        quality = await scoreRoute(path.coords, spec.discipline);
+      } catch (err) {
+        genDebug(`candidate dropped: quality scoring threw — ${err instanceof Error ? err.message : err}`);
+        throw err;
+      }
 
       const gpx = buildGpx(
         path.coords,
@@ -843,7 +880,10 @@ async function generateFreshRoutes(
       // Drop candidates below the quality floor — these are routes on
       // industrial estates, motorway slip roads, or featureless suburban
       // laps. Serving one is the "one bad experience" we can't afford.
-      if (quality.total < QUALITY_FLOOR) return null;
+      if (quality.total < QUALITY_FLOOR) {
+        genDebug(`candidate dropped: quality ${quality.total} < floor ${QUALITY_FLOOR} (${Math.round(distKm)}km; flags: ${quality.flags.slice(0, 3).join("; ")})`);
+        return null;
+      }
 
       const result: GeneratedRoute = {
         coordinates: path.coords,

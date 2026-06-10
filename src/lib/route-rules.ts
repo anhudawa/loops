@@ -473,13 +473,20 @@ function checkDangerousJunctionDensity(
   sampled: [number, number][],
   highwayWays: ProcessedWay[]
 ): RuleViolation | null {
-  // Filter to high-speed roads
+  // Filter to genuinely dangerous roads to cross: major road classes, or
+  // anything signed 100 km/h+. A bare maxspeed of 80-90 is the DEFAULT
+  // rural limit in Ireland/France/Spain — quiet lanes carry it too, so
+  // speed alone over-rejects practically every rural loop.
   const highSpeedWays = highwayWays.filter((w) => {
+    const highway = w.tags.highway ?? "";
+    if (["motorway", "motorway_link", "trunk", "trunk_link", "primary", "primary_link"].includes(highway)) {
+      return true;
+    }
     const raw = w.tags.maxspeed ?? "";
     const numeric = parseInt(raw, 10);
     if (isNaN(numeric)) return false;
     const kmh = raw.toLowerCase().includes("mph") ? numeric * 1.60934 : numeric;
-    return kmh >= 80;
+    return kmh >= 100;
   });
 
   if (highSpeedWays.length === 0) return null;

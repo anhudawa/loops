@@ -9,6 +9,14 @@ seeking alternatives. Full sources in the research below; summary here.
   (their #1 road-cyclist complaint is surprise gravel) — quality scorer now
   reports paved/unpaved/unknown + road-class composition.
 - **Discipline-true routing profiles** (road = fastbike-lowtraffic etc.).
+- **#4 Wind painting** — previews coloured head/tail/crosswind + wind arrow.
+- **#5 Itemised quality factors** — named percentage bars on candidates.
+- **#3 (part) Komoot-refugee content** — /blog/komoot-alternative-for-road-cyclists.
+- **#7 Café-stop awareness** — parsed, shown, nudges ranking.
+- **Session sheet** — plain-language effort placement per candidate.
+- Live E2E proof: "90 min road loop, flat, from Skerries, tailwind home
+  with a cafe stop" → 35 km, match 97, 93% paved, wind-aligned 80, honest
+  SW-16km/h note — all with zero LLM involvement.
 
 ## Do next (priority order)
 1. **Garmin Connect / Wahoo / Hammerhead push** — the exact feature Komoot

@@ -327,12 +327,14 @@ function HomeContent() {
             >
               Plan
             </Link>
-            <Link href="/upload" className="btn-accent px-3 py-1.5 rounded-lg text-sm font-bold flex items-center gap-1.5">
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-              </svg>
-              <span className="hidden md:inline">Share Loop</span>
-            </Link>
+            {user && (
+              <Link href="/upload" className="btn-accent px-3 py-1.5 rounded-lg text-sm font-bold flex items-center gap-1.5">
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+                <span className="hidden md:inline">Share Loop</span>
+              </Link>
+            )}
             {user?.role === "admin" && (
               <Link href="/admin" className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded hidden md:inline-block hover:opacity-80" style={{ background: "rgba(255, 51, 85, 0.15)", color: "var(--danger)" }}>
                 Admin
@@ -363,7 +365,22 @@ function HomeContent() {
             {user ? (
               <button onClick={logout} className="text-xs font-medium hidden md:block hover:opacity-80" style={{ color: "var(--text-muted)" }}>Sign out</button>
             ) : (
-              <Link href="/login" className="text-xs font-medium hover:opacity-80 px-2 py-2" style={{ color: "var(--text-muted)" }}>Sign in</Link>
+              <>
+                <Link
+                  href="/login"
+                  className="text-sm font-semibold hover:opacity-80 px-2.5 py-2"
+                  style={{ color: "var(--text)" }}
+                >
+                  Log in
+                </Link>
+                <Link
+                  href="/login"
+                  className="text-sm font-bold px-4 py-2 rounded-lg hover:opacity-90"
+                  style={{ background: "var(--accent)", color: "var(--bg)" }}
+                >
+                  Sign up
+                </Link>
+              </>
             )}
           </div>
         </div>

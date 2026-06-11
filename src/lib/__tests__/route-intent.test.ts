@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { durationToDistanceKm } from "../route-intent";
+import {
+  durationToDistanceKm,
+  sanitizeDiscipline,
+  sanitizeElevationPreference,
+} from "../route-intent";
 
 describe("durationToDistanceKm", () => {
   it("converts 2 hours on flat road to ~52km", () => {
@@ -50,5 +54,36 @@ describe("durationToDistanceKm", () => {
     expect(durationToDistanceKm(60, "road", "flat", 25)).toBe(
       durationToDistanceKm(60, "road", "flat")
     );
+  });
+});
+
+describe("sanitizeDiscipline", () => {
+  it("passes through valid disciplines", () => {
+    expect(sanitizeDiscipline("road")).toBe("road");
+    expect(sanitizeDiscipline("gravel")).toBe("gravel");
+    expect(sanitizeDiscipline("mtb")).toBe("mtb");
+  });
+
+  it("falls back to road for LLM hallucinations", () => {
+    expect(sanitizeDiscipline("e-bike")).toBe("road");
+    expect(sanitizeDiscipline("ROAD")).toBe("road");
+    expect(sanitizeDiscipline(undefined)).toBe("road");
+    expect(sanitizeDiscipline(null)).toBe("road");
+    expect(sanitizeDiscipline(42)).toBe("road");
+  });
+});
+
+describe("sanitizeElevationPreference", () => {
+  it("passes through the five valid bands", () => {
+    for (const v of ["flat", "rolling", "hilly", "mountainous", "any"] as const) {
+      expect(sanitizeElevationPreference(v)).toBe(v);
+    }
+  });
+
+  it("falls back to any for LLM hallucinations", () => {
+    expect(sanitizeElevationPreference("steep")).toBe("any");
+    expect(sanitizeElevationPreference("")).toBe("any");
+    expect(sanitizeElevationPreference(undefined)).toBe("any");
+    expect(sanitizeElevationPreference(null)).toBe("any");
   });
 });

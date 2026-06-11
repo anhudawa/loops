@@ -28,6 +28,7 @@ import { scoreRoute } from "./route-quality";
 import {
   sampleRouteElevation,
   elevationGainFromSeries,
+  interpolateToFullPath,
 } from "./elevation";
 import {
   matchLibraryRoutes,
@@ -441,7 +442,9 @@ export async function rerouteWaypoints(
   const hasElevation = elevations.some((e) => !Number.isNaN(e));
   if (!hasElevation) {
     const sampled = await sampleRouteElevation(path.coords, 200);
-    elevations = sampled.elevations;
+    // The sampled series is DOWNSAMPLED — expand back to one elevation
+    // per coordinate so the 1:1 alignment contract holds.
+    elevations = interpolateToFullPath(path.coords, sampled.sampled_coords, sampled.elevations);
     elevGain = sampled.gain_m;
     elevLoss = sampled.loss_m;
   } else if (elevGain === null) {
@@ -1057,7 +1060,8 @@ async function buildFreshRouteFromPath(
   const hasElevation = elevations.some((e) => !Number.isNaN(e));
   if (!hasElevation) {
     const sampled = await sampleRouteElevation(path.coords, 200);
-    elevations = sampled.elevations;
+    // Downsampled series → expand to full resolution (1:1 with coords).
+    elevations = interpolateToFullPath(path.coords, sampled.sampled_coords, sampled.elevations);
     elevGain = sampled.gain_m;
     elevLoss = sampled.loss_m;
   } else if (elevGain === null) {
@@ -1098,9 +1102,9 @@ async function buildFreshRouteFromPath(
     distance_km: Math.round(distKm * 10) / 10,
     elevation_gain_m: gain,
     elevation_loss_m: elevLoss,
-    // Quality scoring is skipped for workout-mode candidates — we're
-    // validating by "can actually host the workout," which is a stricter
-    // signal than road-type breakdowns.
+    // Placeholder quality — the caller (generateFreshWorkoutRoutes) runs
+    // scoreRoute on candidates that fit the workout and applies the
+    // QUALITY_FLOOR, exactly like the plain generation path.
     quality_score: 0,
     quality_tier: "good" as QualityTier,
     quality_breakdown: {},
@@ -1139,6 +1143,14 @@ async function generateFreshWorkoutRoutes(
       const fit = assignWorkoutToSegments(cleanSegments, workout);
       if (!fit.fits) return null;
 
+      // Workout candidates face the same quality bar as plain generation:
+      // hosting the efforts doesn't excuse an industrial-estate loop.
+      const quality = await scoreRoute(route.coordinates, spec.discipline);
+      if (quality.total < QUALITY_FLOOR) {
+        genDebug(`workout candidate dropped: quality ${quality.total} < floor ${QUALITY_FLOOR}`);
+        return null;
+      }
+
       // Rebuild the GPX with effort course points so head units alert
       // at the start and end of every interval.
       const gpxWithEfforts = buildGpx(
@@ -1149,7 +1161,18 @@ async function generateFreshWorkoutRoutes(
         workoutCoursePoints(route.coordinates, fit, workout)
       );
 
-      return { ...route, workout_fit: fit, gpx_data: gpxWithEfforts };
+      return {
+        ...route,
+        quality_score: quality.total,
+        quality_tier: (quality.total >= QUALITY_WORLD_CLASS ? "excellent" : "good") as QualityTier,
+        quality_breakdown: quality.breakdown as unknown as Record<string, number>,
+        highlights: extractHighlights(quality.flags),
+        road_type_breakdown: quality.road_class_breakdown ?? route.road_type_breakdown,
+        surface_breakdown: quality.surface_breakdown,
+        match_score: computeMatchScore(route.distance_km, route.elevation_gain_m, spec, quality.total),
+        workout_fit: fit,
+        gpx_data: gpxWithEfforts,
+      };
     })
   );
 
@@ -1189,7 +1212,8 @@ async function generateFreshRoutes(
       const hasElevation = elevations.some((e) => !Number.isNaN(e));
       if (!hasElevation) {
         const sampled = await sampleRouteElevation(path.coords, 200);
-        elevations = sampled.elevations;
+        // Downsampled series → expand to full resolution (1:1 with coords).
+        elevations = interpolateToFullPath(path.coords, sampled.sampled_coords, sampled.elevations);
         elevGain = sampled.gain_m;
         elevLoss = sampled.loss_m;
       } else if (elevGain === null) {

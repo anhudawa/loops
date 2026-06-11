@@ -618,36 +618,43 @@ function scoreSafety(
   const warningHighways = new Set(["primary", "primary_link"]);
   const safeHighways = new Set(["cycleway", "path", "track", "residential", "service"]);
 
+  // Grid-indexed proximity (see SegmentGrid above): the naive
+  // O(samples × all segments) scan here burned 60-90s of sync CPU per
+  // generation and blocked the event loop. Same semantics: each way can
+  // deduct at most once per sampled point.
+  const grid = gridFor(highwayWays);
+
   for (const coord of sampledCoords) {
     const pt: [number, number] = [coord[0], coord[1]];
 
-    // Check for dangerous roads within 30m
-    for (const way of highwayWays) {
-      if (!way.tags.highway) continue;
+    // Check for dangerous roads within 30m (warning roads within 20m)
+    const countedWays = new Set<ProcessedWay>();
+    for (const seg of grid.near(pt, 0.03)) {
+      const way = seg.way;
+      if (countedWays.has(way)) continue;
       const hw = way.tags.highway;
-      for (let i = 0; i + 1 < way.nodes.length; i++) {
-        const a: [number, number] = [way.nodes[i].lat, way.nodes[i].lon];
-        const b: [number, number] = [way.nodes[i + 1].lat, way.nodes[i + 1].lon];
-        const d = pointToSegmentDist(pt, a, b);
+      if (!hw) continue;
+      const isDanger = dangerousHighways.has(hw);
+      const isWarning = warningHighways.has(hw);
+      if (!isDanger && !isWarning) continue;
 
-        if (dangerousHighways.has(hw) && d < 0.03) {
-          const flagKey = `danger:${hw}`;
-          if (!checkedFlags.has(flagKey)) {
-            flags.push(`Route near ${hw} — high-speed traffic danger`);
-            checkedFlags.add(flagKey);
-          }
-          deductions += 3;
-          break;
+      const d = pointToSegmentDist(pt, seg.a, seg.b);
+      if (isDanger && d < 0.03) {
+        const flagKey = `danger:${hw}`;
+        if (!checkedFlags.has(flagKey)) {
+          flags.push(`Route near ${hw} — high-speed traffic danger`);
+          checkedFlags.add(flagKey);
         }
-        if (warningHighways.has(hw) && d < 0.02) {
-          const flagKey = `warning:${hw}`;
-          if (!checkedFlags.has(flagKey)) {
-            flags.push(`Route uses primary road — moderate traffic`);
-            checkedFlags.add(flagKey);
-          }
-          deductions += 1;
-          break;
+        deductions += 3;
+        countedWays.add(way);
+      } else if (isWarning && d < 0.02) {
+        const flagKey = `warning:${hw}`;
+        if (!checkedFlags.has(flagKey)) {
+          flags.push(`Route uses primary road — moderate traffic`);
+          checkedFlags.add(flagKey);
         }
+        deductions += 1;
+        countedWays.add(way);
       }
     }
 
@@ -1240,7 +1247,7 @@ export async function scoreRoute(
     elements = await queryOverpass(bbox);
   } catch (err) {
     overpassFailed = true;
-    allFlags.push("OSM data unavailable — surface/safety/scenic scores estimated");
+    allFlags.push("Road data unavailable — could not verify this route");
     console.error("[route-quality] Overpass query failed:", err);
   }
 
@@ -1321,15 +1328,19 @@ export async function scoreRoute(
   let bicycle_access_score: number;
 
   if (overpassFailed) {
-    // Fallback: neutral scores for OSM-dependent dimensions
-    surface_score = 15;
-    safety_score = 20;
-    scenic_score = 10;
-    traffic_volume_score = 8;
-    scenic_diversity_score = 5;
-    waypoint_interest_score = 5;
-    road_continuity_score = 3;
-    bicycle_access_score = 15;
+    // Honesty principle: with no OSM data we cannot verify surface, safety
+    // or access. Neutral guesses previously summed above QUALITY_FLOOR, so
+    // unverified routes shipped labelled good. Zero the OSM-dependent
+    // dimensions — total lands at 0 below, and generation's floor check
+    // rejects these candidates (honest decline beats unverified serve).
+    surface_score = 0;
+    safety_score = 0;
+    scenic_score = 0;
+    traffic_volume_score = 0;
+    scenic_diversity_score = 0;
+    waypoint_interest_score = 0;
+    road_continuity_score = 0;
+    bicycle_access_score = 0;
   } else {
     const surf = scoreSurface(sampled, highwayWays, discipline);
     surfaceBreakdown = surf.surface;
@@ -1381,7 +1392,11 @@ export async function scoreRoute(
     road_continuity_score +
     bicycle_access_score;
 
-  const total = Math.max(0, Math.min(100, Math.round((rawSum / MAX_RAW_SCORE) * 100)));
+  // OSM down → quality 0: we could not verify the route, so we never
+  // label it good. Callers' QUALITY_FLOOR checks then decline honestly.
+  const total = overpassFailed
+    ? 0
+    : Math.max(0, Math.min(100, Math.round((rawSum / MAX_RAW_SCORE) * 100)));
 
   return {
     total,

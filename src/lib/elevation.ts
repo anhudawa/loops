@@ -117,6 +117,46 @@ export function elevationGainFromSeries(elevations: number[]): number {
   return Math.round(gain);
 }
 
+/**
+ * Given a downsampled series of elevations, expand back to the full path
+ * length via nearest-by-cumulative-distance lookup. Good enough for segment
+ * detection and gain/loss; keeps `elevations[i]` aligned 1:1 with
+ * `fullCoords[i]` so GPX export and effort indexing stay correct.
+ */
+export function interpolateToFullPath(
+  fullCoords: [number, number][],
+  sampledCoords: [number, number][],
+  sampledElevations: number[]
+): number[] {
+  if (sampledCoords.length === 0 || sampledElevations.length === 0) {
+    return fullCoords.map(() => NaN);
+  }
+  // Build cumulative distance for both series, then for each full-path
+  // point find the nearest-by-distance sampled point.
+  const fullDist: number[] = [0];
+  for (let i = 1; i < fullCoords.length; i++) {
+    fullDist.push(fullDist[i - 1] + haversineMeters(
+      fullCoords[i - 1][0], fullCoords[i - 1][1],
+      fullCoords[i][0], fullCoords[i][1],
+    ));
+  }
+  const sampledDist: number[] = [0];
+  for (let i = 1; i < sampledCoords.length; i++) {
+    sampledDist.push(sampledDist[i - 1] + haversineMeters(
+      sampledCoords[i - 1][0], sampledCoords[i - 1][1],
+      sampledCoords[i][0], sampledCoords[i][1],
+    ));
+  }
+
+  const out = new Array<number>(fullCoords.length);
+  let j = 0;
+  for (let i = 0; i < fullCoords.length; i++) {
+    while (j < sampledDist.length - 1 && sampledDist[j + 1] < fullDist[i]) j++;
+    out[i] = sampledElevations[j];
+  }
+  return out;
+}
+
 export interface RouteElevationResult {
   elevations: number[];        // metres, aligned with the sampled coords
   sampled_coords: [number, number][];

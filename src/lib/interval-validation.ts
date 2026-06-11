@@ -17,7 +17,9 @@ const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
 const OVERPASS_TIMEOUT_MS = 10000;
 
 export interface SegmentIssue {
-  type: "traffic_signal" | "access_restricted";
+  /** "unverified" = Overpass was unreachable; junctions could not be
+   * checked. Non-blocking for display, but never counts as clean. */
+  type: "traffic_signal" | "access_restricted" | "unverified";
   lat: number;
   lng: number;
   detail: string;
@@ -83,7 +85,9 @@ out body;
   });
 
   if (!res.ok) {
-    return { signalNodes: [], restrictedWays: [] };
+    // Surface the failure — the caller marks the segment "unverified"
+    // instead of pretending it was checked and found clean.
+    throw new Error(`Overpass returned HTTP ${res.status}`);
   }
 
   const json = (await res.json()) as {
@@ -179,8 +183,17 @@ export async function validateSegments(
           });
         }
       } catch {
-        // Overpass failure is not fatal — return the segment without
-        // validation rather than blocking the whole flow.
+        // Overpass failure is not fatal to the flow, but honesty demands
+        // we never report an unchecked segment as clean. Mark it
+        // unverified (non-blocking for display; filterCleanSegments
+        // refuses to treat it as clean).
+        issues.push({
+          type: "unverified",
+          lat: (bbox.s + bbox.n) / 2,
+          lng: (bbox.w + bbox.e) / 2,
+          detail:
+            "Road data unavailable — junctions on this segment could not be verified",
+        });
       }
 
       return {
@@ -200,9 +213,17 @@ export async function validateSegments(
  * Remove segments with blocking issues and return only clean ones.
  * Convenience wrapper used by the workout matcher to drop unsuitable
  * segments before running workout assignment.
+ *
+ * Unverified segments (Overpass down) are NOT clean: "we couldn't check
+ * for junctions" must never be served as "no junctions". The honest
+ * outcome is a decline with alternatives, per the launch spec.
  */
 export function filterCleanSegments(
   validated: ValidatedSegment[]
 ): ValidatedSegment[] {
-  return validated.filter((s) => !s.has_blocking_issues);
+  return validated.filter(
+    (s) =>
+      !s.has_blocking_issues &&
+      !s.issues.some((i) => i.type === "unverified")
+  );
 }

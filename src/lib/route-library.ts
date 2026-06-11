@@ -17,7 +17,7 @@ import {
   type IntervalSegment,
 } from "./interval-segments";
 import { validateSegments, filterCleanSegments } from "./interval-validation";
-import { sampleRouteElevation } from "./elevation";
+import { sampleRouteElevation, interpolateToFullPath } from "./elevation";
 
 export interface LibraryMatch {
   route_id: string;
@@ -379,43 +379,4 @@ export async function matchLibraryForWorkout(
   const scored = analysed.filter((x): x is LibraryMatch => x !== null);
   scored.sort((a, b) => b.match_score - a.match_score);
   return scored.slice(0, maxResults);
-}
-
-/**
- * Given a downsampled series of elevations, expand back to the full path
- * length via nearest-neighbour. Good enough for segment detection; we are
- * not rendering elevation profiles off this data.
- */
-function interpolateToFullPath(
-  fullCoords: [number, number][],
-  sampledCoords: [number, number][],
-  sampledElevations: number[]
-): number[] {
-  if (sampledCoords.length === 0 || sampledElevations.length === 0) {
-    return fullCoords.map(() => NaN);
-  }
-  // Build cumulative distance for both series, then for each full-path
-  // point find the nearest-by-distance sampled point.
-  const fullDist: number[] = [0];
-  for (let i = 1; i < fullCoords.length; i++) {
-    fullDist.push(fullDist[i - 1] + haversineKm(
-      fullCoords[i - 1][0], fullCoords[i - 1][1],
-      fullCoords[i][0], fullCoords[i][1],
-    ));
-  }
-  const sampledDist: number[] = [0];
-  for (let i = 1; i < sampledCoords.length; i++) {
-    sampledDist.push(sampledDist[i - 1] + haversineKm(
-      sampledCoords[i - 1][0], sampledCoords[i - 1][1],
-      sampledCoords[i][0], sampledCoords[i][1],
-    ));
-  }
-
-  const out = new Array<number>(fullCoords.length);
-  let j = 0;
-  for (let i = 0; i < fullCoords.length; i++) {
-    while (j < sampledDist.length - 1 && sampledDist[j + 1] < fullDist[i]) j++;
-    out[i] = sampledElevations[j];
-  }
-  return out;
 }

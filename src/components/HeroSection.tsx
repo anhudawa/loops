@@ -84,21 +84,21 @@ export default function HeroSection({ onExplore }: { onExplore: () => void }) {
           </span>
         </div>
 
-        {/* Tagline */}
+        {/* The one question + tagline (matches /login) */}
         <h1
-          className="font-extrabold uppercase tracking-tight leading-[0.95] mb-4"
+          className="font-extrabold tracking-tight leading-[1.02] mb-4"
           style={{
             fontSize: "clamp(2rem, 6vw, 3.5rem)",
             color: "var(--text)",
           }}
         >
-          Stop Riding The Same Loop
+          Where should I ride today?
         </h1>
         <p
-          className="text-sm md:text-lg mb-6 md:mb-10 max-w-md mx-auto"
+          className="text-sm md:text-lg font-bold mb-6 md:mb-10 max-w-md mx-auto"
           style={{ color: "var(--text-muted)" }}
         >
-          Discover and share the best road, gravel, and MTB loops worldwide. Built by riders, for riders.
+          Stop riding the same loops.
         </p>
 
         {/* CTAs */}

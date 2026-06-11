@@ -79,10 +79,19 @@ export default function RouteCard({ route, showDistance }: RouteCardProps) {
               onError={() => setImgError(true)}
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center" style={{ background: "var(--bg-card)" }}>
-              <svg className="w-8 h-8" style={{ color: "var(--border-light)" }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498l4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 00-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0z" />
-              </svg>
+            <div
+              className="w-full h-full flex flex-col items-center justify-center gap-1"
+              style={{
+                background:
+                  "radial-gradient(ellipse 90% 70% at 50% 30%, rgba(200,255,0,0.08) 0%, var(--bg-card) 70%)",
+              }}
+            >
+              <span className="logo-mark text-lg" style={{ color: "var(--accent)", opacity: 0.7 }}>
+                LOOPS
+              </span>
+              <span className="text-[10px] uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                {route.distance_km} km {discipline?.label ?? ""}
+              </span>
             </div>
           )}
 

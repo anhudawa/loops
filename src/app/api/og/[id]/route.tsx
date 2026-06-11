@@ -67,14 +67,21 @@ export async function GET(
     // Parse coordinates and normalize for SVG path
     let svgPath = "";
     try {
-      const coords: [number, number][] = JSON.parse(route.coordinates);
+      const raw: [number, number][] = JSON.parse(route.coordinates);
+      // Routes carry up to 8,000 points; rendering them all into a
+      // 320px thumbnail made Satori time out on long routes (broken
+      // images on the homepage). ~150 points is visually identical.
+      const MAX_PTS = 150;
+      const step = Math.max(1, Math.floor(raw.length / MAX_PTS));
+      const coords = raw.filter((_, i) => i % step === 0 || i === raw.length - 1);
       if (coords.length > 1) {
-        const lats = coords.map((c) => c[0]);
-        const lngs = coords.map((c) => c[1]);
-        const minLat = Math.min(...lats);
-        const maxLat = Math.max(...lats);
-        const minLng = Math.min(...lngs);
-        const maxLng = Math.max(...lngs);
+        let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+        for (const c of coords) {
+          if (c[0] < minLat) minLat = c[0];
+          if (c[0] > maxLat) maxLat = c[0];
+          if (c[1] < minLng) minLng = c[1];
+          if (c[1] > maxLng) maxLng = c[1];
+        }
         const rangeX = maxLng - minLng || 0.01;
         const rangeY = maxLat - minLat || 0.01;
         const padding = 40;
@@ -83,7 +90,7 @@ export async function GET(
         const points = coords.map((c) => {
           const x = padding + ((c[1] - minLng) / rangeX) * (size - padding * 2);
           const y = padding + ((maxLat - c[0]) / rangeY) * (size - padding * 2);
-          return `${x},${y}`;
+          return `${x.toFixed(1)},${y.toFixed(1)}`;
         });
         svgPath = `M${points.join("L")}`;
       }

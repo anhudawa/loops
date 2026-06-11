@@ -18,13 +18,19 @@ seeking alternatives. Full sources in the research below; summary here.
   with a cafe stop" → 35 km, match 97, 93% paved, wind-aligned 80, honest
   SW-16km/h note — all with zero LLM involvement.
 
+## Shipped 2026-06-10 (cont.)
+- **#2 Post-generation route editing** — drag via-point pins on a Leaflet
+  map, tap to add/remove points, BRouter re-routes with the same
+  discipline profiles + guardrails, live stats, GPX download of the edit.
+  (RouteEditor.tsx + /api/reroute + rerouteWaypoints; needs an on-device
+  browser pass before launch since the sandbox can't render Leaflet.)
+
 ## Do next (priority order)
 1. **Garmin Connect / Wahoo / Hammerhead push** — the exact feature Komoot
    paywalled; our course-point workout alerts depend on a real course push.
    Long pole is API programme approval (owner action), code is plain OAuth+REST.
-2. **Post-generation route editing** — drag via-points on the Leaflet map,
-   BRouter re-routes between anchors, score updates live. Converts "toy" to
-   "tool"; de-risks generator mistakes. Largest item.
+2. **Route editor polish** — undo, save-edited-route to library, re-score
+   quality on save, workout-route editing (anchored efforts pinned).
 3. **Komoot-refugee funnel** — bulk GPX/RWGPS import UI (parsers exist) +
    SEO pages: "Komoot alternative for road cyclists", per-destination pages.
    Catch users mid-exodus; cheapest acquisition we will ever get.

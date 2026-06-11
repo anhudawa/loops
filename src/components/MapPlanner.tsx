@@ -1,16 +1,25 @@
 "use client";
 
 /**
- * Map-first route planner (CEO priority #1: draw roughly where you want
- * to go → GPX, easy to edit).
+ * Map-first route planner — Strava-standard incremental legs.
  *
- * Tap the map to drop points; the route snaps through them via
- * POST /api/reroute (same engine + guardrails as drag-to-edit). Drag a
- * pin to move it, tap a pin to remove it — identical UX to RouteEditor.
- * "Loop back to start" closes the ride by appending the start point.
+ * The route is an ordered list of LEGS, one per pair of anchors. When a
+ * point is added we snap ONLY the new leg (previous anchor → new point)
+ * via POST /api/reroute with exactly those two waypoints and append its
+ * geometry — one small fast call per click, the route grows under the
+ * cursor. Dragging an anchor re-snaps only its two adjacent legs;
+ * removing one merges by re-snapping a single leg; the loop toggle adds
+ * or removes a closing leg. The whole set is never re-routed on add.
  *
- * Anonymous users can sketch freely; the 401 from /api/reroute surfaces
- * as "Sign in to snap your route" rather than a hard redirect.
+ * Totals (sum of legs) live in the toolbar and update the moment each
+ * leg returns. While a leg snaps, just that leg is a thin dashed straight
+ * line — the rest of the route stays solid and real. The displayed solid
+ * polyline is ALWAYS genuine snapped geometry.
+ *
+ * Honesty: anonymous users (401) draw dashed straight legs with running
+ * straight-line distance and a persistent sign-in banner; a failed leg
+ * keeps its dashed segment with a retry affordance; any unsnapped leg
+ * marks the total "~" approximate. Leg math lives in src/lib/plan-legs.ts.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -18,23 +27,30 @@ import Link from "next/link";
 import { MapContainer, TileLayer, Polyline, Marker, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import {
+  haversineKm,
+  legTotals,
+  formatTotals,
+  concatLegGeometry,
+  buildPlanGpx,
+  type LatLng,
+  type PlanLeg,
+} from "@/lib/plan-legs";
 
 interface RerouteResult {
   coordinates: [number, number][];
   elevations: number[];
   distance_km: number;
   elevation_gain_m: number;
-  elevation_loss_m: number;
-  gpx_data: string;
-  warnings: string[];
 }
 
 type Discipline = "road" | "gravel" | "mtb";
 
-const DUBLIN: [number, number] = [53.35, -6.26];
+const DUBLIN: LatLng = [53.35, -6.26];
 const DEFAULT_ZOOM = 10;
-/** /api/reroute accepts max 10 waypoints; keep one spare for the loop-closing point. */
-const MAX_POINTS = 9;
+/** Each leg is its own 2-waypoint call, so the old 10-waypoint API cap
+ * no longer limits the route — this is purely a sanity ceiling. */
+const MAX_POINTS = 50;
 
 const anchorIcon = L.divIcon({
   className: "",
@@ -50,7 +66,7 @@ const startIcon = L.divIcon({
   iconAnchor: [8, 8],
 });
 
-function ClickToAdd({ onAdd }: { onAdd: (latlng: [number, number]) => void }) {
+function ClickToAdd({ onAdd }: { onAdd: (latlng: LatLng) => void }) {
   useMapEvents({
     click(e) {
       onAdd([e.latlng.lat, e.latlng.lng]);
@@ -60,7 +76,7 @@ function ClickToAdd({ onAdd }: { onAdd: (latlng: [number, number]) => void }) {
 }
 
 /** Pans to the rider's location once, if it arrives before they start drawing. */
-function RecenterOnce({ target }: { target: [number, number] | null }) {
+function RecenterOnce({ target }: { target: LatLng | null }) {
   const map = useMap();
   const done = useRef(false);
   useEffect(() => {
@@ -73,17 +89,27 @@ function RecenterOnce({ target }: { target: [number, number] | null }) {
 }
 
 export default function MapPlanner() {
-  const [points, setPoints] = useState<[number, number][]>([]);
+  const [anchors, setAnchors] = useState<LatLng[]>([]);
+  /** legs[i] connects anchors[i] → anchors[i+1]. */
+  const [legs, setLegs] = useState<PlanLeg[]>([]);
+  /** Closing leg (last anchor → first anchor) when loop is on. */
+  const [loopLeg, setLoopLeg] = useState<PlanLeg | null>(null);
   const [discipline, setDiscipline] = useState<Discipline>("road");
   const [loopBack, setLoopBack] = useState(true);
-  const [route, setRoute] = useState<RerouteResult | null>(null);
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [needsAuth, setNeedsAuth] = useState(false);
-  const [geoCenter, setGeoCenter] = useState<[number, number] | null>(null);
-  const requestSeq = useRef(0);
-  const pointsRef = useRef(points);
-  pointsRef.current = points;
+  const [resnapNote, setResnapNote] = useState<string | null>(null);
+  const [geoCenter, setGeoCenter] = useState<LatLng | null>(null);
+
+  const legIdRef = useRef(0);
+  const seqRef = useRef(0);
+  const needsAuthRef = useRef(false);
+  const anchorsRef = useRef(anchors);
+  anchorsRef.current = anchors;
+  const legsRef = useRef(legs);
+  legsRef.current = legs;
+  const loopLegRef = useRef(loopLeg);
+  loopLegRef.current = loopLeg;
 
   // Centre on the rider if they allow it — silently fall back to Dublin.
   useEffect(() => {
@@ -91,7 +117,7 @@ export default function MapPlanner() {
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         // Don't yank the map away if they've already started drawing.
-        if (pointsRef.current.length === 0) {
+        if (anchorsRef.current.length === 0) {
           setGeoCenter([pos.coords.latitude, pos.coords.longitude]);
         }
       },
@@ -100,138 +126,327 @@ export default function MapPlanner() {
     );
   }, []);
 
-  async function snap(nextPoints: [number, number][], loop: boolean, disc: Discipline) {
-    if (nextPoints.length < 2) {
-      requestSeq.current++; // invalidate any in-flight response
-      setRoute(null);
-      setBusy(false);
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    const seq = ++requestSeq.current;
+  // ── Per-leg snapping ───────────────────────────────────────────────────────
+
+  /** Apply a result to the leg with this id, only if seq is still current. */
+  function applyLegResult(id: number, seq: number, patch: Partial<PlanLeg>) {
+    setLegs((prev) =>
+      prev.map((l) => (l.id === id && l.seq === seq ? { ...l, ...patch } : l))
+    );
+    setLoopLeg((prev) =>
+      prev && prev.id === id && prev.seq === seq ? { ...prev, ...patch } : prev
+    );
+  }
+
+  function straightPatch(from: LatLng, to: LatLng): Partial<PlanLeg> {
+    return {
+      coords: [from, to],
+      elevations: [],
+      distance_km: Math.round(haversineKm(from, to) * 10) / 10,
+      gain_m: 0,
+    };
+  }
+
+  /** One small call: snap a single leg (exactly 2 waypoints). */
+  async function performSnap(
+    id: number,
+    seq: number,
+    from: LatLng,
+    to: LatLng,
+    disc: Discipline
+  ): Promise<void> {
     try {
-      const waypoints = loop ? [...nextPoints, nextPoints[0]] : nextPoints;
       const res = await fetch("/api/reroute", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ waypoints, discipline: disc }),
+        body: JSON.stringify({ waypoints: [from, to], discipline: disc }),
       });
-      const body = await res.json();
-      if (seq !== requestSeq.current) return; // stale response
+      const body = await res.json().catch(() => null);
       if (res.status === 401) {
+        needsAuthRef.current = true;
         setNeedsAuth(true);
-        setRoute(null);
+        applyLegResult(id, seq, { ...straightPatch(from, to), status: "straight" });
         return;
       }
       if (!res.ok) {
-        setError(body?.error ?? "Couldn't route between those points — try moving the pin to a road.");
+        applyLegResult(id, seq, {
+          ...straightPatch(from, to),
+          status: "failed",
+          error:
+            body?.error ?? "Couldn't route that leg — tap it to retry, or move the pin to a road.",
+        });
         return;
       }
-      setNeedsAuth(false);
-      setRoute(body.data as RerouteResult);
+      const data = body.data as RerouteResult;
+      applyLegResult(id, seq, {
+        coords: data.coordinates.map(([lat, lng]) => [lat, lng] as LatLng),
+        elevations: data.elevations,
+        distance_km: data.distance_km,
+        gain_m: data.elevation_gain_m,
+        status: "snapped",
+        error: undefined,
+      });
     } catch {
-      if (seq === requestSeq.current) setError("Network hiccup — try that again.");
-    } finally {
-      if (seq === requestSeq.current) setBusy(false);
+      applyLegResult(id, seq, {
+        ...straightPatch(from, to),
+        status: "failed",
+        error: "Network hiccup on that leg — tap it to retry.",
+      });
     }
   }
 
-  function addPoint(latlng: [number, number]) {
-    if (points.length >= MAX_POINTS) {
+  /** Build a new leg and kick off its snap (or keep it straight if anonymous). */
+  function makeLeg(from: LatLng, to: LatLng, disc: Discipline): PlanLeg {
+    const id = ++legIdRef.current;
+    const seq = ++seqRef.current;
+    const anonymous = needsAuthRef.current;
+    const newLeg: PlanLeg = {
+      id,
+      seq,
+      from,
+      to,
+      ...straightPatch(from, to),
+      status: anonymous ? "straight" : "pending",
+    } as PlanLeg;
+    if (!anonymous) void performSnap(id, seq, from, to, disc);
+    return newLeg;
+  }
+
+  /** Re-snap an existing leg in place (drag / retry / discipline change). */
+  function resnapLeg(legToSnap: PlanLeg, from: LatLng, to: LatLng, disc: Discipline): Promise<void> {
+    const seq = ++seqRef.current;
+    const anonymous = needsAuthRef.current;
+    const patch: Partial<PlanLeg> = {
+      seq,
+      from,
+      to,
+      ...straightPatch(from, to),
+      status: anonymous ? "straight" : "pending",
+      error: undefined,
+    };
+    setLegs((prev) => prev.map((l) => (l.id === legToSnap.id ? { ...l, ...patch } : l)));
+    setLoopLeg((prev) => (prev && prev.id === legToSnap.id ? { ...prev, ...patch } : prev));
+    if (anonymous) return Promise.resolve();
+    return performSnap(legToSnap.id, seq, from, to, disc);
+  }
+
+  // ── Anchor operations (all incremental — never re-route the whole set) ────
+
+  function addAnchor(latlng: LatLng) {
+    const current = anchorsRef.current;
+    if (current.length >= MAX_POINTS) {
       setError(`Maximum of ${MAX_POINTS} points — drag a pin to fine-tune instead.`);
       return;
     }
-    const next = [...points, latlng];
-    setPoints(next);
-    snap(next, loopBack, discipline);
-  }
-
-  function movePoint(idx: number, latlng: [number, number]) {
-    const next = points.map((p, i) => (i === idx ? latlng : p)) as [number, number][];
-    setPoints(next);
-    snap(next, loopBack, discipline);
-  }
-
-  function removePoint(idx: number) {
-    const next = points.filter((_, i) => i !== idx);
-    setPoints(next);
     setError(null);
-    snap(next, loopBack, discipline);
+    const prev = current[current.length - 1];
+    setAnchors([...current, latlng]);
+    if (!prev) return; // first anchor — no leg yet
+    // Snap ONLY the new leg and append it (makeLeg starts the fetch, so
+    // keep it out of the setState updater — updaters can run twice).
+    const newLeg = makeLeg(prev, latlng, discipline);
+    setLegs((ls) => [...ls, newLeg]);
+    // The closing leg now starts from the new last anchor.
+    if (loopBack) {
+      const first = current[0];
+      const existing = loopLegRef.current;
+      if (existing) {
+        void resnapLeg(existing, latlng, first, discipline);
+      } else {
+        setLoopLeg(makeLeg(latlng, first, discipline));
+      }
+    }
+  }
+
+  function moveAnchor(idx: number, latlng: LatLng) {
+    const current = anchorsRef.current;
+    const next = current.map((p, i) => (i === idx ? latlng : p)) as LatLng[];
+    setAnchors(next);
+    const currentLegs = legsRef.current;
+    // Re-snap ONLY the two adjacent legs.
+    if (idx > 0 && currentLegs[idx - 1]) {
+      void resnapLeg(currentLegs[idx - 1], next[idx - 1], latlng, discipline);
+    }
+    if (idx < currentLegs.length && currentLegs[idx]) {
+      void resnapLeg(currentLegs[idx], latlng, next[idx + 1], discipline);
+    }
+    const loop = loopLegRef.current;
+    if (loop) {
+      if (idx === 0) void resnapLeg(loop, next[next.length - 1], latlng, discipline);
+      else if (idx === next.length - 1) void resnapLeg(loop, latlng, next[0], discipline);
+    }
+  }
+
+  function removeAnchor(idx: number) {
+    const current = anchorsRef.current;
+    const next = current.filter((_, i) => i !== idx);
+    setAnchors(next);
+    setError(null);
+    if (next.length < 2) {
+      // Not enough anchors for any leg.
+      setLegs([]);
+      setLoopLeg(null);
+      return;
+    }
+    const currentLegs = legsRef.current;
+    const loop = loopLegRef.current;
+    if (idx === 0) {
+      // Drop the first leg; the closing leg now ends at the new first anchor.
+      setLegs(currentLegs.slice(1));
+      if (loop) void resnapLeg(loop, next[next.length - 1], next[0], discipline);
+    } else if (idx === current.length - 1) {
+      // Drop the last leg; the closing leg now starts at the new last anchor.
+      setLegs(currentLegs.slice(0, -1));
+      if (loop) void resnapLeg(loop, next[next.length - 1], next[0], discipline);
+    } else {
+      // Interior anchor: merge its two legs by re-snapping ONE new leg.
+      const merged = makeLeg(current[idx - 1], current[idx + 1], discipline);
+      setLegs([...currentLegs.slice(0, idx - 1), merged, ...currentLegs.slice(idx + 1)]);
+    }
+  }
+
+  /** Most-used control: remove the last anchor and its leg. */
+  function undo() {
+    const current = anchorsRef.current;
+    if (current.length === 0) return;
+    removeAnchor(current.length - 1);
   }
 
   function toggleLoop() {
     const next = !loopBack;
     setLoopBack(next);
-    snap(points, next, discipline);
+    const current = anchorsRef.current;
+    if (next && current.length >= 2) {
+      setLoopLeg(makeLeg(current[current.length - 1], current[0], discipline));
+    } else {
+      setLoopLeg(null);
+    }
   }
 
-  function pickDiscipline(d: Discipline) {
-    if (d === discipline) return;
+  /** Changing discipline re-snaps every leg sequentially with a progress note. */
+  async function pickDiscipline(d: Discipline) {
+    if (d === discipline || resnapNote) return;
     setDiscipline(d);
-    snap(points, loopBack, d);
+    if (needsAuthRef.current) return; // straight legs — nothing to re-snap
+    const all = [...legsRef.current, ...(loopLegRef.current ? [loopLegRef.current] : [])];
+    if (all.length === 0) return;
+    for (let i = 0; i < all.length; i++) {
+      setResnapNote(`Re-snapping for ${d} — leg ${i + 1} of ${all.length}…`);
+      await resnapLeg(all[i], all[i].from, all[i].to, d);
+    }
+    setResnapNote(null);
+  }
+
+  function retryFailedLegs() {
+    const all = [...legsRef.current, ...(loopLegRef.current ? [loopLegRef.current] : [])];
+    for (const l of all) {
+      if (l.status === "failed") void resnapLeg(l, l.from, l.to, discipline);
+    }
+  }
+
+  function retryLeg(id: number) {
+    const all = [...legsRef.current, ...(loopLegRef.current ? [loopLegRef.current] : [])];
+    const l = all.find((x) => x.id === id);
+    if (l && l.status === "failed") void resnapLeg(l, l.from, l.to, discipline);
   }
 
   function clearAll() {
-    requestSeq.current++;
-    setPoints([]);
-    setRoute(null);
+    if (anchorsRef.current.length > 0 && !window.confirm("Clear the whole route?")) return;
+    seqRef.current++;
+    setAnchors([]);
+    setLegs([]);
+    setLoopLeg(null);
     setError(null);
-    setBusy(false);
+    setResnapNote(null);
   }
 
+  // ── Derived state ──────────────────────────────────────────────────────────
+
+  const allLegs = [...legs, ...(loopLeg ? [loopLeg] : [])];
+  const totals = legTotals(allLegs);
+  const snapping = allLegs.some((l) => l.status === "pending");
+  const failedCount = allLegs.filter((l) => l.status === "failed").length;
+  const allSnapped = allLegs.length > 0 && allLegs.every((l) => l.status === "snapped");
+
   function downloadGpx() {
-    if (!route) return;
-    const blob = new Blob([route.gpx_data], { type: "application/gpx+xml" });
+    if (!allSnapped) return;
+    const { coords, elevations } = concatLegGeometry(allLegs);
+    const gpx = buildPlanGpx(
+      coords,
+      elevations,
+      `LOOPS planned ${discipline} route — ${totals.distance_km} km`,
+      discipline
+    );
+    const blob = new Blob([gpx], { type: "application/gpx+xml" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `loops-planned-${route.distance_km}km.gpx`;
+    a.download = `loops-planned-${totals.distance_km}km.gpx`;
     a.click();
     URL.revokeObjectURL(url);
   }
 
-  // Dashed sketch line through the raw points until a snapped route exists.
-  const sketchLine: [number, number][] =
-    !route && points.length >= 2 ? (loopBack ? [...points, points[0]] : points) : [];
-
   return (
     <div className="flex flex-col" style={{ height: "100%", background: "var(--bg)" }}>
-      {/* Planner toolbar — the shared AppHeader sits above (one logo treatment) */}
+      {/* Planner toolbar — totals always visible, Undo is the hero control */}
       <div
-        className="flex items-center gap-3 px-4 py-2.5 border-b z-20"
+        className="flex items-center gap-3 px-3 py-1.5 border-b z-20"
         style={{ background: "var(--bg-raised)", borderColor: "var(--border)" }}
       >
-        <span className="text-sm font-bold" style={{ color: "var(--text)" }}>Draw a route</span>
-        {busy && (
+        <span className="text-lg font-extrabold tabular-nums whitespace-nowrap" style={{ color: "var(--text)" }}>
+          {formatTotals(totals)}
+        </span>
+        {snapping && (
           <span className="text-xs" style={{ color: "var(--accent)" }}>snapping…</span>
         )}
-        <span className="flex-1" />
-        {route && (
-          <span className="text-sm font-semibold tabular-nums" style={{ color: "var(--text)" }}>
-            {route.distance_km} km · +{route.elevation_gain_m} m
-          </span>
+        {resnapNote && (
+          <span className="text-xs" style={{ color: "var(--accent)" }}>{resnapNote}</span>
         )}
+        <span className="flex-1" />
+        <button
+          type="button"
+          onClick={undo}
+          disabled={anchors.length === 0}
+          className="px-4 rounded-xl text-xs font-bold uppercase tracking-wider disabled:opacity-40"
+          style={{
+            minHeight: 44,
+            border: "1px solid var(--border)",
+            background: "var(--bg-card)",
+            color: "var(--text)",
+          }}
+        >
+          ↩ Undo
+        </button>
       </div>
 
       {/* Banners */}
       {needsAuth && (
         <p className="px-4 py-2 text-xs z-20" style={{ background: "rgba(200,255,0,0.08)", color: "var(--text-secondary)" }}>
-          <span className="font-bold" style={{ color: "var(--accent)" }}>Sign in to snap your route.</span>{" "}
-          Your sketch stays put — we just need an account to run the routing engine.{" "}
+          <span className="font-bold" style={{ color: "var(--accent)" }}>Sign in to snap to roads.</span>{" "}
+          You can keep drawing — distances are straight-line until then.{" "}
           <Link href="/login?redirect=/plan" className="font-bold underline" style={{ color: "var(--accent)" }}>
             Log in →
           </Link>
         </p>
       )}
+      {failedCount > 0 && (
+        <p className="px-4 py-2 text-xs z-20 flex items-center gap-2" style={{ background: "rgba(255,80,80,0.1)", color: "#ff6b6b" }}>
+          <span>
+            {failedCount === 1 ? "One leg" : `${failedCount} legs`} couldn&apos;t snap — shown dashed as straight lines (total is approximate).
+          </span>
+          <button
+            type="button"
+            onClick={retryFailedLegs}
+            className="px-2 py-1 rounded-lg font-bold underline"
+            style={{ color: "#ff6b6b" }}
+          >
+            Retry
+          </button>
+        </p>
+      )}
       {error && (
         <p className="px-4 py-2 text-xs z-20" style={{ background: "rgba(255,80,80,0.1)", color: "#ff6b6b" }}>
           {error}
-        </p>
-      )}
-      {route && route.warnings.length > 0 && (
-        <p className="px-4 py-2 text-xs z-20" style={{ background: "rgba(240,160,80,0.1)", color: "#f0a050" }}>
-          ⚠ {route.warnings[0]}
         </p>
       )}
 
@@ -248,20 +463,31 @@ export default function MapPlanner() {
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
           <RecenterOnce target={geoCenter} />
-          <ClickToAdd onAdd={addPoint} />
-          {sketchLine.length > 0 && (
-            <Polyline
-              positions={sketchLine}
-              pathOptions={{ color: "#c8ff00", weight: 3, opacity: 0.55, dashArray: "6 8" }}
-            />
+          <ClickToAdd onAdd={addAnchor} />
+          {/* Each leg renders itself: solid = genuine snapped geometry,
+              dashed = pending / failed / anonymous straight line. */}
+          {allLegs.map((l) =>
+            l.status === "snapped" ? (
+              <Polyline
+                key={l.id}
+                positions={l.coords}
+                pathOptions={{ color: "#c8ff00", weight: 4, opacity: 0.9 }}
+              />
+            ) : (
+              <Polyline
+                key={l.id}
+                positions={[l.from, l.to]}
+                pathOptions={{
+                  color: l.status === "failed" ? "#ff6b6b" : "#c8ff00",
+                  weight: 2.5,
+                  opacity: 0.65,
+                  dashArray: "6 8",
+                }}
+                eventHandlers={l.status === "failed" ? { click: () => retryLeg(l.id) } : undefined}
+              />
+            )
           )}
-          {route && (
-            <Polyline
-              positions={route.coordinates.map(([lat, lng]) => [lat, lng] as [number, number])}
-              pathOptions={{ color: "#c8ff00", weight: 4, opacity: 0.9 }}
-            />
-          )}
-          {points.map((p, i) => (
+          {anchors.map((p, i) => (
             <Marker
               key={`${i}-${p[0]}-${p[1]}`}
               position={p}
@@ -270,16 +496,16 @@ export default function MapPlanner() {
               eventHandlers={{
                 dragend: (e) => {
                   const ll = (e.target as L.Marker).getLatLng();
-                  movePoint(i, [ll.lat, ll.lng]);
+                  moveAnchor(i, [ll.lat, ll.lng]);
                 },
-                click: () => removePoint(i),
+                click: () => removeAnchor(i),
               }}
             />
           ))}
         </MapContainer>
 
         {/* Honest empty state */}
-        {points.length === 0 && (
+        {anchors.length === 0 && (
           <div className="absolute inset-x-0 bottom-6 flex justify-center pointer-events-none" style={{ zIndex: 1000 }}>
             <div
               className="px-4 py-3 rounded-xl text-sm font-semibold text-center mx-4"
@@ -287,18 +513,18 @@ export default function MapPlanner() {
             >
               Tap the map to drop your first point.
               <span className="block text-xs font-normal mt-0.5" style={{ color: "var(--text-muted)" }}>
-                Two points and we&apos;ll snap a rideable route through them.
+                Every point after that snaps a new leg to the road, instantly.
               </span>
             </div>
           </div>
         )}
-        {points.length === 1 && (
+        {anchors.length === 1 && (
           <div className="absolute inset-x-0 bottom-6 flex justify-center pointer-events-none" style={{ zIndex: 1000 }}>
             <div
               className="px-4 py-2 rounded-xl text-xs mx-4"
               style={{ background: "var(--bg-raised)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
             >
-              Drop at least one more point to snap a route.
+              Drop your next point — we&apos;ll snap that leg to the road.
             </div>
           </div>
         )}
@@ -325,7 +551,8 @@ export default function MapPlanner() {
                 type="button"
                 onClick={() => pickDiscipline(d)}
                 aria-pressed={discipline === d}
-                className="px-3 text-xs font-bold uppercase tracking-wider"
+                disabled={resnapNote !== null}
+                className="px-3 text-xs font-bold uppercase tracking-wider disabled:opacity-60"
                 style={{
                   minHeight: 44,
                   background: discipline === d ? "var(--accent)" : "var(--bg-card)",
@@ -357,7 +584,7 @@ export default function MapPlanner() {
           <button
             type="button"
             onClick={clearAll}
-            disabled={points.length === 0}
+            disabled={anchors.length === 0}
             className="px-3 rounded-xl text-xs font-bold disabled:opacity-40"
             style={{ minHeight: 44, border: "1px solid var(--border)", color: "var(--text)" }}
           >
@@ -367,7 +594,8 @@ export default function MapPlanner() {
           <button
             type="button"
             onClick={downloadGpx}
-            disabled={!route}
+            disabled={!allSnapped}
+            title={allSnapped ? undefined : "Every leg must be snapped to a road before export"}
             className="px-4 rounded-xl text-xs font-bold uppercase tracking-wider disabled:opacity-40"
             style={{ minHeight: 44, background: "var(--accent)", color: "var(--bg)" }}
           >

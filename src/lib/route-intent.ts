@@ -220,6 +220,29 @@ function sanitizeWindStrategy(value: string | undefined): WindStrategy {
   return value && WIND_STRATEGIES.has(value) ? (value as WindStrategy) : "none";
 }
 
+const DISCIPLINES: ReadonlySet<string> = new Set(["road", "gravel", "mtb"]);
+const ELEVATION_PREFERENCES: ReadonlySet<string> = new Set([
+  "flat",
+  "rolling",
+  "hilly",
+  "mountainous",
+  "any",
+]);
+
+/** LLM enum guard: anything outside road|gravel|mtb becomes "road". */
+export function sanitizeDiscipline(value: unknown): Discipline {
+  return typeof value === "string" && DISCIPLINES.has(value)
+    ? (value as Discipline)
+    : "road";
+}
+
+/** LLM enum guard: anything outside the five known bands becomes "any". */
+export function sanitizeElevationPreference(value: unknown): ElevationPreference {
+  return typeof value === "string" && ELEVATION_PREFERENCES.has(value)
+    ? (value as ElevationPreference)
+    : "any";
+}
+
 /** Drop malformed workout objects — we never want to route a garbage workout. */
 function sanitizeWorkout(w: WorkoutSpec | null | undefined): WorkoutSpec | undefined {
   if (!w || !Array.isArray(w.intervals) || w.intervals.length === 0) return undefined;
@@ -270,13 +293,20 @@ async function geocodePlace(
     countrycodes: countryToCode(country),
   });
   const url = `https://nominatim.openstreetmap.org/search?${params.toString()}`;
-  const res = await fetch(url, {
-    headers: { "User-Agent": "loops.ie route generator (https://www.loops.ie)" },
-  });
-  if (!res.ok) return null;
-  const data = await res.json();
-  if (!data || data.length === 0) return null;
-  return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": "loops.ie route generator (https://www.loops.ie)" },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data || data.length === 0) return null;
+    return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+  } catch {
+    // Timeout or network failure — degrade to the caller's fallbacks
+    // (browser origin → country centre) instead of killing the request.
+    return null;
+  }
 }
 
 function countryToCode(country: string): string {
@@ -437,11 +467,16 @@ export async function parseRouteIntent(
   }
 
   // ── Resolve distance from duration if needed ────────────────────────────────
-  const discipline = parsed.discipline;
-  const elevationPref = parsed.elevation_preference;
+  // Sanitize LLM enums first: an out-of-vocabulary discipline or elevation
+  // band would miss the SPEED_LOOKUP table and turn distance into NaN.
+  const discipline = sanitizeDiscipline(parsed.discipline);
+  const elevationPref = sanitizeElevationPreference(parsed.elevation_preference);
   const workout = sanitizeWorkout(parsed.workout);
 
-  let distanceKm = parsed.distance_km ?? null;
+  let distanceKm =
+    typeof parsed.distance_km === "number" && Number.isFinite(parsed.distance_km)
+      ? parsed.distance_km
+      : null;
   // A workout fully defines the session length — prefer its total_minutes
   // over a free-text duration if both exist.
   const durationMin = workout
@@ -451,7 +486,7 @@ export async function parseRouteIntent(
   if (distanceKm === null && durationMin !== null) {
     distanceKm = durationToDistanceKm(durationMin, discipline, elevationPref, userSpeedKmh);
   }
-  if (distanceKm === null) {
+  if (distanceKm === null || Number.isNaN(distanceKm)) {
     distanceKm = DEFAULT_DISTANCE_KM;
   }
 

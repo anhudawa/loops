@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { downsampleByInterval, elevationGainFromSeries } from "../elevation";
+import {
+  downsampleByInterval,
+  elevationGainFromSeries,
+  interpolateToFullPath,
+} from "../elevation";
 
 describe("downsampleByInterval", () => {
   it("returns empty result for empty input", () => {
@@ -28,6 +32,34 @@ describe("downsampleByInterval", () => {
     // ~1111m route sampled at 200m → ~5-7 points, always inclusive of ends
     expect(out.coords.length).toBeGreaterThanOrEqual(5);
     expect(out.coords.length).toBeLessThanOrEqual(8);
+  });
+});
+
+describe("interpolateToFullPath", () => {
+  it("returns one elevation per full-resolution coordinate", () => {
+    // 100 full-res points ~10m apart, sampled every ~50m
+    const full: [number, number][] = Array.from({ length: 100 }, (_, i) => [
+      53.35 + i * 0.0001,
+      -6.26,
+    ]);
+    const { coords: sampled } = downsampleByInterval(full, 50);
+    const sampledElev = sampled.map((_, i) => 100 + i);
+    const out = interpolateToFullPath(full, sampled, sampledElev);
+    expect(out.length).toBe(full.length);
+    // Values must come from the sampled series (no NaN, monotone here)
+    expect(out.every((e) => !Number.isNaN(e))).toBe(true);
+    expect(out[0]).toBe(100);
+    expect(out[out.length - 1]).toBe(sampledElev[sampledElev.length - 1]);
+  });
+
+  it("returns NaN-filled array when the sampled series is empty", () => {
+    const full: [number, number][] = [
+      [53.35, -6.26],
+      [53.36, -6.26],
+    ];
+    const out = interpolateToFullPath(full, [], []);
+    expect(out.length).toBe(2);
+    expect(out.every((e) => Number.isNaN(e))).toBe(true);
   });
 });
 

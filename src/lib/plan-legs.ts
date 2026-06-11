@@ -3,8 +3,9 @@
  *
  * The planner keeps the route as an ordered list of legs — one snapped
  * routing call per leg (previous anchor → new anchor). Everything here is
- * pure and unit-tested: totals, geometry concatenation (junction dedupe)
- * and the client-side GPX serializer used for export.
+ * pure and unit-tested: totals, geometry concatenation (junction dedupe),
+ * the live-elevation chart track, the mid-leg insertion index math, and the
+ * client-side GPX serializer used for export.
  */
 
 export type LatLng = [number, number];
@@ -29,6 +30,8 @@ export interface PlanLeg {
   /** Snapped distance, or straight-line distance when unsnapped. */
   distance_km: number;
   gain_m: number;
+  /** Snapped descent; 0 for unsnapped legs (straight lines have no profile). */
+  loss_m: number;
   status: LegStatus;
   error?: string;
 }
@@ -36,6 +39,7 @@ export interface PlanLeg {
 export interface LegTotals {
   distance_km: number;
   gain_m: number;
+  loss_m: number;
   /** True when any leg is unsnapped — display the total as approximate. */
   approx: boolean;
 }
@@ -56,22 +60,26 @@ export function haversineKm(a: LatLng, b: LatLng): number {
 }
 
 /**
- * Total distance and climbing across all legs. Unsnapped legs contribute
- * their straight-line distance and zero gain, and flip `approx` on — the
- * UI prefixes the total with "~" so we never present a guess as fact.
+ * Total distance, climbing and descent across all legs. Unsnapped legs
+ * contribute their straight-line distance and zero gain/loss, and flip
+ * `approx` on — the UI prefixes the total with "~" so we never present a
+ * guess as fact.
  */
 export function legTotals(legs: PlanLeg[]): LegTotals {
   let distance = 0;
   let gain = 0;
+  let loss = 0;
   let approx = false;
   for (const leg of legs) {
     distance += leg.distance_km;
     gain += leg.gain_m;
+    loss += leg.loss_m ?? 0;
     if (leg.status !== "snapped") approx = true;
   }
   return {
     distance_km: Math.round(distance * 10) / 10,
     gain_m: Math.round(gain),
+    loss_m: Math.round(loss),
     approx,
   };
 }
@@ -110,6 +118,50 @@ export function concatLegGeometry(legs: PlanLeg[]): {
     }
   }
   return { coords, elevations };
+}
+
+/**
+ * Concatenate the legs into the `[lat, lng, ele][]` triples the
+ * ElevationProfile chart consumes. Junction dedupe matches concatLegGeometry;
+ * points whose elevation is missing/NaN become 0 so the chart's hasRealData
+ * check (which treats an all-zero series as "no data") stays honest — a route
+ * with no real elevation renders the empty state instead of a flat fake line.
+ */
+export function legGeometryForChart(legs: PlanLeg[]): [number, number, number][] {
+  const { coords, elevations } = concatLegGeometry(legs);
+  return coords.map((c, i) => {
+    const e = elevations[i];
+    return [c[0], c[1], typeof e === "number" && !Number.isNaN(e) ? e : 0];
+  });
+}
+
+/**
+ * Insert a via-anchor into the ordered anchor list at a leg boundary.
+ *
+ * `legIndex` identifies the leg connecting anchors[legIndex] → anchors[legIndex+1];
+ * the new point is inserted between them, so the via lands at position
+ * legIndex+1 and the returned array is one longer. Pure index math — the
+ * caller re-snaps the two resulting legs. Returns the array unchanged when
+ * legIndex is out of range (defensive; the caller validates first).
+ */
+export function insertAnchorAtLeg(
+  anchors: LatLng[],
+  legIndex: number,
+  via: LatLng
+): LatLng[] {
+  if (legIndex < 0 || legIndex >= anchors.length - 1) return anchors;
+  return [...anchors.slice(0, legIndex + 1), via, ...anchors.slice(legIndex + 1)];
+}
+
+/**
+ * The point a mid-leg drag handle sits on: the central VERTEX of the leg's
+ * snapped geometry, so the handle hugs the real road rather than floating on
+ * the straight chord. Falls back to the leg's from/to for a degenerate
+ * (empty) coords array.
+ */
+export function legHandlePoint(leg: PlanLeg): LatLng {
+  const pts = leg.coords.length >= 2 ? leg.coords : [leg.from, leg.to];
+  return pts[Math.floor(pts.length / 2)];
 }
 
 function escapeXml(s: string): string {

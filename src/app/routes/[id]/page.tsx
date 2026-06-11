@@ -17,6 +17,9 @@ import WeatherCard from "@/components/WeatherCard";
 import { useAuth } from "@/components/AuthProvider";
 import { useToast } from "@/components/Toast";
 import Breadcrumbs from "@/components/Breadcrumbs";
+import AppHeader from "@/components/AppHeader";
+import SendToGarmin from "@/components/SendToGarmin";
+import QualityFactors, { SurfaceSummary, type SurfaceBreakdown } from "@/components/QualityFactors";
 import RouteFaq from "@/components/RouteFaq";
 import RelatedRoutes from "@/components/RelatedRoutes";
 import { slugify } from "@/lib/seo";
@@ -52,6 +55,12 @@ interface Route {
   operator_url?: string | null;
 }
 
+interface RouteQualityData {
+  total: number;
+  breakdown: Record<string, number>;
+  surface_breakdown?: SurfaceBreakdown;
+}
+
 export default function RouteDetail() {
   const params = useParams();
   const router = useRouter();
@@ -69,6 +78,8 @@ export default function RouteDetail() {
   const [favLoading, setFavLoading] = useState(false);
   const [fetchError, setFetchError] = useState(false);
   const [mutationError, setMutationError] = useState("");
+  // Quality/surface scoring (parity with /generate) — fetched fire-and-forget
+  const [quality, setQuality] = useState<RouteQualityData | null>(null);
   // Profile hover → map marker (set by profile, drives map)
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   // Map click → profile crosshair (set by map click, drives profile)
@@ -128,6 +139,29 @@ export default function RouteDetail() {
       })
       .catch(() => {});
   }, [params.id]);
+
+  // Quality + surface scoring — same engine the generator uses, surfaced
+  // here for parity. Fire-and-forget: degrade silently if Overpass/the
+  // API is down, the page works without it.
+  useEffect(() => {
+    if (!route?.id || !route.coordinates) return;
+    let cancelled = false;
+    fetch("/api/routes/quality", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ routeId: route.id }),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body) => {
+        if (!cancelled && body?.data && typeof body.data.total === "number") {
+          setQuality(body.data as RouteQualityData);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [route?.id, route?.coordinates]);
 
   // Check if viewer follows the route creator
   useEffect(() => {
@@ -191,24 +225,30 @@ export default function RouteDetail() {
 
   if (fetchError) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ background: "var(--bg)" }}>
-        <p className="text-sm" style={{ color: "var(--text-muted)" }}>Something went wrong loading this route.</p>
-        <button
-          onClick={() => fetchRoute()}
-          className="btn-accent px-4 py-2 rounded-lg text-sm font-bold"
-        >
-          Try again
-        </button>
+      <div className="min-h-screen" style={{ background: "var(--bg)" }}>
+        <AppHeader />
+        <div className="flex flex-col items-center justify-center gap-4 py-32">
+          <p className="text-sm" style={{ color: "var(--text-muted)" }}>Something went wrong loading this route.</p>
+          <button
+            onClick={() => fetchRoute()}
+            className="btn-accent px-4 py-2 rounded-lg text-sm font-bold"
+          >
+            Try again
+          </button>
+        </div>
       </div>
     );
   }
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--bg)" }}>
-        <div className="animate-pulse flex flex-col items-center gap-3">
-          <div className="w-10 h-10 rounded-full" style={{ background: "var(--border)" }} />
-          <div className="h-3 rounded w-24" style={{ background: "var(--border)" }} />
+      <div className="min-h-screen" style={{ background: "var(--bg)" }}>
+        <AppHeader />
+        <div className="flex items-center justify-center py-32">
+          <div className="animate-pulse flex flex-col items-center gap-3">
+            <div className="w-10 h-10 rounded-full" style={{ background: "var(--border)" }} />
+            <div className="h-3 rounded w-24" style={{ background: "var(--border)" }} />
+          </div>
         </div>
       </div>
     );
@@ -235,6 +275,7 @@ export default function RouteDetail() {
   const rawCoords: number[][] = JSON.parse(route.coordinates);
   const fullCoordinates: [number, number, number][] = rawCoords.map((c) => [c[0], c[1], c[2] ?? 0]);
   const coordinates: [number, number][] = rawCoords.map((c) => [c[0], c[1]]);
+  const elevations: number[] = rawCoords.map((c) => c[2] ?? 0);
   const climbs = detectClimbs(fullCoordinates);
 
   const handlePositionChange = (index: number | null) => {
@@ -272,19 +313,7 @@ export default function RouteDetail() {
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
-      {/* Header */}
-      <header className="px-4 md:px-6 py-3" style={{ background: "var(--bg-raised)", borderBottom: "1px solid var(--border)" }}>
-        <div className="max-w-5xl mx-auto flex items-center gap-3">
-          <button onClick={() => (window.history.length > 1 ? router.back() : router.push("/"))} className="min-w-[44px] min-h-[44px] flex items-center justify-center hover:opacity-80 transition-opacity" style={{ color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer" }}>
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-          <Link href="/">
-            <span className="logo-mark text-xl" style={{ color: "var(--text)" }}>LOOPS</span>
-          </Link>
-        </div>
-      </header>
+      <AppHeader />
 
       {/* Hero: Map full-bleed */}
       <div className="h-[200px] md:h-[360px] relative">
@@ -315,8 +344,18 @@ export default function RouteDetail() {
           />
         </div>
 
-        {/* Breadcrumbs */}
-        <div className="mb-3">
+        {/* Back + Breadcrumbs */}
+        <div className="mb-3 flex items-center gap-1">
+          <button
+            onClick={() => (window.history.length > 1 ? router.back() : router.push("/"))}
+            aria-label="Go back"
+            className="min-w-[44px] min-h-[44px] -ml-3 shrink-0 flex items-center justify-center hover:opacity-80 transition-opacity"
+            style={{ color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer" }}
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
           <Breadcrumbs
             items={[
               { label: "LOOPS", href: "/" },
@@ -429,7 +468,36 @@ export default function RouteDetail() {
               </div>
             ))}
           </div>
+
+          {/* Ride something like this — hand the route's shape to the generator */}
+          <Link
+            href={`/generate?q=${encodeURIComponent(`${route.distance_km}km ${route.discipline} loop from ${route.region || route.county}`)}`}
+            className="mt-4 w-full min-h-[44px] flex items-center justify-center gap-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all hover:brightness-110"
+            style={{ background: "var(--accent-glow)", color: "var(--accent)", border: "1px solid rgba(200,255,0,0.3)" }}
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            Ride something like this
+          </Link>
         </div>
+
+        {/* Route quality — same scoring engine as /generate; renders only
+            when the score arrives, degrades silently otherwise */}
+        {quality && (
+          <div className="rounded-2xl p-4 md:p-6 mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-xs font-extrabold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+                Route Quality
+              </h2>
+              <span className="text-sm font-extrabold" style={{ color: "var(--accent)" }}>
+                {quality.total}/100
+              </span>
+            </div>
+            {quality.surface_breakdown && <SurfaceSummary breakdown={quality.surface_breakdown} />}
+            <QualityFactors breakdown={quality.breakdown} />
+          </div>
+        )}
 
         {/* Uploaded by */}
         {route.created_by && route.creator_name && (
@@ -507,6 +575,17 @@ export default function RouteDetail() {
         {/* Ride Actions */}
         <div className="mb-6">
           <RideActions routeId={route.id} routeName={route.name} />
+          {/* One-tap Send to Garmin — renders nothing until Garmin keys are configured */}
+          <div className="mt-2.5 flex justify-center empty:hidden">
+            <SendToGarmin
+              name={route.name}
+              coordinates={coordinates}
+              elevations={elevations}
+              distance_km={route.distance_km}
+              elevation_gain_m={route.elevation_gain_m}
+              discipline={route.discipline}
+            />
+          </div>
           <RideDisclaimer />
         </div>
 

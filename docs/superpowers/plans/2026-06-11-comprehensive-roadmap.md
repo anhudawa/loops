@@ -104,14 +104,14 @@ priority #2. Evidence is file paths and line numbers, not vibes.
 
 ### N7. One coherent planning story (naming + homepage IA) — Owner: PRODUCT / Planning & Generation, with EXPERIENCE
 - **User:** new rider deciding in 10 seconds whether LOOPS beats Komoot.
-- **Problem:** "Plan" button goes to /generate, "Draw a route" to /plan (`HomeClient.tsx:320-339`); "Share Loop" means upload; "loops" vs "routes" drift; `/login` duplicates the landing pitch (573 lines) while the homepage leads with a feed + filters rather than Komoot-style plan/search-first; both "Log in" and "Sign up" hit the same `/login`.
-- **Change:** Naming decision (suggest: "Describe a ride" = /generate, "Draw on map" = /plan, under one "Plan" hub); homepage hero leads with the two planning CTAs above the library feed; demote `/login` to a plain auth page, keep one marketing surface.
+- **Problem:** Four labels for one feature — "Plan a Ride" (`src/components/HeroSection.tsx:110`), "Plan" (`HomeClient.tsx:328`), "Find me a route" (`generate/page.tsx:384`), "Generate a route" (`cycling/[destination]/page.tsx:415`) — while "Draw a route" goes to /plan; "loops" vs "routes" drift; `/login` duplicates the landing pitch (573 lines) and **falsely claims "One tap export to Strava, Komoot, Wahoo, or Garmin"** (`login/page.tsx:85`) when only GPX download exists and Garmin is dormant — a direct honesty-principles violation.
+- **Change:** Naming decision (suggest: "Describe a ride" = /generate, "Draw on map" = /plan, under one "Plan" hub); homepage hero leads with both planning CTAs above the library feed; demote `/login` to a plain auth page; correct the export claim to "GPX export, Garmin push coming" today.
 - **Risk:** SEO copy on /login currently does landing duty — move it, don't delete it.
 - **Verification:** Click-count audit: new user to first planned route ≤ 2 clicks from `/`; terminology grep shows one term per concept.
 
 ### N8. Ship the library: import manifests, fill gaps — Owner: PRODUCT / Library & Destinations
 - **User:** rider browsing a destination expecting a credible, complete route set.
-- **Problem:** Manifests are dry-run validated but library depth is uneven: `scripts/hub-data/gran-canaria.json` has 8 now but `calpe.json` 6 + `calpe-rwgps.json` 3, `dublin.json` 4; cover photos/descriptions sparse vs Komoot collections.
+- **Problem:** Manifests are dry-run validated (108 routes across 13 files) but uneven: `calpe.json` 6 + `calpe-rwgps.json` 3 unreconciled, `dublin.json` 4; **zero cover photos or difficulty/tag metadata in any manifest** vs Komoot's 5-8 photos + ratings per route.
 - **Change:** Run `scripts/import-routes.mjs` for all 10 manifests against prod (post-N1 rotation), reconcile Calpe duplicates, fill `cover_photo`/`description` on the 8-route bar destinations.
 - **Risk:** Importing before credential rotation re-exposes the DB — hard dependency on N1.
 - **Verification:** `/cycling/<slug>` shows ≥8 verified routes with photos for all 10 launch slugs; importer logs clean.

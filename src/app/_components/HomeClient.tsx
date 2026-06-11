@@ -373,6 +373,15 @@ function HomeContent() {
           {loadingMore ? "Loading..." : "Load more loops"}
         </button>
       )}
+
+      {/* Discovery rail — trips, not today's answer. Near-you routes
+          always come first (north star: where should I ride TODAY). */}
+      <div className="pt-10">
+        <p className="text-sm font-bold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>
+          Planning a trip?
+        </p>
+        <FeaturedCollections />
+      </div>
     </>
   );
 
@@ -399,11 +408,6 @@ function HomeContent() {
 
       {/* Main Content */}
       <main className="max-w-3xl mx-auto w-full px-4 md:px-6 pb-20">
-        {/* Featured Collections */}
-        <div className="pt-6">
-          <FeaturedCollections />
-        </div>
-
         {/* Duration Strip */}
         <div className="py-6">
           <DurationStrip

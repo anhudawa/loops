@@ -364,6 +364,13 @@ export default function GeneratePage() {
             ))}
           </div>
 
+          <p className="text-xs mt-3" style={{ color: "var(--text-muted)" }}>
+            Prefer to draw it?{" "}
+            <Link href="/plan" className="font-bold hover:opacity-80" style={{ color: "var(--accent)" }}>
+              Open the map planner →
+            </Link>
+          </p>
+
           <button
             type="submit"
             disabled={loading || prompt.trim().length < 10}

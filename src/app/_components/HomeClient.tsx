@@ -327,6 +327,16 @@ function HomeContent() {
             >
               Plan
             </Link>
+            <Link
+              href="/plan"
+              className="text-xs font-bold uppercase tracking-wider px-2.5 py-1.5 rounded-lg hidden sm:inline-flex items-center gap-1 hover:opacity-80"
+              style={{
+                color: "var(--accent)",
+                border: "1px solid var(--accent)",
+              }}
+            >
+              Draw a route
+            </Link>
             {user && (
               <Link href="/upload" className="btn-accent px-3 py-1.5 rounded-lg text-sm font-bold flex items-center gap-1.5">
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>

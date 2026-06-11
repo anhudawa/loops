@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import dynamic from "next/dynamic";
+import AppHeader from "@/components/AppHeader";
 import RoutePreviewSvg from "@/components/RoutePreviewSvg";
 
 const RouteEditor = dynamic(() => import("@/components/RouteEditor"), { ssr: false });
@@ -146,8 +147,17 @@ async function saveGeneratedRoute(
 }
 
 export default function GeneratePage() {
+  return (
+    <Suspense>
+      <GenerateContent />
+    </Suspense>
+  );
+}
+
+function GenerateContent() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
@@ -157,12 +167,32 @@ export default function GeneratePage() {
   const [submittedPrompt, setSubmittedPrompt] = useState("");
   const [useMyLocation, setUseMyLocation] = useState(false);
 
+  // Run a homepage-handed-off ?q= prompt exactly once.
+  const autoRanRef = useRef(false);
+
   const voice = useVoiceInput();
   const geo = useGeolocation();
 
   useEffect(() => {
-    if (!authLoading && !user) router.push("/login?redirect=/generate");
-  }, [user, authLoading, router]);
+    if (!authLoading && !user) {
+      // Keep the rider's question through the login round-trip.
+      const q = searchParams.get("q");
+      const target = q ? `/generate?q=${encodeURIComponent(q)}` : "/generate";
+      router.push(`/login?redirect=${encodeURIComponent(target)}`);
+    }
+  }, [user, authLoading, router, searchParams]);
+
+  // Homepage answer machine hands off via /generate?q=… — prefill the
+  // prompt and, when it's substantial enough, run generation immediately.
+  useEffect(() => {
+    if (authLoading || !user || autoRanRef.current) return;
+    const q = searchParams.get("q")?.trim() ?? "";
+    if (!q) return;
+    autoRanRef.current = true;
+    setPrompt(q);
+    if (q.length >= 10) runGeneration(q);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, user, searchParams]);
 
   function toggleVoice() {
     if (voice.listening) {
@@ -234,14 +264,18 @@ export default function GeneratePage() {
 
   if (authLoading || !user) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--bg)" }}>
-        <p style={{ color: "var(--text-muted)" }}>Loading…</p>
+      <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)" }}>
+        <AppHeader />
+        <div className="flex-1 flex items-center justify-center">
+          <p style={{ color: "var(--text-muted)" }}>Loading…</p>
+        </div>
       </div>
     );
   }
 
   return (
     <main className="min-h-screen" style={{ background: "var(--bg)" }}>
+      <AppHeader />
       <div className="max-w-3xl mx-auto px-4 py-10">
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2" style={{ color: "var(--text)" }}>

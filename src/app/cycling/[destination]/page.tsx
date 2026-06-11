@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import AppHeader from "@/components/AppHeader";
 import JsonLd from "@/components/JsonLd";
 import { generateBreadcrumbJsonLd, generateFaqJsonLd, slugify } from "@/lib/seo";
 import { getDestinationBySlug, type Destination } from "@/content/destinations";
@@ -48,29 +49,7 @@ export default async function DestinationPage({ params }: Props) {
       <JsonLd data={breadcrumb} />
 
       {/* Header */}
-      <header
-        className="sticky top-0 z-40 border-b"
-        style={{ background: "var(--bg)", borderColor: "var(--border)" }}
-      >
-        <div className="max-w-3xl mx-auto px-4 h-14 flex items-center gap-3">
-          <Link
-            href="/"
-            className="font-black text-xl tracking-tight"
-            style={{ color: "var(--accent)" }}
-          >
-            LOOPS
-          </Link>
-          <span style={{ color: "var(--border-light)" }} aria-hidden="true">
-            /
-          </span>
-          <span
-            className="text-sm font-semibold truncate"
-            style={{ color: "var(--text)" }}
-          >
-            {dest.name}
-          </span>
-        </div>
-      </header>
+      <AppHeader />
 
       <main className="max-w-3xl mx-auto px-4 py-10">
         {/* Hero */}

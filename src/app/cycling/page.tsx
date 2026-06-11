@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import AppHeader from "@/components/AppHeader";
 import { destinations, LAUNCH_DESTINATION_SLUGS } from "@/content/destinations";
 
 export const metadata: Metadata = {
@@ -16,13 +17,7 @@ export default function CyclingIndexPage() {
 
   return (
     <main className="min-h-screen" style={{ background: "var(--bg)" }}>
-      <header className="px-4 md:px-6 py-3" style={{ background: "var(--bg-raised)", borderBottom: "1px solid var(--border)" }}>
-        <div className="max-w-5xl mx-auto">
-          <Link href="/">
-            <span className="logo-mark text-xl" style={{ color: "var(--text)" }}>LOOPS</span>
-          </Link>
-        </div>
-      </header>
+      <AppHeader />
 
       <div className="max-w-5xl mx-auto px-4 md:px-6 py-10">
         <h1 className="text-3xl md:text-4xl font-extrabold mb-3" style={{ color: "var(--text)" }}>

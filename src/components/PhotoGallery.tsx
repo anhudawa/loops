@@ -110,7 +110,7 @@ export default function PhotoGallery({ routeId }: { routeId: string }) {
 
       {!error && !user && photos.length === 0 && (
         <p className="text-sm text-center py-4" style={{ color: "var(--text-muted)" }}>
-          <Link href="/login" className="font-bold hover:opacity-80" style={{ color: "var(--accent)" }}>Sign in</Link> to add photos
+          <Link href={`/login?redirect=/routes/${routeId}`} className="font-bold hover:opacity-80" style={{ color: "var(--accent)" }}>Sign in</Link> to add photos
         </p>
       )}
 

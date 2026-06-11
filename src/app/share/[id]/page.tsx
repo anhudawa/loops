@@ -192,7 +192,7 @@ export default function SharePage() {
 
           {route.gpx_filename && (
             <a
-              href={`/api/routes/${route.id}/download`}
+              href={`/api/routes/${route.id}/gpx`}
               className="flex-1 flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-bold text-sm uppercase tracking-wider transition-all hover:brightness-110"
               style={{ background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
             >

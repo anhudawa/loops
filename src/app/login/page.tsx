@@ -97,7 +97,7 @@ function GoogleButton({
     <button
       onClick={onClick}
       className={`flex items-center justify-center gap-2.5 rounded-xl font-bold uppercase tracking-wider transition-all hover:opacity-90 hover:scale-[1.02] ${
-        size === "small" ? "px-5 py-2.5 text-xs" : "w-full py-3.5 text-sm"
+        size === "small" ? "px-5 py-3 text-xs" : "w-full py-3.5 text-sm"
       }`}
       style={{ background: "#fff", color: "#333" }}
     >

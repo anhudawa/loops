@@ -1583,3 +1583,18 @@ export async function getGarminTokens(userId: string): Promise<GarminTokens | nu
 export async function deleteGarminTokens(userId: string): Promise<void> {
   await sql`DELETE FROM garmin_tokens WHERE user_id = ${userId}`;
 }
+
+
+/** Persist repaired coordinates/elevation after an elevation backfill. */
+export async function updateRouteElevation(
+  id: string,
+  coordinates: string,
+  gainM: number,
+  lossM: number
+): Promise<void> {
+  await sql`
+    UPDATE routes
+    SET coordinates = ${coordinates}, elevation_gain_m = ${gainM}, elevation_loss_m = ${lossM}
+    WHERE id = ${id}
+  `;
+}

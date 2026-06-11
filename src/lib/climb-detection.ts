@@ -130,12 +130,16 @@ export interface Climb {
  * Score = length_km × avg_gradient_%
  */
 export function categoriseClimb(lengthKm: number, avgGradient: number): string | null {
-  const score = lengthKm * avgGradient;
-  if (score >= 80) return "HC";
-  if (score >= 40) return "Cat 1";
-  if (score >= 20) return "Cat 2";
-  if (score >= 8) return "Cat 3";
-  if (score >= 3) return "Cat 4";
+  // Standard (Strava-style) categorisation: length(m) × grade(%), with
+  // a 3% minimum average. Previous thresholds were ~half these values,
+  // so every roller earned a category and modest hills read Cat 1/2.
+  if (avgGradient < 3) return null;
+  const score = lengthKm * 1000 * avgGradient;
+  if (score >= 80000) return "HC";
+  if (score >= 64000) return "Cat 1";
+  if (score >= 32000) return "Cat 2";
+  if (score >= 16000) return "Cat 3";
+  if (score >= 8000) return "Cat 4";
   return null;
 }
 

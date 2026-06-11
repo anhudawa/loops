@@ -363,19 +363,19 @@ function HomeContent() {
               </Link>
             )}
             {user ? (
-              <button onClick={logout} className="text-xs font-medium hidden md:block hover:opacity-80" style={{ color: "var(--text-muted)" }}>Sign out</button>
+              <button onClick={logout} className="text-xs font-medium hover:opacity-80 px-2 py-2" style={{ color: "var(--text-muted)" }}>Sign out</button>
             ) : (
               <>
                 <Link
                   href="/login"
-                  className="text-sm font-semibold hover:opacity-80 px-2.5 py-2"
+                  className="text-sm font-semibold hover:opacity-80 px-2.5 py-2.5"
                   style={{ color: "var(--text)" }}
                 >
                   Log in
                 </Link>
                 <Link
                   href="/login"
-                  className="text-sm font-bold px-4 py-2 rounded-lg hover:opacity-90"
+                  className="text-sm font-bold px-4 py-2.5 rounded-lg hover:opacity-90"
                   style={{ background: "var(--accent)", color: "var(--bg)" }}
                 >
                   Sign up

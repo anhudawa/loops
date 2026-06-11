@@ -39,7 +39,7 @@ export default function MessagesPage() {
 
   useEffect(() => {
     if (!loading && !user) {
-      router.push("/login");
+      router.push("/login?redirect=/messages");
     }
   }, [user, loading, router]);
 

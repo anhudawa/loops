@@ -319,7 +319,7 @@ function HomeContent() {
           <div className="flex items-center gap-2 shrink-0">
             <Link
               href="/generate"
-              className="text-xs font-bold uppercase tracking-wider px-2.5 py-1.5 rounded-lg hidden sm:inline-flex items-center gap-1 hover:opacity-80"
+              className="text-xs font-bold uppercase tracking-wider px-2.5 py-2.5 rounded-lg inline-flex items-center gap-1 hover:opacity-80"
               style={{
                 color: "var(--accent)",
                 border: "1px solid var(--accent)",

@@ -79,19 +79,29 @@ export function middleware(request: NextRequest) {
     pathname.startsWith("/routes/") ||
     pathname.startsWith("/photos") ||
     pathname === "/collections" ||
-    pathname.startsWith("/collections/")
+    pathname.startsWith("/collections/") ||
+    // SEO pillars must be crawlable and browsable pre-signup
+    pathname === "/cycling" ||
+    pathname.startsWith("/cycling/") ||
+    pathname === "/blog" ||
+    pathname.startsWith("/blog/") ||
+    pathname === "/share" ||
+    pathname.startsWith("/share/")
   ) {
     return NextResponse.next();
   }
 
-  // Redirect /explore to homepage
+  // Redirect /explore to homepage (anchor id is scroll-anchor)
   if (pathname === "/explore") {
-    return NextResponse.redirect(new URL("/#explore", request.url));
+    return NextResponse.redirect(new URL("/#scroll-anchor", request.url));
   }
 
   const session = request.cookies.get("session")?.value;
   if (!session) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    // Preserve intent: come back to where the user was heading
+    const login = new URL("/login", request.url);
+    login.searchParams.set("redirect", pathname);
+    return NextResponse.redirect(login);
   }
 
   return NextResponse.next();

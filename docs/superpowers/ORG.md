@@ -9,16 +9,29 @@ hierarchy. No code ships without passing the review gates below.
 ```
 CEO (Anthony) — vision, priorities, go/no-go
  └─ COO (orchestrator agent, one per work session)
-     ├─ Branch Manager: PRODUCT  (value prop, features, roadmap)
-     │   ├─ Project Lead: Planning & Generation (draw-on-map, editor, NL gen)
-     │   └─ Project Lead: Library & Destinations (routes, guides, imports)
-     ├─ Branch Manager: QUALITY  (correctness, testing, performance)
-     │   ├─ Project Lead: Verification (Playwright sweeps, E2E, golden suites)
-     │   └─ Project Lead: Code Review (every diff reviewed before merge)
-     └─ Branch Manager: EXPERIENCE (design, UX, brand, copy)
-         ├─ Project Lead: Mobile-first UI (375px is the primary viewport)
-         └─ Project Lead: Journeys (every flow ends somewhere good)
+     ├─ PILLAR TEAM: PLAN     — natural-language + voice generation (/generate)
+     │     owns: generate page, route-intent, route-generator UX surface
+     ├─ PILLAR TEAM: DRAW     — map route planner (/plan)
+     │     owns: MapPlanner, plan-legs, /plan pages, /api/reroute UX
+     ├─ PILLAR TEAM: DISCOVERY — find a route (/ home, search, browse, routes/[id])
+     │     owns: HomeClient, RouteCard, search, route detail, collections
+     ├─ Branch Manager: QUALITY  — correctness, testing, performance, CI
+     │     reviews every pillar's PR (author ≠ reviewer); owns the engine libs
+     └─ Branch Manager: EXPERIENCE — shared design system, AppHeader, brand
+           owns: AppHeader, globals.css tokens, cross-page consistency
 ```
+
+### The three pillars (CEO, 2026-06-11)
+The product is THREE ways to answer "Where should I ride today?":
+**PLAN** (ask for it), **DRAW** (sketch it), **DISCOVERY** (find one near you).
+Each is a standing team with its own feature branch and PR. Shared
+surfaces (AppHeader, design tokens, the generation engine) are owned by
+Quality/Experience — pillar teams request changes, never fork them.
+
+### Branching (world-class flow)
+Each team works on `feat/<pillar>-<topic>` off the integration branch,
+opens a PR, passes CI (required check), gets an independent review, and
+merges. No team commits directly to another team's owned files.
 
 ## Non-negotiable gates (every change)
 1. **Spec gate** — Project Lead writes a 5-line spec (user, problem,

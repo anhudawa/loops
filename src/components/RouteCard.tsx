@@ -123,20 +123,46 @@ export default function RouteCard({ route, showDistance }: RouteCardProps) {
 
         {/* Content */}
         <div className="p-2.5 md:p-4">
-          {/* Mobile: name + distance + location + rating */}
+          {/* Mobile: name, the "should I ride this?" stats, then meta row.
+              Built to be scannable at a glance (discovery-v2, 2026-06-11). */}
           <div className="md:hidden">
-            <h3 className="text-sm font-bold truncate mb-0.5" style={{ color: "var(--text)" }}>
-              {route.name}
-            </h3>
-            <p className="text-[11px] mb-1" style={{ color: "var(--text-secondary)" }}>
-              {route.distance_km} km · {route.elevation_gain_m} m climbing
-            </p>
-            <div className="flex items-center justify-between">
-              <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+            <div className="flex items-center gap-1.5 mb-0.5 min-w-0">
+              <h3 className="text-sm font-bold truncate" style={{ color: "var(--text)" }}>
+                {route.name}
+              </h3>
+              {route.is_verified === 1 && (
+                <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="var(--success)" aria-label="Verified route">
+                  <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+              )}
+            </div>
+            {/* Primary stats: distance, climbing, surface, discipline */}
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] mb-1">
+              <span className="font-bold" style={{ color: "var(--accent)" }}>{route.distance_km} km</span>
+              <span aria-hidden="true" style={{ color: "var(--border-light)" }}>·</span>
+              <span style={{ color: "var(--text-secondary)" }}>{route.elevation_gain_m} m climb</span>
+              <span aria-hidden="true" style={{ color: "var(--border-light)" }}>·</span>
+              <span className="capitalize" style={{ color: "var(--text-secondary)" }}>{route.surface_type}</span>
+              {discipline && (
+                <>
+                  <span aria-hidden="true" style={{ color: "var(--border-light)" }}>·</span>
+                  <span style={{ color: "var(--text-secondary)" }}>{discipline.icon} {discipline.label}</span>
+                </>
+              )}
+            </div>
+            {/* Meta row: location + distance-away, rating */}
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs truncate" style={{ color: "var(--text-muted)" }}>
                 {locationText}{countryText}
+                {showDistance && route.distance_km_away !== undefined && (
+                  <span style={{ color: "var(--accent)" }}>
+                    {" · "}
+                    {route.distance_km_away < 1 ? "< 1 km away" : `${Math.round(route.distance_km_away)} km away`}
+                  </span>
+                )}
               </span>
               {hasRating && (
-                <span className="flex items-center gap-0.5 text-[11px]" style={{ color: "var(--text-muted)" }}>
+                <span className="flex items-center gap-0.5 text-[11px] shrink-0" style={{ color: "var(--text-muted)" }}>
                   <svg className="w-3 h-3" viewBox="0 0 24 24" fill="var(--warning)" aria-hidden="true">
                     <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                   </svg>
@@ -202,6 +228,14 @@ export default function RouteCard({ route, showDistance }: RouteCardProps) {
               <span className="capitalize">{route.surface_type}</span>
               <span style={{ color: "var(--border-light)" }} aria-hidden="true">·</span>
               <span>{locationText}{countryText}</span>
+              {showDistance && route.distance_km_away !== undefined && (
+                <>
+                  <span style={{ color: "var(--border-light)" }} aria-hidden="true">·</span>
+                  <span className="font-bold" style={{ color: "var(--accent)" }}>
+                    {route.distance_km_away < 1 ? "< 1 km away" : `${Math.round(route.distance_km_away)} km away`}
+                  </span>
+                </>
+              )}
             </div>
           </div>
         </div>

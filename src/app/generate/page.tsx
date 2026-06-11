@@ -4,7 +4,10 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
+import dynamic from "next/dynamic";
 import RoutePreviewSvg from "@/components/RoutePreviewSvg";
+
+const RouteEditor = dynamic(() => import("@/components/RouteEditor"), { ssr: false });
 import RideDisclaimer from "@/components/RideDisclaimer";
 import ShareButton from "@/components/ShareButton";
 import { useVoiceInput } from "@/lib/useVoiceInput";
@@ -66,6 +69,7 @@ interface GeneratedCandidate {
   workout_fit?: WorkoutFit;
   wind_note?: string;
   wind_forecast?: { direction_deg: number; speed_kmh: number };
+  waypoints_used?: [number, number][];
 }
 
 type Candidate = LibraryCandidate | GeneratedCandidate;
@@ -686,6 +690,7 @@ function CandidateCard({
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
 
   const workoutFit = candidate.workout_fit;
   const highlights = workoutFit?.fits
@@ -800,6 +805,27 @@ function CandidateCard({
           )}
 
           {workoutFit?.fits && <WorkoutAssignment fit={workoutFit} coordinates={candidate.coordinates} />}
+
+          {!isLibrary && candidate.waypoints_used && candidate.waypoints_used.length >= 3 && !workoutFit?.fits && (
+            <div className="mt-2">
+              {!editing ? (
+                <button
+                  onClick={() => setEditing(true)}
+                  className="text-xs font-bold px-3 py-1.5 rounded-lg"
+                  style={{ border: "1px solid var(--border)", color: "var(--text)" }}
+                >
+                  ✎ Edit route
+                </button>
+              ) : (
+                <RouteEditor
+                  initialCoordinates={candidate.coordinates}
+                  initialWaypoints={candidate.waypoints_used}
+                  discipline={interpreted?.discipline ?? "road"}
+                  onClose={() => setEditing(false)}
+                />
+              )}
+            </div>
+          )}
 
           <div className="flex flex-wrap gap-2 mt-3">
             {isLibrary ? (

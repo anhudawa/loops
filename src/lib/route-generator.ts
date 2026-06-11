@@ -407,6 +407,80 @@ function computeRoadTypeBreakdown(_coords: [number, number][]): Record<string, n
   return { estimated: 100 };
 }
 
+// ── Reroute (route editing) ──────────────────────────────────────────────────
+
+export interface RerouteResult {
+  coordinates: [number, number][];
+  elevations: number[];
+  distance_km: number;
+  elevation_gain_m: number;
+  elevation_loss_m: number;
+  gpx_data: string;
+  /** Geometric rule check — surfaced so the editor can warn honestly. */
+  warnings: string[];
+}
+
+/**
+ * Re-route a user-edited set of via points (drag-to-edit on the map).
+ * Same BRouter profiles and geometric guardrails as generation; quality
+ * re-scoring is skipped for speed — the editor shows a "re-checked
+ * surfaces on export" note instead.
+ */
+export async function rerouteWaypoints(
+  waypoints: [number, number][],
+  discipline: Discipline
+): Promise<RerouteResult | null> {
+  if (waypoints.length < 2 || waypoints.length > 10) return null;
+  const profile = DISCIPLINE_PROFILE[discipline];
+  const path = await routeViaBRouter(waypoints, profile);
+  if (!path || path.coords.length < 2) return null;
+
+  let elevations = path.elevations;
+  let elevGain = path.elevation_gain_m;
+  let elevLoss: number | null = null;
+  const hasElevation = elevations.some((e) => !Number.isNaN(e));
+  if (!hasElevation) {
+    const sampled = await sampleRouteElevation(path.coords, 200);
+    elevations = sampled.elevations;
+    elevGain = sampled.gain_m;
+    elevLoss = sampled.loss_m;
+  } else if (elevGain === null) {
+    elevGain = elevationGainFromSeries(elevations);
+  }
+  if (elevLoss === null) {
+    let loss = 0;
+    for (let i = 1; i < elevations.length; i++) {
+      const d = elevations[i] - elevations[i - 1];
+      if (d < 0 && !Number.isNaN(d)) loss += -d;
+    }
+    elevLoss = Math.round(loss);
+  }
+
+  const distKm = path.distance_km;
+  const rules = validateRouteRules(path.coords, discipline, null, {
+    elevationGain: elevGain ?? 0,
+    distanceKm: distKm,
+  });
+  const warnings = rules.passed
+    ? []
+    : rules.violations.map((v) => v.message);
+
+  return {
+    coordinates: path.coords,
+    elevations,
+    distance_km: Math.round(distKm * 10) / 10,
+    elevation_gain_m: Math.round(elevGain ?? 0),
+    elevation_loss_m: elevLoss,
+    gpx_data: buildGpx(
+      path.coords,
+      elevations,
+      `Edited ${discipline} route — ${Math.round(distKm)}km`,
+      discipline
+    ),
+    warnings,
+  };
+}
+
 // ── Main export ──────────────────────────────────────────────────────────────
 
 export interface GenerateRouteOptions {

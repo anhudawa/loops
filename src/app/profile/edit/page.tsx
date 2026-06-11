@@ -22,7 +22,7 @@ export default function EditProfilePage() {
 
   useEffect(() => {
     if (!loading && !user) {
-      router.push("/login");
+      router.push("/login?redirect=/profile/edit");
     }
   }, [user, loading, router]);
 

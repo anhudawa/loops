@@ -151,7 +151,7 @@ export default function HeroSection({ onExplore }: { onExplore: () => void }) {
       {/* Scroll indicator */}
       <button
         onClick={onExplore}
-        className="absolute bottom-8 left-1/2 -translate-x-1/2 hero-bounce"
+        className="absolute bottom-6 left-1/2 -translate-x-1/2 hero-bounce p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center"
         style={{ color: "var(--text-muted)" }}
         aria-label="Scroll to routes"
       >

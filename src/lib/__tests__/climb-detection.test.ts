@@ -93,29 +93,30 @@ describe("CATEGORY_COLORS", () => {
   });
 });
 
-describe("categoriseClimb", () => {
-  it("returns HC for score >= 80", () => {
-    expect(categoriseClimb(10, 8.5)).toBe("HC"); // 10 * 8.5 = 85
+describe("categoriseClimb (standard metres × grade thresholds)", () => {
+  it("returns HC for score >= 80,000", () => {
+    expect(categoriseClimb(10, 8.5)).toBe("HC"); // 85,000
   });
 
-  it("returns Cat 1 for score 40-79", () => {
-    expect(categoriseClimb(8, 6)).toBe("Cat 1"); // 48
+  it("returns Cat 1 for 64k-79k", () => {
+    expect(categoriseClimb(10, 7)).toBe("Cat 1"); // 70,000
   });
 
-  it("returns Cat 2 for score 20-39", () => {
-    expect(categoriseClimb(5, 5)).toBe("Cat 2"); // 25
+  it("returns Cat 2 for 32k-63k", () => {
+    expect(categoriseClimb(8, 5)).toBe("Cat 2"); // 40,000
   });
 
-  it("returns Cat 3 for score 8-19", () => {
-    expect(categoriseClimb(3, 4)).toBe("Cat 3"); // 12
+  it("returns Cat 3 for 16k-31k", () => {
+    expect(categoriseClimb(5, 4)).toBe("Cat 3"); // 20,000
   });
 
-  it("returns Cat 4 for score 3-7", () => {
-    expect(categoriseClimb(1, 4)).toBe("Cat 4"); // 4
+  it("returns Cat 4 for 8k-15k", () => {
+    expect(categoriseClimb(3, 4)).toBe("Cat 4"); // 12,000
   });
 
-  it("returns null for score < 3", () => {
-    expect(categoriseClimb(0.5, 3)).toBeNull(); // 1.5
+  it("returns null for rollers and sub-3% drags", () => {
+    expect(categoriseClimb(2, 3)).toBeNull();    // 6,000 — a bump, not a climb
+    expect(categoriseClimb(20, 2.5)).toBeNull(); // long false flat
   });
 });
 

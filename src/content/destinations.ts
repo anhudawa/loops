@@ -324,7 +324,7 @@ export const destinations: Destination[] = [
           "The classic loop runs from Enniskerry over the Sally Gap, down into Laragh, through Glendalough, over the Wicklow Gap to Hollywood, and back via Blessington. It covers approximately 110 km with 1500 m of climbing and takes in two mountain passes, a glacial valley, and quiet rolling farmland.",
       },
     ],
-    collectionSlug: "wicklow",
+    collectionSlug: null,
   },
 
   {

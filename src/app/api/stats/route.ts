@@ -57,7 +57,12 @@ export async function GET() {
         ratings: Number(community.ratings),
       },
     });
-  } catch (err) {
-    return handleApiError(err);
+  } catch {
+    // DB down: return nulls with 200 so consumer consoles stay clean —
+    // the UI guards against null stats already.
+    return NextResponse.json(
+      { routes: null, totalKm: null, countries: null, featuredRoutes: [], community: null },
+      { headers: { "Cache-Control": "public, max-age=60" } }
+    );
   }
 }

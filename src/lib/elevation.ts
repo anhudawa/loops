@@ -67,9 +67,12 @@ async function fetchElevationBatch(batch: [number, number][]): Promise<number[]>
   const lngs = batch.map(([, lng]) => lng.toFixed(5)).join(",");
   const url = `${OPEN_METEO_ELEVATION_URL}?latitude=${lats}&longitude=${lngs}`;
 
-  const res = await fetch(url, {
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-  });
+  let res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+  if (res.status === 429 || res.status >= 500) {
+    // Transient load — one retry after a short backoff.
+    await new Promise((r) => setTimeout(r, 1500 + Math.random() * 1500));
+    res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+  }
   if (!res.ok) {
     throw new Error(`Open-Meteo elevation API returned HTTP ${res.status}`);
   }
@@ -82,20 +85,19 @@ async function fetchElevationBatch(batch: [number, number][]): Promise<number[]>
 
 /**
  * Fetch elevation (metres) for each coordinate.
- * Requests are batched at BATCH_SIZE and run in parallel.
+ * Batches run SEQUENTIALLY — parallel batches trip the public API's
+ * rate limit (503s), which broke elevation backfill entirely.
  */
 export async function fetchElevations(
   coords: [number, number][]
 ): Promise<number[]> {
   if (coords.length === 0) return [];
 
-  const batches: [number, number][][] = [];
+  const out: number[] = [];
   for (let i = 0; i < coords.length; i += BATCH_SIZE) {
-    batches.push(coords.slice(i, i + BATCH_SIZE));
+    out.push(...(await fetchElevationBatch(coords.slice(i, i + BATCH_SIZE))));
   }
-
-  const results = await Promise.all(batches.map(fetchElevationBatch));
-  return results.flat();
+  return out;
 }
 
 /**

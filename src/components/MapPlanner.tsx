@@ -8,30 +8,43 @@
  * via POST /api/reroute with exactly those two waypoints and append its
  * geometry — one small fast call per click, the route grows under the
  * cursor. Dragging an anchor re-snaps only its two adjacent legs;
- * removing one merges by re-snapping a single leg; the loop toggle adds
- * or removes a closing leg. The whole set is never re-routed on add.
+ * dragging the MIDDLE of a leg inserts a via-point and re-snaps only the
+ * two halves; removing one merges by re-snapping a single leg; the loop
+ * toggle adds or removes a closing leg. The whole set is never re-routed.
  *
  * Totals (sum of legs) live in the toolbar and update the moment each
- * leg returns. While a leg snaps, just that leg is a thin dashed straight
- * line — the rest of the route stays solid and real. The displayed solid
- * polyline is ALWAYS genuine snapped geometry.
+ * leg returns, alongside a live elevation profile that redraws per leg.
+ * While a leg snaps, just that leg is a thin dashed straight line — the
+ * rest of the route stays solid and real. The displayed solid polyline is
+ * ALWAYS genuine snapped geometry.
  *
  * Honesty: anonymous users (401) draw dashed straight legs with running
  * straight-line distance and a persistent sign-in banner; a failed leg
  * keeps its dashed segment with a retry affordance; any unsnapped leg
- * marks the total "~" approximate. Leg math lives in src/lib/plan-legs.ts.
+ * marks the total "~" approximate; the elevation profile shows its empty
+ * state rather than a faked flat line. Leg math lives in plan-legs.ts.
+ *
+ * Surface/way-type: deliberately NOT shown here. The per-leg /api/reroute
+ * response carries no surface tags (surface_breakdown only comes from the
+ * rate-limited whole-route Overpass scan), so per our honesty principle we
+ * skip it rather than guess a paved/unpaved hint we can't stand behind.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { MapContainer, TileLayer, Polyline, Marker, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import ElevationProfile from "@/components/ElevationProfile";
 import {
   haversineKm,
   legTotals,
   formatTotals,
   concatLegGeometry,
+  legGeometryForChart,
+  legHandlePoint,
+  insertAnchorAtLeg,
   buildPlanGpx,
   type LatLng,
   type PlanLeg,
@@ -42,6 +55,7 @@ interface RerouteResult {
   elevations: number[];
   distance_km: number;
   elevation_gain_m: number;
+  elevation_loss_m?: number | null;
 }
 
 type Discipline = "road" | "gravel" | "mtb";
@@ -64,6 +78,15 @@ const startIcon = L.divIcon({
   html: `<div style="width:16px;height:16px;border-radius:50%;background:#0a0a0c;border:3px solid #c8ff00;box-shadow:0 0 0 2px #0a0a0c;cursor:grab"></div>`,
   iconSize: [16, 16],
   iconAnchor: [8, 8],
+});
+
+/** Small hollow handle on the middle of a snapped leg — grab and drag it to
+ * insert a via-point there (Strava's signature mid-leg reshape). */
+const handleIcon = L.divIcon({
+  className: "",
+  html: `<div style="width:11px;height:11px;border-radius:50%;background:#0a0a0c;border:2px solid #c8ff00;opacity:0.85;cursor:grab"></div>`,
+  iconSize: [11, 11],
+  iconAnchor: [5.5, 5.5],
 });
 
 function ClickToAdd({ onAdd }: { onAdd: (latlng: LatLng) => void }) {
@@ -100,6 +123,11 @@ export default function MapPlanner() {
   const [needsAuth, setNeedsAuth] = useState(false);
   const [resnapNote, setResnapNote] = useState<string | null>(null);
   const [geoCenter, setGeoCenter] = useState<LatLng | null>(null);
+  const [showProfile, setShowProfile] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const router = useRouter();
 
   const legIdRef = useRef(0);
   const seqRef = useRef(0);
@@ -144,6 +172,7 @@ export default function MapPlanner() {
       elevations: [],
       distance_km: Math.round(haversineKm(from, to) * 10) / 10,
       gain_m: 0,
+      loss_m: 0,
     };
   }
 
@@ -183,6 +212,7 @@ export default function MapPlanner() {
         elevations: data.elevations,
         distance_km: data.distance_km,
         gain_m: data.elevation_gain_m,
+        loss_m: typeof data.elevation_loss_m === "number" ? data.elevation_loss_m : 0,
         status: "snapped",
         error: undefined,
       });
@@ -277,6 +307,52 @@ export default function MapPlanner() {
     }
   }
 
+  /**
+   * Mid-leg reshape (Strava's signature edit): a via-point dropped on the
+   * line splits exactly that leg into two and re-snaps ONLY those two. Every
+   * other leg is untouched — our per-leg model makes the non-destructive
+   * behaviour Strava had to rebuild structurally free.
+   *
+   * `legIndex` in [0, legs.length-1] is a normal leg; `legIndex === legs.length`
+   * is the closing loop leg (last anchor → first anchor), which becomes a new
+   * trailing leg plus a re-snapped loop back to the start.
+   */
+  function insertViaInLeg(legIndex: number, via: LatLng) {
+    const current = anchorsRef.current;
+    const currentLegs = legsRef.current;
+    if (current.length >= MAX_POINTS) {
+      setError(`Maximum of ${MAX_POINTS} points — drag a pin to fine-tune instead.`);
+      return;
+    }
+    setError(null);
+
+    const loop = loopLegRef.current;
+    // Closing-leg handle: append the via as a new last anchor.
+    if (loop && legIndex === currentLegs.length) {
+      const last = current[current.length - 1];
+      const first = current[0];
+      setAnchors([...current, via]);
+      const newLeg = makeLeg(last, via, discipline); // last → via (real leg)
+      setLegs((ls) => [...ls, newLeg]);
+      void resnapLeg(loop, via, first, discipline); // via → first (loop)
+      return;
+    }
+
+    if (legIndex < 0 || legIndex >= currentLegs.length) return;
+    const a = current[legIndex];
+    const b = current[legIndex + 1];
+    setAnchors(insertAnchorAtLeg(current, legIndex, via));
+    // Replace the single leg with two fresh, independently-snapped legs.
+    const first = makeLeg(a, via, discipline);
+    const second = makeLeg(via, b, discipline);
+    setLegs((ls) => [
+      ...ls.slice(0, legIndex),
+      first,
+      second,
+      ...ls.slice(legIndex + 1),
+    ]);
+  }
+
   function removeAnchor(idx: number) {
     const current = anchorsRef.current;
     const next = current.filter((_, i) => i !== idx);
@@ -358,6 +434,7 @@ export default function MapPlanner() {
     setLoopLeg(null);
     setError(null);
     setResnapNote(null);
+    setSaveError(null);
   }
 
   // ── Derived state ──────────────────────────────────────────────────────────
@@ -367,6 +444,16 @@ export default function MapPlanner() {
   const snapping = allLegs.some((l) => l.status === "pending");
   const failedCount = allLegs.filter((l) => l.status === "failed").length;
   const allSnapped = allLegs.length > 0 && allLegs.every((l) => l.status === "snapped");
+
+  // Live elevation profile: rebuild the [lat,lng,ele] track whenever a leg's
+  // geometry changes. ElevationProfile renders its own empty state when the
+  // route carries no real elevation (anonymous / unsnapped), so we never fake
+  // a flat line.
+  const profileCoords = useMemo(() => legGeometryForChart(allLegs), [allLegs]);
+  const hasElevation = useMemo(
+    () => profileCoords.length >= 2 && profileCoords.some((c) => c[2] !== 0),
+    [profileCoords]
+  );
 
   function downloadGpx() {
     if (!allSnapped) return;
@@ -384,6 +471,53 @@ export default function MapPlanner() {
     a.download = `loops-planned-${totals.distance_km}km.gpx`;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  /** Save the drawn route to the rider's library, then open its detail page.
+   * Same payload shape /generate posts; sign-in is gated by the 401 the
+   * endpoint returns (we surface the existing sign-in banner, never lie). */
+  async function saveRoute() {
+    if (!allSnapped || saving) return;
+    setSaving(true);
+    setSaveError(null);
+    const { coords, elevations } = concatLegGeometry(allLegs);
+    const cleanElevations = elevations.map((e) => (Number.isNaN(e) ? 0 : e));
+    const name = `Planned ${discipline} route — ${totals.distance_km} km`;
+    try {
+      const res = await fetch("/api/routes/from-generated", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          description: "Drawn on the LOOPS map planner",
+          coordinates: coords,
+          elevations: cleanElevations,
+          distance_km: totals.distance_km,
+          elevation_gain_m: totals.gain_m,
+          elevation_loss_m: totals.loss_m,
+          discipline,
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (res.status === 401) {
+        // Anonymous — reuse the persistent sign-in banner, don't pretend to save.
+        needsAuthRef.current = true;
+        setNeedsAuth(true);
+        setSaveError("Sign in to save this route to your library.");
+        return;
+      }
+      if (!res.ok) {
+        setSaveError(body?.error ?? "Couldn't save that route — try again.");
+        return;
+      }
+      const id = body?.data?.id;
+      if (id) router.push(`/routes/${id}`);
+      else setSaveError("Saved, but couldn't open the route page.");
+    } catch {
+      setSaveError("Network hiccup while saving — try again.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -444,6 +578,11 @@ export default function MapPlanner() {
           </button>
         </p>
       )}
+      {saveError && (
+        <p className="px-4 py-2 text-xs z-20" style={{ background: "rgba(255,80,80,0.1)", color: "#ff6b6b" }}>
+          {saveError}
+        </p>
+      )}
       {error && (
         <p className="px-4 py-2 text-xs z-20" style={{ background: "rgba(255,80,80,0.1)", color: "#ff6b6b" }}>
           {error}
@@ -486,6 +625,25 @@ export default function MapPlanner() {
                 eventHandlers={l.status === "failed" ? { click: () => retryLeg(l.id) } : undefined}
               />
             )
+          )}
+          {/* Mid-leg drag handles — grab the middle of a snapped leg and drag
+              to insert a via-point, splitting only that leg. Snapped legs with
+              real interior geometry only; an unsnapped leg has no line to grab. */}
+          {allLegs.map((l, i) =>
+            l.status === "snapped" && l.coords.length >= 3 ? (
+              <Marker
+                key={`h-${l.id}`}
+                position={legHandlePoint(l)}
+                draggable
+                icon={handleIcon}
+                eventHandlers={{
+                  dragend: (e) => {
+                    const ll = (e.target as L.Marker).getLatLng();
+                    insertViaInLeg(i, [ll.lat, ll.lng]);
+                  },
+                }}
+              />
+            ) : null
           )}
           {anchors.map((p, i) => (
             <Marker
@@ -530,13 +688,42 @@ export default function MapPlanner() {
         )}
       </div>
 
+      {/* Live elevation profile — redraws per leg as the route grows. Shown
+          only once there's real snapped elevation; collapsible to keep the
+          map dominant on small screens. */}
+      {hasElevation && (
+        <div
+          className="border-t z-20"
+          style={{ background: "var(--bg-raised)", borderColor: "var(--border)" }}
+        >
+          <button
+            type="button"
+            onClick={() => setShowProfile((v) => !v)}
+            className="w-full flex items-center justify-between px-3 py-1.5"
+            aria-expanded={showProfile}
+          >
+            <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+              Elevation · +{totals.gain_m} m / -{totals.loss_m} m
+            </span>
+            <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+              {showProfile ? "Hide ▾" : "Show ▸"}
+            </span>
+          </button>
+          {showProfile && (
+            <div className="px-3 pb-2">
+              <ElevationProfile coordinates={profileCoords} distanceKm={totals.distance_km} />
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Bottom control bar — mobile-first, ≥44px targets */}
       <div
         className="px-3 pt-2 pb-3 border-t z-20"
         style={{ background: "var(--bg-raised)", borderColor: "var(--border)" }}
       >
         <p className="text-[11px] pb-2" style={{ color: "var(--text-muted)" }}>
-          tap the map to add · drag a pin to move · tap a pin to remove
+          tap the map to add · drag a pin to move · drag the middle of a leg to reshape · tap a pin to remove
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <div
@@ -589,6 +776,17 @@ export default function MapPlanner() {
             style={{ minHeight: 44, border: "1px solid var(--border)", color: "var(--text)" }}
           >
             Clear all
+          </button>
+
+          <button
+            type="button"
+            onClick={saveRoute}
+            disabled={!allSnapped || saving}
+            title={allSnapped ? undefined : "Every leg must be snapped to a road before saving"}
+            className="px-4 rounded-xl text-xs font-bold uppercase tracking-wider disabled:opacity-40"
+            style={{ minHeight: 44, border: "1px solid var(--accent)", background: "var(--bg-card)", color: "var(--accent)" }}
+          >
+            {saving ? "Saving…" : "Save route"}
           </button>
 
           <button

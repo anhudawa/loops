@@ -170,6 +170,9 @@ function GenerateContent() {
 
   // Run a homepage-handed-off ?q= prompt exactly once.
   const autoRanRef = useRef(false);
+  // First result card — scrolled into view when candidates land so the rider
+  // sees the answer without hunting (mobile especially).
+  const resultsRef = useRef<HTMLDivElement>(null);
 
   const voice = useVoiceInput();
   const geo = useGeolocation();
@@ -195,6 +198,15 @@ function GenerateContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, user, searchParams]);
 
+  // When results land, bring the first one into view. The submit lives in a
+  // sticky bar inside the input card, so on mobile the rider would otherwise
+  // stay parked on the input with the answer rendered off-screen below.
+  useEffect(() => {
+    if (!loading && candidates.length > 0 && resultsRef.current) {
+      resultsRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [loading, candidates]);
+
   function toggleVoice() {
     if (voice.listening) {
       voice.stop();
@@ -212,8 +224,8 @@ function GenerateContent() {
     if (coords) setUseMyLocation(true);
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleSubmit(e?: { preventDefault: () => void }) {
+    e?.preventDefault();
     if (voice.listening) voice.stop();
     const trimmed = prompt.trim();
     if (trimmed.length < 10) {
@@ -221,6 +233,12 @@ function GenerateContent() {
       return;
     }
     await runGeneration(trimmed);
+  }
+
+  // Retry the last submitted prompt — wired to the Retry button on errors so a
+  // timeout or network blip is never a dead end.
+  function retryLast() {
+    if (submittedPrompt) runGeneration(submittedPrompt);
   }
 
   async function runGeneration(trimmed: string) {
@@ -234,11 +252,17 @@ function GenerateContent() {
     // point if their prompt doesn't name a place.
     const origin = useMyLocation ? geo.coords : null;
 
+    // Public routing can stall on busy roads. Cap the wait at 55s and turn a
+    // hang into an actionable, retryable error instead of an endless spinner.
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 55_000);
+
     try {
       const res = await fetch("/api/generate-route", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: trimmed, ...(origin ? { origin } : {}) }),
+        signal: controller.signal,
       });
       const body = await res.json();
       if (!res.ok) {
@@ -255,10 +279,19 @@ function GenerateContent() {
         }
       }
     } catch (err) {
-      setError({
-        message: err instanceof Error ? err.message : "Network error. Please try again.",
-      });
+      if (controller.signal.aborted) {
+        setError({
+          message: "This one took longer than a minute — busy roads can do that.",
+          code: "TIMEOUT",
+        });
+      } else {
+        setError({
+          message: err instanceof Error ? err.message : "Network error. Please try again.",
+          code: "NETWORK",
+        });
+      }
     } finally {
+      clearTimeout(timeout);
       setLoading(false);
     }
   }
@@ -298,6 +331,15 @@ function GenerateContent() {
               id="plan-prompt"
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
+              onKeyDown={(e) => {
+                // Enter submits (Shift+Enter keeps the newline) — matches the
+                // mobile keyboard's Go/Search affordance so a tap actually does
+                // something instead of inserting a blank line.
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  if (!loading) handleSubmit();
+                }
+              }}
               placeholder="e.g. 2 hour loop on country lanes with a few rolling hills"
               rows={3}
               maxLength={1000}
@@ -345,7 +387,7 @@ function GenerateContent() {
             )}
           </div>
           <p id="plan-prompt-hint" className="sr-only">
-            Describe distance or duration, terrain, starting point, and optionally a structured interval workout. You can also dictate with the microphone.
+            Describe distance or duration, terrain, starting point, and optionally a structured interval workout. You can also dictate with the microphone. Press Enter to search.
           </p>
 
           {voice.listening && (
@@ -357,13 +399,40 @@ function GenerateContent() {
             <p className="text-xs mt-2" style={{ color: "#ff6b6b" }}>{voice.error}</p>
           )}
 
+          {/* Primary submit — placed directly under the textarea so it's the
+              first thing below the input on a 375px screen, and made sticky so
+              it stays reachable above the on-screen keyboard while scrolling.
+              This is the fix for "typed a prompt and nothing happened": the old
+              layout buried this CTA below the examples and the location toggle,
+              off-screen on mobile. */}
+          <div className="sticky bottom-3 z-10 mt-3">
+            <button
+              type="submit"
+              disabled={loading || prompt.trim().length < 10}
+              aria-busy={loading}
+              className="w-full min-h-[52px] py-3.5 rounded-xl text-sm font-bold uppercase tracking-wider transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg"
+              style={{
+                background: "var(--accent)",
+                color: "var(--bg)",
+              }}
+            >
+              {loading && (
+                <span
+                  className="inline-block w-4 h-4 rounded-full border-2 border-current border-t-transparent animate-spin shrink-0"
+                  aria-hidden="true"
+                />
+              )}
+              {loading ? "Finding your route…" : "Find my route"}
+            </button>
+          </div>
+
           {/* Use my location toggle — the "I'm here now, give me a ride" path */}
           <button
             type="button"
             onClick={toggleLocation}
             disabled={loading || geo.loading}
             aria-pressed={useMyLocation}
-            className="mt-3 inline-flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-full transition-all"
+            className="mt-3 inline-flex items-center gap-2 text-xs font-bold px-3 py-2 rounded-full transition-all min-h-[44px]"
             style={{
               background: useMyLocation ? "var(--accent-glow)" : "var(--bg-card)",
               border: `1px solid ${useMyLocation ? "var(--accent)" : "var(--border)"}`,
@@ -405,22 +474,14 @@ function GenerateContent() {
               Open the map planner →
             </Link>
           </p>
-
-          <button
-            type="submit"
-            disabled={loading || prompt.trim().length < 10}
-            aria-busy={loading}
-            className="mt-4 w-full py-3 rounded-xl text-sm font-bold uppercase tracking-wider transition-all disabled:opacity-50"
-            style={{
-              background: "var(--accent)",
-              color: "var(--bg)",
-            }}
-          >
-            {loading ? "Finding a route…" : "Find me a route"}
-          </button>
         </form>
 
-        {error && <ErrorPanel error={error} />}
+        {error && (
+          <ErrorPanel
+            error={error}
+            onRetry={submittedPrompt && error.code !== "TOO_SHORT" ? retryLast : undefined}
+          />
+        )}
         {error?.code === "PARSE_FAILED" && (
           <FallbackForm
             onSubmit={(text) => {
@@ -448,7 +509,7 @@ function GenerateContent() {
         )}
 
         {!loading && candidates.length > 0 && (
-          <div>
+          <div ref={resultsRef} style={{ scrollMarginTop: 16 }}>
             <h2 className="text-sm font-bold uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>
               {candidates.some((c) => c.source === "library")
                 ? "Matched from our verified library"
@@ -517,25 +578,30 @@ function InterpretedPanel({ interpreted }: { interpreted: Interpreted }) {
     interpreted.cafe_stop && "café stop",
   ].filter(Boolean);
 
+  // Prominent intent confirmation (deconstruction A1 / our NL wedge): show the
+  // rider we understood their request before they commit to reading results.
   return (
     <div
       className="mb-5 rounded-2xl p-4"
       style={{
-        background: "var(--bg-card)",
-        border: "1px solid var(--border)",
+        background: "var(--accent-glow)",
+        border: "1px solid var(--accent)",
       }}
     >
-      <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>
-        Interpreted as
+      <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: "var(--accent)" }}>
+        Here&apos;s what we understood
       </p>
-      <p className="text-sm" style={{ color: "var(--text)" }}>
+      <p className="text-base font-bold" style={{ color: "var(--text)" }}>
         {bits.join(" · ")}
       </p>
       {interpreted.is_workout && interpreted.workout_summary && (
-        <p className="text-xs mt-1" style={{ color: "var(--accent)" }}>
+        <p className="text-sm mt-1 font-bold" style={{ color: "var(--accent)" }}>
           Workout: {interpreted.workout_summary}
         </p>
       )}
+      <p className="text-xs mt-1.5" style={{ color: "var(--text-muted)" }}>
+        Not quite right? Edit your request above and search again.
+      </p>
     </div>
   );
 }
@@ -550,7 +616,13 @@ function formatDuration(minutes: number): string {
 
 // ── Error panel ───────────────────────────────────────────────────────────────
 
-function ErrorPanel({ error }: { error: { message: string; code?: string } }) {
+function ErrorPanel({
+  error,
+  onRetry,
+}: {
+  error: { message: string; code?: string };
+  onRetry?: () => void;
+}) {
   const hint = (() => {
     switch (error.code) {
       case "FEATURE_DISABLED":
@@ -562,7 +634,9 @@ function ErrorPanel({ error }: { error: { message: string; code?: string } }) {
       case "GEOCODE_FAILED":
         return "Name a town or landmark — e.g. 'from Blessington' or 'near Dalkey'.";
       case "TIMEOUT":
-        return "Try a shorter distance or a more specific location.";
+        return "Busy roads can take a while to plot. Give it another go, or try a shorter distance or a more specific location.";
+      case "NETWORK":
+        return "Check your connection and try again — your request is still here.";
       case "RATE_LIMITED":
         return "You've asked a few times in a row — give it a minute and try again.";
       default:
@@ -586,6 +660,16 @@ function ErrorPanel({ error }: { error: { message: string; code?: string } }) {
         <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
           {hint}
         </p>
+      )}
+      {onRetry && (
+        <button
+          type="button"
+          onClick={onRetry}
+          className="mt-3 inline-flex items-center justify-center gap-2 min-h-[44px] px-5 rounded-xl text-sm font-bold uppercase tracking-wider"
+          style={{ background: "var(--accent)", color: "var(--bg)" }}
+        >
+          Try again
+        </button>
       )}
     </div>
   );
@@ -739,20 +823,29 @@ function LoadingStages() {
     return () => timers.forEach(clearTimeout);
   }, []);
 
+  // Big, unmissable progress card. Slow-path honesty (spec): public routing can
+  // take up to a minute, so we say so plainly instead of leaving the rider
+  // wondering whether anything is happening.
   return (
     <div
-      className="rounded-2xl p-4 flex items-center gap-3"
-      style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+      className="rounded-2xl p-5"
+      style={{ background: "var(--bg-card)", border: "1px solid var(--accent)" }}
       role="status"
       aria-live="polite"
     >
-      <span
-        className="inline-block w-4 h-4 rounded-full border-2 border-t-transparent animate-spin shrink-0"
-        style={{ borderColor: "var(--accent)", borderTopColor: "transparent" }}
-        aria-hidden="true"
-      />
-      <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-        {LOADING_STAGES[stage].label}
+      <div className="flex items-center gap-3">
+        <span
+          className="inline-block w-6 h-6 rounded-full border-[3px] border-t-transparent animate-spin shrink-0"
+          style={{ borderColor: "var(--accent)", borderTopColor: "transparent" }}
+          aria-hidden="true"
+        />
+        <p className="text-base font-bold" style={{ color: "var(--text)" }}>
+          {LOADING_STAGES[stage].label}
+        </p>
+      </div>
+      <p className="text-sm mt-3" style={{ color: "var(--text-muted)" }}>
+        This can take up to a minute on busy roads — we&apos;re checking real
+        road quality, not just drawing a line. Hang tight.
       </p>
     </div>
   );

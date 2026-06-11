@@ -628,6 +628,50 @@ function FallbackForm({ onSubmit }: { onSubmit: (text: string) => void }) {
   );
 }
 
+// ── Full-screen route viewer ──────────────────────────────────────────────────
+
+const RouteViewerMap = dynamic(() => import("@/components/RouteViewerMap"), { ssr: false });
+
+function RouteViewerModal({
+  coordinates,
+  title,
+  stats,
+  onClose,
+}: {
+  coordinates: [number, number][];
+  title: string;
+  stats: string;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-[1000] flex flex-col"
+      style={{ background: "var(--bg)" }}
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+    >
+      <div className="flex items-center gap-3 px-4 py-3" style={{ background: "var(--bg-raised)", borderBottom: "1px solid var(--border)" }}>
+        <button
+          onClick={onClose}
+          className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg font-bold"
+          style={{ color: "var(--text)" }}
+          aria-label="Close map"
+        >
+          ✕
+        </button>
+        <div className="min-w-0">
+          <p className="text-sm font-bold truncate" style={{ color: "var(--text)" }}>{title}</p>
+          <p className="text-xs" style={{ color: "var(--text-muted)" }}>{stats}</p>
+        </div>
+      </div>
+      <div className="flex-1">
+        <RouteViewerMap coordinates={coordinates} />
+      </div>
+    </div>
+  );
+}
+
 // ── Loading stages ────────────────────────────────────────────────────────────
 
 /**
@@ -692,6 +736,7 @@ function CandidateCard({
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
+  const [viewing, setViewing] = useState(false);
 
   const workoutFit = candidate.workout_fit;
   const highlights = workoutFit?.fits
@@ -720,14 +765,36 @@ function CandidateCard({
       className="rounded-2xl overflow-hidden"
       style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
     >
-      <div className="grid grid-cols-[auto_1fr] gap-4 p-4">
-        <RoutePreviewSvg
-          coordinates={candidate.coordinates}
-          highlights={highlights}
-          wind={!isLibrary ? candidate.wind_forecast : undefined}
-          width={180}
-          height={140}
-        />
+      <div className="grid grid-cols-1 sm:grid-cols-[auto_1fr] gap-4 p-4">
+        <button
+          type="button"
+          onClick={() => setViewing(true)}
+          className="block w-full sm:w-auto text-left cursor-pointer hover:opacity-90"
+          aria-label="View this route on the map"
+        >
+          <span className="block sm:hidden">
+            <RoutePreviewSvg
+              coordinates={candidate.coordinates}
+              highlights={highlights}
+              wind={!isLibrary ? candidate.wind_forecast : undefined}
+              width={640}
+              height={300}
+              className="w-full"
+            />
+          </span>
+          <span className="hidden sm:block">
+            <RoutePreviewSvg
+              coordinates={candidate.coordinates}
+              highlights={highlights}
+              wind={!isLibrary ? candidate.wind_forecast : undefined}
+              width={180}
+              height={140}
+            />
+          </span>
+          <span className="block text-[10px] mt-1 text-center" style={{ color: "var(--text-muted)" }}>
+            Tap to view full map
+          </span>
+        </button>
 
         <div className="flex flex-col">
           <div className="flex items-start justify-between gap-3 mb-2">
@@ -797,6 +864,15 @@ function CandidateCard({
 
           {!isLibrary && candidate.quality_breakdown && (
             <QualityFactors breakdown={candidate.quality_breakdown} />
+          )}
+
+          {viewing && (
+            <RouteViewerModal
+              coordinates={candidate.coordinates}
+              title={isLibrary ? candidate.name : `${candidate.distance_km} km ${interpreted?.discipline ?? ""} route`}
+              stats={`${candidate.distance_km} km · +${candidate.elevation_gain_m} m`}
+              onClose={() => setViewing(false)}
+            />
           )}
 
           {candidate.wind_note && (

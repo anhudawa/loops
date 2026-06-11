@@ -12,6 +12,7 @@ import { useAuth } from "@/components/AuthProvider";
 import Link from "next/link";
 import { DEFAULT_SPEED_KMH } from "@/config/constants";
 import FeaturedCollections from "./FeaturedCollections";
+import RouteSearchBox from "@/components/RouteSearchBox";
 
 interface Route {
   id: string;
@@ -36,6 +37,26 @@ interface Route {
   rating_count?: number;
 }
 
+/**
+ * The routes API (getRoutes) returns `avg_rating` and `haversine_distance`,
+ * but RouteCard reads `avg_score` and `distance_km_away`. Normalise here so
+ * ratings and "X km away" actually render on the feed — they were silently
+ * dropped before this mapping existed. 2026-06-11 discovery-v2.
+ */
+function normalizeRoute(raw: Record<string, unknown>): Route {
+  const avgScore = raw.avg_score !== undefined ? raw.avg_score : raw.avg_rating;
+  const distanceAway =
+    raw.distance_km_away !== undefined ? raw.distance_km_away : raw.haversine_distance;
+  return {
+    ...(raw as unknown as Route),
+    avg_score: avgScore != null ? Number(avgScore) : undefined,
+    distance_km_away: distanceAway != null ? Number(distanceAway) : undefined,
+    rating_count: raw.rating_count != null ? Number(raw.rating_count) : undefined,
+    estimated_minutes:
+      raw.estimated_minutes != null ? Number(raw.estimated_minutes) : undefined,
+  };
+}
+
 const STORAGE_KEY = "loops-filters";
 
 interface FilterState {
@@ -44,6 +65,7 @@ interface FilterState {
   country: string;
   city: string;
   sort: string;
+  search: string;
 }
 
 const DEFAULT_FILTERS: FilterState = {
@@ -52,10 +74,11 @@ const DEFAULT_FILTERS: FilterState = {
   country: "",
   city: "",
   sort: "",
+  search: "",
 };
 
 function filtersFromParams(params: URLSearchParams): FilterState | null {
-  const keys = ["duration", "discipline", "country", "city", "sort"];
+  const keys = ["duration", "discipline", "country", "city", "sort", "search"];
   const hasAny = keys.some((k) => params.has(k));
   if (!hasAny) return null;
 
@@ -65,6 +88,7 @@ function filtersFromParams(params: URLSearchParams): FilterState | null {
     country: params.get("country") || "",
     city: params.get("city") || "",
     sort: params.get("sort") || "",
+    search: params.get("search") || "",
   };
 }
 
@@ -72,7 +96,9 @@ function filtersFromStorage(): FilterState | null {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (!stored) return null;
-    return JSON.parse(stored) as FilterState;
+    const parsed = JSON.parse(stored) as Partial<FilterState>;
+    // Merge over defaults so older stored shapes (pre-search) stay valid.
+    return { ...DEFAULT_FILTERS, ...parsed };
   } catch {
     return null;
   }
@@ -85,6 +111,7 @@ function filtersToParams(f: FilterState): URLSearchParams {
   if (f.country) p.set("country", f.country);
   if (f.city) p.set("city", f.city);
   if (f.sort) p.set("sort", f.sort);
+  if (f.search) p.set("search", f.search);
   return p;
 }
 
@@ -189,13 +216,17 @@ function HomeContent() {
   const [hasMore, setHasMore] = useState(false);
   const [page, setPage] = useState(1);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [locationDenied, setLocationDenied] = useState(false);
   const [avgSpeedKmh, setAvgSpeedKmh] = useState(DEFAULT_SPEED_KMH);
 
   useEffect(() => {
-    if (!navigator.geolocation) return;
+    if (!navigator.geolocation) {
+      setLocationDenied(true);
+      return;
+    }
     navigator.geolocation.getCurrentPosition(
       (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => {}
+      () => setLocationDenied(true)
     );
   }, []);
 
@@ -210,7 +241,14 @@ function HomeContent() {
     }
   }, [filters, router]);
 
-  const hasActiveFilters = filters.duration !== null || filters.discipline !== "" || filters.country !== "" || filters.city !== "";
+  const hasActiveFilters =
+    filters.duration !== null ||
+    filters.discipline !== "" ||
+    filters.country !== "" ||
+    filters.city !== "" ||
+    filters.search !== "";
+
+  const isSearching = filters.search !== "";
 
   // Fetch countries on mount
   useEffect(() => {
@@ -238,6 +276,7 @@ function HomeContent() {
     if (filters.country) params.set("country", filters.country);
     if (filters.city) params.set("county", filters.city);
     if (filters.duration) params.set("duration", filters.duration);
+    if (filters.search) params.set("search", filters.search);
 
     // Use fallback sort if provided, otherwise use filter sort
     const effectiveSort = fallbackSort || filters.sort;
@@ -254,7 +293,8 @@ function HomeContent() {
       const res = await fetch(`/api/routes?${params}`);
       if (!res.ok) throw new Error(`routes API ${res.status}`);
       const json = await res.json();
-      const newRoutes = Array.isArray(json.data) ? json.data : Array.isArray(json) ? json : [];
+      const rawRoutes = Array.isArray(json.data) ? json.data : Array.isArray(json) ? json : [];
+      const newRoutes: Route[] = rawRoutes.map(normalizeRoute);
 
       // If no routes found with default sort and user has location, fall back to top rated
       if (newRoutes.length === 0 && pageNum === 1 && !append && !fallbackSort && !filters.sort && userLocation) {
@@ -288,6 +328,10 @@ function HomeContent() {
 
   const clearAllFilters = () => setFilters(DEFAULT_FILTERS);
 
+  const setSearch = useCallback((value: string) => {
+    setFilters((f) => (f.search === value ? f : { ...f, search: value }));
+  }, []);
+
   const scrollToContent = () => {
     const el = document.getElementById("scroll-anchor");
     if (el) {
@@ -296,14 +340,26 @@ function HomeContent() {
     }
   };
 
+  // The heading above the feed answers "what am I looking at?" honestly.
+  // Search results lead; otherwise near-you (with location) or top-rated.
   const sortLabel = useMemo(() => {
+    if (isSearching) return `Results for "${filters.search}"`;
     if (filters.sort === "newest") return "Newest";
     if (filters.sort === "distance") return "Longest";
     if (filters.sort === "rating") return "Top rated";
-    if (filters.sort === "nearby") return "Nearest";
-    if (userLocation) return "Nearby · Best rated";
-    return "Best rated";
-  }, [filters.sort, userLocation]);
+    if (filters.sort === "nearby") return "Nearest to you";
+    if (userLocation) return "Near you";
+    return "Top rated";
+  }, [filters.sort, filters.search, isSearching, userLocation]);
+
+  // Honest sub-label: explain why this ordering when there's no location.
+  const sortSubLabel = useMemo(() => {
+    if (isSearching) return null;
+    if (filters.sort) return null;
+    if (userLocation) return "Closest rideable loops first";
+    if (locationDenied) return "Location off — showing the best-rated loops";
+    return null;
+  }, [filters.sort, isSearching, userLocation, locationDenied]);
 
   const sortSelect = (
     <select
@@ -320,6 +376,8 @@ function HomeContent() {
     </select>
   );
 
+  // Empty state that helps: search-aware, with concrete next steps. Never a
+  // dead end (north star: always hand the rider a way forward).
   const emptyState = (
     <div className="text-center py-16">
       <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: "var(--bg-card)" }}>
@@ -327,16 +385,42 @@ function HomeContent() {
           <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
         </svg>
       </div>
-      <p className="text-sm font-medium mb-1" style={{ color: "var(--text-secondary)" }}>No loops match your filters</p>
-      <p className="text-xs" style={{ color: "var(--text-muted)" }}>Try broadening your search</p>
+      <p className="text-sm font-medium mb-1" style={{ color: "var(--text-secondary)" }}>
+        {isSearching ? `No loops match "${filters.search}"` : "No loops match your filters"}
+      </p>
+      <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+        {isSearching ? "Try a town, region, or route name — or a different spelling." : "Try broadening your search."}
+      </p>
       {filters.duration && (
         <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
           Try {filters.duration === "1h" ? "2h" : filters.duration === "4h+" ? "3h" : filters.duration === "2h" ? "1h or 3h" : "2h or 4h+"} instead
         </p>
       )}
-      <button onClick={clearAllFilters} className="mt-3 text-sm font-bold hover:opacity-80" style={{ color: "var(--accent)" }}>
-        Clear all filters
-      </button>
+      <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
+        {hasActiveFilters && (
+          <button
+            onClick={clearAllFilters}
+            className="text-sm font-bold px-4 min-h-[44px] inline-flex items-center rounded-lg hover:opacity-80"
+            style={{ color: "var(--accent)", border: "1px solid var(--accent)" }}
+          >
+            Clear filters
+          </button>
+        )}
+        <Link
+          href="/generate"
+          className="text-sm font-bold px-4 min-h-[44px] inline-flex items-center rounded-lg hover:opacity-80"
+          style={{ color: "var(--text-secondary)", border: "1px solid var(--border)" }}
+        >
+          Ask the planner
+        </Link>
+        <Link
+          href="/collections"
+          className="text-sm font-bold px-4 min-h-[44px] inline-flex items-center rounded-lg hover:opacity-80"
+          style={{ color: "var(--text-secondary)", border: "1px solid var(--border)" }}
+        >
+          Browse destinations
+        </Link>
+      </div>
     </div>
   );
 
@@ -408,6 +492,16 @@ function HomeContent() {
 
       {/* Main Content */}
       <main className="max-w-3xl mx-auto w-full px-4 md:px-6 pb-20">
+        {/* Search — the biggest discovery lever. Queries the routes API's
+            `search` param (name/description/county/region), debounced. */}
+        <div className="pt-6">
+          <RouteSearchBox
+            value={filters.search}
+            onChange={() => { /* live text is owned by the box; commit on debounce */ }}
+            onDebouncedChange={setSearch}
+          />
+        </div>
+
         {/* Duration Strip */}
         <div className="py-6">
           <DurationStrip
@@ -458,13 +552,16 @@ function HomeContent() {
           )}
         </div>
 
-        {/* Route Count */}
-        <div className="flex items-center gap-2 pb-3">
-          <span className="text-xs font-bold" style={{ color: "var(--text-muted)" }}>{sortLabel}</span>
+        {/* Feed heading — answers "what am I looking at?" honestly. */}
+        <div className="flex items-baseline gap-2 pb-3">
+          <h2 className="text-sm font-bold" style={{ color: "var(--text)" }}>{sortLabel}</h2>
           <span className="text-xs" style={{ color: "var(--text-muted)", opacity: 0.5 }}>&mdash;</span>
-          <span className="text-xs font-bold" style={{ color: "var(--text)" }}>
+          <span className="text-xs font-bold" style={{ color: "var(--text-muted)" }}>
             {loading ? "..." : `${routes.length} loop${routes.length !== 1 ? "s" : ""}`}
           </span>
+          {sortSubLabel && !loading && (
+            <span className="text-xs" style={{ color: "var(--text-muted)" }}>· {sortSubLabel}</span>
+          )}
         </div>
 
         {/* Route Cards */}

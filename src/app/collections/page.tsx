@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { getCollections } from "@/lib/db";
+import AppHeader from "@/components/AppHeader";
 import CollectionCard from "@/components/CollectionCard";
-import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "Collections — LOOPS | Curated Cycling Route Packs",
@@ -25,15 +25,7 @@ export default async function CollectionsPage() {
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
       {/* Header */}
-      <header className="sticky top-0 z-40 border-b" style={{ background: "var(--bg)", borderColor: "var(--border)" }}>
-        <div className="max-w-5xl mx-auto px-4 h-14 flex items-center gap-4">
-          <Link href="/" className="font-black text-xl tracking-tight" style={{ color: "var(--accent)" }}>
-            LOOPS
-          </Link>
-          <span style={{ color: "var(--border-light)" }} aria-hidden="true">/</span>
-          <span className="font-semibold text-sm" style={{ color: "var(--text)" }}>Collections</span>
-        </div>
-      </header>
+      <AppHeader />
 
       <main className="max-w-5xl mx-auto px-4 py-10">
         <div className="mb-8">

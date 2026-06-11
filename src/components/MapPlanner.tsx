@@ -196,15 +196,12 @@ export default function MapPlanner() {
     !route && points.length >= 2 ? (loopBack ? [...points, points[0]] : points) : [];
 
   return (
-    <div className="flex flex-col" style={{ height: "100dvh", background: "var(--bg)" }}>
-      {/* Top bar */}
-      <header
+    <div className="flex flex-col" style={{ height: "100%", background: "var(--bg)" }}>
+      {/* Planner toolbar — the shared AppHeader sits above (one logo treatment) */}
+      <div
         className="flex items-center gap-3 px-4 py-2.5 border-b z-20"
         style={{ background: "var(--bg-raised)", borderColor: "var(--border)" }}
       >
-        <Link href="/" className="shrink-0">
-          <span className="logo-mark text-xl" style={{ color: "var(--text)" }}>LOOPS</span>
-        </Link>
         <span className="text-sm font-bold" style={{ color: "var(--text)" }}>Draw a route</span>
         {busy && (
           <span className="text-xs" style={{ color: "var(--accent)" }}>snapping…</span>
@@ -215,7 +212,7 @@ export default function MapPlanner() {
             {route.distance_km} km · +{route.elevation_gain_m} m
           </span>
         )}
-      </header>
+      </div>
 
       {/* Banners */}
       {needsAuth && (

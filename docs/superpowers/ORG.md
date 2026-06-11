@@ -30,6 +30,12 @@ CEO (Anthony) — vision, priorities, go/no-go
    correctness bugs before merge. Author ≠ reviewer.
 5. **Ship gate** — merged to main only with 1-4 evidenced in the PR body.
 
+## North star (CEO-set, 2026-06-11)
+The product answers ONE question: **"Where should I ride today?"**
+Every page, every layout decision, every CTA is judged against how
+directly it answers that question. Anything that doesn't serve it is
+secondary or cut.
+
 ## Standing priorities (CEO-set, 2026-06-11)
 1. Draw-on-map route planning → GPX, easily editable (value-prop upgrade).
 2. Comprehensive function+layout roadmap (COO to produce, dept-audited).

@@ -7,6 +7,7 @@ import DisciplineTabs from "@/components/DisciplineTabs";
 import RouteCard from "@/components/RouteCard";
 import SkeletonCard from "@/components/SkeletonCard";
 import HeroSection from "@/components/HeroSection";
+import AppHeader from "@/components/AppHeader";
 import { useAuth } from "@/components/AuthProvider";
 import Link from "next/link";
 import { DEFAULT_SPEED_KMH } from "@/config/constants";
@@ -97,8 +98,81 @@ const selectStyle = {
   minHeight: 44,
 };
 
+/**
+ * The answer machine (2026-06-11 redesign): logged-in riders get the one
+ * question, not a marketing hero. Free text → /generate; Draw → /plan;
+ * Browse nearby → the geo-sorted feed below.
+ */
+function AnswerMachine({ onBrowseNearby }: { onBrowseNearby: () => void }) {
+  const router = useRouter();
+  const [q, setQ] = useState("");
+
+  return (
+    <section className="px-4 md:px-6 pt-6">
+      <div
+        className="max-w-3xl mx-auto rounded-2xl p-4 md:p-6"
+        style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+      >
+        <h1 className="text-xl md:text-2xl font-extrabold mb-3" style={{ color: "var(--text)" }}>
+          Where should I ride today?
+        </h1>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            const trimmed = q.trim();
+            if (trimmed) router.push(`/generate?q=${encodeURIComponent(trimmed)}`);
+          }}
+          className="flex gap-2"
+        >
+          <label htmlFor="ride-question" className="sr-only">
+            Describe the ride you want
+          </label>
+          <input
+            id="ride-question"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            maxLength={1000}
+            placeholder="e.g. 2 hours, rolling hills, tailwind home"
+            className="flex-1 min-w-0 px-4 rounded-xl text-sm min-h-[48px]"
+            style={{
+              background: "var(--bg)",
+              border: "1px solid var(--border)",
+              color: "var(--text)",
+              outline: "none",
+            }}
+          />
+          <button
+            type="submit"
+            disabled={!q.trim()}
+            className="btn-accent px-4 rounded-xl text-sm font-bold uppercase tracking-wider min-h-[48px] disabled:opacity-50"
+          >
+            Go
+          </button>
+        </form>
+        <div className="flex flex-wrap gap-2 mt-3">
+          <Link
+            href="/plan"
+            className="text-xs font-bold uppercase tracking-wider px-3 min-h-[44px] inline-flex items-center rounded-lg hover:opacity-80"
+            style={{ color: "var(--accent)", border: "1px solid var(--accent)" }}
+          >
+            Draw a route
+          </Link>
+          <button
+            type="button"
+            onClick={onBrowseNearby}
+            className="text-xs font-bold uppercase tracking-wider px-3 min-h-[44px] inline-flex items-center rounded-lg hover:opacity-80"
+            style={{ color: "var(--text-secondary)", border: "1px solid var(--border)" }}
+          >
+            Browse nearby
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function HomeContent() {
-  const { user, logout, unreadCount } = useAuth();
+  const { user } = useAuth();
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -304,97 +378,24 @@ function HomeContent() {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)" }}>
-      <HeroSection onExplore={scrollToContent} />
-
-      {/* Scroll anchor — must be outside sticky header for scrollIntoView to work */}
-      <div id="scroll-anchor" />
-
-      {/* Header */}
-      <header className="px-4 md:px-6 py-3 border-b sticky top-0 z-30" style={{ background: "var(--bg-raised)", borderColor: "var(--border)" }}>
-        <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
-          <Link href="/" className="shrink-0">
-            <span className="logo-mark text-2xl" style={{ color: "var(--text)" }}>LOOPS</span>
-          </Link>
-
-          <div className="flex items-center gap-2 shrink-0">
-            <Link
-              href="/generate"
-              className="text-xs font-bold uppercase tracking-wider px-2.5 py-2.5 rounded-lg inline-flex items-center gap-1 hover:opacity-80"
-              style={{
-                color: "var(--accent)",
-                border: "1px solid var(--accent)",
-              }}
-            >
-              Plan
-            </Link>
-            <Link
-              href="/plan"
-              className="text-xs font-bold uppercase tracking-wider px-2.5 py-1.5 rounded-lg hidden sm:inline-flex items-center gap-1 hover:opacity-80"
-              style={{
-                color: "var(--accent)",
-                border: "1px solid var(--accent)",
-              }}
-            >
-              Draw a route
-            </Link>
-            {user && (
-              <Link href="/upload" className="btn-accent px-3 py-1.5 rounded-lg text-sm font-bold flex items-center gap-1.5">
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                </svg>
-                <span className="hidden md:inline">Share Loop</span>
-              </Link>
-            )}
-            {user?.role === "admin" && (
-              <Link href="/admin" className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded hidden md:inline-block hover:opacity-80" style={{ background: "rgba(255, 51, 85, 0.15)", color: "var(--danger)" }}>
-                Admin
-              </Link>
-            )}
-            {user && (
-              <Link href="/messages" className="relative p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:opacity-80 transition-opacity" style={{ color: "var(--text-muted)" }} aria-label="Messages">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                </svg>
-                {unreadCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 flex items-center justify-center rounded-full text-[10px] font-bold px-1" style={{ background: "var(--danger)", color: "#fff" }}>
-                    {unreadCount > 99 ? "99+" : unreadCount}
-                  </span>
-                )}
-              </Link>
-            )}
-            {user && (
-              <Link href={`/profile/${user.id}`} className="shrink-0 hover:opacity-80 transition-opacity">
-                <img
-                  src={user.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || user.email)}&background=1a1a1a&color=c8ff00&size=32&bold=true`}
-                  alt={user.name || user.email}
-                  className="w-7 h-7 rounded-full object-cover"
-                  style={{ border: "1.5px solid var(--border)" }}
-                />
-              </Link>
-            )}
-            {user ? (
-              <button onClick={logout} className="text-xs font-medium hover:opacity-80 px-2 py-2" style={{ color: "var(--text-muted)" }}>Sign out</button>
-            ) : (
-              <>
-                <Link
-                  href="/login"
-                  className="text-sm font-semibold hover:opacity-80 px-2.5 py-2.5"
-                  style={{ color: "var(--text)" }}
-                >
-                  Log in
-                </Link>
-                <Link
-                  href="/login"
-                  className="text-sm font-bold px-4 py-2.5 rounded-lg hover:opacity-90"
-                  style={{ background: "var(--accent)", color: "var(--bg)" }}
-                >
-                  Sign up
-                </Link>
-              </>
-            )}
-          </div>
-        </div>
-      </header>
+      {user ? (
+        // Logged in: the answer machine. Header on top, the question next,
+        // no marketing hero (CEO north star, 2026-06-11).
+        <>
+          <AppHeader />
+          <AnswerMachine onBrowseNearby={scrollToContent} />
+          {/* Scroll anchor — "Browse nearby" lands here */}
+          <div id="scroll-anchor" />
+        </>
+      ) : (
+        // Logged out: the question as a headline, then real routes.
+        <>
+          <HeroSection onExplore={scrollToContent} />
+          {/* Scroll anchor — must be above the sticky header so scrolling works */}
+          <div id="scroll-anchor" />
+          <AppHeader />
+        </>
+      )}
 
       {/* Main Content */}
       <main className="max-w-3xl mx-auto w-full px-4 md:px-6 pb-20">

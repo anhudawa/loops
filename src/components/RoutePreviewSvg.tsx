@@ -114,6 +114,8 @@ export default function RoutePreviewSvg({
         background: "var(--bg-card)",
         borderRadius: 12,
         border: "1px solid var(--border)",
+        maxWidth: "100%",
+        height: "auto",
       }}
     >
       {/* Base route line — wind-painted when forecast is meaningful */}

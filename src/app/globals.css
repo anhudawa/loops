@@ -12,6 +12,8 @@
   --bg: #0a0a0a;
   --bg-raised: #141414;
   --bg-card: #1a1a1a;
+  --surface: var(--bg-card);
+  --surface-hover: var(--bg-raised);
   --bg-card-hover: #222222;
   --border: #2a2a2a;
   --border-light: #333333;

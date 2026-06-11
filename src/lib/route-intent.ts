@@ -9,6 +9,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { IntensityZone } from "./intensity";
 import { ZONES } from "./intensity";
+import type { WindStrategy } from "./wind";
 
 export type Discipline = "road" | "gravel" | "mtb";
 export type ElevationPreference = "flat" | "rolling" | "hilly" | "mountainous" | "any";
@@ -44,6 +45,8 @@ export interface RouteSpec {
   region?: string;
   country: string;                   // geocoding constraint
   workout?: WorkoutSpec;             // present when prompt described a workout
+  wind_strategy: WindStrategy;       // "tailwind home" etc.; "none" by default
+  cafe_stop?: boolean;               // rider asked for a café stop
 }
 
 /**
@@ -153,6 +156,17 @@ If the rider describes a workout:
 
 If no workout is described, omit the workout field (set it to null).
 
+## Café stop:
+- "with a café stop" / "coffee stop" / "stop for coffee halfway" → cafe_stop: true
+- otherwise → cafe_stop: false
+
+## Wind strategy:
+Riders often plan loops around the wind. Extract:
+- "tailwind home" / "wind at my back on the way back" / "tailwind on the return" / "headwind out" / "into the wind first" → wind_strategy: "tailwind_home" (headwind out and tailwind home are the same loop orientation; default to "tailwind_home" unless the rider's emphasis is clearly only the outbound leg)
+- "tailwind out" / "wind behind me to start" → wind_strategy: "tailwind_out"
+- explicitly only about riding out into the wind with no mention of the return → wind_strategy: "headwind_out"
+- no wind mention → wind_strategy: "none"
+
 Return ONLY valid JSON matching this TypeScript interface (no markdown, no explanation):
 {
   "distance_km": number | null,
@@ -167,6 +181,8 @@ Return ONLY valid JSON matching this TypeScript interface (no markdown, no expla
   "vibes": string[],
   "region": string | null,
   "country": string,
+  "wind_strategy": "tailwind_home" | "tailwind_out" | "headwind_out" | "none",
+  "cafe_stop": boolean,
   "workout": null | {
     "intervals": Array<{ "count": number, "duration_minutes": number, "zone": "z1"|"z2"|"z3"|"z4"|"z5"|"z6"|"z7", "recovery_minutes": number }>,
     "warmup_minutes": number,
@@ -188,7 +204,20 @@ interface ParsedIntent {
   vibes: string[];
   region: string | null;
   country: string;
+  wind_strategy?: string;
+  cafe_stop?: boolean;
   workout: WorkoutSpec | null;
+}
+
+const WIND_STRATEGIES: ReadonlySet<string> = new Set([
+  "tailwind_home",
+  "tailwind_out",
+  "headwind_out",
+  "none",
+]);
+
+function sanitizeWindStrategy(value: string | undefined): WindStrategy {
+  return value && WIND_STRATEGIES.has(value) ? (value as WindStrategy) : "none";
 }
 
 /** Drop malformed workout objects — we never want to route a garbage workout. */
@@ -278,38 +307,133 @@ export interface ParseRouteIntentOptions {
   origin?: [number, number];
 }
 
+/**
+ * Deterministic fallback parser — no LLM. Handles the structured-form
+ * prompt format and simple free text so that a total LLM outage degrades
+ * to "plain requests still work" instead of "the product is down".
+ * Workouts are NOT parsed here (they need the LLM); plain rides only.
+ */
+export function parseBasicIntent(prompt: string): ParsedIntent | null {
+  const p = prompt.toLowerCase();
+
+  // Workout prompts need the LLM — stripping the session and serving a
+  // plain ride would silently compromise it. Decline so the caller
+  // surfaces PARSE_FAILED and the structured form.
+  if (/\d\s*[x×]\s*\d|\binterval|\bthreshold\b|\btempo\b|\bvo2|sweet\s*spot|\bzone\s*[1-7]\b|\bz[1-7]\b/.test(p)) {
+    return null;
+  }
+
+  // Duration: "2 hour", "1.5 hours", "90 min"
+  let duration: number | null = null;
+  const hourMatch = p.match(/(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)\b/);
+  const minMatch = p.match(/(\d+)\s*(?:minutes?|mins?)\b/);
+  if (hourMatch) duration = Math.round(parseFloat(hourMatch[1]) * 60);
+  if (minMatch) duration = (duration ?? 0) + parseInt(minMatch[1], 10);
+
+  // Distance: "60km", "40 mile"
+  let distance: number | null = null;
+  // Negative lookahead: "30km/h" is a pace, not a distance.
+  const kmMatch = p.match(/(\d+(?:\.\d+)?)\s*(?:km|kilometres?|kilometers?)\b(?!\s*\/?\s*h\b)/);
+  const miMatch = p.match(/(\d+(?:\.\d+)?)\s*(?:miles?|mi)\b/);
+  if (kmMatch) distance = Math.round(parseFloat(kmMatch[1]));
+  else if (miMatch) distance = Math.round(parseFloat(miMatch[1]) * 1.609);
+
+  if (duration === null && distance === null) return null; // too vague
+
+  const discipline: Discipline =
+    /\bgravel\b/.test(p) ? "gravel" : /\bmtb|mountain bike\b/.test(p) ? "mtb" : "road";
+
+  // Strip "mountain bike" before terrain matching so the discipline
+  // phrase doesn't read as mountainous terrain.
+  const pTerrain = p.replace(/mountain\s*bike/g, "");
+  const elevation_preference: ElevationPreference =
+    /\bflat\b|no (?:big )?climb/.test(pTerrain) ? "flat"
+    : /\brolling\b/.test(pTerrain) ? "rolling"
+    : /\bhilly\b|\bhills\b|climbing\b/.test(pTerrain) ? "hilly"
+    : /mountain(?:ous)?\b/.test(pTerrain) ? "mountainous"
+    : "any";
+
+  let wind: string = "none";
+  if (/tailwind (?:on the way |coming |)home|tailwind back|wind at my back .*(home|back)|headwind (?:out|first)/.test(p)) {
+    wind = "tailwind_home";
+  } else if (/tailwind (?:out|to start|first)/.test(p)) {
+    wind = "tailwind_out";
+  }
+
+  const cafe_stop = /\bcaf[eé]\b|coffee\s+stop|stop\s+for\s+coffee/.test(p);
+
+  // "from <place>" — stop at punctuation or terrain/wind keywords
+  let region: string | null = null;
+  const fromMatch = prompt.match(/\bfrom\s+([A-Za-zÀ-ÿ''. -]{3,40}?)(?:[,.;]|\s+(?:with|on|in|and|tailwind|headwind)\b|\s+\d|$)/i);
+  if (fromMatch) region = fromMatch[1].trim();
+
+  return {
+    distance_km: distance,
+    distance_tolerance_km: null,
+    duration_minutes: duration,
+    max_elevation_gain_m:
+      elevation_preference === "flat" && distance ? distance * 5 : null,
+    elevation_preference,
+    discipline,
+    is_loop: !/point to point|a to b/.test(p),
+    road_preferences: ["tertiary", "unclassified", "residential"],
+    avoid: ["motorway", "trunk"],
+    vibes: [],
+    region,
+    country: DEFAULT_COUNTRY,
+    wind_strategy: wind,
+    cafe_stop,
+    workout: null,
+  };
+}
+
 export async function parseRouteIntent(
   prompt: string,
   options: ParseRouteIntentOptions = {}
 ): Promise<RouteSpec> {
   const userSpeedKmh = options.userSpeedKmh ?? BASELINE_SPEED_KMH;
   const origin = options.origin;
-  const client = new Anthropic();
-
-  const message = await client.messages.create({
-    model: "claude-haiku-4-5-20251001",
-    max_tokens: 1024,
-    system: [
-      {
-        type: "text",
-        text: SYSTEM_PROMPT,
-        cache_control: { type: "ephemeral" },
-      },
-    ],
-    messages: [{ role: "user", content: prompt }],
-  });
-
-  const text = message.content[0].type === "text" ? message.content[0].text : "";
 
   let parsed: ParsedIntent;
   try {
-    parsed = JSON.parse(text);
-  } catch {
-    const match = text.match(/\{[\s\S]*\}/);
-    if (!match) {
-      throw new Error(`Failed to parse LLM response as JSON: ${text.slice(0, 200)}`);
+    // Constructed inside the try: with no API key the SDK throws at
+    // construction, and that must hit the basic-parser fallback too.
+    const client = new Anthropic();
+    const message = await client.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 1024,
+      system: [
+        {
+          type: "text",
+          text: SYSTEM_PROMPT,
+          cache_control: { type: "ephemeral" },
+        },
+      ],
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    const text = message.content[0].type === "text" ? message.content[0].text : "";
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      const match = text.match(/\{[\s\S]*\}/);
+      if (!match) {
+        throw new Error(`Failed to parse LLM response as JSON: ${text.slice(0, 200)}`);
+      }
+      parsed = JSON.parse(match[0]);
     }
-    parsed = JSON.parse(match[0]);
+  } catch (err) {
+    // LLM unavailable or returned garbage: try the deterministic parser
+    // for simple requests (and the structured form's format) so a model
+    // outage never takes the whole product down.
+    const basic = parseBasicIntent(prompt);
+    if (!basic) {
+      throw err instanceof Error && err.message.startsWith("Failed to parse LLM response")
+        ? err
+        : new Error("Failed to parse LLM response: model unavailable");
+    }
+    console.error("[route-intent] LLM unavailable — using basic parser");
+    parsed = basic;
   }
 
   // ── Resolve distance from duration if needed ────────────────────────────────
@@ -382,5 +506,7 @@ export async function parseRouteIntent(
     region,
     country,
     workout,
+    wind_strategy: sanitizeWindStrategy(parsed.wind_strategy),
+    cafe_stop: parsed.cafe_stop === true,
   };
 }

@@ -5,11 +5,20 @@ import { getAllPosts } from "@/lib/blog";
 import { getAllDestinationSlugs } from "@/content/destinations";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const [routes, countries, collections] = await Promise.all([
-    getAllRoutesForSitemap(),
-    getCountries(),
-    getCollections(),
-  ]);
+  // Fail soft: a DB outage yields a sitemap of static + content pages
+  // instead of failing the build or the request.
+  let routes: Awaited<ReturnType<typeof getAllRoutesForSitemap>> = [];
+  let countries: string[] = [];
+  let collections: Awaited<ReturnType<typeof getCollections>> = [];
+  try {
+    [routes, countries, collections] = await Promise.all([
+      getAllRoutesForSitemap(),
+      getCountries(),
+      getCollections(),
+    ]);
+  } catch {
+    // continue with static pages only
+  }
 
   const staticPages: MetadataRoute.Sitemap = [
     { url: "https://loops.ie", changeFrequency: "weekly", priority: 1.0 },
@@ -44,7 +53,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // Get regions for each country
   const regionPages: MetadataRoute.Sitemap = [];
   for (const country of countries) {
-    const regions = await getRegions(country);
+    let regions: string[] = [];
+    try {
+      regions = await getRegions(country);
+    } catch {
+      continue;
+    }
     for (const region of regions) {
       regionPages.push({
         url: `https://loops.ie/routes/country/${slugify(country)}/${slugify(region)}`,

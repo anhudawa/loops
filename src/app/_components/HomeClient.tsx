@@ -178,6 +178,7 @@ function HomeContent() {
     setFetchError(false);
     try {
       const res = await fetch(`/api/routes?${params}`);
+      if (!res.ok) throw new Error(`routes API ${res.status}`);
       const json = await res.json();
       const newRoutes = Array.isArray(json.data) ? json.data : Array.isArray(json) ? json : [];
 
@@ -362,7 +363,7 @@ function HomeContent() {
             {user ? (
               <button onClick={logout} className="text-xs font-medium hidden md:block hover:opacity-80" style={{ color: "var(--text-muted)" }}>Sign out</button>
             ) : (
-              <Link href="/login" className="text-xs font-medium hidden md:block hover:opacity-80" style={{ color: "var(--text-muted)" }}>Sign in</Link>
+              <Link href="/login" className="text-xs font-medium hover:opacity-80 px-2 py-2" style={{ color: "var(--text-muted)" }}>Sign in</Link>
             )}
           </div>
         </div>

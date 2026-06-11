@@ -44,6 +44,10 @@ export interface QualityScore {
   confidence_level: "high" | "medium" | "low";
   low_coverage_warning: boolean;               // true if >30% of route unmatched in OSM
   osm_cached: boolean;
+  /** Paved/unpaved/unknown share of sampled points ("know before you go"). */
+  surface_breakdown?: { paved_pct: number; unpaved_pct: number; unknown_pct: number };
+  /** Road-class share (% of sampled points per OSM highway class). */
+  road_class_breakdown?: Record<string, number>;
 }
 
 // ──── Types for OSM data ────────────────────────────────────────────────────
@@ -157,6 +161,79 @@ function pointToSegmentDist(
   return haversineKm(pt, [ay + t * dy, ax + t * dx]);
 }
 
+
+// ──── Spatial index ──────────────────────────────────────────────────────────
+//
+// findNearestWay/anyWayWithin are called for hundreds of sampled points
+// against thousands of ways. The naive scan is O(samples × segments) and
+// burned 60-90s of sync CPU per generation, blocking the event loop (and
+// the pipeline timeout with it). A coarse grid index makes each lookup
+// touch only nearby segments. Indexes are cached per ways-array identity,
+// so call sites stay unchanged.
+
+interface IndexedSegment {
+  a: [number, number];
+  b: [number, number];
+  way: ProcessedWay;
+}
+
+const GRID_CELL_DEG = 0.005; // ≈ 550 m of latitude
+
+class SegmentGrid {
+  private cells = new Map<string, IndexedSegment[]>();
+
+  constructor(ways: ProcessedWay[]) {
+    for (const way of ways) {
+      for (let i = 0; i + 1 < way.nodes.length; i++) {
+        const a: [number, number] = [way.nodes[i].lat, way.nodes[i].lon];
+        const b: [number, number] = [way.nodes[i + 1].lat, way.nodes[i + 1].lon];
+        const seg: IndexedSegment = { a, b, way };
+        const minX = Math.floor(Math.min(a[1], b[1]) / GRID_CELL_DEG);
+        const maxX = Math.floor(Math.max(a[1], b[1]) / GRID_CELL_DEG);
+        const minY = Math.floor(Math.min(a[0], b[0]) / GRID_CELL_DEG);
+        const maxY = Math.floor(Math.max(a[0], b[0]) / GRID_CELL_DEG);
+        for (let x = minX; x <= maxX; x++) {
+          for (let y = minY; y <= maxY; y++) {
+            const key = `${x},${y}`;
+            const list = this.cells.get(key);
+            if (list) list.push(seg);
+            else this.cells.set(key, [seg]);
+          }
+        }
+      }
+    }
+  }
+
+  /** Segments in all cells overlapping a maxKm neighbourhood of pt. */
+  near(pt: [number, number], maxKm: number): IndexedSegment[] {
+    const degLat = maxKm / 111;
+    const degLng = maxKm / (111 * Math.max(0.2, Math.cos((pt[0] * Math.PI) / 180)));
+    const minX = Math.floor((pt[1] - degLng) / GRID_CELL_DEG);
+    const maxX = Math.floor((pt[1] + degLng) / GRID_CELL_DEG);
+    const minY = Math.floor((pt[0] - degLat) / GRID_CELL_DEG);
+    const maxY = Math.floor((pt[0] + degLat) / GRID_CELL_DEG);
+    const out: IndexedSegment[] = [];
+    for (let x = minX; x <= maxX; x++) {
+      for (let y = minY; y <= maxY; y++) {
+        const list = this.cells.get(`${x},${y}`);
+        if (list) out.push(...list);
+      }
+    }
+    return out;
+  }
+}
+
+const gridCache = new WeakMap<ProcessedWay[], SegmentGrid>();
+
+function gridFor(ways: ProcessedWay[]): SegmentGrid {
+  let grid = gridCache.get(ways);
+  if (!grid) {
+    grid = new SegmentGrid(ways);
+    gridCache.set(ways, grid);
+  }
+  return grid;
+}
+
 /** Find the nearest processed way within maxKm of a point. */
 function findNearestWay(
   pt: [number, number],
@@ -165,15 +242,11 @@ function findNearestWay(
 ): ProcessedWay | null {
   let bestDist = maxKm;
   let bestWay: ProcessedWay | null = null;
-  for (const way of ways) {
-    for (let i = 0; i + 1 < way.nodes.length; i++) {
-      const a: [number, number] = [way.nodes[i].lat, way.nodes[i].lon];
-      const b: [number, number] = [way.nodes[i + 1].lat, way.nodes[i + 1].lon];
-      const d = pointToSegmentDist(pt, a, b);
-      if (d < bestDist) {
-        bestDist = d;
-        bestWay = way;
-      }
+  for (const seg of gridFor(ways).near(pt, maxKm)) {
+    const d = pointToSegmentDist(pt, seg.a, seg.b);
+    if (d < bestDist) {
+      bestDist = d;
+      bestWay = seg.way;
     }
   }
   return bestWay;
@@ -185,12 +258,8 @@ function anyWayWithin(
   ways: ProcessedWay[],
   maxKm: number
 ): ProcessedWay | null {
-  for (const way of ways) {
-    for (let i = 0; i + 1 < way.nodes.length; i++) {
-      const a: [number, number] = [way.nodes[i].lat, way.nodes[i].lon];
-      const b: [number, number] = [way.nodes[i + 1].lat, way.nodes[i + 1].lon];
-      if (pointToSegmentDist(pt, a, b) < maxKm) return way;
-    }
+  for (const seg of gridFor(ways).near(pt, maxKm)) {
+    if (pointToSegmentDist(pt, seg.a, seg.b) < maxKm) return seg.way;
   }
   return null;
 }
@@ -198,9 +267,55 @@ function anyWayWithin(
 // ──── Overpass API ───────────────────────────────────────────────────────────
 
 const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
+
+/**
+ * Overpass etiquette gate: the public API allows ~2 concurrent requests
+ * per client. Without this, scoring 15-30 candidates in parallel gets
+ * most of them rate-limited and silently dropped — fewer, worse routes.
+ * Retries once on 429 after a short backoff.
+ */
+const OVERPASS_MAX_CONCURRENT = 2;
+let overpassActive = 0;
+const overpassQueue: Array<() => void> = [];
+
+async function overpassGate(run: () => Promise<Response>): Promise<Response> {
+  // Loop, don't assume: a woken waiter must re-check the limit, otherwise
+  // a freshly arriving caller can slip in alongside it.
+  while (overpassActive >= OVERPASS_MAX_CONCURRENT) {
+    await new Promise<void>((resolve) => overpassQueue.push(resolve));
+  }
+  overpassActive++;
+  try {
+    let resp = await run();
+    if (resp.status === 429) {
+      await new Promise((r) => setTimeout(r, 2000 + Math.random() * 2000));
+      resp = await run();
+    }
+    return resp;
+  } finally {
+    overpassActive--;
+    overpassQueue.shift()?.();
+  }
+}
 const OVERPASS_TIMEOUT_S = 30;
 
-async function queryOverpass(bbox: BoundingBox): Promise<OsmElement[]> {
+/**
+ * Snap a bbox OUTWARD to a coarse grid (~0.05° ≈ 5 km). Candidates from
+ * the same start point then share one cache entry and one Overpass query
+ * instead of five near-identical mega-queries — the single biggest
+ * latency cost in generation.
+ */
+function quantizeBbox(bbox: BoundingBox, gridDeg = 0.05): BoundingBox {
+  return {
+    minLat: Math.floor(bbox.minLat / gridDeg) * gridDeg,
+    minLng: Math.floor(bbox.minLng / gridDeg) * gridDeg,
+    maxLat: Math.ceil(bbox.maxLat / gridDeg) * gridDeg,
+    maxLng: Math.ceil(bbox.maxLng / gridDeg) * gridDeg,
+  };
+}
+
+async function queryOverpass(rawBbox: BoundingBox): Promise<OsmElement[]> {
+  const bbox = quantizeBbox(rawBbox);
   const key = getCacheKey(bbox);
   const cached = osmCache.get(key);
   if (cached && cached.expires > Date.now()) return cached.elements;
@@ -229,12 +344,14 @@ out body;
 out skel qt;
 `.trim();
 
-  const resp = await fetch(OVERPASS_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: `data=${encodeURIComponent(query)}`,
-    signal: AbortSignal.timeout(35_000),
-  });
+  const resp = await overpassGate(async () =>
+    fetch(OVERPASS_URL, {
+      method: "POST",
+      headers: { "User-Agent": "loops.ie route generator (https://www.loops.ie)", "Content-Type": "application/x-www-form-urlencoded" },
+      body: `data=${encodeURIComponent(query)}`,
+      signal: AbortSignal.timeout(35_000),
+    })
+  );
 
   if (!resp.ok) {
     throw new Error(`Overpass API error: ${resp.status} ${resp.statusText}`);
@@ -385,28 +502,66 @@ function disciplineIndex(d: Discipline): 0 | 1 | 2 {
   return d === "road" ? 0 : d === "gravel" ? 1 : 2;
 }
 
+/** Surfaces that mean tarmac/sealed for a road bike. */
+const PAVED_SURFACE_SET = new Set([
+  "asphalt", "paved", "concrete", "concrete:plates", "concrete:lanes",
+  "paving_stones", "sett", "metal", "wood",
+]);
+const UNPAVED_SURFACE_SET = new Set([
+  "unpaved", "gravel", "fine_gravel", "compacted", "dirt", "earth", "grass",
+  "ground", "mud", "sand", "woodchips", "pebblestone", "rock", "cobblestone",
+]);
+/** Highway classes assumed paved when no surface tag exists. */
+const PAVED_CLASS_SET = new Set([
+  "motorway", "motorway_link", "trunk", "trunk_link", "primary", "primary_link",
+  "secondary", "secondary_link", "tertiary", "tertiary_link", "residential",
+  "service", "living_street", "cycleway",
+]);
+const UNPAVED_CLASS_SET = new Set(["track", "path", "bridleway"]);
+
+export interface SurfaceBreakdown {
+  paved_pct: number;
+  unpaved_pct: number;
+  unknown_pct: number;
+}
+
 function scoreSurface(
   sampledCoords: Coord[],
   highwayWays: ProcessedWay[],
   discipline: Discipline
-): { score: number; flags: string[] } {
+): {
+  score: number;
+  flags: string[];
+  surface: SurfaceBreakdown;
+  roadClasses: Record<string, number>;
+} {
   const flags: string[] = [];
   const di = disciplineIndex(discipline);
   const scores: number[] = [];
   let motorwayCount = 0;
   let unmatchedCount = 0;
+  let paved = 0, unpaved = 0, unknown = 0;
+  const classCounts: Record<string, number> = {};
 
   for (const coord of sampledCoords) {
     const pt: [number, number] = [coord[0], coord[1]];
     const nearest = findNearestWay(pt, highwayWays, 0.05);
     if (!nearest) {
       unmatchedCount++;
+      unknown++;
       scores.push(15); // neutral for unmatched
       continue;
     }
 
     const hw = nearest.tags.highway ?? "";
     const surface = nearest.tags.surface ?? "";
+
+    classCounts[hw || "unknown"] = (classCounts[hw || "unknown"] ?? 0) + 1;
+    if (PAVED_SURFACE_SET.has(surface)) paved++;
+    else if (UNPAVED_SURFACE_SET.has(surface)) unpaved++;
+    else if (PAVED_CLASS_SET.has(hw)) paved++;
+    else if (UNPAVED_CLASS_SET.has(hw)) unpaved++;
+    else unknown++;
 
     const weights = HIGHWAY_WEIGHTS[hw];
     let baseScore = weights ? weights[di] : 15;
@@ -433,7 +588,19 @@ function scoreSurface(
   }
 
   const avg = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 15;
-  return { score: Math.round(avg), flags };
+  const total = Math.max(1, paved + unpaved + unknown);
+  const pct = (n: number) => Math.round((n / total) * 100);
+  const roadClasses: Record<string, number> = {};
+  const classTotal = Math.max(1, Object.values(classCounts).reduce((a, b) => a + b, 0));
+  for (const [k, v] of Object.entries(classCounts)) {
+    roadClasses[k] = Math.round((v / classTotal) * 100);
+  }
+  return {
+    score: Math.round(avg),
+    flags,
+    surface: { paved_pct: pct(paved), unpaved_pct: pct(unpaved), unknown_pct: pct(unknown) },
+    roadClasses,
+  };
 }
 
 // ──── Safety Scoring ─────────────────────────────────────────────────────────
@@ -1141,6 +1308,8 @@ export async function scoreRoute(
   }
 
   // 5. Score each dimension
+  let surfaceBreakdown: QualityScore["surface_breakdown"];
+  let roadClassBreakdown: QualityScore["road_class_breakdown"];
   let surface_score: number;
   let safety_score: number;
   let scenic_score: number;
@@ -1163,6 +1332,8 @@ export async function scoreRoute(
     bicycle_access_score = 15;
   } else {
     const surf = scoreSurface(sampled, highwayWays, discipline);
+    surfaceBreakdown = surf.surface;
+    roadClassBreakdown = surf.roadClasses;
     const safe = scoreSafety(sampled, highwayWays);
     const scenic = scoreScenic(bbox, elements, nodeMap, sampled);
     const traffic = scoreTrafficVolume(sampled, highwayWays);
@@ -1227,6 +1398,8 @@ export async function scoreRoute(
       bicycle_access_score,
     },
     flags: [...new Set(allFlags)], // deduplicate
+    surface_breakdown: surfaceBreakdown,
+    road_class_breakdown: roadClassBreakdown,
     confidence,
     confidence_level,
     low_coverage_warning,

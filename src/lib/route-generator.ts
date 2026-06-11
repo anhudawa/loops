@@ -45,6 +45,15 @@ import {
   QUALITY_FLOOR,
   QUALITY_WORLD_CLASS,
 } from "@/config/constants";
+import {
+  fetchWindForecast,
+  analyzeWind,
+  alignmentScore as windAlignmentScore,
+  type WindForecast,
+  type WindStrategy,
+} from "./wind";
+import { findEffortCorridors, type EffortCorridor } from "./session-assembly";
+import { ZONES } from "./intensity";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -62,10 +71,18 @@ export interface GeneratedRoute {
   /** Positive highlights from quality scoring: landscape, POIs, surface. */
   highlights: string[];
   road_type_breakdown: Record<string, number>;
+  /** Paved/unpaved/unknown share — "know before you go". */
+  surface_breakdown?: { paved_pct: number; unpaved_pct: number; unknown_pct: number };
   gpx_data: string;
   waypoints_used: [number, number][];
   match_score: number;          // 0–100 how well it matches the request
   workout_fit?: WorkoutFit;     // present on workout-mode generations
+  /** Rider-facing wind summary; present when the request had a wind strategy. */
+  wind_note?: string;
+  /** 0–100 fit against the requested wind strategy (50 = neutral). */
+  wind_alignment_score?: number;
+  /** The forecast used, for wind-painting the preview. */
+  wind_forecast?: { direction_deg: number; speed_kmh: number };
 }
 
 /**
@@ -91,6 +108,9 @@ export interface InterpretedIntent {
   country: string;
   is_workout: boolean;
   workout_summary?: string;  // e.g. "2 × 20 min threshold"
+  /** Present when the rider asked for wind-aware routing ("tailwind home"). */
+  wind_strategy?: WindStrategy;
+  cafe_stop?: boolean;
 }
 
 export interface GenerateResult {
@@ -122,11 +142,21 @@ const BROUTER_URL =
   process.env.BROUTER_URL?.replace(/\/$/, "") ?? "https://brouter.de/brouter";
 const BROUTER_TIMEOUT_MS = 15000;
 
-/** BRouter profile per discipline. `trekking` is the safest default. */
+/** Stage-by-stage rejection logging for generation triage (GENERATE_DEBUG=1). */
+function genDebug(msg: string): void {
+  if (process.env.GENERATE_DEBUG) console.error(`[generate] ${msg}`);
+}
+
+/**
+ * BRouter profile per discipline (all verified live on brouter.de).
+ * fastbike-lowtraffic = paved-only and quiet-road-preferring — exactly
+ * the road product promise. Previously everything used `trekking`,
+ * which happily routes a road bike onto dirt tracks.
+ */
 const DISCIPLINE_PROFILE: Record<Discipline, string> = {
-  road: "trekking",
-  gravel: "trekking",
-  mtb: "trekking",
+  road: "fastbike-lowtraffic",
+  gravel: "gravel",
+  mtb: "mtb",
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -160,11 +190,53 @@ function escapeXml(str: string): string {
     .replace(/'/g, "&apos;");
 }
 
+interface GpxWaypoint {
+  lat: number;
+  lng: number;
+  name: string;
+  desc?: string;
+}
+
+/**
+ * Course points for a workout: a waypoint at the start and end of every
+ * effort segment so head units (Garmin/Wahoo) fire alerts on course.
+ * Names are kept short — some units truncate around 16 characters.
+ */
+function workoutCoursePoints(
+  coords: [number, number][],
+  fit: WorkoutFit,
+  workout: WorkoutSpec
+): GpxWaypoint[] {
+  const points: GpxWaypoint[] = [];
+  let effortNum = 0;
+  for (const a of fit.interval_segments) {
+    effortNum += 1;
+    const iv = workout.intervals[a.interval_index];
+    const zone = iv ? iv.zone.toUpperCase() : "EFFORT";
+    const mins = iv ? `${iv.duration_minutes}min` : "";
+    const start = coords[a.segment.start_index];
+    const end = coords[a.segment.end_index];
+    if (!start || !end) continue;
+    points.push({
+      lat: start[0], lng: start[1],
+      name: `EFFORT ${effortNum} GO`,
+      desc: `${mins} ${zone}`.trim(),
+    });
+    points.push({
+      lat: end[0], lng: end[1],
+      name: `EFFORT ${effortNum} END`,
+      desc: "Recover",
+    });
+  }
+  return points;
+}
+
 function buildGpx(
   coords: [number, number][],
   elevations: number[] | null,
   name: string,
-  discipline: string
+  discipline: string,
+  waypoints: GpxWaypoint[] = []
 ): string {
   const now = new Date().toISOString();
   const trkpts = coords
@@ -174,6 +246,13 @@ function buildGpx(
         : "";
       return `    <trkpt lat="${lat.toFixed(6)}" lon="${lng.toFixed(6)}">${ele}</trkpt>`;
     })
+    .join("\n");
+
+  const wpts = waypoints
+    .map(
+      (w) =>
+        `  <wpt lat="${w.lat.toFixed(6)}" lon="${w.lng.toFixed(6)}"><name>${escapeXml(w.name)}</name>${w.desc ? `<desc>${escapeXml(w.desc)}</desc>` : ""}<sym>Flag, Blue</sym></wpt>`
+    )
     .join("\n");
 
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -186,7 +265,7 @@ function buildGpx(
     <author><name>loops.ie</name></author>
     <time>${now}</time>
   </metadata>
-  <trk>
+${wpts ? wpts + "\n" : ""}  <trk>
     <name>${escapeXml(name)}</name>
     <type>${escapeXml(discipline)}</type>
     <trkseg>
@@ -207,7 +286,8 @@ interface RoutedPath {
 
 async function routeViaBRouter(
   waypoints: [number, number][],       // [lat, lng]
-  profile: string
+  profile: string,
+  retried = false
 ): Promise<RoutedPath | null> {
   // BRouter expects lonlats as "lng,lat|lng,lat|..."
   const lonlats = waypoints.map(([lat, lng]) => `${lng},${lat}`).join("|");
@@ -222,7 +302,21 @@ async function routeViaBRouter(
   } catch {
     return null;
   }
-  if (!res.ok) return null;
+  if (!res.ok) {
+    // "target island detected for section N" = waypoint N+1 is unreachable
+    // (offshore island, private estate, sea). Drop it and retry once —
+    // a triangle loop beats a dead candidate.
+    if (res.status === 400 && !retried && waypoints.length > 3) {
+      const body = await res.text().catch(() => "");
+      const match = body.match(/island detected for section (\d+)/);
+      if (match) {
+        const badIdx = Math.min(parseInt(match[1], 10) + 1, waypoints.length - 2);
+        const pruned = waypoints.filter((_, i) => i !== badIdx);
+        return routeViaBRouter(pruned, profile, true);
+      }
+    }
+    return null;
+  }
 
   let json: BRouterFeatureCollection;
   try {
@@ -311,6 +405,80 @@ function extractHighlights(flags: string[]): string[] {
 function computeRoadTypeBreakdown(_coords: [number, number][]): Record<string, number> {
   // Detailed road-type analysis is already done in scoreRoute via Overpass.
   return { estimated: 100 };
+}
+
+// ── Reroute (route editing) ──────────────────────────────────────────────────
+
+export interface RerouteResult {
+  coordinates: [number, number][];
+  elevations: number[];
+  distance_km: number;
+  elevation_gain_m: number;
+  elevation_loss_m: number;
+  gpx_data: string;
+  /** Geometric rule check — surfaced so the editor can warn honestly. */
+  warnings: string[];
+}
+
+/**
+ * Re-route a user-edited set of via points (drag-to-edit on the map).
+ * Same BRouter profiles and geometric guardrails as generation; quality
+ * re-scoring is skipped for speed — the editor shows a "re-checked
+ * surfaces on export" note instead.
+ */
+export async function rerouteWaypoints(
+  waypoints: [number, number][],
+  discipline: Discipline
+): Promise<RerouteResult | null> {
+  if (waypoints.length < 2 || waypoints.length > 10) return null;
+  const profile = DISCIPLINE_PROFILE[discipline];
+  const path = await routeViaBRouter(waypoints, profile);
+  if (!path || path.coords.length < 2) return null;
+
+  let elevations = path.elevations;
+  let elevGain = path.elevation_gain_m;
+  let elevLoss: number | null = null;
+  const hasElevation = elevations.some((e) => !Number.isNaN(e));
+  if (!hasElevation) {
+    const sampled = await sampleRouteElevation(path.coords, 200);
+    elevations = sampled.elevations;
+    elevGain = sampled.gain_m;
+    elevLoss = sampled.loss_m;
+  } else if (elevGain === null) {
+    elevGain = elevationGainFromSeries(elevations);
+  }
+  if (elevLoss === null) {
+    let loss = 0;
+    for (let i = 1; i < elevations.length; i++) {
+      const d = elevations[i] - elevations[i - 1];
+      if (d < 0 && !Number.isNaN(d)) loss += -d;
+    }
+    elevLoss = Math.round(loss);
+  }
+
+  const distKm = path.distance_km;
+  const rules = validateRouteRules(path.coords, discipline, null, {
+    elevationGain: elevGain ?? 0,
+    distanceKm: distKm,
+  });
+  const warnings = rules.passed
+    ? []
+    : rules.violations.map((v) => v.message);
+
+  return {
+    coordinates: path.coords,
+    elevations,
+    distance_km: Math.round(distKm * 10) / 10,
+    elevation_gain_m: Math.round(elevGain ?? 0),
+    elevation_loss_m: elevLoss,
+    gpx_data: buildGpx(
+      path.coords,
+      elevations,
+      `Edited ${discipline} route — ${Math.round(distKm)}km`,
+      discipline
+    ),
+    warnings,
+  };
 }
 
 // ── Main export ──────────────────────────────────────────────────────────────
@@ -414,10 +582,66 @@ async function summariseIntent(spec: RouteSpec): Promise<InterpretedIntent> {
     country: spec.country,
     is_workout: !!spec.workout,
     workout_summary,
+    wind_strategy: spec.wind_strategy !== "none" ? spec.wind_strategy : undefined,
+    cafe_stop: spec.cafe_stop || undefined,
   };
 }
 
-async function candidatesFromSpec(spec: RouteSpec): Promise<RouteCandidate[]> {
+/** Rough ride duration for forecasting which hour the rider is on each leg. */
+function estimateDurationMinutes(spec: RouteSpec): number {
+  return spec.duration_minutes ?? Math.round((spec.distance_km / 25) * 60);
+}
+
+/**
+ * Wind wrapper around candidate selection. Fetches the forecast for the
+ * ride window once, lets generation use it for ranking, then annotates
+ * every served candidate (library or generated) with an honest wind note.
+ * Forecast failure or light wind never blocks generation — we degrade
+ * and say so, per the launch spec.
+ */
+/**
+ * Generate candidates from an already-built RouteSpec — used by the smoke
+ * test and any future structured (non-LLM) entry points.
+ */
+export async function candidatesFromSpec(spec: RouteSpec): Promise<RouteCandidate[]> {
+  const forecast =
+    spec.wind_strategy !== "none"
+      ? await fetchWindForecast(
+          spec.start_point,
+          new Date(),
+          estimateDurationMinutes(spec),
+          spec.wind_strategy
+        )
+      : null;
+
+  const candidates = await candidatesFromSpecInner(spec, forecast);
+
+  if (spec.wind_strategy !== "none") {
+    for (const c of candidates) {
+      if (forecast) {
+        const analysis = analyzeWind(c.coordinates, forecast, spec.wind_strategy);
+        c.wind_note = analysis.note;
+        if (c.source === "generated") {
+          c.wind_alignment_score = analysis.alignment_score;
+          c.wind_forecast = {
+            direction_deg: forecast.direction_deg,
+            speed_kmh: forecast.speed_kmh,
+          };
+        }
+      } else {
+        c.wind_note =
+          "Couldn't reach the wind forecast — this route isn't wind-optimised.";
+      }
+    }
+  }
+
+  return candidates;
+}
+
+async function candidatesFromSpecInner(
+  spec: RouteSpec,
+  windForecast: WindForecast | null
+): Promise<RouteCandidate[]> {
 
   // ── Workout mode ───────────────────────────────────────────────────────────
   // A workout is a hard constraint: either the route's segments can host it
@@ -427,34 +651,39 @@ async function candidatesFromSpec(spec: RouteSpec): Promise<RouteCandidate[]> {
   // failure honestly rather than ship a generic route mislabelled as
   // workout-friendly.
   if (spec.workout) {
-    const workoutMatches = await matchLibraryForWorkout(spec, 3);
+    const workoutMatches = await matchLibraryForWorkout(spec, 3).catch(() => []);
     if (workoutMatches.length > 0) {
       return workoutMatches.map((m) => ({ source: "library" as const, ...m }));
     }
+    // Anchor-first (spec §3): find the effort road, build the loop
+    // around it. Falls back to route-first wide search, then declines.
+    const anchored = await assembleAnchorFirstWorkout(spec, spec.workout);
+    if (anchored.length > 0) {
+      return anchored.map((g) => ({ source: "generated" as const, ...g }));
+    }
     const freshWorkout = await generateFreshWorkoutRoutes(spec, spec.workout);
     if (freshWorkout.length === 0) {
-      throw new Error(
-        "No routes in your area can host this workout. Try a shorter interval duration, a different zone, or a wider start location."
-      );
+      throw new Error(workoutDeclineMessage(spec.workout));
     }
     return freshWorkout.map((g) => ({ source: "generated" as const, ...g }));
   }
 
   // ── Library-first ──────────────────────────────────────────────────────────
-  const libraryMatches = await matchLibraryRoutes(spec, 3);
+  // Fail soft: a DB outage must never block fresh generation.
+  const libraryMatches = await matchLibraryRoutes(spec, 3).catch(() => []);
   if (libraryMatches.length > 0) {
     return libraryMatches.map((m) => ({ source: "library" as const, ...m }));
   }
 
   // ── Fresh generation ───────────────────────────────────────────────────────
-  const generated = await generateFreshRoutes(spec);
+  const generated = await generateFreshRoutes(spec, windForecast);
 
   // If none of the fresh builds hit "excellent", try to mix in library
   // routes as fallback. A verified operator route at "good" match is
   // better than a generated one at "good" quality — trust signal.
   const hasExcellent = generated.some((g) => g.quality_tier === "excellent");
   if (!hasExcellent && generated.length > 0) {
-    const libraryFallbacks = await matchLibraryRoutes(spec, 2);
+    const libraryFallbacks = await matchLibraryRoutes(spec, 2).catch(() => []);
     if (libraryFallbacks.length > 0) {
       return [
         ...libraryFallbacks.map((m) => ({ source: "library" as const, ...m })),
@@ -464,6 +693,298 @@ async function candidatesFromSpec(spec: RouteSpec): Promise<RouteCandidate[]> {
   }
 
   return generated.map((g) => ({ source: "generated" as const, ...g }));
+}
+
+/**
+ * Anchor-first session assembly (launch spec §3): find a qualifying
+ * effort corridor near the start FIRST, then build the loop around it —
+ * warm-up leg out, efforts as laps of the corridor (ride the stretch,
+ * spin back, repeat), cool-down home. Efforts are engineered onto a road
+ * that can hold them, not hoped for.
+ */
+async function assembleAnchorFirstWorkout(
+  spec: RouteSpec,
+  workout: WorkoutSpec
+): Promise<GeneratedRoute[]> {
+  const profile = DISCIPLINE_PROFILE[spec.discipline];
+
+  // Corridor must hold the most demanding block (longest distance need).
+  let needBlock = workout.intervals[0];
+  let needKm = 0;
+  for (const iv of workout.intervals) {
+    const km = ZONES[iv.zone].terrain.min_length_km_per_minute * iv.duration_minutes;
+    if (km > needKm) {
+      needKm = km;
+      needBlock = iv;
+    }
+  }
+  const totalReps = workout.intervals.reduce((s, iv) => s + iv.count, 0);
+
+  let corridors: EffortCorridor[];
+  try {
+    corridors = await findEffortCorridors(
+      spec.start_point,
+      needBlock.zone,
+      needBlock.duration_minutes,
+      { limit: 2 }
+    );
+  } catch (err) {
+    genDebug(`anchor-first: corridor search failed — ${err instanceof Error ? err.message : err}`);
+    return [];
+  }
+  genDebug(`anchor-first: ${corridors.length} qualifying corridor(s)`);
+
+  const results: GeneratedRoute[] = [];
+  for (const corridor of corridors) {
+    try {
+      const route = await buildLoopAroundCorridor(spec, workout, corridor, totalReps, profile);
+      if (route) results.push(route);
+    } catch (err) {
+      genDebug(`anchor-first: assembly failed — ${err instanceof Error ? err.message : err}`);
+    }
+    if (results.length >= 2) break;
+  }
+  results.sort((a, b) => b.match_score - a.match_score);
+  return results;
+}
+
+async function buildLoopAroundCorridor(
+  spec: RouteSpec,
+  workout: WorkoutSpec,
+  corridor: EffortCorridor,
+  totalReps: number,
+  profile: string
+): Promise<GeneratedRoute | null> {
+  const A = corridor.coords[0];
+
+  // Spec §3: minimum 15 minutes riding before effort 1. If the corridor
+  // is close, detour the warm-up leg to make up the time.
+  const warmupNeedKm = (Math.max(15, workout.warmup_minutes) / 60) * 24; // easy pace
+  let warmupLeg = await routeViaBRouter([spec.start_point, A], profile);
+  if (warmupLeg && warmupLeg.distance_km < warmupNeedKm * 0.7) {
+    const deficit = warmupNeedKm - warmupLeg.distance_km;
+    const brg = ((Math.atan2(
+      Math.sin(((A[1] - spec.start_point[1]) * Math.PI) / 180) * Math.cos((A[0] * Math.PI) / 180),
+      Math.cos((spec.start_point[0] * Math.PI) / 180) * Math.sin((A[0] * Math.PI) / 180) -
+        Math.sin((spec.start_point[0] * Math.PI) / 180) * Math.cos((A[0] * Math.PI) / 180) *
+          Math.cos(((A[1] - spec.start_point[1]) * Math.PI) / 180)
+    ) * 180) / Math.PI + 360) % 360;
+    // Detour point ~120° off the direct line, half the deficit out
+    const detourBrg = ((brg + 120) * Math.PI) / 180;
+    const dKm = deficit / 2;
+    const detour: [number, number] = [
+      spec.start_point[0] + (dKm / 111.32) * Math.cos(detourBrg),
+      spec.start_point[1] + (dKm / (111.32 * Math.cos((spec.start_point[0] * Math.PI) / 180))) * Math.sin(detourBrg),
+    ];
+    const extended = await routeViaBRouter([spec.start_point, detour, A], profile);
+    if (extended && extended.distance_km > warmupLeg.distance_km) {
+      genDebug(`anchor-first: warm-up extended ${warmupLeg.distance_km.toFixed(1)}km → ${extended.distance_km.toFixed(1)}km (need ~${warmupNeedKm.toFixed(1)}km)`);
+      warmupLeg = extended;
+    }
+  }
+  if (!warmupLeg || warmupLeg.coords.length < 2) {
+    genDebug("anchor-first: no warm-up leg to corridor");
+    return null;
+  }
+
+  // Assemble: warm-up → [effort A→B, spin back B→A] × (reps−1) → final
+  // effort A→B → home. All efforts run the same direction, so the
+  // qualified gradient profile applies to every rep.
+  const coords: [number, number][] = [];
+  const elevations: number[] = [];
+
+  // Truncate the traversal to the longest rep's needed distance plus a
+  // short roll-off: a 30-second effort must not drag the rider down an
+  // 8 km corridor end to end on every rep.
+  let maxNeedKm = 0;
+  for (const iv of workout.intervals) {
+    const km = ZONES[iv.zone].terrain.min_length_km_per_minute * iv.duration_minutes;
+    if (km > maxNeedKm) maxNeedKm = km;
+  }
+  const traverseKm = Math.min(corridor.length_km, maxNeedKm + 0.4);
+  let cut = corridor.coords.length;
+  {
+    let cum = 0;
+    for (let i = 1; i < corridor.coords.length; i++) {
+      cum += haversineKm(
+        corridor.coords[i - 1][0], corridor.coords[i - 1][1],
+        corridor.coords[i][0], corridor.coords[i][1]
+      );
+      if (cum >= traverseKm) {
+        cut = i + 1;
+        break;
+      }
+    }
+  }
+  const corridorCoords = corridor.coords.slice(0, cut);
+  const corridorElev = corridor.elevations.slice(0, cut);
+  const reverseCoords = [...corridorCoords].reverse();
+  const reverseElev = [...corridorElev].reverse();
+
+  const B = corridorCoords[corridorCoords.length - 1];
+  const homeLeg = await routeViaBRouter([B, spec.end_point], profile);
+  if (!homeLeg || homeLeg.coords.length < 2) {
+    genDebug("anchor-first: no leg home from corridor");
+    return null;
+  }
+
+  const push = (cs: [number, number][], es: number[]) => {
+    // Skip the first point only when it actually duplicates the tail
+    // (~1 m tolerance) — BRouter legs snap to slightly different points,
+    // and unconditionally dropping a real point left a gap in effort 1.
+    let start = 0;
+    if (coords.length > 0 && cs.length > 0) {
+      const tail = coords[coords.length - 1];
+      if (Math.abs(tail[0] - cs[0][0]) < 1e-5 && Math.abs(tail[1] - cs[0][1]) < 1e-5) {
+        start = 1;
+      }
+    }
+    for (let i = start; i < cs.length; i++) {
+      coords.push(cs[i]);
+      elevations.push(es[i]);
+    }
+  };
+
+  push(warmupLeg.coords, warmupLeg.elevations);
+
+  // Effort segment bounds (by traversal): efforts occupy the corridor up
+  // to the zone's required distance; any remainder is roll-off.
+  const intervalPlan: Array<{ interval_index: number; rep_index: number; zone: string; duration: number }> = [];
+  workout.intervals.forEach((iv, ii) => {
+    for (let r = 0; r < iv.count; r++) {
+      intervalPlan.push({ interval_index: ii, rep_index: r, zone: iv.zone, duration: iv.duration_minutes });
+    }
+  });
+
+  const segments: WorkoutFit["interval_segments"] = [];
+  const candidateSegments: IntervalSegment[] = [];
+
+  for (let rep = 0; rep < totalReps; rep++) {
+    const plan = intervalPlan[rep];
+    const needRepKm =
+      ZONES[plan.zone as keyof typeof ZONES].terrain.min_length_km_per_minute * plan.duration;
+
+    const effortStartIdx = coords.length - 1;
+    push(corridorCoords, corridorElev);
+
+    // Find where the rep's needed distance is reached within the traverse
+    let cum = 0;
+    let effortEndIdx = coords.length - 1;
+    for (let i = effortStartIdx + 1; i < coords.length; i++) {
+      cum += haversineKm(coords[i - 1][0], coords[i - 1][1], coords[i][0], coords[i][1]);
+      if (cum >= needRepKm) {
+        effortEndIdx = i;
+        break;
+      }
+    }
+
+    const seg: IntervalSegment = {
+      start_index: effortStartIdx,
+      end_index: effortEndIdx,
+      length_km: Math.round(Math.min(cum, corridor.length_km) * 10) / 10,
+      avg_gradient_pct: corridor.avg_gradient_pct,
+      max_gradient_pct: corridor.max_gradient_pct,
+      gradient_variance: corridor.gradient_variance,
+      suitable_zones: [plan.zone as IntervalSegment["suitable_zones"][number]],
+    };
+    segments.push({ interval_index: plan.interval_index, rep_index: plan.rep_index, segment: seg });
+    if (rep === 0) candidateSegments.push(seg);
+
+    // Spin back for the next rep (not after the last)
+    if (rep < totalReps - 1) {
+      push(reverseCoords, reverseElev);
+    }
+  }
+
+  push(homeLeg.coords, homeLeg.elevations);
+
+  // Elevation gaps from BRouter legs: backfill NaNs by interpolation
+  for (let i = 0; i < elevations.length; i++) {
+    if (Number.isNaN(elevations[i])) {
+      let j = i + 1;
+      while (j < elevations.length && Number.isNaN(elevations[j])) j++;
+      const prev = i > 0 ? elevations[i - 1] : elevations[j] ?? 0;
+      const next = j < elevations.length ? elevations[j] : prev;
+      for (let k = i; k < j; k++) {
+        elevations[k] = prev + ((next - prev) * (k - i + 1)) / (j - i + 1);
+      }
+    }
+  }
+
+  const distKm = totalDistanceKm(coords);
+  let gain = 0;
+  let loss = 0;
+  for (let i = 1; i < elevations.length; i++) {
+    const d = elevations[i] - elevations[i - 1];
+    if (d > 0) gain += d;
+    else loss += -d;
+  }
+
+  const rulesResult = validateRouteRules(coords, spec.discipline, null, {
+    elevationGain: Math.round(gain),
+    distanceKm: distKm,
+  });
+  if (!rulesResult.passed) {
+    genDebug(`anchor-first: assembled loop failed rules — ${rulesResult.violations?.map((v) => v.rule).join("; ")}`);
+    return null;
+  }
+
+  const quality = await scoreRoute(coords, spec.discipline);
+  if (quality.total < QUALITY_FLOOR) {
+    genDebug(`anchor-first: assembled loop quality ${quality.total} < ${QUALITY_FLOOR}`);
+    return null;
+  }
+
+  const fit: WorkoutFit = {
+    fits: true,
+    interval_segments: segments,
+    candidate_segments: candidateSegments,
+  };
+
+  const matchScore = computeMatchScore(distKm, Math.round(gain), spec, quality.total);
+
+  return {
+    coordinates: coords,
+    elevations,
+    distance_km: Math.round(distKm * 10) / 10,
+    elevation_gain_m: Math.round(gain),
+    elevation_loss_m: Math.round(loss),
+    quality_score: quality.total,
+    quality_tier: quality.total >= QUALITY_WORLD_CLASS ? "excellent" : "good",
+    quality_breakdown: quality.breakdown as unknown as Record<string, number>,
+    highlights: extractHighlights(quality.flags),
+    road_type_breakdown: quality.road_class_breakdown ?? computeRoadTypeBreakdown(coords),
+    surface_breakdown: quality.surface_breakdown,
+    gpx_data: buildGpx(
+      coords,
+      elevations,
+      `Workout ${spec.discipline} route — ${Math.round(distKm)}km`,
+      spec.discipline,
+      workoutCoursePoints(coords, fit, workout)
+    ),
+    waypoints_used: [spec.start_point, A, B],
+    match_score: matchScore,
+    workout_fit: fit,
+  };
+}
+
+/**
+ * Honest decline with a concrete alternative (launch spec: never silently
+ * serve a compromised segment — say so and suggest what would work).
+ * Splitting the longest interval in half is the most common fix: a clean
+ * 10-minute stretch is far easier to find than a clean 20.
+ */
+function workoutDeclineMessage(workout: WorkoutSpec): string {
+  const longest = workout.intervals.reduce(
+    (max, iv) => (iv.duration_minutes > max.duration_minutes ? iv : max),
+    workout.intervals[0]
+  );
+  const base = `I couldn't find roads near your start point that can hold ${longest.count} × ${longest.duration_minutes} min uninterrupted at that intensity.`;
+  if (longest.duration_minutes >= 12) {
+    const half = Math.round(longest.duration_minutes / 2);
+    return `${base} Splitting it into ${longest.count * 2} × ${half} min would be much easier to place — or try a different start location.`;
+  }
+  return `${base} Try a different start location, or a slightly shorter interval.`;
 }
 
 // ── Workout-aware fresh generation ───────────────────────────────────────────
@@ -618,7 +1139,17 @@ async function generateFreshWorkoutRoutes(
       const fit = assignWorkoutToSegments(cleanSegments, workout);
       if (!fit.fits) return null;
 
-      return { ...route, workout_fit: fit };
+      // Rebuild the GPX with effort course points so head units alert
+      // at the start and end of every interval.
+      const gpxWithEfforts = buildGpx(
+        route.coordinates,
+        route.elevations,
+        `Workout ${spec.discipline} route — ${Math.round(route.distance_km)}km`,
+        spec.discipline,
+        workoutCoursePoints(route.coordinates, fit, workout)
+      );
+
+      return { ...route, workout_fit: fit, gpx_data: gpxWithEfforts };
     })
   );
 
@@ -631,7 +1162,10 @@ async function generateFreshWorkoutRoutes(
   return candidates.slice(0, 3);
 }
 
-async function generateFreshRoutes(spec: RouteSpec): Promise<GeneratedRoute[]> {
+async function generateFreshRoutes(
+  spec: RouteSpec,
+  windForecast: WindForecast | null = null
+): Promise<GeneratedRoute[]> {
   const profile = DISCIPLINE_PROFILE[spec.discipline];
 
   const waypointSets = await generateWaypointSets(spec);
@@ -639,7 +1173,10 @@ async function generateFreshRoutes(spec: RouteSpec): Promise<GeneratedRoute[]> {
   const candidateResults = await Promise.allSettled(
     waypointSets.map(async (waypoints) => {
       const path = await routeViaBRouter(waypoints, profile);
-      if (!path || path.coords.length < 2) return null;
+      if (!path || path.coords.length < 2) {
+        genDebug("candidate dropped: BRouter returned no path");
+        return null;
+      }
 
       // Backfill elevation from Open-Meteo if BRouter didn't return any (rare
       // but possible if the profile skips SRTM). This is the safety net for
@@ -679,9 +1216,18 @@ async function generateFreshRoutes(spec: RouteSpec): Promise<GeneratedRoute[]> {
           spec.elevation_preference === "flat" &&
           (spec.max_elevation_gain_m ?? Infinity) < distKm * 6,
       });
-      if (!rulesResult.passed) return null;
+      if (!rulesResult.passed) {
+        genDebug(`candidate dropped: rules — ${rulesResult.violations?.map((v) => v.rule).join("; ") ?? "failed"} (${Math.round(distKm)}km)`);
+        return null;
+      }
 
-      const quality = await scoreRoute(path.coords, spec.discipline);
+      let quality;
+      try {
+        quality = await scoreRoute(path.coords, spec.discipline);
+      } catch (err) {
+        genDebug(`candidate dropped: quality scoring threw — ${err instanceof Error ? err.message : err}`);
+        throw err;
+      }
 
       const gpx = buildGpx(
         path.coords,
@@ -690,12 +1236,31 @@ async function generateFreshRoutes(spec: RouteSpec): Promise<GeneratedRoute[]> {
         spec.discipline
       );
 
-      const matchScore = computeMatchScore(distKm, gain, spec, quality.total);
+      let matchScore = computeMatchScore(distKm, gain, spec, quality.total);
+
+      // Wind alignment shapes the ranking: a loop oriented for the
+      // requested tailwind beats an equally good one that ignores it.
+      // 15% weight — wind helps pick between good routes, it never
+      // rescues a bad one.
+      if (windForecast && spec.wind_strategy !== "none") {
+        const ws = windAlignmentScore(path.coords, windForecast, spec.wind_strategy);
+        matchScore = Math.round(matchScore * 0.85 + ws * 0.15);
+      }
+
+      // Café stop requested: prefer candidates whose quality scan found
+      // cafés/restaurants along the way (a nudge, never a rescue).
+      if (spec.cafe_stop) {
+        const hasCafe = quality.flags.some((f) => /caf|restaurant|pub/i.test(f));
+        matchScore = Math.min(100, Math.round(matchScore + (hasCafe ? 6 : -4)));
+      }
 
       // Drop candidates below the quality floor — these are routes on
       // industrial estates, motorway slip roads, or featureless suburban
       // laps. Serving one is the "one bad experience" we can't afford.
-      if (quality.total < QUALITY_FLOOR) return null;
+      if (quality.total < QUALITY_FLOOR) {
+        genDebug(`candidate dropped: quality ${quality.total} < floor ${QUALITY_FLOOR} (${Math.round(distKm)}km; flags: ${quality.flags.slice(0, 3).join("; ")})`);
+        return null;
+      }
 
       const result: GeneratedRoute = {
         coordinates: path.coords,
@@ -707,7 +1272,8 @@ async function generateFreshRoutes(spec: RouteSpec): Promise<GeneratedRoute[]> {
         quality_tier: quality.total >= QUALITY_WORLD_CLASS ? "excellent" : "good",
         quality_breakdown: quality.breakdown as unknown as Record<string, number>,
         highlights: extractHighlights(quality.flags),
-        road_type_breakdown: computeRoadTypeBreakdown(path.coords),
+        road_type_breakdown: quality.road_class_breakdown ?? computeRoadTypeBreakdown(path.coords),
+        surface_breakdown: quality.surface_breakdown,
         gpx_data: gpx,
         waypoints_used: waypoints,
         match_score: matchScore,

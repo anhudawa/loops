@@ -16,6 +16,7 @@ function makeSpec(overrides: Partial<RouteSpec> = {}): RouteSpec {
     avoid: ["motorway"],
     vibes: [],
     country: "Ireland",
+    wind_strategy: "none",
     ...overrides,
   };
 }

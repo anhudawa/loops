@@ -1,0 +1,90 @@
+[
+  {
+    "name": "Puerto del León Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/54568804",
+    "description": "Málaga's signature climb: the beautifully engineered A-7000 through the Montes de Málaga to Puerto del León and back. 46 km with one steady 15 km ascent starting minutes from the city.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "moderate",
+    "county": "Málaga",
+    "country": "Spain",
+    "region": "Andalucía"
+  },
+  {
+    "name": "Casabermeja, Riogordo and Colmenar Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/54809543",
+    "description": "The big Montes day: 88 km and nearly 2,000 m through Casabermeja, Riogordo and Colmenar, finishing over Puerto del León. The classic Málaga training loop.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "hard",
+    "county": "Málaga",
+    "country": "Spain",
+    "region": "Andalucía"
+  },
+  {
+    "name": "Comares and Torre del Mar Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/54494026",
+    "description": "97 km into the Axarquía: over Puerto del León, up to the balcony village of Comares and back along the coast from Torre del Mar.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "hard",
+    "county": "Málaga",
+    "country": "Spain",
+    "region": "Andalucía"
+  },
+  {
+    "name": "Sierra de Mijas Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/55104786",
+    "description": "61 km from Fuengirola around the Sierra de Mijas with the climb to the white village — the western Costa del Sol's standard ride.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "moderate",
+    "county": "Málaga",
+    "country": "Spain",
+    "region": "Andalucía"
+  },
+  {
+    "name": "Mijas Loop from Calahonda",
+    "rwgps_url": "https://ridewithgps.com/routes/52986726",
+    "description": "53 km with 1,200 m of climbing — the punchy Mijas circuit from the coast at Calahonda, ideal for repeat hill efforts.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "moderate",
+    "county": "Málaga",
+    "country": "Spain",
+    "region": "Andalucía"
+  },
+  {
+    "name": "Torre del Mar Flat Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/54662067",
+    "description": "The easy day: 63 km east along the coast to Torre del Mar and back with barely 400 m of climbing — recovery spinning with sea views.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "easy",
+    "county": "Málaga",
+    "country": "Spain",
+    "region": "Andalucía"
+  },
+  {
+    "name": "Benagalbón Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/54662026",
+    "description": "40 km with one gentle climb to the village of Benagalbón — the short option when the legs need persuading.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "easy",
+    "county": "Málaga",
+    "country": "Spain",
+    "region": "Andalucía"
+  },
+  {
+    "name": "Comares Hard Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/54663584",
+    "description": "90 km and 1,850 m into the Axarquía with the full climb to the balcony village of Comares — one of Málaga's toughest regular loops.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "hard",
+    "county": "Málaga",
+    "country": "Spain",
+    "region": "Andalucía"
+  }
+]

@@ -4,10 +4,18 @@ import { slugify, generateItemListJsonLd } from "@/lib/seo";
 import JsonLd from "@/components/JsonLd";
 
 export default async function HomeSeoContent() {
-  const [countries, featuredRoutes] = await Promise.all([
-    getCountries(),
-    getRoutes({ limit: 20 }),
-  ]);
+  // Fail soft: a DB outage degrades this SEO section to its static copy
+  // instead of taking down the homepage (or the build).
+  let countries: string[] = [];
+  let featuredRoutes: Awaited<ReturnType<typeof getRoutes>> = [];
+  try {
+    [countries, featuredRoutes] = await Promise.all([
+      getCountries(),
+      getRoutes({ limit: 20 }),
+    ]);
+  } catch {
+    // render without dynamic data
+  }
 
   return (
     <section className="max-w-5xl mx-auto px-4 md:px-6 py-12 mt-8" style={{ borderTop: "1px solid var(--border)" }}>
@@ -16,8 +24,9 @@ export default async function HomeSeoContent() {
         Discover Cycling Routes Worldwide
       </h2>
       <p className="text-sm leading-relaxed mb-6" style={{ color: "var(--text-secondary)" }}>
-        LOOPS is a free cycling route discovery platform. Every route has been ridden and uploaded by a real cyclist.
-        Browse gravel, road, and MTB routes, download free GPX files, and find your next ride.
+        LOOPS is a free cycling route discovery platform: a curated library of the world's best
+        cycling roads plus wind-aware route generation. Browse gravel, road, and MTB routes,
+        download free GPX files, and find your next ride.
         Works with Strava, Komoot, Wahoo, and Garmin.
       </p>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">

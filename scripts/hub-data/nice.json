@@ -1,0 +1,90 @@
+[
+  {
+    "name": "Col d'Èze Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/55515105",
+    "description": "Nice's daily climb: 44 km over the Col d'Èze and the Corniche roads — the warm-up ride that happens to have some of the best views in cycling.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "moderate",
+    "county": "Alpes-Maritimes",
+    "country": "France",
+    "region": "Côte d'Azur"
+  },
+  {
+    "name": "Menton via Col de la Madone",
+    "rwgps_url": "https://ridewithgps.com/routes/55342795",
+    "description": "88 km along the coast to Menton and back over the Col de la Madone — professional cycling's most famous test climb.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "hard",
+    "county": "Alpes-Maritimes",
+    "country": "France",
+    "region": "Côte d'Azur"
+  },
+  {
+    "name": "Col de la Madone and Grande Corniche Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/55441134",
+    "description": "The full Madone day: 101 km and 2,400 m combining the test climb with the Grande Corniche balcony road above the Mediterranean.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "hard",
+    "county": "Alpes-Maritimes",
+    "country": "France",
+    "region": "Côte d'Azur"
+  },
+  {
+    "name": "Col de Vence and Bouyon Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/55561551",
+    "description": "94 km northwest of the city over the Col de Vence to Bouyon — the standard structured-training loop on quiet middle-mountain roads.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "moderate",
+    "county": "Alpes-Maritimes",
+    "country": "France",
+    "region": "Côte d'Azur"
+  },
+  {
+    "name": "Col de Turini and Col de Braus Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/55548953",
+    "description": "The epic: 132 km and almost 3,500 m over the Col de Braus and the mighty Col de Turini of Monte Carlo Rally and Tour de France fame.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "hard",
+    "county": "Alpes-Maritimes",
+    "country": "France",
+    "region": "Côte d'Azur"
+  },
+  {
+    "name": "Villefranche, Èze and Cap Ferrat",
+    "rwgps_url": "https://ridewithgps.com/routes/48295403",
+    "description": "The short classic: 32 km around Villefranche, up to Èze village and around the Cap Ferrat peninsula — small distance, big views.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "easy",
+    "county": "Alpes-Maritimes",
+    "country": "France",
+    "region": "Côte d'Azur"
+  },
+  {
+    "name": "Cap d'Ail, Madone and Èze",
+    "rwgps_url": "https://ridewithgps.com/routes/55262367",
+    "description": "62 km from Cap d'Ail combining the Col de la Madone with Èze — a condensed hit of the area's two most famous climbs.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "hard",
+    "county": "Alpes-Maritimes",
+    "country": "France",
+    "region": "Côte d'Azur"
+  },
+  {
+    "name": "Madone d'Utelle Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/54450489",
+    "description": "110 km and 2,500 m from Nice up the Var valley to the sanctuary summit of the Madone d'Utelle — a dead-end climb with the best view on the Côte d'Azur.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "hard",
+    "county": "Alpes-Maritimes",
+    "country": "France",
+    "region": "Côte d'Azur"
+  }
+]

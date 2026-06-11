@@ -9,15 +9,21 @@ import Breadcrumbs from "@/components/Breadcrumbs";
 export const revalidate = 3600;
 
 export async function generateStaticParams() {
-  const countries = await getCountries();
-  const params: { country: string; region: string }[] = [];
-  for (const country of countries) {
-    const regions = await getRegions(country);
-    for (const region of regions) {
-      params.push({ country: slugify(country), region: slugify(region) });
+  // Fail soft: if the DB is unreachable at build time, render on demand
+  // instead of failing the whole build.
+  try {
+    const countries = await getCountries();
+    const params: { country: string; region: string }[] = [];
+    for (const country of countries) {
+      const regions = await getRegions(country);
+      for (const region of regions) {
+        params.push({ country: slugify(country), region: slugify(region) });
+      }
     }
+    return params;
+  } catch {
+    return [];
   }
-  return params;
 }
 
 export async function generateMetadata({
@@ -26,7 +32,12 @@ export async function generateMetadata({
   params: Promise<{ country: string; region: string }>;
 }): Promise<Metadata> {
   const { country: countrySlug, region: regionSlug } = await params;
-  const stats = await getRegionStats(countrySlug, regionSlug);
+  let stats: Awaited<ReturnType<typeof getRegionStats>> = null;
+  try {
+    stats = await getRegionStats(countrySlug, regionSlug);
+  } catch {
+    return { title: "Cycling Routes | LOOPS" };
+  }
   if (!stats) return { title: "Not Found - LOOPS" };
 
   const title = `Cycling Routes in ${stats.displayName}, ${stats.countryDisplayName} — ${stats.routeCount} Routes | LOOPS`;
@@ -60,10 +71,18 @@ export default async function RegionPage({
   params: Promise<{ country: string; region: string }>;
 }) {
   const { country: countrySlug, region: regionSlug } = await params;
-  const stats = await getRegionStats(countrySlug, regionSlug);
+  // Fail soft: a DB outage shows an honest message, never a crash page.
+  let stats: Awaited<ReturnType<typeof getRegionStats>> = null;
+  let routes: Awaited<ReturnType<typeof getRoutesByRegionSlug>> = [];
+  let dbDown = false;
+  try {
+    stats = await getRegionStats(countrySlug, regionSlug);
+    if (stats) routes = await getRoutesByRegionSlug(countrySlug, regionSlug);
+  } catch {
+    dbDown = true;
+  }
+  if (dbDown) return <RoutesUnavailable />;
   if (!stats) notFound();
-
-  const routes = await getRoutesByRegionSlug(countrySlug, regionSlug);
 
   const breadcrumbItems = [
     { name: "LOOPS", url: "https://loops.ie" },
@@ -177,5 +196,22 @@ export default async function RegionPage({
         </div>
       </div>
     </div>
+  );
+}
+
+
+function RoutesUnavailable() {
+  return (
+    <main className="min-h-screen flex items-center justify-center px-4" style={{ background: "var(--bg)" }}>
+      <div className="text-center max-w-md">
+        <h1 className="text-xl font-bold mb-2" style={{ color: "var(--text)" }}>
+          Routes are taking a breather
+        </h1>
+        <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+          We couldn&apos;t load the route library just now. Give it a minute and
+          refresh — the roads aren&apos;t going anywhere.
+        </p>
+      </div>
+    </main>
   );
 }

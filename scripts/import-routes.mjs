@@ -21,6 +21,10 @@
  * Usage:
  *   node --env-file=.env.local scripts/import-routes.mjs scripts/hub-data/dublin.json
  *   node --env-file=.env.local scripts/import-routes.mjs scripts/hub-data/girona.json
+ *
+ * Pass --dry-run to fetch, parse and quality-check every route without
+ * touching the database (no POSTGRES_URL needed). Use this to verify a
+ * new manifest before importing.
  */
 
 import { createPool } from "@vercel/postgres";
@@ -28,19 +32,22 @@ import { randomUUID } from "crypto";
 import { readFileSync, existsSync } from "fs";
 import { resolve } from "path";
 
-const POSTGRES_URL = process.env.POSTGRES_URL;
-if (!POSTGRES_URL) {
-  console.error("❌ POSTGRES_URL not set. Run with: node --env-file=.env.local scripts/import-routes.mjs <manifest.json>");
-  process.exit(1);
-}
+const args = process.argv.slice(2);
+const DRY_RUN = args.includes("--dry-run");
+const manifestPath = args.find((a) => !a.startsWith("--"));
 
-const manifestPath = process.argv[2];
 if (!manifestPath) {
-  console.error("❌ No manifest file specified. Usage: node scripts/import-routes.mjs <manifest.json>");
+  console.error("❌ No manifest file specified. Usage: node scripts/import-routes.mjs <manifest.json> [--dry-run]");
   process.exit(1);
 }
 
-const pool = createPool({ connectionString: POSTGRES_URL });
+const POSTGRES_URL = process.env.POSTGRES_URL;
+if (!POSTGRES_URL && !DRY_RUN) {
+  console.error("❌ POSTGRES_URL not set. Run with: node --env-file=.env.local scripts/import-routes.mjs <manifest.json> (or pass --dry-run to validate without a database)");
+  process.exit(1);
+}
+
+const pool = DRY_RUN ? null : createPool({ connectionString: POSTGRES_URL });
 
 // ── Quality thresholds ──
 // Routes must pass a basic safety + surface check via Overpass before
@@ -224,7 +231,7 @@ out tags;
 
 async function main() {
   const manifest = JSON.parse(readFileSync(manifestPath, "utf-8"));
-  console.log(`📦 Importing ${manifest.length} routes from ${manifestPath}\n`);
+  console.log(`📦 ${DRY_RUN ? "Validating" : "Importing"} ${manifest.length} routes from ${manifestPath}\n`);
 
   let inserted = 0, skipped = 0, failed = 0;
 
@@ -233,14 +240,16 @@ async function main() {
     process.stdout.write(`  ${label} … `);
 
     // Check for duplicate by name + county
-    const { rows: existing } = await pool.query(
-      `SELECT id FROM routes WHERE name = $1 AND county = $2 LIMIT 1`,
-      [route.name, route.county]
-    );
-    if (existing.length > 0) {
-      console.log("SKIP (already exists)");
-      skipped++;
-      continue;
+    if (!DRY_RUN) {
+      const { rows: existing } = await pool.query(
+        `SELECT id FROM routes WHERE name = $1 AND county = $2 LIMIT 1`,
+        [route.name, route.county]
+      );
+      if (existing.length > 0) {
+        console.log("SKIP (already exists)");
+        skipped++;
+        continue;
+      }
     }
 
     let points;
@@ -332,6 +341,12 @@ async function main() {
       continue;
     }
 
+    if (DRY_RUN) {
+      console.log(`DRY OK (${stats.distanceKm} km, +${stats.elevGain}m, ${coords.length} pts, quality=${qualityScore})`);
+      inserted++;
+      continue;
+    }
+
     const id = randomUUID();
     try {
       await pool.query(
@@ -377,9 +392,10 @@ async function main() {
     }
   }
 
-  console.log(`\n✅ Done: ${inserted} inserted, ${skipped} skipped, ${failed} failed`);
+  console.log(`\n✅ Done: ${inserted} ${DRY_RUN ? "validated" : "inserted"}, ${skipped} skipped, ${failed} failed`);
+  if (failed > 0) process.exitCode = 1;
 }
 
 main()
   .catch((e) => { console.error("Import failed:", e); process.exit(1); })
-  .finally(() => pool.end());
+  .finally(() => pool?.end());

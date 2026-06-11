@@ -20,9 +20,11 @@
 
 import { createPool } from '@vercel/postgres';
 
-const DB_URL =
-  process.env.DATABASE_URL ||
-  'postgresql://neondb_owner:npg_NmxMEVUs4b9n@ep-square-violet-abmzjihi-pooler.eu-west-2.aws.neon.tech/neondb?channel_binding=require&sslmode=require';
+const DB_URL = process.env.DATABASE_URL || process.env.POSTGRES_URL;
+if (!DB_URL) {
+  console.error('DATABASE_URL/POSTGRES_URL not set. Run with: node --env-file=.env.local scripts/run-full-quality-audit.mjs');
+  process.exit(1);
+}
 
 // ── Geometry helpers ────────────────────────────────────────────────────────
 

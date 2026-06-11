@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import JsonLd from "@/components/JsonLd";
-import { generateBreadcrumbJsonLd, generateFaqJsonLd } from "@/lib/seo";
+import { generateBreadcrumbJsonLd, generateFaqJsonLd, slugify } from "@/lib/seo";
 import { getDestinationBySlug, type Destination } from "@/content/destinations";
 
 interface Props {
@@ -331,6 +331,31 @@ export default async function DestinationPage({ params }: Props) {
             ))}
           </div>
         </section>
+
+        {/* Route library link */}
+        {dest.routesCountry && dest.routesRegion && (
+          <div
+            className="mb-6 rounded-xl p-5 text-center"
+            style={{
+              background: "var(--bg-raised)",
+              border: "1px solid var(--border)",
+            }}
+          >
+            <p className="text-sm mb-3" style={{ color: "var(--text-muted)" }}>
+              Ready-to-ride loops with GPX downloads, elevation profiles and climb details
+            </p>
+            <Link
+              href={`/routes/country/${slugify(dest.routesCountry)}/${slugify(dest.routesRegion)}`}
+              className="inline-flex items-center justify-center font-bold text-sm px-5 py-2.5 rounded-lg"
+              style={{
+                background: "var(--accent)",
+                color: "var(--bg)",
+              }}
+            >
+              Browse {dest.name} routes
+            </Link>
+          </div>
+        )}
 
         {/* Collection link */}
         {dest.collectionSlug && (

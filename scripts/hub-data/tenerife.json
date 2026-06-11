@@ -1,0 +1,90 @@
+[
+  {
+    "name": "Vilaflor via San Miguel",
+    "rwgps_url": "https://ridewithgps.com/routes/55218726",
+    "description": "The medium mountain day from the southern resorts: a steady climb through San Miguel to Vilaflor, Spain's highest village, and a long flowing descent home. 63 km.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "moderate",
+    "county": "Tenerife",
+    "country": "Spain",
+    "region": "Tenerife"
+  },
+  {
+    "name": "Vilaflor Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/55482269",
+    "description": "85 km from Adeje climbing to Vilaflor through the pine forest and returning along the quieter western slopes — the standard Teide-foothills training loop.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "moderate",
+    "county": "Tenerife",
+    "country": "Spain",
+    "region": "Tenerife"
+  },
+  {
+    "name": "Teide via Vilaflor and Chío",
+    "rwgps_url": "https://ridewithgps.com/routes/55218728",
+    "description": "The signature day: up through Vilaflor into the Teide National Park past the cable car at over 2,300 m, then down via Chío. 117 km and 2,800 m on the longest climb in Europe.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "hard",
+    "county": "Tenerife",
+    "country": "Spain",
+    "region": "Tenerife"
+  },
+  {
+    "name": "Masca Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/54347320",
+    "description": "Short but mighty: 49 km from Santiago del Teide through the famous Masca gorge road — relentless ramps, hairpins and the most dramatic scenery on the island.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "hard",
+    "county": "Tenerife",
+    "country": "Spain",
+    "region": "Tenerife"
+  },
+  {
+    "name": "Montaña Negra Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/54347242",
+    "description": "The friendlier northwest loop from Santiago del Teide around Montaña Negra — 51 km through lava fields and pine forest without the big-mountain gradients.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "moderate",
+    "county": "Tenerife",
+    "country": "Spain",
+    "region": "Tenerife"
+  },
+  {
+    "name": "Anaga Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/54806693",
+    "description": "The other Tenerife: 47 km through the ancient laurel forests and ridgeline roads of the Anaga mountains in the island's north. Constant climbing, unforgettable riding.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "hard",
+    "county": "Tenerife",
+    "country": "Spain",
+    "region": "Tenerife"
+  },
+  {
+    "name": "Vilaflor Easy Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/18677043",
+    "description": "The gentlest way up: 47 km to Vilaflor at a steady gradient — as close to an easy day as the south of Tenerife offers.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "moderate",
+    "county": "Tenerife",
+    "country": "Spain",
+    "region": "Tenerife"
+  },
+  {
+    "name": "Teide Gentle Loop",
+    "rwgps_url": "https://ridewithgps.com/routes/32397693",
+    "description": "92 km circuit of the volcano's southern flank using the steadier gradients — the Teide experience without the steepest ramps.",
+    "discipline": "road",
+    "surface_type": "road",
+    "difficulty": "hard",
+    "county": "Tenerife",
+    "country": "Spain",
+    "region": "Tenerife"
+  }
+]

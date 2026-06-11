@@ -4,7 +4,12 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
+import dynamic from "next/dynamic";
 import RoutePreviewSvg from "@/components/RoutePreviewSvg";
+
+const RouteEditor = dynamic(() => import("@/components/RouteEditor"), { ssr: false });
+import RideDisclaimer from "@/components/RideDisclaimer";
+import SendToGarmin from "@/components/SendToGarmin";
 import ShareButton from "@/components/ShareButton";
 import { useVoiceInput } from "@/lib/useVoiceInput";
 import { useGeolocation } from "@/lib/useGeolocation";
@@ -45,6 +50,7 @@ interface LibraryCandidate {
   match_score: number;
   distance_from_start_km: number;
   workout_fit?: WorkoutFit;
+  wind_note?: string;
 }
 
 interface GeneratedCandidate {
@@ -56,10 +62,15 @@ interface GeneratedCandidate {
   elevation_loss_m: number;
   quality_score: number;
   quality_tier?: "excellent" | "good";
+  quality_breakdown?: Record<string, number>;
   highlights?: string[];
+  surface_breakdown?: { paved_pct: number; unpaved_pct: number; unknown_pct: number };
   gpx_data: string;
   match_score: number;
   workout_fit?: WorkoutFit;
+  wind_note?: string;
+  wind_forecast?: { direction_deg: number; speed_kmh: number };
+  waypoints_used?: [number, number][];
 }
 
 type Candidate = LibraryCandidate | GeneratedCandidate;
@@ -73,6 +84,8 @@ interface Interpreted {
   country: string;
   is_workout: boolean;
   workout_summary?: string;
+  wind_strategy?: "tailwind_home" | "tailwind_out" | "headwind_out";
+  cafe_stop?: boolean;
 }
 
 interface GenerateResponse {
@@ -148,7 +161,7 @@ export default function GeneratePage() {
   const geo = useGeolocation();
 
   useEffect(() => {
-    if (!authLoading && !user) router.push("/login?returnTo=/generate");
+    if (!authLoading && !user) router.push("/login?redirect=/generate");
   }, [user, authLoading, router]);
 
   function toggleVoice() {
@@ -176,7 +189,10 @@ export default function GeneratePage() {
       setError({ message: "Describe the route you want in a bit more detail.", code: "TOO_SHORT" });
       return;
     }
+    await runGeneration(trimmed);
+  }
 
+  async function runGeneration(trimmed: string) {
     setLoading(true);
     setError(null);
     setCandidates([]);
@@ -363,9 +379,18 @@ export default function GeneratePage() {
         </form>
 
         {error && <ErrorPanel error={error} />}
+        {error?.code === "PARSE_FAILED" && (
+          <FallbackForm
+            onSubmit={(text) => {
+              setPrompt(text);
+              runGeneration(text);
+            }}
+          />
+        )}
 
         {loading && (
           <div className="grid gap-4">
+            <LoadingStages />
             {[0, 1, 2].map((i) => (
               <div
                 key={i}
@@ -397,6 +422,7 @@ export default function GeneratePage() {
                 />
               ))}
             </div>
+            <RideDisclaimer />
           </div>
         )}
 
@@ -431,12 +457,22 @@ function InterpretedPanel({ interpreted }: { interpreted: Interpreted }) {
     ? `from ${interpreted.region}`
     : `in ${interpreted.country}`;
 
+  const windLabel = interpreted.wind_strategy
+    ? {
+        tailwind_home: "wind-planned for the run home",
+        tailwind_out: "tailwind to start",
+        headwind_out: "into the wind first",
+      }[interpreted.wind_strategy]
+    : null;
+
   const bits = [
     duration && `${duration} (~${interpreted.distance_km} km)`,
     !duration && `${interpreted.distance_km} km`,
     interpreted.discipline,
     terrainLabel,
     locationLabel,
+    windLabel,
+    interpreted.cafe_stop && "café stop",
   ].filter(Boolean);
 
   return (
@@ -513,6 +549,129 @@ function ErrorPanel({ error }: { error: { message: string; code?: string } }) {
   );
 }
 
+// ── Fallback form ─────────────────────────────────────────────────────────────
+
+/**
+ * Structured fallback when natural-language parsing fails (launch spec
+ * resilience: fall back to a form instead of a dead end). Composes a
+ * clean prompt from the fields and reruns generation.
+ */
+function FallbackForm({ onSubmit }: { onSubmit: (text: string) => void }) {
+  const [hours, setHours] = useState("2");
+  const [discipline, setDiscipline] = useState("road");
+  const [terrain, setTerrain] = useState("rolling");
+  const [place, setPlace] = useState("");
+
+  const selectStyle = {
+    background: "var(--bg-card)",
+    border: "1px solid var(--border)",
+    color: "var(--text)",
+  } as const;
+
+  return (
+    <form
+      className="mb-6 rounded-2xl p-4 grid gap-3"
+      style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+      onSubmit={(e) => {
+        e.preventDefault();
+        const placePart = place.trim() ? ` from ${place.trim()}` : "";
+        onSubmit(
+          `${hours} hour ${discipline} loop, ${terrain} terrain${placePart}`
+        );
+      }}
+    >
+      <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+        Quick form
+      </p>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+          Hours
+          <select value={hours} onChange={(e) => setHours(e.target.value)} className="w-full mt-1 rounded-lg px-2 py-2 text-sm" style={selectStyle}>
+            {["1", "1.5", "2", "3", "4", "5"].map((h) => <option key={h} value={h}>{h}</option>)}
+          </select>
+        </label>
+        <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+          Bike
+          <select value={discipline} onChange={(e) => setDiscipline(e.target.value)} className="w-full mt-1 rounded-lg px-2 py-2 text-sm" style={selectStyle}>
+            <option value="road">Road</option>
+            <option value="gravel">Gravel</option>
+            <option value="mtb">MTB</option>
+          </select>
+        </label>
+        <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+          Terrain
+          <select value={terrain} onChange={(e) => setTerrain(e.target.value)} className="w-full mt-1 rounded-lg px-2 py-2 text-sm" style={selectStyle}>
+            <option value="flat">Flat</option>
+            <option value="rolling">Rolling</option>
+            <option value="hilly">Hilly</option>
+          </select>
+        </label>
+        <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+          Start (optional)
+          <input
+            value={place}
+            onChange={(e) => setPlace(e.target.value)}
+            placeholder="e.g. Skerries"
+            className="w-full mt-1 rounded-lg px-2 py-2 text-sm"
+            style={selectStyle}
+          />
+        </label>
+      </div>
+      <button
+        type="submit"
+        className="justify-self-start font-bold text-sm px-4 py-2 rounded-lg"
+        style={{ background: "var(--accent)", color: "var(--bg)" }}
+      >
+        Find me a route
+      </button>
+    </form>
+  );
+}
+
+// ── Loading stages ────────────────────────────────────────────────────────────
+
+/**
+ * Honest progress narration while generation runs (launch spec: perceived
+ * quality is quality). Stages mirror the real pipeline order; timings are
+ * approximations of where the time actually goes.
+ */
+const LOADING_STAGES = [
+  { at: 0, label: "Reading your request…" },
+  { at: 2000, label: "Checking the library of verified routes…" },
+  { at: 4500, label: "Plotting candidate loops…" },
+  { at: 8000, label: "Checking road quality and safety…" },
+  { at: 12000, label: "Scoring and ranking the best options…" },
+];
+
+function LoadingStages() {
+  const [stage, setStage] = useState(0);
+
+  useEffect(() => {
+    const timers = LOADING_STAGES.map((s, i) =>
+      setTimeout(() => setStage(i), s.at)
+    );
+    return () => timers.forEach(clearTimeout);
+  }, []);
+
+  return (
+    <div
+      className="rounded-2xl p-4 flex items-center gap-3"
+      style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+      role="status"
+      aria-live="polite"
+    >
+      <span
+        className="inline-block w-4 h-4 rounded-full border-2 border-t-transparent animate-spin shrink-0"
+        style={{ borderColor: "var(--accent)", borderTopColor: "transparent" }}
+        aria-hidden="true"
+      />
+      <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+        {LOADING_STAGES[stage].label}
+      </p>
+    </div>
+  );
+}
+
 // ── Candidate card ────────────────────────────────────────────────────────────
 
 function CandidateCard({
@@ -532,6 +691,7 @@ function CandidateCard({
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
 
   const workoutFit = candidate.workout_fit;
   const highlights = workoutFit?.fits
@@ -561,7 +721,13 @@ function CandidateCard({
       style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
     >
       <div className="grid grid-cols-[auto_1fr] gap-4 p-4">
-        <RoutePreviewSvg coordinates={candidate.coordinates} highlights={highlights} width={180} height={140} />
+        <RoutePreviewSvg
+          coordinates={candidate.coordinates}
+          highlights={highlights}
+          wind={!isLibrary ? candidate.wind_forecast : undefined}
+          width={180}
+          height={140}
+        />
 
         <div className="flex flex-col">
           <div className="flex items-start justify-between gap-3 mb-2">
@@ -621,7 +787,46 @@ function CandidateCard({
             </div>
           )}
 
-          {workoutFit?.fits && <WorkoutAssignment fit={workoutFit} />}
+          {!isLibrary && candidate.surface_breakdown && candidate.surface_breakdown.unknown_pct < 100 && (
+            <p className="text-xs mt-2 font-semibold" style={{ color: candidate.surface_breakdown.unpaved_pct > 5 ? "#f0a050" : "var(--text-secondary)" }}>
+              {candidate.surface_breakdown.paved_pct >= 99
+                ? "✓ 100% paved"
+                : `${candidate.surface_breakdown.paved_pct}% paved · ${candidate.surface_breakdown.unpaved_pct}% unpaved${candidate.surface_breakdown.unknown_pct > 10 ? ` · ${candidate.surface_breakdown.unknown_pct}% unknown` : ""}`}
+            </p>
+          )}
+
+          {!isLibrary && candidate.quality_breakdown && (
+            <QualityFactors breakdown={candidate.quality_breakdown} />
+          )}
+
+          {candidate.wind_note && (
+            <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>
+              🌬 {candidate.wind_note}
+            </p>
+          )}
+
+          {workoutFit?.fits && <WorkoutAssignment fit={workoutFit} coordinates={candidate.coordinates} />}
+
+          {!isLibrary && candidate.waypoints_used && candidate.waypoints_used.length >= 3 && !workoutFit?.fits && (
+            <div className="mt-2">
+              {!editing ? (
+                <button
+                  onClick={() => setEditing(true)}
+                  className="text-xs font-bold px-3 py-1.5 rounded-lg"
+                  style={{ border: "1px solid var(--border)", color: "var(--text)" }}
+                >
+                  ✎ Edit route
+                </button>
+              ) : (
+                <RouteEditor
+                  initialCoordinates={candidate.coordinates}
+                  initialWaypoints={candidate.waypoints_used}
+                  discipline={interpreted?.discipline ?? "road"}
+                  onClose={() => setEditing(false)}
+                />
+              )}
+            </div>
+          )}
 
           <div className="flex flex-wrap gap-2 mt-3">
             {isLibrary ? (
@@ -665,6 +870,27 @@ function CandidateCard({
                 >
                   Download GPX
                 </button>
+                <SendToGarmin
+                  name={submittedPrompt.slice(0, 80) || `LOOPS ${candidate.distance_km} km`}
+                  coordinates={candidate.coordinates}
+                  elevations={candidate.elevations}
+                  distance_km={candidate.distance_km}
+                  elevation_gain_m={candidate.elevation_gain_m}
+                  discipline={interpreted?.discipline ?? "road"}
+                  course_points={
+                    workoutFit?.fits
+                      ? workoutFit.interval_segments.flatMap((a, i) => {
+                          const s = candidate.coordinates[a.segment.start_index];
+                          const e = candidate.coordinates[a.segment.end_index];
+                          if (!s || !e) return [];
+                          return [
+                            { lat: s[0], lng: s[1], name: `EFFORT ${i + 1} GO`, type: "SEGMENT_START" },
+                            { lat: e[0], lng: e[1], name: `EFFORT ${i + 1} END`, type: "SEGMENT_END" },
+                          ];
+                        })
+                      : undefined
+                  }
+                />
               </>
             )}
           </div>
@@ -716,22 +942,91 @@ function SourceBadge({
   );
 }
 
-function WorkoutAssignment({ fit }: { fit: WorkoutFit }) {
+/**
+ * Itemised quality factors — an opaque 0-100 earns no trust; named
+ * factors do. Shows the three riders care about most.
+ */
+const FACTOR_MAX: Record<string, { label: string; max: number }> = {
+  safety_score: { label: "Quiet & safe roads", max: 35 },
+  surface_score: { label: "Surface", max: 25 },
+  scenic_score: { label: "Scenery", max: 20 },
+};
+
+function QualityFactors({ breakdown }: { breakdown: Record<string, number> }) {
+  const rows = Object.entries(FACTOR_MAX)
+    .filter(([k]) => typeof breakdown[k] === "number")
+    .map(([k, meta]) => ({ ...meta, pct: Math.round((breakdown[k] / meta.max) * 100) }));
+  if (rows.length === 0) return null;
+  return (
+    <div className="mt-2 space-y-1">
+      {rows.map((r) => (
+        <div key={r.label} className="flex items-center gap-2">
+          <span className="text-[10px] w-28 shrink-0" style={{ color: "var(--text-muted)" }}>{r.label}</span>
+          <span className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: "var(--bg-raised)" }}>
+            <span
+              className="block h-full rounded-full"
+              style={{ width: `${Math.min(100, r.pct)}%`, background: r.pct >= 70 ? "var(--accent)" : r.pct >= 45 ? "#f0c050" : "#f08050" }}
+            />
+          </span>
+          <span className="text-[10px] w-8 text-right" style={{ color: "var(--text-secondary)" }}>{r.pct}%</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function haversineKmUI(a: [number, number], b: [number, number]): number {
+  const R = 6371;
+  const dLat = ((b[0] - a[0]) * Math.PI) / 180;
+  const dLon = ((b[1] - a[1]) * Math.PI) / 180;
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((a[0] * Math.PI) / 180) * Math.cos((b[0] * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+/**
+ * Plain-language session sheet (spec §3): where each effort starts, how
+ * long it runs, what the road does. Distances computed from the route
+ * geometry so they match the head unit.
+ */
+function WorkoutAssignment({
+  fit,
+  coordinates,
+}: {
+  fit: WorkoutFit;
+  coordinates: [number, number][];
+}) {
+  // Cumulative km at each coordinate index (computed once per render —
+  // candidate cards are small and static).
+  const cum: number[] = [0];
+  for (let i = 1; i < coordinates.length; i++) {
+    cum.push(cum[i - 1] + haversineKmUI(coordinates[i - 1], coordinates[i]));
+  }
+  const atKm = (idx: number) => (cum[Math.min(idx, cum.length - 1)] ?? 0).toFixed(1);
+
+  const gradWord = (g: number) =>
+    g > 1.5 ? `a steady ${g}% climb` : g < -1.5 ? `a gentle ${Math.abs(g)}% descent` : "flat road";
+
   return (
     <div
-      className="mt-2 p-2 rounded-lg"
+      className="mt-2 p-2.5 rounded-lg"
       style={{ background: "var(--accent-glow)", border: "1px solid var(--accent)" }}
     >
-      <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: "var(--accent)" }}>
-        Interval segments
+      <p className="text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--accent)" }}>
+        Your session, on the road
       </p>
-      <ul className="space-y-0.5">
+      <ul className="space-y-1">
         {fit.interval_segments.map((a, i) => (
-          <li key={i} className="text-xs" style={{ color: "var(--text)" }}>
-            Rep {a.interval_index + 1}.{a.rep_index + 1}: {a.segment.length_km} km @ {a.segment.avg_gradient_pct}% avg
+          <li key={i} className="text-xs leading-relaxed" style={{ color: "var(--text)" }}>
+            <span className="font-bold">Effort {i + 1}</span> — starts {atKm(a.segment.start_index)} km in:
+            {" "}{a.segment.length_km} km on {gradWord(a.segment.avg_gradient_pct)}, ends at {atKm(a.segment.end_index)} km.
           </li>
         ))}
       </ul>
+      <p className="text-[10px] mt-1.5" style={{ color: "var(--text-muted)" }}>
+        Effort start/end markers are in the GPX — your head unit will alert you on course.
+      </p>
     </div>
   );
 }

@@ -21,11 +21,16 @@ export interface Destination {
   faqs: DestinationFaq[];
   /** Slug for the matching /collections page, or null if none exists. */
   collectionSlug: string | null;
+  /** Country/region used to link to this destination's route library pages. */
+  routesCountry?: string;
+  routesRegion?: string;
 }
 
 export const destinations: Destination[] = [
   {
     slug: "girona",
+    routesCountry: "Spain",
+    routesRegion: "Cataluña",
     name: "Girona",
     tagline: "Where the pros train and the roads stay quiet",
     country: "Spain",
@@ -84,6 +89,8 @@ export const destinations: Destination[] = [
 
   {
     slug: "mallorca",
+    routesCountry: "Spain",
+    routesRegion: "Islas Baleares",
     name: "Mallorca",
     tagline: "The original spring training island",
     country: "Spain",
@@ -142,6 +149,8 @@ export const destinations: Destination[] = [
 
   {
     slug: "dublin",
+    routesCountry: "Ireland",
+    routesRegion: "Dublin",
     name: "Dublin",
     tagline: "City rides, coastal roads, and mountains on the doorstep",
     country: "Ireland",
@@ -200,6 +209,8 @@ export const destinations: Destination[] = [
 
   {
     slug: "calpe",
+    routesCountry: "Spain",
+    routesRegion: "Costa Blanca",
     name: "Calpe",
     tagline: "Sun, climbs, and pro-team winter camps on the Costa Blanca",
     country: "Spain",
@@ -258,6 +269,8 @@ export const destinations: Destination[] = [
 
   {
     slug: "wicklow",
+    routesCountry: "Ireland",
+    routesRegion: "Wicklow",
     name: "Wicklow",
     tagline: "Ireland's mountain playground, 30 minutes from Dublin",
     country: "Ireland",
@@ -316,6 +329,8 @@ export const destinations: Destination[] = [
 
   {
     slug: "tenerife",
+    routesCountry: "Spain",
+    routesRegion: "Tenerife",
     name: "Tenerife",
     tagline: "Volcanic altitude and year-round sunshine for serious climbing",
     country: "Spain",
@@ -371,7 +386,391 @@ export const destinations: Destination[] = [
     ],
     collectionSlug: null,
   },
+
+  {
+    slug: "malaga",
+    routesCountry: "Spain",
+    routesRegion: "Andalucía",
+    name: "Málaga / Costa del Sol",
+    tagline: "Winter sun, mountain roads ten minutes from the beach",
+    country: "Spain",
+    bestMonths: "October to May",
+    avgTemp: "16-24 C through the winter riding season",
+    rainfall: "Very dry; occasional wet spells November to January, almost none March onwards",
+    riding: [
+      "Málaga has quietly become one of Europe's best winter bases. The city sits with its back against the Montes de Málaga, so within fifteen minutes of the seafront you are climbing on quiet, well-surfaced mountain roads while the rest of northern Europe is on the turbo. The A-7000 over the Montes is the classic artery: a steady, beautifully engineered climb that opens into a high plateau of rolling roads towards Colmenar.",
+      "Inland the terrain keeps giving. The loop through Colmenar, Riogordo and the Axarquía villages is rolling to hilly with almost no traffic. Further west, the roads around Mijas, Coín and Alhaurín offer punchier riding, and a big day takes you to Ronda over some of Andalusia's most dramatic tarmac. East along the coast, the climbs above Vélez-Málaga suit structured efforts.",
+      "Surfaces are generally very good on the main training roads, and Andalusian drivers give cyclists room. The coastal N-340 is best avoided in favour of the inland alternatives. Café stops are everywhere — Colmenar's village squares are the standard mid-ride halt.",
+    ],
+    climbs: [
+      "Puerto del León via the A-7000 (15 km, avg 5%) — Málaga's signature climb through the Montes, steady gradient and a fast, open descent to Colmenar",
+      "Mijas from Fuengirola (8 km, avg 5-6%) — the Costa del Sol test climb to the white village, popular for repeat efforts",
+      "Puerto de los Pescadores (7 km, avg 5%) — the gateway to the Axarquía loops from the coast",
+      "Comares (10 km, avg 6%, ramps over 10%) — a balcony village finish with views over the whole Axarquía",
+      "Ronda day (140 km+ round trip) — not one climb but a mountain epic via El Burgo or the A-366, the region's big-day benchmark",
+    ],
+    practical: {
+      airport:
+        "Málaga-Costa del Sol (AGP) has direct flights from most of Europe year-round, including multiple daily Irish and UK connections. The city is 15 minutes from the terminal.",
+      bikeHire:
+        "High-end road hire is well established: shops in Málaga city, Fuengirola and Benalmádena rent current-generation carbon bikes. Book December-March in advance — winter training camp demand is high.",
+      accommodation:
+        "Málaga city east side (Pedregalejo, El Palo) puts you closest to the Montes climbs. Fuengirola and Benalmádena suit riders heading for Mijas and the western hills. Plenty of apartment stock for week-long stays.",
+    },
+    faqs: [
+      {
+        question: "Is Málaga good for winter cycling?",
+        answer:
+          "Málaga is one of the best winter cycling destinations in Europe. Daytime temperatures of 16-20 C from November to March, very little rain, and mountain climbs starting within fifteen minutes of the city make it ideal for winter training volume.",
+      },
+      {
+        question: "What is the best climb in Málaga?",
+        answer:
+          "Puerto del León via the A-7000 is the signature climb: around 15 km at a steady 5% on a beautifully surfaced road through the Montes de Málaga, with quiet traffic and a fast descent to Colmenar on the far side.",
+      },
+      {
+        question: "When is the best time to cycle on the Costa del Sol?",
+        answer:
+          "October to May. Mid-winter (December-February) is mild and dry by northern European standards, and spring brings 20-24 C with green hillsides. July and August are too hot for long rides except at dawn.",
+      },
+      {
+        question: "How do I get to Málaga with a bike?",
+        answer:
+          "Fly direct to Málaga-Costa del Sol (AGP) — it is one of Spain's best-connected airports with year-round routes from Ireland and the UK. Most airlines carry bike boxes as sports luggage; the airport is 15 minutes from the city.",
+      },
+      {
+        question: "Is the riding in Málaga hilly?",
+        answer:
+          "Yes — the coast is backed by mountains, so most quality riding involves climbing. Flat options exist along the coast and the Guadalhorce valley, but the appeal is steady mountain climbs like Puerto del León and the rolling Axarquía terrain inland.",
+      },
+    ],
+    collectionSlug: null,
+  },
+
+  {
+    slug: "gran-canaria",
+    routesCountry: "Spain",
+    routesRegion: "Gran Canaria",
+    name: "Gran Canaria",
+    tagline: "A volcano of switchbacks with summer all winter",
+    country: "Spain",
+    bestMonths: "October to April",
+    avgTemp: "18-25 C at the coast year-round; cooler at altitude",
+    rainfall: "Minimal in the south; the summit can catch cloud and showers in winter",
+    riding: [
+      "Gran Canaria is a near-circular volcanic island that rises to almost 2,000 m in its centre, which means every ride is a choice of how much climbing you want — and the answer can be enormous. From the southern resorts the roads tilt upwards almost immediately into ravine climbs with engineered gradients, endless switchbacks and very little traffic once you leave the coast.",
+      "The Valley of the Tears (VOTT) is the island's legend: a brutally steep road on the GC-606 with sustained double-digit ramps, regularly named among the hardest climbs in Europe. But the everyday riding is friendlier — Fataga, Ayagaures and Soria are steady, scenic climbs, and the full ascent to Pico de las Nieves is a 40+ km drag to the island's roof with views over the cloud sea to Teide.",
+      "Winter is peak season: while northern Europe freezes, the south of the island sits at 20-24 C. Wind is a factor on exposed ridges, and the descents are long and technical — good brakes and cool judgement matter here.",
+    ],
+    climbs: [
+      "Pico de las Nieves from Maspalomas via Fataga (45 km to 1,920 m) — the island's roof, a full morning of climbing in one effort",
+      "Valley of the Tears / GC-606 (12 km, avg 9%, sustained ramps over 15%) — one of Europe's hardest climbs; bring a 34 and humility",
+      "Ayagaures (10 km, avg 5%) — the steady local climb from the southern resorts, perfect for structured efforts",
+      "Soria (18 km, avg 4-5%) — a long, scenic valley climb to the reservoir and the foot of the VOTT",
+      "Fataga (14 km, avg 4%) — switchbacks through a protected ravine, the most photographed road on the island",
+    ],
+    practical: {
+      airport:
+        "Gran Canaria (LPA) has year-round direct flights from Dublin and most of Europe. The southern resorts — the usual cycling bases — are 20-30 minutes from the terminal.",
+      bikeHire:
+        "Maspalomas and Playa del Inglés have several dedicated road bike rental operations with current carbon bikes and compact gearing. Book ahead December-March.",
+      accommodation:
+        "Maspalomas is the standard base: direct access to Fataga and Ayagaures, huge hotel and apartment stock, and reliable sun. Las Palmas in the north suits riders who prefer a city base and the wilder northern roads.",
+    },
+    faqs: [
+      {
+        question: "Is Gran Canaria good for cycling?",
+        answer:
+          "Gran Canaria is one of the best winter cycling destinations in the world. The south of the island offers 20-24 C from November to March, quiet engineered mountain roads, and climbing options from steady 4% valley roads to some of the hardest ramps in Europe.",
+      },
+      {
+        question: "How hard is the Valley of the Tears?",
+        answer:
+          "Very hard. The GC-606 sustains an average around 9% for 12 km with long sections well above 15%. It is regularly listed among Europe's toughest road climbs. Most riders want at least a 34x32 and fresh legs.",
+      },
+      {
+        question: "When is the best time to cycle in Gran Canaria?",
+        answer:
+          "October to April. Coastal temperatures sit between 18 and 25 C all winter. Summer is rideable but hot inland. The summit of Pico de las Nieves can be 10-15 C cooler than the coast — carry a layer for the descent in any season.",
+      },
+      {
+        question: "Is Gran Canaria too hilly for beginners?",
+        answer:
+          "There is genuinely flat riding only along the southern coast, so the island suits riders who want to climb. That said, climbs like Fataga and Ayagaures are steady and beautifully graded — a fit beginner with low gearing will manage them comfortably.",
+      },
+      {
+        question: "Gran Canaria or Tenerife for a cycling holiday?",
+        answer:
+          "Tenerife is built around one giant volcano climb (Teide); Gran Canaria offers more varied route-building with dozens of distinct climbs and loops. For repeat visits and varied training, Gran Canaria edges it; for altitude blocks and the longest single climb in Europe, Tenerife.",
+      },
+    ],
+    collectionSlug: null,
+  },
+
+  {
+    slug: "lanzarote",
+    routesCountry: "Spain",
+    routesRegion: "Lanzarote",
+    name: "Lanzarote",
+    tagline: "Volcanic roads, honest wind, triathlon hardness",
+    country: "Spain",
+    bestMonths: "October to April",
+    avgTemp: "17-24 C year-round",
+    rainfall: "One of the driest places in Europe — rain is rare in any month",
+    riding: [
+      "Lanzarote is the leanest of the Canary cycling islands: no big mountains, no forests, just a stark volcanic landscape of black rock, white villages and roads that roll constantly without ever climbing for more than half an hour. What it lacks in cols it makes up for in honesty — the wind blows most days, and riding here builds the kind of strength you notice at home.",
+      "The island is compact enough to ride end-to-end and back in a long day. The classic loop runs north through Teguise and the Tabayesco climb to the Mirador del Río, with views across to La Graciosa, then back along the wild west coast. South, the roads through Timanfaya's volcanic badlands are like riding on another planet — smooth tarmac through fields of lava.",
+      "Lanzarote's sporting culture runs deep: Club La Santa hosts athletes year-round and Ironman Lanzarote has made the island's roads famous in triathlon. Drivers are exceptionally used to cyclists, surfaces are good, and traffic outside Arrecife is light.",
+    ],
+    climbs: [
+      "Tabayesco (10 km, avg 4-5%) — the island's longest climb, a steady drag up the Haría valley to the Mirador de Haría",
+      "Mirador del Río (5 km, avg 5%) — the scenic finish at the island's northern cliff edge",
+      "Femés (4 km, avg 6%) — short and punchy from either side, the south's repeat-effort hill",
+      "Timanfaya traverse — not a climb but the must-ride road through the volcanic park, rolling and otherworldly",
+      "La Geria wine valley — rolling roads through black-ash vineyards, the island's signature scenery",
+    ],
+    practical: {
+      airport:
+        "Lanzarote (ACE) has year-round direct flights from Dublin and most of Europe, 10-15 minutes from the main resort bases.",
+      bikeHire:
+        "Good road bike rental in Puerto del Carmen, Costa Teguise and at Club La Santa. Triathlon demand means plenty of quality stock, but book ahead for January-March.",
+      accommodation:
+        "Puerto del Carmen and Costa Teguise are the standard bases with the widest accommodation choice. Club La Santa is the full sports-resort option with open training facilities.",
+    },
+    faqs: [
+      {
+        question: "Is Lanzarote good for cycling?",
+        answer:
+          "Yes — Lanzarote is a winter cycling staple. It offers 17-24 C temperatures year-round, almost no rain, quiet well-surfaced roads through striking volcanic scenery, and a deep sporting culture built around Club La Santa and Ironman Lanzarote.",
+      },
+      {
+        question: "How windy is Lanzarote for cycling?",
+        answer:
+          "Genuinely windy — the trade winds blow most days, typically 20-30 km/h. Locals plan loops to finish with a tailwind. It makes the island superb strength training, but riders expecting sheltered climbs should look at Gran Canaria or Tenerife instead.",
+      },
+      {
+        question: "Does Lanzarote have big climbs?",
+        answer:
+          "No. The longest climb, Tabayesco, is around 10 km at 4-5%. Lanzarote is rolling rather than mountainous — total elevation accumulates through constant undulation and wind resistance rather than long cols.",
+      },
+      {
+        question: "When is the best time to cycle in Lanzarote?",
+        answer:
+          "October to April for cooler temperatures and the winter training atmosphere, though the island is rideable in every month. Rain is rare at any time of year.",
+      },
+      {
+        question: "What is the classic Lanzarote ride?",
+        answer:
+          "The northern loop: Teguise, the Tabayesco climb, Mirador del Río at the island's cliff edge, and back along the west coast — roughly 100 km taking in the best of the island's volcanic scenery.",
+      },
+    ],
+    collectionSlug: null,
+  },
+
+  {
+    slug: "algarve",
+    routesCountry: "Portugal",
+    routesRegion: "Algarve",
+    name: "Algarve",
+    tagline: "Portugal's quiet-road winter playground",
+    country: "Portugal",
+    bestMonths: "October to May",
+    avgTemp: "15-22 C through the winter season",
+    rainfall: "Mild Atlantic winters; most rain falls November to January in short spells",
+    riding: [
+      "The Algarve is the most underrated winter destination on the European circuit. The coast gets the tourists; the riding happens inland, where the hills of the Serra do Caldeirão and Serra de Monchique hide hundreds of kilometres of quiet, twisting, well-surfaced roads through cork oak and eucalyptus. The Volta ao Algarve brings the pro peloton here every February for a reason.",
+      "From the central coast (Albufeira, Vilamoura, Faro) you are into rolling backroads within twenty minutes. The climb to Alto do Malhão — the Volta's iconic summit finish — is short and sharp; the long day west to Fóia, the Algarve's highest point above Monchique, is the region's queen stage. The far west around Sagres and the Costa Vicentina offers wild Atlantic coastal riding when the wind allows.",
+      "Portuguese drivers are notably patient, traffic inland is sparse, and food stops are cheap and generous. Surfaces on the main riding roads are good and improving — the region has invested heavily in cycling tourism since the mid-2010s.",
+    ],
+    climbs: [
+      "Fóia from Monchique (8 km, avg 6%) — the Algarve's highest point at 902 m, the region's signature climb with Atlantic views from the summit",
+      "Alto do Malhão (2.5 km, avg 9%) — the Volta ao Algarve's famous wall finish, ideal for repeat efforts",
+      "Picota (5 km, avg 6%) — Monchique's quieter second summit",
+      "Serra do Caldeirão loops via Salir and Barranco do Velho — rolling 4-6% climbs strung together through cork forest, the heart of Algarve riding",
+      "Vila do Bispo to Sagres coastal roads — flat to rolling, wind-exposed riding to mainland Europe's southwestern tip",
+    ],
+    practical: {
+      airport:
+        "Faro (FAO) has year-round direct flights from Dublin and the UK, 30-45 minutes from the main cycling bases.",
+      bikeHire:
+        "Established road hire in Vilamoura, Albufeira and Lagos with quality carbon stock; several operators deliver to accommodation. February-April is peak demand.",
+      accommodation:
+        "Vilamoura and Albufeira are central to the best inland riding and have huge winter apartment availability at low season rates. Lagos suits riders targeting Monchique and the west coast.",
+    },
+    faqs: [
+      {
+        question: "Is the Algarve good for cycling?",
+        answer:
+          "Excellent — the inland Algarve offers quiet rolling roads, mild 15-22 C winters and the climbs made famous by the Volta ao Algarve, while coastal bases provide affordable winter accommodation and direct flights. It is one of Europe's best-value winter training destinations.",
+      },
+      {
+        question: "What are the famous climbs in the Algarve?",
+        answer:
+          "Alto do Malhão (2.5 km at 9%) is the Volta ao Algarve's iconic summit finish. Fóia above Monchique (8 km at 6%) is the region's highest road at 902 m. Most riding is rolling hills through the Serra do Caldeirão rather than long cols.",
+      },
+      {
+        question: "When is the best time to cycle in the Algarve?",
+        answer:
+          "October to May. February to April is the sweet spot — the Volta ao Algarve atmosphere, green hills, wildflowers and 17-22 C days. Summer is hot and busy on the coast but the inland hills stay rideable with early starts.",
+      },
+      {
+        question: "Is the Algarve flat or hilly?",
+        answer:
+          "The immediate coast is flat to rolling; everything inland is constantly rolling with short 4-9% climbs. Total daily climbing adds up quickly — a 100 km inland loop typically gathers 1,200-1,800 m without any single long col.",
+      },
+      {
+        question: "How do I get to the Algarve with a bike?",
+        answer:
+          "Fly direct to Faro (FAO) — Aer Lingus and Ryanair operate year-round from Dublin. Bike boxes travel as sports luggage, and most hire and transfer companies are used to handling them. The main bases are within 45 minutes of the airport.",
+      },
+    ],
+    collectionSlug: null,
+  },
+
+  {
+    slug: "lucca",
+    routesCountry: "Italy",
+    routesRegion: "Toscana",
+    name: "Lucca / Tuscany",
+    tagline: "Renaissance walls, pro test climbs and Italy's finest riding",
+    country: "Italy",
+    bestMonths: "March to June, September to October",
+    avgTemp: "13-27 C across the riding season",
+    rainfall: "Spring and autumn bring occasional wet days; summer is dry and hot",
+    riding: [
+      "Lucca is Italian cycling distilled: a perfectly preserved walled city sitting between the flat Piana di Lucca — ideal for recovery spins and group work — and the mountains of the Garfagnana and Monte Pisano. Generations of professionals have based themselves here, and Monte Serra remains one of the sport's most famous test climbs, the road where Tuscan careers are measured.",
+      "Variety is the region's gift. South, Monte Serra offers four distinct ascents. North, the Garfagnana valley climbs into the Apuan Alps on quiet, dramatic roads beneath marble peaks. West lies the coast at Viareggio for flat tempo; east, rolling vineyard hills towards Montecarlo. A short transfer opens the strade bianche country south of Florence for gravel days.",
+      "Italian road culture is the quiet star — drivers wait, café stops are sacred, and every village has a fountain. Surfaces vary from billiard-smooth provincial roads to rougher mountain lanes; the riding rewards a 28 mm tyre.",
+    ],
+    climbs: [
+      "Monte Serra from Buti (9 km, avg 7%) — the classic side of Tuscany's test climb, a benchmark effort for every pro who has lived here",
+      "Monte Serra from Calci (10 km, avg 7%) — the harder, more irregular western approach",
+      "San Pellegrino in Alpe (13 km, avg 8%, ramps to 18%) — the Garfagnana monster, one of the hardest climbs in the Apennines",
+      "Passo delle Radici (20+ km, avg 4-5%) — the long, steady way over the Apennine spine",
+      "Pizzorne (10 km, avg 6%) — Lucca's local plateau climb, switchbacks straight out of the plain north of the city",
+    ],
+    practical: {
+      airport:
+        "Pisa (PSA) is 30 minutes away with direct flights from Dublin and most of Europe; Florence (FLR) is an hour. Both are well used to bike boxes.",
+      bikeHire:
+        "Quality road hire in Lucca town and through cycling hotels in the area. Stock is thinner than Mallorca — book well ahead for spring.",
+      accommodation:
+        "Inside or just outside Lucca's walls is the classic base, with every ride starting through the city gates. Cycling-dedicated hotels around the Piana offer guided groups and workshop facilities.",
+    },
+    faqs: [
+      {
+        question: "Is Lucca good for cycling?",
+        answer:
+          "Lucca is one of Europe's great cycling bases: flat valley roads for easy days, the legendary Monte Serra test climb 30 minutes away, the Apuan Alps and Garfagnana to the north, and Italian café culture throughout. Many professionals have made it home.",
+      },
+      {
+        question: "What is the famous climb near Lucca?",
+        answer:
+          "Monte Serra — roughly 9-10 km at 7% with several distinct approaches. It has been the benchmark climb for Tuscan professionals for decades, and the Buti side is the standard test effort.",
+      },
+      {
+        question: "When is the best time to cycle in Tuscany?",
+        answer:
+          "April to June and September to October are ideal: 18-27 C, green landscapes or harvest colours, and stable weather. July and August are hot but rideable with dawn starts. Winter is quiet and cool with occasional rain — many locals ride year-round.",
+      },
+      {
+        question: "Can I ride gravel near Lucca?",
+        answer:
+          "Yes. The hills around Lucca hide plenty of strade bianche-style white roads, and the famous gravel country of the Crete Senesi and Chianti is within a 1-2 hour transfer for a day trip.",
+      },
+      {
+        question: "How do I get to Lucca with a bike?",
+        answer:
+          "Fly to Pisa (PSA), 30 minutes from Lucca by car or direct train. Ryanair operates from Dublin year-round. The train accepts boxed bikes, and most cycling hotels arrange airport transfers with bike transport.",
+      },
+    ],
+    collectionSlug: null,
+  },
+
+  {
+    slug: "nice",
+    routesCountry: "France",
+    routesRegion: "Côte d'Azur",
+    name: "Nice / Côte d'Azur",
+    tagline: "Where the pro peloton lives — cols rising straight from the sea",
+    country: "France",
+    bestMonths: "March to June, September to November",
+    avgTemp: "13-26 C across the riding season",
+    rainfall: "Over 300 sunny days a year; autumn brings short heavy showers",
+    riding: [
+      "More WorldTour professionals live around Nice than almost anywhere else in the sport, and the reason is obvious from the first ride: serious climbing starts inside the city limits. From the Promenade des Anglais you can be on the Col d'Èze in twenty minutes or threading up to the Col de la Madone — the most famous test climb in professional cycling — within the hour.",
+      "The riding splits into tiers. The coastal cols (Èze, La Turbie, the three Corniche roads) offer iconic Mediterranean riding with film-set views. Behind them, the middle mountains — Col de Vence, Coursegoules, the Gorges du Loup — provide all-day loops on quiet roads. And in the Alpes-Maritimes proper, the Col de Turini and the high cols of the Tour's final week wait for big days out.",
+      "Traffic on the coast itself is heavy; the skill of riding Nice is escaping upward quickly, which every local route does. Surfaces are excellent, the descents are world-class and technical, and the café at the Col d'Èze may host more pros per square metre than anywhere in the sport.",
+    ],
+    climbs: [
+      "Col de la Madone (12 km, avg 7%) — the pro test climb above Menton, made famous by a generation of Tour contenders",
+      "Col d'Èze (10 km, avg 5%) — Nice's daily climb, the spine of the old Paris-Nice time trial",
+      "Col de Turini (24 km, avg 5%, via Sospel) — the Alpes-Maritimes giant of Monte Carlo Rally fame and Tour de France battles",
+      "Col de Vence (10 km, avg 6.5%) — the standard structured-training climb northwest of the city",
+      "Madone d'Utelle (15 km, avg 6%) — a dead-end sanctuary summit with the best view on the Côte d'Azur",
+    ],
+    practical: {
+      airport:
+        "Nice Côte d'Azur (NCE) is one of Europe's best-connected airports with year-round direct flights from Dublin, sitting 20 minutes from the city's cycling bases.",
+      bikeHire:
+        "Several high-end rental operations in Nice and along the coast supply current race bikes. Demand peaks around Paris-Nice in March and early summer — reserve ahead.",
+      accommodation:
+        "Nice itself is the practical base with the widest options; the port district puts you closest to the Col d'Èze side of town. Menton suits riders focused on the Madone and the Italian border roads.",
+    },
+    faqs: [
+      {
+        question: "Is Nice good for cycling?",
+        answer:
+          "Nice is one of the world's great cycling cities — more professional riders live on the Côte d'Azur than almost anywhere else. Famous cols start straight from the coast, the weather allows year-round riding, and the road surfaces and descents are exceptional.",
+      },
+      {
+        question: "What is the Col de la Madone?",
+        answer:
+          "A 12 km, 7% climb above Menton that became professional cycling's most famous test climb — generations of Tour de France contenders have used it as their form benchmark. The summit road is quiet because it leads almost nowhere, which is exactly why the pros love it.",
+      },
+      {
+        question: "When is the best time to cycle in Nice?",
+        answer:
+          "March to June and September to November are perfect: 16-26 C and reliable sun. Winter riding is genuinely good by northern standards (13-15 C, mostly dry). July and August are hot and the coast roads are at their busiest.",
+      },
+      {
+        question: "Is riding in Nice traffic-heavy?",
+        answer:
+          "The coastal strip is busy, but every classic route climbs away from it within minutes. Once on the cols and the balcony roads behind the coast, traffic is light. Local knowledge — or a well-built route — matters more here than in Mallorca or Girona.",
+      },
+      {
+        question: "How hard is the riding around Nice?",
+        answer:
+          "It is a climber's destination: genuinely flat riding is limited to the Promenade and the Var valley. Everything worthwhile goes uphill, from the 5% Col d'Èze to all-day mountain loops via the Col de Turini. Riders who prefer flat terrain will find Mallorca or the Algarve a better fit.",
+      },
+    ],
+    collectionSlug: null,
+  },
 ];
+
+/**
+ * The 10 launch destinations (June 2026 launch build spec): curated route
+ * libraries and constrained generation ship for these first. Dublin and
+ * Wicklow remain as home-turf coverage outside the destination count.
+ */
+export const LAUNCH_DESTINATION_SLUGS = [
+  "mallorca",
+  "girona",
+  "malaga",
+  "calpe",
+  "tenerife",
+  "gran-canaria",
+  "lanzarote",
+  "algarve",
+  "lucca",
+  "nice",
+] as const;
+
+export function getLaunchDestinations(): Destination[] {
+  return destinations.filter((d) =>
+    (LAUNCH_DESTINATION_SLUGS as readonly string[]).includes(d.slug)
+  );
+}
 
 export function getDestinationBySlug(slug: string): Destination | undefined {
   return destinations.find((d) => d.slug === slug);

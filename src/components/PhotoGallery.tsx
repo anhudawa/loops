@@ -4,6 +4,10 @@ import { useState, useEffect, useRef } from "react";
 import { useAuth } from "./AuthProvider";
 import Link from "next/link";
 
+const photoSrc = (filename: string) =>
+  filename.startsWith("http") ? filename : `/photos/${filename}`;
+
+
 interface Photo {
   id: string;
   user_name: string | null;
@@ -124,7 +128,7 @@ export default function PhotoGallery({ routeId }: { routeId: string }) {
               onClick={() => setExpanded(expanded === photo.id ? null : photo.id)}
             >
               <img
-                src={`/photos/${photo.filename}`}
+                src={photoSrc(photo.filename)}
                 alt={photo.caption || "Route photo"}
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform"
               />
@@ -151,7 +155,7 @@ export default function PhotoGallery({ routeId }: { routeId: string }) {
               return (
                 <>
                   <img
-                    src={`/photos/${photo.filename}`}
+                    src={photoSrc(photo.filename)}
                     alt={photo.caption || "Route photo"}
                     className="max-w-full max-h-[85vh] rounded-lg object-contain"
                   />

@@ -11,6 +11,7 @@ import Comments from "@/components/Comments";
 import PhotoGallery from "@/components/PhotoGallery";
 import ConditionReports from "@/components/ConditionReports";
 import RideActions from "@/components/RideActions";
+import RideDisclaimer from "@/components/RideDisclaimer";
 import ShareRide from "@/components/ShareRide";
 import WeatherCard from "@/components/WeatherCard";
 import { useAuth } from "@/components/AuthProvider";
@@ -19,6 +20,7 @@ import Breadcrumbs from "@/components/Breadcrumbs";
 import RouteFaq from "@/components/RouteFaq";
 import RelatedRoutes from "@/components/RelatedRoutes";
 import { slugify } from "@/lib/seo";
+import { SOCIAL_FEATURES_ENABLED } from "@/config/constants";
 import { detectClimbs, haversine, CATEGORY_COLORS, type Climb } from "@/lib/climb-detection";
 
 const MapView = dynamic(() => import("@/components/MapView"), { ssr: false });
@@ -407,9 +409,11 @@ export default function RouteDetail() {
           </div>
           {mutationError && <p className="text-xs mt-1" style={{ color: "var(--danger)" }}>{mutationError}</p>}
 
-          <div className="mb-4">
-            <StarRating routeId={route.id} />
-          </div>
+          {SOCIAL_FEATURES_ENABLED && (
+            <div className="mb-4">
+              <StarRating routeId={route.id} />
+            </div>
+          )}
 
           {/* Stats row */}
           <div className="grid grid-cols-4 gap-3 pt-4 border-t" style={{ borderColor: "var(--border)" }}>
@@ -490,41 +494,6 @@ export default function RouteDetail() {
           </div>
         )}
 
-        {/* Operator attribution */}
-        {route.operator_name && (
-          <div
-            className="flex items-center gap-3 rounded-xl px-4 py-3 mb-4"
-            style={{ background: "var(--bg-card)", border: "1px solid var(--accent)", borderColor: "rgba(200,255,0,0.2)" }}
-          >
-            <div
-              className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
-              style={{ background: "var(--accent-glow)", color: "var(--accent)" }}
-            >
-              {route.operator_name.charAt(0).toUpperCase()}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[10px] uppercase tracking-wider font-bold" style={{ color: "var(--text-muted)" }}>
-                Route by
-              </p>
-              {route.operator_url ? (
-                <a
-                  href={route.operator_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm font-bold hover:opacity-80 transition-opacity truncate block"
-                  style={{ color: "var(--accent)" }}
-                >
-                  {route.operator_name}
-                </a>
-              ) : (
-                <p className="text-sm font-bold truncate" style={{ color: "var(--text)" }}>
-                  {route.operator_name}
-                </p>
-              )}
-            </div>
-          </div>
-        )}
-
         {/* Photos */}
         <div className="rounded-2xl p-4 md:p-6 mb-3 md:mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
           <PhotoGallery routeId={route.id} />
@@ -538,6 +507,7 @@ export default function RouteDetail() {
         {/* Ride Actions */}
         <div className="mb-6">
           <RideActions routeId={route.id} routeName={route.name} />
+          <RideDisclaimer />
         </div>
 
         {/* Elevation Profile — full width */}
@@ -594,15 +564,22 @@ export default function RouteDetail() {
         </div>
 
         {/* Trail Conditions */}
-        <div className="rounded-2xl p-4 md:p-6 mb-3 md:mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-          <ConditionReports routeId={route.id} />
-        </div>
+        {SOCIAL_FEATURES_ENABLED && (
+          <div className="rounded-2xl p-4 md:p-6 mb-3 md:mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+            <ConditionReports routeId={route.id} />
+          </div>
+        )}
 
         {/* Comments */}
-        <div className="rounded-2xl p-4 md:p-6 mb-6 md:mb-8" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-          <Comments routeId={route.id} />
-        </div>
+        {SOCIAL_FEATURES_ENABLED && (
+          <div className="rounded-2xl p-4 md:p-6 mb-6 md:mb-8" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+            <Comments routeId={route.id} />
+          </div>
+        )}
       </div>
+
+      {/* Spacer so the sticky CTA never covers the footer/content */}
+      {!user && !authLoading && <div className="h-24" aria-hidden="true" />}
 
       {/* Sticky bottom CTA for unauthenticated users */}
       {!user && !authLoading && (

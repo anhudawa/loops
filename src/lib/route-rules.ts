@@ -91,6 +91,79 @@ function pointToSegmentKm(
   return haversineKm(pt, [ay + t * dy, ax + t * dx]);
 }
 
+
+// ──── Spatial index ──────────────────────────────────────────────────────────
+//
+// findNearestWay/anyWayWithin are called for hundreds of sampled points
+// against thousands of ways. The naive scan is O(samples × segments) and
+// burned 60-90s of sync CPU per generation, blocking the event loop (and
+// the pipeline timeout with it). A coarse grid index makes each lookup
+// touch only nearby segments. Indexes are cached per ways-array identity,
+// so call sites stay unchanged.
+
+interface IndexedSegment {
+  a: [number, number];
+  b: [number, number];
+  way: ProcessedWay;
+}
+
+const GRID_CELL_DEG = 0.005; // ≈ 550 m of latitude
+
+class SegmentGrid {
+  private cells = new Map<string, IndexedSegment[]>();
+
+  constructor(ways: ProcessedWay[]) {
+    for (const way of ways) {
+      for (let i = 0; i + 1 < way.nodes.length; i++) {
+        const a: [number, number] = [way.nodes[i].lat, way.nodes[i].lon];
+        const b: [number, number] = [way.nodes[i + 1].lat, way.nodes[i + 1].lon];
+        const seg: IndexedSegment = { a, b, way };
+        const minX = Math.floor(Math.min(a[1], b[1]) / GRID_CELL_DEG);
+        const maxX = Math.floor(Math.max(a[1], b[1]) / GRID_CELL_DEG);
+        const minY = Math.floor(Math.min(a[0], b[0]) / GRID_CELL_DEG);
+        const maxY = Math.floor(Math.max(a[0], b[0]) / GRID_CELL_DEG);
+        for (let x = minX; x <= maxX; x++) {
+          for (let y = minY; y <= maxY; y++) {
+            const key = `${x},${y}`;
+            const list = this.cells.get(key);
+            if (list) list.push(seg);
+            else this.cells.set(key, [seg]);
+          }
+        }
+      }
+    }
+  }
+
+  /** Segments in all cells overlapping a maxKm neighbourhood of pt. */
+  near(pt: [number, number], maxKm: number): IndexedSegment[] {
+    const degLat = maxKm / 111;
+    const degLng = maxKm / (111 * Math.max(0.2, Math.cos((pt[0] * Math.PI) / 180)));
+    const minX = Math.floor((pt[1] - degLng) / GRID_CELL_DEG);
+    const maxX = Math.floor((pt[1] + degLng) / GRID_CELL_DEG);
+    const minY = Math.floor((pt[0] - degLat) / GRID_CELL_DEG);
+    const maxY = Math.floor((pt[0] + degLat) / GRID_CELL_DEG);
+    const out: IndexedSegment[] = [];
+    for (let x = minX; x <= maxX; x++) {
+      for (let y = minY; y <= maxY; y++) {
+        const list = this.cells.get(`${x},${y}`);
+        if (list) out.push(...list);
+      }
+    }
+    return out;
+  }
+}
+
+const gridCache = new WeakMap<ProcessedWay[], SegmentGrid>();
+
+function gridFor(ways: ProcessedWay[]): SegmentGrid {
+  let grid = gridCache.get(ways);
+  if (!grid) {
+    grid = new SegmentGrid(ways);
+    gridCache.set(ways, grid);
+  }
+  return grid;
+}
+
 /** Find the nearest way within maxKm, returning it or null. */
 function findNearestWay(
   pt: [number, number],
@@ -99,15 +172,11 @@ function findNearestWay(
 ): ProcessedWay | null {
   let bestDist = maxKm;
   let bestWay: ProcessedWay | null = null;
-  for (const way of ways) {
-    for (let i = 0; i + 1 < way.nodes.length; i++) {
-      const a: [number, number] = [way.nodes[i].lat, way.nodes[i].lon];
-      const b: [number, number] = [way.nodes[i + 1].lat, way.nodes[i + 1].lon];
-      const d = pointToSegmentKm(pt, a, b);
-      if (d < bestDist) {
-        bestDist = d;
-        bestWay = way;
-      }
+  for (const seg of gridFor(ways).near(pt, maxKm)) {
+    const d = pointToSegmentKm(pt, seg.a, seg.b);
+    if (d < bestDist) {
+      bestDist = d;
+      bestWay = seg.way;
     }
   }
   return bestWay;
@@ -119,12 +188,8 @@ function anyWayWithin(
   ways: ProcessedWay[],
   maxKm: number
 ): ProcessedWay | null {
-  for (const way of ways) {
-    for (let i = 0; i + 1 < way.nodes.length; i++) {
-      const a: [number, number] = [way.nodes[i].lat, way.nodes[i].lon];
-      const b: [number, number] = [way.nodes[i + 1].lat, way.nodes[i + 1].lon];
-      if (pointToSegmentKm(pt, a, b) < maxKm) return way;
-    }
+  for (const seg of gridFor(ways).near(pt, maxKm)) {
+    if (pointToSegmentKm(pt, seg.a, seg.b) < maxKm) return seg.way;
   }
   return null;
 }
@@ -473,13 +538,20 @@ function checkDangerousJunctionDensity(
   sampled: [number, number][],
   highwayWays: ProcessedWay[]
 ): RuleViolation | null {
-  // Filter to high-speed roads
+  // Filter to genuinely dangerous roads to cross: major road classes, or
+  // anything signed 100 km/h+. A bare maxspeed of 80-90 is the DEFAULT
+  // rural limit in Ireland/France/Spain — quiet lanes carry it too, so
+  // speed alone over-rejects practically every rural loop.
   const highSpeedWays = highwayWays.filter((w) => {
+    const highway = w.tags.highway ?? "";
+    if (["motorway", "motorway_link", "trunk", "trunk_link", "primary", "primary_link"].includes(highway)) {
+      return true;
+    }
     const raw = w.tags.maxspeed ?? "";
     const numeric = parseInt(raw, 10);
     if (isNaN(numeric)) return false;
     const kmh = raw.toLowerCase().includes("mph") ? numeric * 1.60934 : numeric;
-    return kmh >= 80;
+    return kmh >= 100;
   });
 
   if (highSpeedWays.length === 0) return null;
@@ -504,7 +576,7 @@ function checkDangerousJunctionDensity(
   if (per10km > 3) {
     return {
       rule: "DANGEROUS_JUNCTION_DENSITY",
-      message: `${junctionCentres.length} crossings of high-speed roads (≥80 km/h) over ${distKm.toFixed(1)}km — ${per10km.toFixed(1)} per 10km (limit: 3)`,
+      message: `${junctionCentres.length} crossings of major roads (trunk/primary or 100 km/h+) over ${distKm.toFixed(1)}km — ${per10km.toFixed(1)} per 10km (limit: 3)`,
       severity: "fatal",
     };
   }

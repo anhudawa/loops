@@ -428,7 +428,10 @@ export async function parseRouteIntent(
   try {
     // Constructed inside the try: with no API key the SDK throws at
     // construction, and that must hit the basic-parser fallback too.
-    const client = new Anthropic();
+    // Hard timeout (12s) well under the 55s pipeline budget so a slow model
+    // falls through to the deterministic parser instead of burning the
+    // whole request. Set on the client, the supported SDK surface.
+    const client = new Anthropic({ timeout: 12000, maxRetries: 1 });
     const message = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 1024,

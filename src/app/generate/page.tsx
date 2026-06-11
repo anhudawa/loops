@@ -644,18 +644,36 @@ function ErrorPanel({
     }
   })();
 
+  // An honest "no" is a product feature, not a failure. Decline codes get
+  // a calm, on-brand treatment (accent, not danger-red) so the moment that
+  // proves our honesty positioning never looks like a crash.
+  const isDecline =
+    error.code === "NO_WORKOUT_MATCH" ||
+    error.code === "NO_ROUTES_FOUND" ||
+    error.code === "GEOCODE_FAILED";
+
   return (
     <div
       role="alert"
       className="mb-6 rounded-2xl p-4"
       style={{
-        background: "rgba(255, 80, 80, 0.08)",
-        border: "1px solid rgba(255, 80, 80, 0.3)",
+        background: isDecline ? "var(--bg-card)" : "rgba(255, 80, 80, 0.08)",
+        border: isDecline
+          ? "1px solid var(--accent)"
+          : "1px solid rgba(255, 80, 80, 0.3)",
       }}
     >
-      <p className="text-sm font-bold" style={{ color: "#ff6b6b" }}>
+      <p
+        className="text-sm font-bold"
+        style={{ color: isDecline ? "var(--text)" : "#ff6b6b" }}
+      >
         {error.message}
       </p>
+      {isDecline && (
+        <p className="text-[11px] mt-1 font-semibold uppercase tracking-wider" style={{ color: "var(--accent)" }}>
+          We won&apos;t serve a route we can&apos;t stand over
+        </p>
+      )}
       {hint && (
         <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
           {hint}

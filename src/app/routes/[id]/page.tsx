@@ -272,7 +272,15 @@ export default function RouteDetail() {
     );
   }
 
-  const rawCoords: number[][] = JSON.parse(route.coordinates);
+  // Guard the parse: malformed/truncated coordinates must degrade to an
+  // empty route, never crash the page in the render path.
+  let rawCoords: number[][] = [];
+  try {
+    const parsed = JSON.parse(route.coordinates);
+    if (Array.isArray(parsed)) rawCoords = parsed;
+  } catch {
+    rawCoords = [];
+  }
   const fullCoordinates: [number, number, number][] = rawCoords.map((c) => [c[0], c[1], c[2] ?? 0]);
   const coordinates: [number, number][] = rawCoords.map((c) => [c[0], c[1]]);
   const elevations: number[] = rawCoords.map((c) => c[2] ?? 0);

@@ -33,6 +33,16 @@ Each team works on `feat/<pillar>-<topic>` off the integration branch,
 opens a PR, passes CI (required check), gets an independent review, and
 merges. No team commits directly to another team's owned files.
 
+### Worktree isolation (MANDATORY — learned 2026-06-11)
+Parallel pillar teams MUST each run in their own `git worktree`
+(`git worktree add ../loops-<pillar> feat/<pillar>-<topic>`). On
+2026-06-11 three teams shared one checkout with a live `next dev`; the
+dev server and concurrent `git checkout` repeatedly reverted edits and
+switched branches under running agents. They recovered (commits are
+durable; cherry-pick + force-with-lease), but it cost real time. One
+worktree per team eliminates the race. The COO sets these up before
+staffing parallel teams.
+
 ## Non-negotiable gates (every change)
 1. **Spec gate** — Project Lead writes a 5-line spec (user, problem,
    change, risk, verification plan) BEFORE code.

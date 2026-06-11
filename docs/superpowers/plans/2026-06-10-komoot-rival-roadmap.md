@@ -25,10 +25,17 @@ seeking alternatives. Full sources in the research below; summary here.
   (RouteEditor.tsx + /api/reroute + rerouteWaypoints; needs an on-device
   browser pass before launch since the sandbox can't render Leaflet.)
 
+## Shipped 2026-06-11
+- **#1 Garmin Connect push (code-complete)** — full OAuth 1.0a flow, token
+  storage, Courses API push with course points (workout efforts as
+  SEGMENT_START/END), Connect/Send/done/error UI on generated candidates.
+  Dormant until GARMIN_CONSUMER_KEY/SECRET are set; activation steps +
+  required sandbox test: docs/superpowers/plans/garmin-connect-setup.md.
+
 ## Do next (priority order)
-1. **Garmin Connect / Wahoo / Hammerhead push** — the exact feature Komoot
-   paywalled; our course-point workout alerts depend on a real course push.
-   Long pole is API programme approval (owner action), code is plain OAuth+REST.
+1. **Garmin activation** — owner applies for the Training API (see setup
+   doc); then one sandbox push test on a real Edge before launch. Wahoo
+   Cloud API next (OAuth2, same component pattern).
 2. **Route editor polish** — undo, save-edited-route to library, re-score
    quality on save, workout-route editing (anchored efforts pinned).
 3. **Komoot-refugee funnel** — bulk GPX/RWGPS import UI (parsers exist) +

@@ -9,6 +9,7 @@ import RoutePreviewSvg from "@/components/RoutePreviewSvg";
 
 const RouteEditor = dynamic(() => import("@/components/RouteEditor"), { ssr: false });
 import RideDisclaimer from "@/components/RideDisclaimer";
+import SendToGarmin from "@/components/SendToGarmin";
 import ShareButton from "@/components/ShareButton";
 import { useVoiceInput } from "@/lib/useVoiceInput";
 import { useGeolocation } from "@/lib/useGeolocation";
@@ -869,6 +870,27 @@ function CandidateCard({
                 >
                   Download GPX
                 </button>
+                <SendToGarmin
+                  name={submittedPrompt.slice(0, 80) || `LOOPS ${candidate.distance_km} km`}
+                  coordinates={candidate.coordinates}
+                  elevations={candidate.elevations}
+                  distance_km={candidate.distance_km}
+                  elevation_gain_m={candidate.elevation_gain_m}
+                  discipline={interpreted?.discipline ?? "road"}
+                  course_points={
+                    workoutFit?.fits
+                      ? workoutFit.interval_segments.flatMap((a, i) => {
+                          const s = candidate.coordinates[a.segment.start_index];
+                          const e = candidate.coordinates[a.segment.end_index];
+                          if (!s || !e) return [];
+                          return [
+                            { lat: s[0], lng: s[1], name: `EFFORT ${i + 1} GO`, type: "SEGMENT_START" },
+                            { lat: e[0], lng: e[1], name: `EFFORT ${i + 1} END`, type: "SEGMENT_END" },
+                          ];
+                        })
+                      : undefined
+                  }
+                />
               </>
             )}
           </div>

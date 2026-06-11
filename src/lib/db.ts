@@ -255,6 +255,15 @@ export async function migrateDb() {
   await sql`ALTER TABLE routes ADD COLUMN IF NOT EXISTS operator_name TEXT`;
   await sql`ALTER TABLE routes ADD COLUMN IF NOT EXISTS operator_url TEXT`;
 
+  // Garmin Connect tokens (Courses API push)
+  await sql`
+    CREATE TABLE IF NOT EXISTS garmin_tokens (
+      user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      access_token TEXT NOT NULL,
+      token_secret TEXT NOT NULL,
+      connected_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `;
 }
 
 // ──── Types ────
@@ -1539,4 +1548,38 @@ export async function addRouteToCollection(collectionId: string, routeId: string
     ), updated_at = NOW()
     WHERE id = ${collectionId}
   `;
+}
+
+
+// ──── Garmin Connect tokens ────
+
+export interface GarminTokens {
+  access_token: string;
+  token_secret: string;
+}
+
+export async function saveGarminTokens(
+  userId: string,
+  accessToken: string,
+  tokenSecret: string
+): Promise<void> {
+  await sql`
+    INSERT INTO garmin_tokens (user_id, access_token, token_secret)
+    VALUES (${userId}, ${accessToken}, ${tokenSecret})
+    ON CONFLICT (user_id)
+    DO UPDATE SET access_token = ${accessToken}, token_secret = ${tokenSecret}, connected_at = NOW()
+  `;
+}
+
+export async function getGarminTokens(userId: string): Promise<GarminTokens | null> {
+  const { rows } = await sql`
+    SELECT access_token, token_secret FROM garmin_tokens WHERE user_id = ${userId}
+  `;
+  return rows.length > 0
+    ? { access_token: rows[0].access_token, token_secret: rows[0].token_secret }
+    : null;
+}
+
+export async function deleteGarminTokens(userId: string): Promise<void> {
+  await sql`DELETE FROM garmin_tokens WHERE user_id = ${userId}`;
 }

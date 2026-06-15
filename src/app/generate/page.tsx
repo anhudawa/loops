@@ -2,10 +2,16 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import RoutePreviewSvg from "@/components/RoutePreviewSvg";
 import ShareButton from "@/components/ShareButton";
+
+const GeneratedRouteMap = dynamic(
+  () => import("@/components/GeneratedRouteMap"),
+  { ssr: false }
+);
 import { useVoiceInput } from "@/lib/useVoiceInput";
 import { useGeolocation } from "@/lib/useGeolocation";
 
@@ -142,6 +148,7 @@ export default function GeneratePage() {
   const [interpreted, setInterpreted] = useState<Interpreted | null>(null);
   const [error, setError] = useState<{ message: string; code?: string } | null>(null);
   const [submittedPrompt, setSubmittedPrompt] = useState("");
+  const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
   const [useMyLocation, setUseMyLocation] = useState(false);
 
   const voice = useVoiceInput();
@@ -181,6 +188,7 @@ export default function GeneratePage() {
     setError(null);
     setCandidates([]);
     setInterpreted(null);
+    setExpandedIndex(null);
     setSubmittedPrompt(trimmed);
 
     // Send current location when the rider opted in — used as the start
@@ -394,6 +402,8 @@ export default function GeneratePage() {
                   candidate={c}
                   submittedPrompt={submittedPrompt}
                   interpreted={interpreted}
+                  expanded={expandedIndex === i}
+                  onToggleExpand={() => setExpandedIndex(expandedIndex === i ? null : i)}
                 />
               ))}
             </div>
@@ -519,10 +529,14 @@ function CandidateCard({
   candidate,
   submittedPrompt,
   interpreted,
+  expanded,
+  onToggleExpand,
 }: {
   candidate: Candidate;
   submittedPrompt: string;
   interpreted: Interpreted | null;
+  expanded: boolean;
+  onToggleExpand: () => void;
 }) {
   const router = useRouter();
   const isLibrary = candidate.source === "library";
@@ -534,7 +548,7 @@ function CandidateCard({
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const workoutFit = candidate.workout_fit;
-  const highlights = workoutFit?.fits
+  const svgHighlights = workoutFit?.fits
     ? workoutFit.interval_segments.map((a) => ({
         start_index: a.segment.start_index,
         end_index: a.segment.end_index,
@@ -557,11 +571,30 @@ function CandidateCard({
 
   return (
     <article
-      className="rounded-2xl overflow-hidden"
-      style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+      className="rounded-2xl overflow-hidden cursor-pointer transition-all"
+      style={{
+        background: "var(--bg-card)",
+        border: expanded ? "1px solid var(--accent)" : "1px solid var(--border)",
+      }}
+      onClick={onToggleExpand}
     >
-      <div className="grid grid-cols-[auto_1fr] gap-4 p-4">
-        <RoutePreviewSvg coordinates={candidate.coordinates} highlights={highlights} width={180} height={140} />
+      {/* Expanded: full interactive map */}
+      {expanded && (
+        <div onClick={(e) => e.stopPropagation()}>
+          <GeneratedRouteMap
+            coordinates={candidate.coordinates}
+            discipline={isLibrary ? candidate.discipline : interpreted?.discipline}
+            highlights={svgHighlights}
+            height={300}
+          />
+        </div>
+      )}
+
+      <div className={expanded ? "p-4" : "grid grid-cols-[auto_1fr] gap-4 p-4"}>
+        {/* Collapsed: SVG preview */}
+        {!expanded && (
+          <RoutePreviewSvg coordinates={candidate.coordinates} highlights={svgHighlights} width={180} height={140} />
+        )}
 
         <div className="flex flex-col">
           <div className="flex items-start justify-between gap-3 mb-2">

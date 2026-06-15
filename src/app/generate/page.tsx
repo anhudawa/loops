@@ -150,6 +150,7 @@ export default function GeneratePage() {
   const [submittedPrompt, setSubmittedPrompt] = useState("");
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
   const [useMyLocation, setUseMyLocation] = useState(false);
+  const [showVoiceHint, setShowVoiceHint] = useState(false);
 
   const voice = useVoiceInput();
   const geo = useGeolocation();
@@ -158,7 +159,18 @@ export default function GeneratePage() {
     if (!authLoading && !user) router.push("/login?returnTo=/generate");
   }, [user, authLoading, router]);
 
+  useEffect(() => {
+    if (voice.supported && typeof localStorage !== "undefined") {
+      const seen = localStorage.getItem("loops-voice-hint-seen");
+      if (!seen) setShowVoiceHint(true);
+    }
+  }, [voice.supported]);
+
   function toggleVoice() {
+    if (showVoiceHint) {
+      setShowVoiceHint(false);
+      localStorage.setItem("loops-voice-hint-seen", "1");
+    }
     if (voice.listening) {
       voice.stop();
     } else {
@@ -305,6 +317,34 @@ export default function GeneratePage() {
             Describe distance or duration, terrain, starting point, and optionally a structured interval workout. You can also dictate with the microphone.
           </p>
 
+          {showVoiceHint && !voice.listening && !loading && (
+            <div
+              className="mt-2 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2 animate-pulse"
+              style={{
+                background: "var(--accent-glow)",
+                border: "1px solid var(--accent)",
+                color: "var(--accent)",
+              }}
+            >
+              <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+              </svg>
+              Try it — tap the mic and say what you want to ride
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowVoiceHint(false);
+                  localStorage.setItem("loops-voice-hint-seen", "1");
+                }}
+                className="ml-auto"
+                style={{ color: "var(--text-muted)" }}
+                aria-label="Dismiss hint"
+              >
+                ✕
+              </button>
+            </div>
+          )}
           {voice.listening && (
             <p className="text-xs mt-2" style={{ color: "var(--accent)" }}>
               Listening… speak your route, then tap the mic to stop.

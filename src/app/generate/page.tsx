@@ -12,6 +12,11 @@ const GeneratedRouteMap = dynamic(
   () => import("@/components/GeneratedRouteMap"),
   { ssr: false }
 );
+
+const ElevationProfile = dynamic(
+  () => import("@/components/ElevationProfile"),
+  { ssr: false }
+);
 import { useVoiceInput } from "@/lib/useVoiceInput";
 import { useGeolocation } from "@/lib/useGeolocation";
 
@@ -618,7 +623,7 @@ function CandidateCard({
       }}
       onClick={onToggleExpand}
     >
-      {/* Expanded: full interactive map */}
+      {/* Expanded: full interactive map + elevation profile */}
       {expanded && (
         <div onClick={(e) => e.stopPropagation()}>
           <GeneratedRouteMap
@@ -627,6 +632,18 @@ function CandidateCard({
             highlights={svgHighlights}
             height={300}
           />
+          {!isLibrary && candidate.elevations && candidate.elevations.length > 0 && (
+            <div className="px-4 pt-3">
+              <ElevationProfile
+                coordinates={candidate.coordinates.map(([lat, lng], i) => [
+                  lat,
+                  lng,
+                  candidate.elevations[i] ?? 0,
+                ] as [number, number, number])}
+                distanceKm={candidate.distance_km}
+              />
+            </div>
+          )}
         </div>
       )}
 

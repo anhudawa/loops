@@ -447,6 +447,23 @@ function HomeContent() {
           )}
         </div>
       </main>
+
+      {/* Floating "Plan a ride" button — mobile-first, always visible */}
+      <Link
+        href="/generate"
+        className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-5 py-3 rounded-full text-sm font-bold uppercase tracking-wider shadow-lg transition-transform active:scale-95 md:hidden"
+        style={{
+          background: "var(--accent)",
+          color: "var(--bg)",
+          boxShadow: "0 4px 20px rgba(200, 255, 0, 0.3)",
+        }}
+        aria-label="Plan a ride"
+      >
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+        </svg>
+        Plan a ride
+      </Link>
     </div>
   );
 }

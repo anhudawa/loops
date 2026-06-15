@@ -206,14 +206,14 @@ export default function GeneratePage() {
         setError({ message: body?.error ?? "Could not generate a route.", code: body?.code });
       } else {
         const data = body.data as GenerateResponse | Candidate[] | undefined;
-        // Tolerate both the new { interpreted, candidates } shape and the
-        // old array shape in case of a stale worker.
         if (data && !Array.isArray(data)) {
           setInterpreted(data.interpreted ?? null);
           setCandidates(data.candidates ?? []);
         } else {
           setCandidates(data ?? []);
         }
+        // Auto-expand the top result so the rider sees the map immediately
+        setExpandedIndex(0);
       }
     } catch (err) {
       setError({
@@ -590,10 +590,16 @@ function CandidateCard({
         </div>
       )}
 
-      <div className={expanded ? "p-4" : "grid grid-cols-[auto_1fr] gap-4 p-4"}>
-        {/* Collapsed: SVG preview */}
+      <div className={expanded ? "p-4" : "grid grid-cols-1 sm:grid-cols-[auto_1fr] gap-3 sm:gap-4 p-4"}>
+        {/* Collapsed: SVG preview (hidden on tiny mobile, shown sm+) */}
         {!expanded && (
-          <RoutePreviewSvg coordinates={candidate.coordinates} highlights={svgHighlights} width={180} height={140} />
+          <RoutePreviewSvg
+            coordinates={candidate.coordinates}
+            highlights={svgHighlights}
+            width={180}
+            height={120}
+            className="hidden sm:block"
+          />
         )}
 
         <div className="flex flex-col">

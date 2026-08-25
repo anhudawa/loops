@@ -21,6 +21,8 @@ The researched organisation queue and outreach ledger are
 `IRELAND_CONTRIBUTOR_TARGETS.md` and `IRELAND_CONTRIBUTOR_OUTREACH.csv`. They
 identify possible introducers only. A row in either file is not contributor
 consent, route permission or evidence that a particular road is safe.
+The founder-approved, no-send message drafts and reply handling are in
+`IRELAND_CONTRIBUTOR_OUTREACH_MESSAGES.md`.
 
 ## Founding contributor cohort
 

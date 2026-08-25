@@ -16,6 +16,9 @@ describe("ordered migration manifest", () => {
       "008_minimise_recording_filenames.sql",
       "009_route_source_candidates.sql",
       "010_expand_route_source_destinations.sql",
+      "011_clontarf_road_intelligence.sql",
+      "012_route_plan_edge_coverage.sql",
+      "013_harden_road_evidence_links.sql",
     ]);
     expect(migrations.every((migration) => /^[a-f0-9]{64}$/.test(migration.checksum))).toBe(true);
   });

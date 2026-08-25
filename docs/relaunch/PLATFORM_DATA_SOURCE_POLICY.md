@@ -149,6 +149,24 @@ Official sources:
 - [Nominatim usage policy](https://operations.osmfoundation.org/policies/nominatim/)
 - [CARTO basemap terms](https://carto.com/legal/basemap-terms/)
 
+### Road-intelligence map matching
+
+The Clontarf lab may map-match an already approved contributor recording to a
+directed road graph. This is analysis of evidence LOOPS is already permitted
+to process; it is not permission to ingest another platform's public route
+catalogue. The current implementation supports Valhalla `trace_attributes`
+because it returns the traversed OSM way/node identity and normalized road
+attributes required for evidence coverage.
+
+There is deliberately no default public map-matching URL. Staging writes
+require a contracted or self-hosted endpoint and an explicit environment
+approval. A public demonstration server can be useful for manual technical
+evaluation but is not commercial infrastructure.
+
+Official source:
+
+- [Valhalla map-matching API](https://valhalla.github.io/valhalla/api/map-matching/)
+
 ## Data minimisation and publication
 
 - Source references remain visible only to LOOPS reviewers.

@@ -16,7 +16,7 @@ Last updated: 2026-08-25
 
 The staging database began empty. No production or legacy routes were copied.
 All migrations from `000_runtime_schema.sql` through
-`010_expand_route_source_destinations.sql` are recorded as applied with matching
+`013_harden_road_evidence_links.sql` are recorded as applied with matching
 checksums.
 
 ## Environment safeguards
@@ -149,6 +149,36 @@ states establishes the named exact-version rider, evidence or rights required
 for LOOPS publication. A lead advances only when the source introduces that
 rider and the person completes the normal contributor upload, rights and
 privacy workflow.
+
+## Clontarf Road Intelligence Lab
+
+The staging database now contains the private Road Intelligence v1 foundation
+for Clontarf:
+
+- one active Clontarf coverage area with a 45 km lab radius;
+- 12 fixed planning-demand benchmarks, including five four-hour requests;
+- approved-attestation-only directed road observations;
+- reusable provider/OSM road-edge identity and characteristic records;
+- separately reviewed human road assessments;
+- team-only human-covered or provisional plan records that are structurally
+  outside route publication;
+- ordered proposal-edge records that link every human-covered road directly
+  to its approved ride observation rather than trusting a summary percentage;
+- deferred integrity checks that reject human-covered plan commits without
+  current edge evidence and reject assessments not supported by a ride over
+  that exact directed edge.
+
+The post-migration trust audit passes with zero invalid observations, zero
+invalid assessments, zero unsupported human-covered plans and zero
+public-capable proposals. The evidence graph correctly remains empty: zero
+approved Clontarf rides, zero road edges, zero observations, zero assessments,
+zero plan proposals and zero routes. `VALHALLA_URL` is not configured, and the
+dry run contacted no map-matching provider.
+
+The next road-intelligence input must be a real approved completed ride from a
+named contributor beginning within the Clontarf lab area. Edge ingestion also
+requires a contracted or self-hosted Valhalla endpoint and the explicit
+staging approval documented in `CLONTARF_ROAD_INTELLIGENCE_LAB.md`.
 
 ## Next operating gates
 

@@ -90,6 +90,26 @@ interface SourceCandidateRow {
   next_action: string;
 }
 
+interface RoadIntelligenceAreaRow {
+  id: string;
+  name: string;
+  country: string;
+  region: string;
+  center_lat: number;
+  center_lng: number;
+  coverage_radius_km: number;
+  status: "active" | "paused" | "retired";
+  benchmark_count: number;
+  four_hour_benchmark_count: number;
+  observed_edge_count: number;
+  recent_edge_count: number;
+  observed_directed_km: number;
+  recent_directed_km: number;
+  unique_rider_count: number;
+  approved_assessment_count: number;
+  proposal_count: number;
+}
+
 interface CommentRow {
   id: string;
   user_name: string | null;
@@ -144,7 +164,7 @@ interface BetaApplicationRow {
   created_at: string;
 }
 
-type Tab = "users" | "beta" | "sources" | "routes" | "incidents" | "errors" | "comments";
+type Tab = "users" | "beta" | "sources" | "roads" | "routes" | "incidents" | "errors" | "comments";
 
 const REVIEW_CHECKS = [
   ["evidence_checked", "Ride evidence matches this route version"],
@@ -174,6 +194,7 @@ export default function AdminPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [routes, setRoutes] = useState<RouteRow[]>([]);
   const [sourceCandidates, setSourceCandidates] = useState<SourceCandidateRow[]>([]);
+  const [roadIntelligenceAreas, setRoadIntelligenceAreas] = useState<RoadIntelligenceAreaRow[]>([]);
   const [incidents, setIncidents] = useState<IncidentRow[]>([]);
   const [operationalErrors, setOperationalErrors] = useState<OperationalErrorRow[]>([]);
   const [betaApplications, setBetaApplications] = useState<BetaApplicationRow[]>([]);
@@ -252,6 +273,17 @@ export default function AdminPage() {
     }
   }, []);
 
+  const fetchRoadIntelligence = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/road-intelligence");
+      if (!res.ok) throw new Error("Failed to fetch road intelligence coverage");
+      const data = await res.json();
+      setRoadIntelligenceAreas(data.areas);
+    } catch {
+      setLoadError(true);
+    }
+  }, []);
+
   const fetchComments = useCallback(async () => {
     try {
       const res = await fetch("/api/admin/comments");
@@ -312,6 +344,10 @@ export default function AdminPage() {
       setLoadingTab(true);
       fetchSourceCandidates().finally(() => setLoadingTab(false));
     }
+    if (tab === "roads" && roadIntelligenceAreas.length === 0) {
+      setLoadingTab(true);
+      fetchRoadIntelligence().finally(() => setLoadingTab(false));
+    }
     if (tab === "comments" && comments.length === 0) {
       setLoadingTab(true);  
       fetchComments().finally(() => setLoadingTab(false));
@@ -328,7 +364,7 @@ export default function AdminPage() {
       setLoadingTab(true);
       fetchBetaApplications().finally(() => setLoadingTab(false));
     }
-  }, [tab, routes.length, sourceCandidates.length, comments.length, incidents.length, operationalErrors.length, betaApplications.length, fetchRoutes, fetchSourceCandidates, fetchComments, fetchIncidents, fetchOperationalErrors, fetchBetaApplications]);
+  }, [tab, routes.length, sourceCandidates.length, roadIntelligenceAreas.length, comments.length, incidents.length, operationalErrors.length, betaApplications.length, fetchRoutes, fetchSourceCandidates, fetchRoadIntelligence, fetchComments, fetchIncidents, fetchOperationalErrors, fetchBetaApplications]);
 
   const handleBan = async (userId: string) => {
     try {
@@ -685,7 +721,7 @@ export default function AdminPage() {
 
         {/* Tabs */}
         <div className="flex gap-6 mb-6 border-b overflow-x-auto" style={{ borderColor: "var(--border)" }}>
-          {(["users", "beta", "sources", "routes", "incidents", "errors", "comments"] as Tab[]).map((t) => (
+          {(["users", "beta", "sources", "roads", "routes", "incidents", "errors", "comments"] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -925,6 +961,54 @@ export default function AdminPage() {
                     )}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          )}
+
+          {!loadingTab && tab === "roads" && (
+            <div>
+              <div className="p-4" style={{ background: "rgba(200,255,0,0.06)", borderBottom: "1px solid var(--border)" }}>
+                <p className="text-sm font-extrabold" style={{ color: "var(--accent)" }}>Clontarf Road Intelligence Lab</p>
+                <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+                  Directed-road coverage comes only from approved completed-ride attestations. Plans remain team-only and can never become public routes without a new exact-geometry submission and independent review.
+                </p>
+              </div>
+              <div className="grid gap-4 p-4">
+                {roadIntelligenceAreas.map((area) => (
+                  <div key={area.id} className="rounded-xl p-4" style={{ background: "var(--bg-raised)", border: "1px solid var(--border)" }}>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="font-extrabold" style={{ color: "var(--text)" }}>{area.name}</p>
+                        <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+                          {area.region}, {area.country} · {area.coverage_radius_km} km lab radius · {area.status}
+                        </p>
+                      </div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded" style={{ color: area.observed_edge_count > 0 ? "var(--success)" : "var(--warning)", background: "var(--bg)" }}>
+                        {area.observed_edge_count > 0 ? "evidence accumulating" : "awaiting first approved ride"}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
+                      {[
+                        { label: "Directed coverage", value: `${area.recent_directed_km} km`, detail: `${area.recent_edge_count} current edges` },
+                        { label: "Named riders", value: area.unique_rider_count, detail: "approved evidence only" },
+                        { label: "Human assessments", value: area.approved_assessment_count, detail: "current and reviewed" },
+                        { label: "Planning benchmark", value: area.benchmark_count, detail: `${area.four_hour_benchmark_count} four-hour requests` },
+                      ].map((metric) => (
+                        <div key={metric.label} className="rounded-lg p-3" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+                          <p className="text-[10px] uppercase tracking-wider font-bold" style={{ color: "var(--text-muted)" }}>{metric.label}</p>
+                          <p className="text-xl font-extrabold mt-1" style={{ color: "var(--text)" }}>{metric.value}</p>
+                          <p className="text-[10px] mt-1" style={{ color: "var(--text-muted)" }}>{metric.detail}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-xs mt-4" style={{ color: "var(--text-muted)" }}>
+                      {area.proposal_count} team-only plan proposals · {area.observed_edge_count} all-time observed directed edges · {area.observed_directed_km} km all-time coverage
+                    </p>
+                  </div>
+                ))}
+                {roadIntelligenceAreas.length === 0 && (
+                  <p className="p-8 text-center text-sm" style={{ color: "var(--text-muted)" }}>No road intelligence areas configured.</p>
+                )}
               </div>
             </div>
           )}

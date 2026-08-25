@@ -1437,6 +1437,98 @@ export async function getRouteSourceCandidates(
   };
 }
 
+export interface RoadIntelligenceCoverage {
+  id: string;
+  name: string;
+  country: string;
+  region: string;
+  center_lat: number;
+  center_lng: number;
+  coverage_radius_km: number;
+  status: "active" | "paused" | "retired";
+  benchmark_count: number;
+  four_hour_benchmark_count: number;
+  observed_edge_count: number;
+  recent_edge_count: number;
+  observed_directed_km: number;
+  recent_directed_km: number;
+  unique_rider_count: number;
+  approved_assessment_count: number;
+  proposal_count: number;
+}
+
+export async function getRoadIntelligenceCoverage(): Promise<{ areas: RoadIntelligenceCoverage[] }> {
+  const { rows } = await sql.query(`
+    WITH approved_observations AS (
+      SELECT reo.area_id, reo.road_edge_id, MAX(reo.observed_at) AS last_observed_at
+      FROM ride_edge_observations reo
+      JOIN ride_attestations ra
+        ON ra.id = reo.ride_attestation_id
+       AND ra.route_id = reo.route_id
+       AND ra.route_version_id = reo.route_version_id
+       AND ra.review_status = 'approved'
+      GROUP BY reo.area_id, reo.road_edge_id
+    ), edge_coverage AS (
+      SELECT ao.area_id,
+        COUNT(*)::int AS observed_edge_count,
+        COUNT(*) FILTER (WHERE ao.last_observed_at >= CURRENT_DATE - INTERVAL '365 days')::int AS recent_edge_count,
+        COALESCE(SUM(re.length_m), 0) / 1000.0 AS observed_directed_km,
+        COALESCE(SUM(re.length_m) FILTER (WHERE ao.last_observed_at >= CURRENT_DATE - INTERVAL '365 days'), 0) / 1000.0 AS recent_directed_km
+      FROM approved_observations ao
+      JOIN road_edges re ON re.id = ao.road_edge_id
+      GROUP BY ao.area_id
+    ), rider_coverage AS (
+      SELECT reo.area_id,
+        COUNT(DISTINCT COALESCE(ra.rider_user_id, 'name:' || LOWER(ra.rider_name)))::int AS unique_rider_count
+      FROM ride_edge_observations reo
+      JOIN ride_attestations ra ON ra.id = reo.ride_attestation_id AND ra.review_status = 'approved'
+      GROUP BY reo.area_id
+    ), assessment_coverage AS (
+      SELECT reo.area_id, COUNT(DISTINCT reha.id)::int AS approved_assessment_count
+      FROM road_edge_human_assessments reha
+      JOIN ride_edge_observations reo
+        ON reo.road_edge_id = reha.road_edge_id
+       AND reo.ride_attestation_id = reha.ride_attestation_id
+      JOIN ride_attestations ra
+        ON ra.id = reha.ride_attestation_id
+       AND ra.route_id = reha.route_id
+       AND ra.route_version_id = reha.route_version_id
+       AND ra.review_status = 'approved'
+      WHERE reha.review_status = 'approved' AND reha.valid_until >= CURRENT_DATE
+      GROUP BY reo.area_id
+    ), benchmark_counts AS (
+      SELECT area_id,
+        COUNT(*) FILTER (WHERE active)::int AS benchmark_count,
+        COUNT(*) FILTER (WHERE active AND duration_minutes = 240)::int AS four_hour_benchmark_count
+      FROM road_intelligence_benchmarks
+      GROUP BY area_id
+    ), proposal_counts AS (
+      SELECT area_id, COUNT(*)::int AS proposal_count
+      FROM route_plan_proposals
+      GROUP BY area_id
+    )
+    SELECT a.id, a.name, a.country, a.region, a.center_lat, a.center_lng,
+      a.coverage_radius_km, a.status,
+      COALESCE(b.benchmark_count, 0)::int AS benchmark_count,
+      COALESCE(b.four_hour_benchmark_count, 0)::int AS four_hour_benchmark_count,
+      COALESCE(ec.observed_edge_count, 0)::int AS observed_edge_count,
+      COALESCE(ec.recent_edge_count, 0)::int AS recent_edge_count,
+      ROUND(COALESCE(ec.observed_directed_km, 0)::numeric, 1)::float AS observed_directed_km,
+      ROUND(COALESCE(ec.recent_directed_km, 0)::numeric, 1)::float AS recent_directed_km,
+      COALESCE(rc.unique_rider_count, 0)::int AS unique_rider_count,
+      COALESCE(ac.approved_assessment_count, 0)::int AS approved_assessment_count,
+      COALESCE(pc.proposal_count, 0)::int AS proposal_count
+    FROM road_intelligence_areas a
+    LEFT JOIN edge_coverage ec ON ec.area_id = a.id
+    LEFT JOIN rider_coverage rc ON rc.area_id = a.id
+    LEFT JOIN assessment_coverage ac ON ac.area_id = a.id
+    LEFT JOIN benchmark_counts b ON b.area_id = a.id
+    LEFT JOIN proposal_counts pc ON pc.area_id = a.id
+    ORDER BY CASE a.status WHEN 'active' THEN 0 WHEN 'paused' THEN 1 ELSE 2 END, a.name
+  `);
+  return { areas: rows as RoadIntelligenceCoverage[] };
+}
+
 export interface ContributorRouteSubmission {
   id: string;
   name: string;

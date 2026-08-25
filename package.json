@@ -12,6 +12,8 @@
     "audit:local-candidates": "node --import tsx scripts/audit-local-ride-candidates.mts",
     "sources:sync": "node --import tsx scripts/sync-route-source-candidates.mts",
     "sources:audit": "node --import tsx scripts/audit-route-source-candidates.mts",
+    "roads:sync": "node --import tsx scripts/sync-road-intelligence.mts",
+    "roads:audit:clontarf": "node --import tsx scripts/audit-clontarf-road-intelligence.mts",
     "audit:beta-readiness": "node --import tsx scripts/audit-ireland-beta-readiness.mts",
     "preflight:deploy": "node --import tsx scripts/deployment-preflight.mts",
     "migrate:status": "node --import tsx scripts/migrate.mts --status",

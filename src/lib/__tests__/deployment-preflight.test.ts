@@ -12,6 +12,8 @@ const baseEnvironment = {
   NEXT_PUBLIC_BASE_URL: "https://staging.loops.ie",
   NEXT_PUBLIC_MAP_TILE_URL: "https://tiles.example/{z}/{x}/{y}.png",
   NEXT_PUBLIC_MAP_ATTRIBUTION: "© OpenStreetMap contributors · Example Maps",
+  LOOPS_MAP_USAGE_MODE: "internal_r_and_d",
+  LOOPS_ACCESS_MODE: "team_sso",
   GOOGLE_CLIENT_ID: "test-client",
   GOOGLE_CLIENT_SECRET: "test-secret",
 };
@@ -47,5 +49,35 @@ describe("deployment preflight", () => {
       ...baseEnvironment,
       LOOPS_ALLOW_SYNTHETIC_SEED: "true",
     }).passed).toBe(false);
+  });
+
+  it("rejects internal R&D maps without team SSO", () => {
+    const result = evaluateDeploymentPreflight({
+      ...baseEnvironment,
+      LOOPS_ACCESS_MODE: "public",
+    });
+    expect(result.failures.join(" ")).toContain("team_sso");
+  });
+
+  it("requires the linked MapTiler logo on the Free staging plan", () => {
+    const result = evaluateDeploymentPreflight({
+      ...baseEnvironment,
+      NEXT_PUBLIC_MAP_TILE_URL: "https://api.maptiler.com/maps/streets-v4/{z}/{x}/{y}.png?key=test",
+      NEXT_PUBLIC_MAP_ATTRIBUTION: "© MapTiler · © OpenStreetMap contributors",
+    });
+    expect(result.failures.join(" ")).toContain("linked MapTiler logo");
+  });
+
+  it("rejects internal R&D map usage in production", () => {
+    const result = evaluateDeploymentPreflight({
+      ...baseEnvironment,
+      LOOPS_DEPLOYMENT_ENV: "production",
+      LOOPS_DATABASE_TARGET: "production",
+      LOOPS_LEGAL_REVIEWED_AT: "2026-08-25",
+      LOOPS_MONITORING_PROVIDER: "test",
+      LOOPS_MONITORING_ALERTS_VERIFIED_AT: "2026-08-25",
+    });
+    expect(result.failures.join(" ")).toContain("allowed only in staging");
+    expect(result.failures.join(" ")).toContain("requires LOOPS_MAP_USAGE_MODE=commercial");
   });
 });

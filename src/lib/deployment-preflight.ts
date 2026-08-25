@@ -58,6 +58,31 @@ export function evaluateDeploymentPreflight(
     failures.push("NEXT_PUBLIC_MAP_ATTRIBUTION is required");
   }
 
+  const mapUsageMode = env.LOOPS_MAP_USAGE_MODE;
+  if (mapUsageMode !== "internal_r_and_d" && mapUsageMode !== "commercial") {
+    failures.push("LOOPS_MAP_USAGE_MODE must be internal_r_and_d or commercial");
+  }
+  if (mapUsageMode === "internal_r_and_d") {
+    if (target !== "staging") {
+      failures.push("Internal R&D map usage is allowed only in staging");
+    }
+    if (env.LOOPS_ACCESS_MODE !== "team_sso") {
+      failures.push("Internal R&D map usage requires LOOPS_ACCESS_MODE=team_sso");
+    }
+    if (
+      env.NEXT_PUBLIC_MAP_TILE_URL?.includes("api.maptiler.com") &&
+      !(
+        env.NEXT_PUBLIC_MAP_ATTRIBUTION?.includes("api.maptiler.com/resources/logo") &&
+        env.NEXT_PUBLIC_MAP_ATTRIBUTION?.includes("maptiler.com")
+      )
+    ) {
+      failures.push("MapTiler Free staging requires a linked MapTiler logo");
+    }
+  }
+  if (target === "production" && mapUsageMode !== "commercial") {
+    failures.push("Production requires LOOPS_MAP_USAGE_MODE=commercial");
+  }
+
   const googleConfigured = Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
   const emailConfigured = Boolean(env.RESEND_API_KEY);
   if (!googleConfigured && !emailConfigured) {

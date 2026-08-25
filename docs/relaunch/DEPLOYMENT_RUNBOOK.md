@@ -28,8 +28,11 @@ database branch/copy.
 2. Set `LOOPS_DEPLOYMENT_ENV=staging` and
    `LOOPS_DATABASE_TARGET=staging`.
 3. Set the exact expected host/name separately from the database URL.
-4. Configure a 32-byte token-encryption key, HTTPS application URL, contracted
-   tile URL/attribution and at least one complete sign-in method.
+4. Configure a 32-byte token-encryption key, HTTPS application URL, map tile
+   URL/attribution and at least one complete sign-in method. A Free MapTiler
+   key may be used only with `LOOPS_MAP_USAGE_MODE=internal_r_and_d` and
+   `LOOPS_ACCESS_MODE=team_sso` in protected staging. Production requires
+   `LOOPS_MAP_USAGE_MODE=commercial`.
 5. Keep Strava/Garmin credentials, synthetic seed mode and fresh generation
    disabled.
 

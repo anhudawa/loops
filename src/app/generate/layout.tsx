@@ -1,21 +1,21 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Plan a Ride — LOOPS",
+  title: "Find a Human-Ridden Road Loop — LOOPS",
   description:
-    "Describe the ride you want and LOOPS matches it to a verified loop or builds one from country lanes and back roads. Duration, distance, or structured intervals — all handled.",
+    "Describe the road ride you want and LOOPS searches human-ridden Irish loops for the best match. Duration, distance, scenery, and structured sessions supported.",
   alternates: { canonical: "/generate" },
   openGraph: {
-    title: "Plan a Ride — LOOPS",
+    title: "Find a Human-Ridden Road Loop — LOOPS",
     description:
-      "Describe the ride you want and LOOPS matches it to a verified loop or builds one. Duration, distance, or structured intervals — all handled.",
+      "Describe the road ride you want and LOOPS searches human-ridden Irish loops for the best match.",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Plan a Ride — LOOPS",
+    title: "Find a Human-Ridden Road Loop — LOOPS",
     description:
-      "Describe the ride you want and LOOPS matches it to a verified loop or builds one.",
+      "Describe the road ride you want and LOOPS searches human-ridden Irish loops for the best match.",
   },
   robots: {
     // The planner is behind auth and hits external APIs on every visit —

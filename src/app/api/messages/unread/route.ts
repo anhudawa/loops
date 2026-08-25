@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserBySession, getUnreadCount, migrateDb } from "@/lib/db";
+import { getUserBySession, getUnreadCount } from "@/lib/db";
 import { handleApiError } from "@/lib/api-utils";
 
 export async function GET(request: NextRequest) {
@@ -14,7 +14,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ count: 0 });
     }
 
-    await migrateDb();
     const count = await getUnreadCount(user.id);
     return NextResponse.json({ count });
   } catch (err) {

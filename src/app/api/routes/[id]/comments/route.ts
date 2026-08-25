@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getRouteComments, insertComment, deleteOwnComment, getUserBySession } from "@/lib/db";
+import { getRoute, getRouteComments, insertComment, deleteOwnComment, getUserBySession } from "@/lib/db";
 import { apiError, handleApiError, stripHtml } from "@/lib/api-utils";
 import { COMMENTS_PER_PAGE, MAX_COMMENT_LENGTH } from "@/config/constants";
 import { v4 as uuidv4 } from "uuid";
@@ -10,6 +10,8 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    const route = await getRoute(id);
+    if (!route || route.is_verified !== 1) return apiError("Route not found", "NOT_FOUND", 404);
     const { searchParams } = new URL(request.url);
     const page = Math.max(1, Number(searchParams.get("page")) || 1);
     const pageSize = COMMENTS_PER_PAGE;
@@ -28,6 +30,8 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
+    const route = await getRoute(id);
+    if (!route || route.is_verified !== 1) return apiError("Route not found", "NOT_FOUND", 404);
     const sessionToken = request.cookies.get("session")?.value;
 
     if (!sessionToken) {
@@ -68,6 +72,8 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
+    const route = await getRoute(id);
+    if (!route || route.is_verified !== 1) return apiError("Route not found", "NOT_FOUND", 404);
     const sessionToken = request.cookies.get("session")?.value;
 
     if (!sessionToken) {

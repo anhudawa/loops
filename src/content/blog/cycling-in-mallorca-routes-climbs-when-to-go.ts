@@ -48,9 +48,9 @@ export const mallorca: BlogPost = {
     },
     {
       type: "cta",
-      text: "We've mapped Mallorca's classic loops and climbs into one curated pack — distances, gradients and surfaces verified.",
-      href: "/collections/mallorca",
-      label: "See the Mallorca collection",
+      text: "Mallorca is planned after Ireland and Girona. Its road catalogue will open only after local riders have supplied and independently reviewed the routes.",
+      href: "/generate",
+      label: "Search the Ireland beta",
     },
     { type: "h2", text: "Best loops" },
     {
@@ -83,9 +83,9 @@ export const mallorca: BlogPost = {
     },
     {
       type: "cta",
-      text: "Tell our AI your base town, fitness and how many days you have — get a Mallorca week built around the climbs you want.",
-      href: "/generate",
-      label: "Plan a Mallorca route",
+      text: "Mallorca follows Ireland and Girona only after LOOPS proves a repeatable, human-ridden destination catalogue.",
+      href: "/cycling",
+      label: "View the LOOPS rollout",
     },
   ],
   faqs: [

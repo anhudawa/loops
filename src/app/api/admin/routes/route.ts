@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin";
-import { getAllRoutes } from "@/lib/db";
+import { getAllRoutes, markExpiredRoutesStale } from "@/lib/db";
 import { handleApiError } from "@/lib/api-utils";
 
 export async function GET(request: NextRequest) {
@@ -8,6 +8,7 @@ export async function GET(request: NextRequest) {
     const auth = await requireAdmin(request);
     if (auth instanceof NextResponse) return auth;
 
+    await markExpiredRoutesStale();
     const page = Number(request.nextUrl.searchParams.get("page") || "1");
     const data = await getAllRoutes(page, 50);
     return NextResponse.json(data);

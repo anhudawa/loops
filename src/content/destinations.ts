@@ -39,7 +39,7 @@ export const destinations: Destination[] = [
     rainfall: "Driest months are June through August; spring can bring afternoon showers in the hills",
     riding: [
       "Girona is the unofficial cycling capital of Europe. A few hundred professional riders live here for a reason: within 30 minutes of the medieval old town you reach rolling farmland, coastal flats, volcanic terrain in the Garrotxa, and the first serious foothills of the Pyrenees. Traffic on the secondary roads to the north and west is almost non-existent.",
-      "The terrain suits every rider. If you want steady Zone 2 volume, the GI-554 corridor towards Banyoles and the lake loop is flat-to-rolling perfection. If you want to hurt, Rocacorba, Mare de Deu del Mont, and the Pyrenean cols around Camprodon are all within reach of a long day. Gravel riders can disappear into the volcanic tracks around Olot or head east to the coastal paths of the Costa Brava.",
+      "The road terrain suits every rider. If you want steady Zone 2 volume, the GI-554 corridor towards Banyoles and the lake loop is flat-to-rolling perfection. If you want to hurt, Rocacorba, Mare de Deu del Mont, and the Pyrenean cols around Camprodon are all within reach of a long day.",
       "Road surfaces are generally excellent. The Catalan government resurfaces cycling-popular roads regularly, and local drivers are accustomed to large groups. The cafe culture rounds it off: rides start and end at La Fabrica, Federal, or any of the bike-friendly stops along the Onyar.",
     ],
     climbs: [
@@ -53,7 +53,7 @@ export const destinations: Destination[] = [
       airport:
         "Barcelona El Prat (BCN) is 1h15 by car or 1h40 by direct train. Girona-Costa Brava airport (GRO) handles seasonal Ryanair flights and is 15 minutes from town.",
       bikeHire:
-        "Several shops in the old town rent high-end road and gravel bikes: Eat Sleep Cycle, Trek Travel, and La Bicicleta. Book frames in advance during March-May peak.",
+        "Several shops in the old town rent high-end road bikes, including Eat Sleep Cycle, Trek Travel, and La Bicicleta. Book frames in advance during the March-May peak.",
       accommodation:
         "The old town (Barri Vell) is the classic base — walkable to cafes and ride start points. Budget hostels to boutique hotels. For longer stays, apartments in the Eixample or Pedret neighborhoods are popular with visiting riders.",
     },
@@ -72,11 +72,6 @@ export const destinations: Destination[] = [
         question: "How do I get to Girona with a bike?",
         answer:
           "Fly into Barcelona El Prat and take the train or drive (1h15). Most airlines accept bike boxes as checked luggage. Girona-Costa Brava airport handles seasonal low-cost flights and is 15 minutes from the city centre. Several bike hire shops in Girona also offer airport transfers.",
-      },
-      {
-        question: "Can I ride gravel in Girona?",
-        answer:
-          "Yes. The volcanic zone around Olot and the Garrotxa natural park has excellent gravel tracks. The coastal paths along the Costa Brava and the forest tracks through the Gavarres massif are also popular. Many Girona-based pros train on gravel year-round.",
       },
       {
         question: "What are the must-ride climbs near Girona?",
@@ -280,7 +275,7 @@ export const destinations: Destination[] = [
     riding: [
       "The Wicklow Mountains are the closest real mountains to Dublin, and for Irish cyclists they are the default training ground. The landscape is raw: open moorland, deep glacial valleys, conifer plantations, and exposed mountain passes above 500 m. The roads are mostly single-carriageway R-roads with light traffic, and the views on a clear day reach from the Irish Sea to the midlands.",
       "The Military Road (R115) is the backbone. Built by the British army after the 1798 rebellion to access the mountain interior, it runs roughly north-south across the range, climbing over several passes including the Sally Gap (503 m) and the Wicklow Gap (470 m). These passes are not Alpine in gradient but they are long, exposed, and often windy. The climbing is steady rather than steep: 3-5% over 10-15 km stretches.",
-      "Beyond the main passes, Wicklow offers excellent quieter roads through the eastern valleys. The Glendalough valley, Glenmalure (the longest glacial valley in Ireland), and the Avoca valley all have scenic, low-traffic roads. Gravel and MTB riders can access forest tracks and fireroads throughout the Wicklow Mountains National Park. The terrain rewards riders who like long, steady efforts in quiet surroundings more than short, explosive climbs.",
+      "Beyond the main passes, Wicklow offers excellent quieter roads through the eastern valleys. The Glendalough valley, Glenmalure (the longest glacial valley in Ireland), and the Avoca valley all have scenic, low-traffic roads. The terrain rewards riders who like long, steady efforts in quiet surroundings more than short, explosive climbs.",
     ],
     climbs: [
       "Sally Gap via R115 from Dublin (15 km, avg 3.5%) — the classic mountain pass across open moorland",
@@ -312,11 +307,6 @@ export const destinations: Destination[] = [
         question: "How hard is the Sally Gap?",
         answer:
           "The Sally Gap is not steep (average 3.5%) but it is long (15 km from the Dublin side) and very exposed. Wind is the main difficulty - a headwind over the open moorland above 450 m can turn a moderate climb into a genuine effort. On a calm day, strong recreational riders complete it in 40-50 minutes.",
-      },
-      {
-        question: "Can I do gravel riding in Wicklow?",
-        answer:
-          "Yes. The Wicklow Mountains National Park has an extensive network of forest fireroads and tracks. The Ballinastoe MTB trails are purpose-built. For gravel bikes, the fireroads in Glendalough, Laragh, and the Devil's Glen offer long off-road loops. Surface quality varies from smooth gravel to rough forestry track.",
       },
       {
         question: "What is the best cycling loop in Wicklow?",

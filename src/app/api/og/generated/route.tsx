@@ -50,13 +50,24 @@ function fallbackImage(message: string) {
 }
 
 export async function GET(request: Request) {
+  let distance = "0";
+  let elevation = "0";
+  let discipline = "road";
+  let name = "Reviewed Road Route";
+  let color = "#c8ff00";
+  let svgPath = "";
+  let startX = "0";
+  let startY = "0";
+  const svgW = 480;
+  const svgH = 480;
+
   try {
     const { searchParams } = new URL(request.url);
     const coordsParam = searchParams.get("coords");
-    const distance = searchParams.get("distance") || "0";
-    const elevation = searchParams.get("elevation") || "0";
-    const discipline = searchParams.get("discipline") || "road";
-    const name = searchParams.get("name") || "Generated Route";
+    distance = searchParams.get("distance") || "0";
+    elevation = searchParams.get("elevation") || "0";
+    discipline = searchParams.get("discipline") || "road";
+    name = searchParams.get("name") || "Reviewed Road Route";
 
     if (!coordsParam) {
       return fallbackImage("Route preview");
@@ -73,7 +84,7 @@ export async function GET(request: Request) {
       return fallbackImage("Route preview");
     }
 
-    const color = DISCIPLINE_COLORS[discipline] || "#c8ff00";
+    color = DISCIPLINE_COLORS[discipline] || "#c8ff00";
 
     const lats = coords.map((c) => c[0]);
     const lngs = coords.map((c) => c[1]);
@@ -84,20 +95,22 @@ export async function GET(request: Request) {
     const rangeX = maxLng - minLng || 0.01;
     const rangeY = maxLat - minLat || 0.01;
     const padding = 50;
-    const svgW = 480;
-    const svgH = 480;
 
     const points = coords.map((c) => {
       const x = padding + ((c[1] - minLng) / rangeX) * (svgW - padding * 2);
       const y = padding + ((maxLat - c[0]) / rangeY) * (svgH - padding * 2);
       return `${x},${y}`;
     });
-    const svgPath = `M${points.join("L")}`;
+    svgPath = `M${points.join("L")}`;
 
-    const startX = points[0].split(",")[0];
-    const startY = points[0].split(",")[1];
+    startX = points[0].split(",")[0];
+    startY = points[0].split(",")[1];
+  } catch {
+    console.error(JSON.stringify({ event: "route_og_render_failed" }));
+    return fallbackImage("Plan your ride on LOOPS");
+  }
 
-    return new ImageResponse(
+  return new ImageResponse(
       (
         <div
           style={{
@@ -227,9 +240,5 @@ export async function GET(request: Request) {
           "Cache-Control": "public, max-age=86400, s-maxage=86400",
         },
       }
-    );
-  } catch (error) {
-    console.error("Generated route OG image error:", error);
-    return fallbackImage("Plan your ride on LOOPS");
-  }
+  );
 }

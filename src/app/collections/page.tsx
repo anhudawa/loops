@@ -4,12 +4,12 @@ import AppHeader from "@/components/AppHeader";
 import CollectionCard from "@/components/CollectionCard";
 
 export const metadata: Metadata = {
-  title: "Collections — LOOPS | Curated Cycling Route Packs",
-  description: "Curated cycling route collections from around the world. Girona, Mallorca, Wild Atlantic Way and more — hand-picked routes for every discipline.",
+  title: "Ireland Road Collections | LOOPS",
+  description: "Reviewed, human-ridden road cycling collections from the LOOPS Ireland beta.",
   alternates: { canonical: "/collections" },
   openGraph: {
-    title: "Collections — Curated Cycling Route Packs",
-    description: "Hand-picked route packs from the best cycling destinations worldwide.",
+    title: "Ireland Road Collections | LOOPS",
+    description: "Reviewed, human-ridden road cycling collections from the LOOPS Ireland beta.",
     url: "https://www.loops.ie/collections",
   },
 };
@@ -31,7 +31,7 @@ export default async function CollectionsPage() {
         <div className="mb-8">
           <h1 className="text-3xl font-black tracking-tight mb-2" style={{ color: "var(--text)" }}>Collections</h1>
           <p className="text-base" style={{ color: "var(--text-muted)" }}>
-            Curated route packs from the world&apos;s best cycling destinations.
+            Reviewed Irish road loops grouped for easier discovery. Girona and Mallorca follow only after Ireland passes its launch gates.
           </p>
         </div>
 

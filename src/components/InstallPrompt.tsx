@@ -34,11 +34,11 @@ export default function InstallPrompt() {
     const wasDismissed = localStorage.getItem(DISMISSED_KEY) === "1";
     if (wasDismissed) return;
 
-    setDismissed(false);
-
-    if (isIosSafari()) {
-      setShowIosHint(true);
-    }
+    const timer = window.setTimeout(() => {
+      setDismissed(false);
+      if (isIosSafari()) setShowIosHint(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   // Listen for beforeinstallprompt (Chrome/Edge/Samsung)
@@ -52,6 +52,13 @@ export default function InstallPrompt() {
     return () => window.removeEventListener("beforeinstallprompt", handler);
   }, []);
 
+  const dismiss = useCallback(() => {
+    localStorage.setItem(DISMISSED_KEY, "1");
+    setDismissed(true);
+    setDeferredPrompt(null);
+    setShowIosHint(false);
+  }, []);
+
   const handleInstall = useCallback(async () => {
     if (!deferredPrompt) return;
     await deferredPrompt.prompt();
@@ -60,14 +67,7 @@ export default function InstallPrompt() {
       setDeferredPrompt(null);
     }
     dismiss();
-  }, [deferredPrompt]);
-
-  function dismiss() {
-    localStorage.setItem(DISMISSED_KEY, "1");
-    setDismissed(true);
-    setDeferredPrompt(null);
-    setShowIosHint(false);
-  }
+  }, [deferredPrompt, dismiss]);
 
   const visible = !dismissed && (deferredPrompt || showIosHint);
   if (!visible) return null;

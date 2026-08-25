@@ -4,7 +4,7 @@ export const thresholdIntervals: BlogPost = {
   slug: "where-to-do-threshold-intervals-safely-outdoors",
   title: "Where to Do Threshold Intervals Safely Outdoors",
   description:
-    "How to find the right roads for threshold intervals: gradient, length, traffic and surface, plus session structures and how to let AI find your ideal stretch.",
+    "How to find the right roads for threshold intervals: gradient, length, traffic, surface, session structure and why current human assessment matters.",
   excerpt:
     "Threshold work only counts if you can hold the effort uninterrupted. Here's how to choose roads that let you do that — safely.",
   date: "2026-05-10",
@@ -36,7 +36,7 @@ export const thresholdIntervals: BlogPost = {
         "**A steady climb of 3–6% is close to perfect.** The gradient holds your effort honest, removes the temptation to coast and minimises wind variability. You can't freewheel uphill, so power stays continuous.",
         "**Length matched to your intervals.** A 10-minute interval at climbing speed needs roughly 3–5 km of uninterrupted climb. Know the length before you start.",
         "**Minimal traffic and no junctions.** Every stop sign or busy intersection is a forced surge or a dangerous decision under fatigue. Pick roads where you won't have to brake.",
-        "**Good, predictable surface.** Smooth tarmac for road; firm, consistent hardpack for gravel. You shouldn't be dodging potholes while staring at your power meter.",
+        "**Good, predictable surface.** Smooth, consistent tarmac with no known broken sections. You shouldn't be dodging potholes while staring at your power meter.",
         "**A safe turnaround or loop.** You need somewhere to recover and reset between reps without descending a dangerous road repeatedly.",
       ],
     },
@@ -51,9 +51,9 @@ export const thresholdIntervals: BlogPost = {
     },
     {
       type: "cta",
-      text: "Our AI route planner can find steady, low-traffic climbs near you that match your interval length — no more guessing which road works.",
+      text: "LOOPS only recommends an Irish road segment for threshold work when a rider has assessed that exact segment for the session and an independent reviewer has approved it.",
       href: "/generate",
-      label: "Find an interval route",
+      label: "Find a reviewed threshold route",
     },
     { type: "h2", text: "Sample threshold sessions" },
     {
@@ -81,7 +81,7 @@ export const thresholdIntervals: BlogPost = {
     },
     {
       type: "p",
-      text: "Threshold work sits between your easy [Zone 2 endurance rides](/blog/how-to-structure-a-zone-2-endurance-ride) and your hardest [VO2 max sessions](/blog/vo2-max-intervals-complete-outdoor-guide). Get the road right and the session takes care of itself. If you're travelling, destinations like [Calpe](/collections/calpe) and [Mallorca](/collections/mallorca) are full of long, steady, traffic-light climbs purpose-built for this kind of work.",
+      text: "Threshold work sits between your easy [Zone 2 endurance rides](/blog/how-to-structure-a-zone-2-endurance-ride) and your hardest [VO2 max sessions](/blog/vo2-max-intervals-complete-outdoor-guide). Get the road right and the session takes care of itself. If you're travelling, destinations such as Calpe and Mallorca are known for long, steady climbs, but recce the exact road and conditions before using one for a hard effort.",
     },
   ],
   faqs: [
@@ -108,7 +108,7 @@ export const thresholdIntervals: BlogPost = {
     {
       question: "How do I find safe interval roads in a new area?",
       answer:
-        "Recce the road before riding it hard so you know the junctions, surface and traffic. Prefer quiet times of day and quieter roads. Tools that suggest routes by gradient and traffic — such as an AI route planner that can match a steady climb to your interval length — make finding suitable stretches much faster than trial and error.",
+        "Recce the road before riding it hard so you know the junctions, surface and traffic. Prefer quiet times of day and quieter roads. Map data can narrow a search, but it cannot establish that a stretch is safe or suitable for a threshold session; that requires current, on-road human assessment.",
     },
   ],
 };

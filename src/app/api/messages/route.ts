@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { getUserBySession, getConversations, getOrCreateConversation, sendMessage, getUnreadCount, migrateDb } from "@/lib/db";
+import { getUserBySession, getConversations, getOrCreateConversation, sendMessage, getUnreadCount } from "@/lib/db";
 import { apiError, handleApiError } from "@/lib/api-utils";
 import { MAX_MESSAGE_LENGTH } from "@/config/constants";
 import { v4 as uuidv4 } from "uuid";
@@ -17,7 +17,6 @@ export async function GET(request: NextRequest) {
       return apiError("Not authenticated", "UNAUTHORIZED", 401);
     }
 
-    await migrateDb();
     const [conversations, unreadCount] = await Promise.all([
       getConversations(user.id),
       getUnreadCount(user.id),
@@ -54,7 +53,6 @@ export async function POST(request: NextRequest) {
       return apiError("Cannot message yourself", "VALIDATION_ERROR", 400);
     }
 
-    await migrateDb();
     const conversationId = await getOrCreateConversation(user.id, to);
     const message = await sendMessage(uuidv4(), conversationId, user.id, body.trim());
 

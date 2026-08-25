@@ -3,11 +3,19 @@ import { cookies } from "next/headers";
 import { getUserBySession } from "@/lib/db";
 import { getValidAccessToken, fetchActivity, fetchActivityStreams, mapStravaDiscipline } from "@/lib/strava-api";
 import { calculateStats } from "@/lib/geo-utils";
+import { ALLOW_STRAVA_ROUTE_IMPORT } from "@/config/route-policy";
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  if (!ALLOW_STRAVA_ROUTE_IMPORT) {
+    return NextResponse.json(
+      { error: "Strava activity importing is disabled.", code: "STRAVA_DISABLED" },
+      { status: 410 }
+    );
+  }
+
   const session = (await cookies()).get("session")?.value;
   if (!session) {
     return NextResponse.json({ error: "Not authenticated", code: "AUTH_REQUIRED" }, { status: 401 });

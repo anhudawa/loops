@@ -6,7 +6,7 @@ import { getAllPosts, getPostsGroupedByCategory, type BlogPost } from "@/lib/blo
 export const metadata: Metadata = {
   title: "Cycling Guides & Training Blog — LOOPS",
   description:
-    "Expert cycling destination guides and training advice: Girona, Mallorca, Wicklow, winter camps, Zone 2, threshold & VO2 max intervals, and AI route planning.",
+    "Road cycling destination guides and training advice from LOOPS, including Ireland, Girona, Mallorca, endurance and interval sessions.",
   alternates: { canonical: "/blog" },
   keywords: [
     "cycling blog",
@@ -20,14 +20,14 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Cycling Guides & Training Blog — LOOPS",
     description:
-      "Destination guides and training science for road, gravel and endurance cyclists. Plus how to plan routes with AI.",
+      "Road cycling destination guides and practical outdoor training advice from LOOPS.",
     url: "https://www.loops.ie/blog",
     type: "website",
   },
 };
 
 const CATEGORY_BLURB: Record<string, string> = {
-  Destinations: "Where to ride. Complete guides to the world's best cycling regions.",
+  Destinations: "Where to ride: Ireland first, with Girona and Mallorca next.",
   Training: "How to ride. Evidence-based interval and endurance training, applied outdoors.",
   Product: "How LOOPS helps you find and plan routes that fit your training and your trip.",
 };
@@ -80,7 +80,7 @@ export default function BlogIndexPage() {
     name: "LOOPS Cycling Blog",
     url: "https://www.loops.ie/blog",
     description:
-      "Cycling destination guides and training advice from LOOPS — the AI-powered cycling route platform.",
+      "Road cycling destination guides and training advice from LOOPS — built around human-ridden, reviewed routes.",
     blogPost: allPosts.map((p) => ({
       "@type": "BlogPosting",
       headline: p.title,
@@ -115,10 +115,10 @@ export default function BlogIndexPage() {
             Cycling guides &amp; training
           </h1>
           <p className="text-base max-w-2xl leading-relaxed" style={{ color: "var(--text-muted)" }}>
-            Destination guides to the world&apos;s best riding and evidence-based training advice you can
-            actually take outdoors. Then plan it with{" "}
+            Irish road riding and evidence-based training advice you can take outdoors, with Girona and
+            Mallorca next. Find a suitable ride in our{" "}
             <Link href="/generate" className="font-semibold underline underline-offset-2" style={{ color: "var(--accent)" }}>
-              AI route planning
+              human-ridden route library
             </Link>
             .
           </p>

@@ -1323,7 +1323,6 @@ export async function scoreRoute(
   let traffic_volume_score: number;
   let scenic_diversity_score: number;
   let waypoint_interest_score: number;
-  let gradient_comfort_score: number;
   let road_continuity_score: number;
   let bicycle_access_score: number;
 
@@ -1376,7 +1375,7 @@ export async function scoreRoute(
 
   // Gradient comfort is always computed from local elevation data (no Overpass needed)
   const gradient = scoreGradientComfort(coordinates);
-  gradient_comfort_score = gradient.score;
+  const gradient_comfort_score = gradient.score;
   allFlags.push(...gradient.flags);
 
   // 6. Normalize total to 0–100

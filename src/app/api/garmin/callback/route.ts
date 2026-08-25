@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exchangeAccessToken, isGarminEnabled } from "@/lib/garmin";
 import { getUserBySession, saveGarminTokens } from "@/lib/db";
+import { openToken } from "@/lib/token-crypto";
 
 /** OAuth callback: exchange the verifier for access tokens and store them. */
 export async function GET(request: NextRequest) {
@@ -15,7 +16,17 @@ export async function GET(request: NextRequest) {
   const oauthToken = url.searchParams.get("oauth_token");
   const verifier = url.searchParams.get("oauth_verifier");
   const stored = request.cookies.get("garmin_oauth")?.value ?? "";
-  const [reqToken, reqSecret] = stored.split(":");
+  let reqToken = "";
+  let reqSecret = "";
+  try {
+    const parsed = JSON.parse(openToken(stored));
+    if (Array.isArray(parsed) && parsed.length === 2) {
+      reqToken = String(parsed[0]);
+      reqSecret = String(parsed[1]);
+    }
+  } catch {
+    // Missing, legacy plaintext, expired-key or tampered cookie.
+  }
 
   if (!oauthToken || !verifier || !reqToken || !reqSecret || oauthToken !== reqToken) {
     return NextResponse.redirect(new URL("/generate?garmin=error", request.url));

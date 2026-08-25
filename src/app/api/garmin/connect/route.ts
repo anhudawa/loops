@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRequestToken, isGarminEnabled } from "@/lib/garmin";
 import { getUserBySession } from "@/lib/db";
+import { sealToken } from "@/lib/token-crypto";
 
 /** Begin the Garmin OAuth flow: fetch a request token and redirect to
  * Garmin's consent page. The request-token secret rides in a short-lived
@@ -23,7 +24,7 @@ export async function GET(request: NextRequest) {
     const callback = `${origin}/api/garmin/callback`;
     const { token, secret, authorizeUrl } = await getRequestToken(callback);
     const res = NextResponse.redirect(authorizeUrl);
-    res.cookies.set("garmin_oauth", `${token}:${secret}`, {
+    res.cookies.set("garmin_oauth", sealToken(JSON.stringify([token, secret])), {
       httpOnly: true,
       secure: true,
       sameSite: "lax",

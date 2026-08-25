@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getRoute, getUserBySession, trackDownload, migrateDb } from "@/lib/db";
+import { getRoute, getUserBySession, recordBetaProductEvent, trackDownload } from "@/lib/db";
 import { apiError, handleApiError } from "@/lib/api-utils";
 import { v4 as uuidv4 } from "uuid";
+import { hasActiveBetaAccess } from "@/lib/beta-intake";
 
 export async function GET(
   request: NextRequest,
@@ -17,6 +18,9 @@ export async function GET(
     if (!user) {
       return apiError("Sign in to download routes", "UNAUTHORIZED", 401);
     }
+    if (user.role !== "admin" && !(await hasActiveBetaAccess(user.id))) {
+      return apiError("Ireland beta access is required to download routes", "BETA_ACCESS_REQUIRED", 403);
+    }
 
     const { id } = await params;
     const route = await getRoute(id);
@@ -25,10 +29,21 @@ export async function GET(
       return apiError("Route not found", "NOT_FOUND", 404);
     }
 
+    if (route.is_verified !== 1 && user.role !== "admin" && user.id !== route.created_by) {
+      return apiError("Route not found", "NOT_FOUND", 404);
+    }
+
     // Track download
     try {
-      await migrateDb();
       await trackDownload(uuidv4(), id, user.id);
+      if (route.is_verified === 1 && route.current_version_id) {
+        await recordBetaProductEvent(
+          user.id,
+          id,
+          route.current_version_id,
+          "gpx_download"
+        );
+      }
     } catch {
       // Don't block the download if tracking fails
     }

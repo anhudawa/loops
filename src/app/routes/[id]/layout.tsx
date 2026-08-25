@@ -9,6 +9,7 @@ import {
   slugify,
 } from "@/lib/seo";
 import JsonLd from "@/components/JsonLd";
+import { isEligibleForPublicLibrary } from "@/config/route-policy";
 
 export async function generateMetadata({
   params,
@@ -23,15 +24,18 @@ export async function generateMetadata({
     return { title: "Cycling Route | LOOPS" };
   }
 
-  if (!route) {
-    return { title: "Route Not Found - LOOPS" };
+  if (!route || route.is_verified !== 1 || !isEligibleForPublicLibrary(route)) {
+    return {
+      title: "Private route review | LOOPS",
+      robots: { index: false, follow: false, noarchive: true },
+    };
   }
 
   const location = route.region || route.county;
   const title = `${route.name} — ${route.distance_km}km ${route.discipline} route in ${location}, ${route.country} | LOOPS`;
   const description = route.description
-    ? `${route.description.slice(0, 120)}. ${route.distance_km}km ${route.discipline} route in ${location}, ${route.country}. ${route.elevation_gain_m}m climbing. Free GPX download.`
-    : `${route.distance_km}km ${route.discipline} route in ${location}, ${route.country}. ${route.elevation_gain_m}m climbing. Free GPX download.`;
+    ? `${route.description.slice(0, 120)}. ${route.distance_km}km human-ridden road route in ${location}, ${route.country}. ${route.elevation_gain_m}m climbing.`
+    : `${route.distance_km}km human-ridden road route in ${location}, ${route.country}. ${route.elevation_gain_m}m climbing.`;
 
   return {
     title,
@@ -74,7 +78,7 @@ export default async function RouteLayout({
     return children;
   }
 
-  if (!route) return children;
+  if (!route || route.is_verified !== 1 || !isEligibleForPublicLibrary(route)) return children;
 
   const routeJsonLd = generateRouteJsonLd({
     id: route.id,

@@ -3,8 +3,13 @@ import { cookies } from "next/headers";
 import { getUserBySession, saveStravaTokens } from "@/lib/db";
 import { exchangeCode } from "@/lib/strava-api";
 import { sql } from "@vercel/postgres";
+import { ALLOW_STRAVA_ROUTE_IMPORT } from "@/config/route-policy";
 
 export async function GET(request: NextRequest) {
+  if (!ALLOW_STRAVA_ROUTE_IMPORT) {
+    return NextResponse.redirect(new URL("/upload?strava_error=disabled", request.url));
+  }
+
   const code = request.nextUrl.searchParams.get("code");
   const stateParam = request.nextUrl.searchParams.get("state");
   const error = request.nextUrl.searchParams.get("error");

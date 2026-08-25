@@ -29,6 +29,8 @@ interface RouteCardProps {
     comment_count?: number;
     operator_name?: string | null;
     operator_url?: string | null;
+    ridden_by_name?: string | null;
+    last_ridden_at?: string | null;
   };
   isSelected?: boolean;
   onHover?: (id: string | null) => void;
@@ -131,7 +133,7 @@ export default function RouteCard({ route, showDistance }: RouteCardProps) {
                 {route.name}
               </h3>
               {route.is_verified === 1 && (
-                <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="var(--success)" aria-label="Verified route">
+                <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="var(--success)" aria-label="Human-ridden route">
                   <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                 </svg>
               )}
@@ -182,7 +184,7 @@ export default function RouteCard({ route, showDistance }: RouteCardProps) {
               <div className="flex items-center gap-1.5 min-w-0">
                 <h3 className="font-bold tracking-tight truncate" style={{ color: "var(--text)" }}>{route.name}</h3>
                 {route.is_verified === 1 && (
-                  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="var(--success)" aria-label="Verified route">
+                  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="var(--success)" aria-label="Human-ridden route">
                     <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                   </svg>
                 )}
@@ -202,6 +204,12 @@ export default function RouteCard({ route, showDistance }: RouteCardProps) {
 
             {route.description && (
               <p className="text-[13px] mb-3 line-clamp-2 leading-relaxed" style={{ color: "var(--text-muted)" }}>{route.description}</p>
+            )}
+
+            {route.is_verified === 1 && route.ridden_by_name && route.last_ridden_at && (
+              <p className="text-[11px] mb-2" style={{ color: "var(--success)" }}>
+                Ridden by {route.ridden_by_name} · {new Date(route.last_ridden_at).toLocaleDateString("en-IE", { month: "short", year: "numeric" })}
+              </p>
             )}
 
             {/* Stats row */}

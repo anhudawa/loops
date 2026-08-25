@@ -21,13 +21,12 @@ export default async function HomeSeoContent() {
     <section className="max-w-5xl mx-auto px-4 md:px-6 py-12 mt-8" style={{ borderTop: "1px solid var(--border)" }}>
       <JsonLd data={generateItemListJsonLd("Cycling Routes on LOOPS", featuredRoutes)} />
       <h2 className="text-2xl font-extrabold mb-4" style={{ color: "var(--text)" }}>
-        Discover Cycling Routes Worldwide
+        Human-Ridden Road Cycling Routes in Ireland
       </h2>
       <p className="text-sm leading-relaxed mb-6" style={{ color: "var(--text-secondary)" }}>
-        LOOPS is a free cycling route discovery platform: a curated library of the world's best
-        cycling roads plus wind-aware route generation. Browse gravel, road, and MTB routes,
-        download free GPX files, and find your next ride.
-        Works with Strava, Komoot, Wahoo, and Garmin.
+        LOOPS matches your location, available time and training session to Irish road loops that
+        a real rider has completed. Every published route is reviewed, versioned and permissioned.
+        When there is no credible match, LOOPS says so rather than inventing one.
       </p>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
         {countries.map((country) => (

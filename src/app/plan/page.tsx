@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
-import PlanClient from "./PlanClient";
+import { redirect } from "next/navigation";
 
 export const metadata: Metadata = {
-  title: "Plan a Route | LOOPS",
+  title: "Find a Human-Ridden Route | LOOPS",
   description:
-    "Draw your ride on the map — tap points and LOOPS snaps a rideable route through them, with live distance and climbing, ready to download as GPX.",
+    "Search the LOOPS library for a human-ridden Irish road route.",
   alternates: { canonical: "/plan" },
   robots: {
     // Interactive planner — nothing for crawlers to index.
@@ -14,5 +14,5 @@ export const metadata: Metadata = {
 };
 
 export default function PlanPage() {
-  return <PlanClient />;
+  redirect("/generate");
 }

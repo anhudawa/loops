@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 import { getAllRoutesForSitemap, getCountries, getRegions, getCollections } from "@/lib/db";
 import { slugify } from "@/lib/seo";
 import { getAllPosts } from "@/lib/blog";
-import { getAllDestinationSlugs } from "@/content/destinations";
+import { destinations } from "@/content/destinations";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // Fail soft: a DB outage yields a sitemap of static + content pages
@@ -75,11 +75,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.7,
   }));
 
-  const destinationPages: MetadataRoute.Sitemap = getAllDestinationSlugs().map((slug) => ({
-    url: `https://loops.ie/cycling/${slug}`,
-    changeFrequency: "monthly",
-    priority: 0.8,
-  }));
+  const destinationPages: MetadataRoute.Sitemap = destinations
+    .filter((destination) => destination.country === "Ireland")
+    .map((destination) => ({
+      url: `https://loops.ie/cycling/${destination.slug}`,
+      changeFrequency: "monthly",
+      priority: 0.8,
+    }));
 
   return [
     ...staticPages,

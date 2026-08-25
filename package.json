@@ -1,5 +1,5 @@
 {
-  "name": "gravel-ireland",
+  "name": "loops-ie",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -8,6 +8,12 @@
     "start": "next start",
     "lint": "eslint",
     "seed": "npx tsx scripts/seed.ts",
+    "audit:provenance": "node --import tsx scripts/audit-route-provenance.mts",
+    "audit:beta-readiness": "node --import tsx scripts/audit-ireland-beta-readiness.mts",
+    "preflight:deploy": "node --import tsx scripts/deployment-preflight.mts",
+    "migrate:status": "node --import tsx scripts/migrate.mts --status",
+    "migrate:apply": "node --import tsx scripts/migrate.mts --apply",
+    "rehearse:migration": "node --import tsx scripts/rehearse-provenance-migration.mts",
     "cap:sync": "npx cap sync",
     "cap:ios": "npx cap open ios",
     "cap:android": "npx cap open android",
@@ -17,7 +23,7 @@
     "utterances": "tsx scripts/run-utterance-suite.mts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.80.0",
+    "@anthropic-ai/sdk": "^0.120.0",
     "@capacitor/android": "^8.2.0",
     "@capacitor/app": "^8.0.1",
     "@capacitor/core": "^8.2.0",
@@ -33,21 +39,21 @@
     "@types/better-sqlite3": "^7.6.13",
     "@types/leaflet": "^1.9.21",
     "@types/uuid": "^10.0.0",
-    "@vercel/blob": "^2.3.1",
+    "@vercel/blob": "^2.8.0",
     "@vercel/postgres": "^0.10.0",
     "better-sqlite3": "^12.6.2",
     "fit-file-parser": "^2.3.3",
     "leaflet": "^1.9.4",
-    "next": "16.1.6",
+    "next": "^16.3.2",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-leaflet": "^5.0.0",
-    "resend": "^6.9.3",
-    "uuid": "^13.0.0"
+    "resend": "^6.22.1",
+    "uuid": "^14.0.2"
   },
   "devDependencies": {
-    "@capacitor/assets": "^3.0.5",
-    "@capacitor/cli": "^7.6.0",
+    "@capacitor/cli": "^8.4.2",
+    "@electric-sql/pglite": "^0.5.7",
     "@playwright/test": "^1.58.2",
     "@tailwindcss/postcss": "^4",
     "@types/mapbox__polyline": "^1.0.5",
@@ -58,6 +64,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",
+    "tsx": "^4.23.12",
     "typescript": "5.9.3",
     "vitest": "^4.1.0",
     "xml2js": "^0.6.2"

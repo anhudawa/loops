@@ -6,11 +6,10 @@
  * Course points (workout effort markers, climbs) are included so the
  * head unit alerts on course.
  *
- * The Garmin Connect Developer Program uses OAuth 1.0a (HMAC-SHA1).
- * Set GARMIN_CONSUMER_KEY + GARMIN_CONSUMER_SECRET once the application
- * is approved (see docs/superpowers/plans/garmin-connect-setup.md) — the
- * feature switches on with no code changes. Until then isGarminEnabled()
- * is false and the UI shows nothing.
+ * IMPORTANT: this is a legacy, unverified OAuth 1 implementation. Garmin's
+ * current Connect Developer Program documents OAuth 2. It is hard-disabled by
+ * commercial policy until LOOPS is approved, rebuilt and tested against the
+ * partner environment.
  *
  * NOTE: built against the documented API shape but NOT yet exercised
  * against Garmin's sandbox (needs approved credentials). Run one manual
@@ -18,6 +17,8 @@
  */
 
 import crypto from "crypto";
+import { tokenEncryptionConfigured } from "./token-crypto";
+import { ALLOW_GARMIN_COURSES_INTEGRATION } from "@/config/route-policy";
 
 const REQUEST_TOKEN_URL = "https://connectapi.garmin.com/oauth-service/oauth/request_token";
 const AUTHORIZE_URL = "https://connect.garmin.com/oauthConfirm";
@@ -25,7 +26,12 @@ const ACCESS_TOKEN_URL = "https://connectapi.garmin.com/oauth-service/oauth/acce
 const COURSES_URL = "https://apis.garmin.com/training-api/courses/v1/course";
 
 export function isGarminEnabled(): boolean {
-  return Boolean(process.env.GARMIN_CONSUMER_KEY && process.env.GARMIN_CONSUMER_SECRET);
+  return Boolean(
+    ALLOW_GARMIN_COURSES_INTEGRATION &&
+    process.env.GARMIN_CONSUMER_KEY &&
+    process.env.GARMIN_CONSUMER_SECRET &&
+    tokenEncryptionConfigured()
+  );
 }
 
 // ── OAuth 1.0a signing ───────────────────────────────────────────────────────

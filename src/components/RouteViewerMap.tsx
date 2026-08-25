@@ -7,6 +7,7 @@ import { useMemo } from "react";
 import { MapContainer, TileLayer, Polyline, Marker } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { MAP_ATTRIBUTION, MAP_TILE_URL } from "@/config/map-provider";
 
 const startIcon = L.divIcon({
   className: "",
@@ -22,10 +23,7 @@ export default function RouteViewerMap({ coordinates }: { coordinates: [number, 
   );
   return (
     <MapContainer bounds={bounds} style={{ height: "100%", width: "100%" }} scrollWheelZoom>
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
+      {MAP_TILE_URL && <TileLayer attribution={MAP_ATTRIBUTION} url={MAP_TILE_URL} />}
       <Polyline
         positions={coordinates.map(([lat, lng]) => [lat, lng] as [number, number])}
         pathOptions={{ color: "#c8ff00", weight: 4, opacity: 0.95 }}

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getRouteConditions, insertCondition, getUserBySession } from "@/lib/db";
+import { getRoute, getRouteConditions, insertCondition, getUserBySession } from "@/lib/db";
 import { apiError, handleApiError } from "@/lib/api-utils";
 import { CONDITIONS_PER_PAGE, MAX_CONDITION_NOTE_LENGTH, CONDITION_STATUSES } from "@/config/constants";
 import { v4 as uuidv4 } from "uuid";
@@ -10,6 +10,8 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    const route = await getRoute(id);
+    if (!route || route.is_verified !== 1) return apiError("Route not found", "NOT_FOUND", 404);
     const { searchParams } = new URL(request.url);
     const page = Math.max(1, Number(searchParams.get("page")) || 1);
     const rows = await getRouteConditions(id, CONDITIONS_PER_PAGE + 1, (page - 1) * CONDITIONS_PER_PAGE);
@@ -27,6 +29,8 @@ export async function POST(
 ) {
   try {
     const { id: routeId } = await params;
+    const route = await getRoute(routeId);
+    if (!route || route.is_verified !== 1) return apiError("Route not found", "NOT_FOUND", 404);
     const sessionToken = request.cookies.get("session")?.value;
 
     if (!sessionToken) {

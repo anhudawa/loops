@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRoute } from "@/lib/db";
 import { apiError, handleApiError } from "@/lib/api-utils";
+import { isEligibleForPublicLibrary } from "@/config/route-policy";
 
 const cache = new Map<string, { data: unknown; timestamp: number }>();
 const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
@@ -13,7 +14,7 @@ export async function GET(
     const { id } = await params;
     const route = await getRoute(id);
 
-    if (!route) {
+    if (!route || route.is_verified !== 1 || !isEligibleForPublicLibrary(route)) {
       return apiError("Route not found", "NOT_FOUND", 404);
     }
 

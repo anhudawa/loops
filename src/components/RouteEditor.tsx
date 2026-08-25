@@ -13,6 +13,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { MapContainer, TileLayer, Polyline, Marker, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { MAP_ATTRIBUTION, MAP_TILE_URL } from "@/config/map-provider";
 
 interface RerouteResult {
   coordinates: [number, number][];
@@ -210,10 +211,7 @@ export default function RouteEditor({
       )}
 
       <MapContainer bounds={bounds} style={{ height: 340, width: "100%" }} scrollWheelZoom>
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
+        {MAP_TILE_URL && <TileLayer attribution={MAP_ATTRIBUTION} url={MAP_TILE_URL} />}
         <ClickToAdd onAdd={addAnchor} />
         <Polyline
           positions={coords.map(([lat, lng]) => [lat, lng] as [number, number])}

@@ -26,14 +26,14 @@ export default function AboutPage() {
 
         <div className="space-y-4 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
           <p>
-            LOOPS is a free cycling route discovery platform. We believe great routes shouldn&apos;t
-            be locked behind paywalls. Our library routes follow the roads local riders actually use,
-            and every generated route is scored against real road data with hard safety guardrails.
+            LOOPS helps road cyclists find enjoyable loops for where they are, how long they have,
+            and the kind of ride or training session they want to do. Every published loop is tied
+            to a named person who rode that exact route version and is reviewed before publication.
           </p>
           <p>
-            Whether you ride road, gravel, or mountain bike, LOOPS helps you find routes worth riding.
-            Download any route as a GPX file and load it into Strava, Komoot, Wahoo, Garmin, or any
-            app that supports GPX.
+            The relaunch starts with road cycling in Ireland, followed by Girona and Mallorca after
+            the Irish beta meets its trust and usage targets. LOOPS searches and ranks the
+            human-ridden library; it does not invent a consumer route when there is no trustworthy match.
           </p>
           <p>
             LOOPS is built and maintained in Ireland. If you have questions or want to get in touch,

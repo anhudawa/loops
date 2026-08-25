@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { getRoute } from "@/lib/db";
 import polyline from "@mapbox/polyline";
+import { isEligibleForPublicLibrary } from "@/config/route-policy";
 
 export async function generateMetadata({
   params,
@@ -10,13 +11,16 @@ export async function generateMetadata({
   const { id } = await params;
   const route = await getRoute(id);
 
-  if (!route) {
-    return { title: "Route Not Found - LOOPS" };
+  if (!route || route.is_verified !== 1 || !isEligibleForPublicLibrary(route)) {
+    return {
+      title: "Route Not Found - LOOPS",
+      robots: { index: false, follow: false, noarchive: true },
+    };
   }
 
   const location = route.region || route.county;
   const title = `${route.name} — ${route.distance_km}km ${route.discipline} ride | LOOPS`;
-  const description = `${route.distance_km}km ${route.discipline} route with ${route.elevation_gain_m}m climbing near ${location}, ${route.country}. View the route and plan your own ride on LOOPS.`;
+  const description = `${route.distance_km}km human-ridden road route with ${route.elevation_gain_m}m climbing near ${location}, ${route.country}. Independently reviewed on LOOPS.`;
 
   let encodedCoords = "";
   try {

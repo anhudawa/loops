@@ -28,27 +28,74 @@ export default function TermsPage() {
           <section>
             <h2 className="text-base font-bold mb-2" style={{ color: "var(--text)" }}>Use of service</h2>
             <p>
-              LOOPS is provided free of charge. By using LOOPS you agree to use it responsibly,
-              not upload harmful content, and not attempt to disrupt the service. We reserve the
-              right to suspend accounts that violate these terms.
+              LOOPS helps people discover and plan human-ridden road cycling loops. Some features
+              may be offered as a free or invitation-only beta and others may become paid. You must
+              use the service lawfully and responsibly, keep your account secure, and not disrupt,
+              scrape or misuse the service. We may suspend accounts or remove content that breaches
+              these terms or creates a safety, rights or privacy concern.
             </p>
           </section>
 
           <section>
-            <h2 className="text-base font-bold mb-2" style={{ color: "var(--text)" }}>Content</h2>
+            <h2 className="text-base font-bold mb-2" style={{ color: "var(--text)" }}>Closed beta access</h2>
             <p>
-              You retain ownership of routes, photos, and comments you upload. By uploading content
-              to LOOPS, you grant us a licence to display it within the service. Other users may
-              download route GPX files for personal use.
+              Applying does not guarantee admission. Approved access is personal, may be limited to
+              rider or contributor features, and may be paused or removed to protect route quality,
+              safety, review capacity or the integrity of the beta. Do not share account access or
+              represent a waitlisted application as an invitation.
             </p>
           </section>
 
           <section>
-            <h2 className="text-base font-bold mb-2" style={{ color: "var(--text)" }}>Disclaimer</h2>
+            <h2 className="text-base font-bold mb-2" style={{ color: "var(--text)" }}>Contributor promises</h2>
             <p>
-              Route information is provided as-is. Always exercise caution when cycling and verify
-              conditions before riding. LOOPS is not responsible for the accuracy of user-submitted
-              route data or trail conditions.
+              When you submit a loop, you promise that you personally rode the exact submitted
+              route, that the uploaded file is your completed-activity recording, and that the ride
+              date and source information are accurate. You must own or control the content and have
+              permission to let LOOPS use it, including under the terms of the app or device from
+              which you exported it. You must not submit another person&apos;s activity, a copied public
+              route, synthetic social proof, or a route that exposes another person&apos;s private or
+              sensitive location.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-base font-bold mb-2" style={{ color: "var(--text)" }}>Your content and licence</h2>
+            <p>
+              You keep ownership of content you create. You give LOOPS a non-exclusive, worldwide,
+              royalty-free licence to store, verify, analyse, format, reproduce, display, distribute
+              and promote submitted route content as part of operating LOOPS, including making an
+              approved route available as a downloadable navigation file. This licence allows LOOPS
+              to use service providers to operate the product. It does not allow LOOPS to sell your
+              personal ride history as a data feed.
+            </p>
+            <p className="mt-2">
+              Submission never guarantees publication. LOOPS may reject, quarantine, mark stale or
+              remove a route. You may request removal at hello@loops.ie. We will assess deletion and
+              legal-retention requirements and explain the outcome; removal does not undo downloads
+              or lawful uses that occurred before the request.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-base font-bold mb-2" style={{ color: "var(--text)" }}>Platform independence</h2>
+            <p>
+              References to Garmin, RideWithGPS, Komoot, Strava, Wahoo or other services describe a
+              contributor&apos;s recording source or a compatible export destination. They do not imply
+              sponsorship or endorsement. Direct account integrations remain unavailable unless
+              LOOPS has the required platform approval.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-base font-bold mb-2" style={{ color: "var(--text)" }}>Cycling risk and route currency</h2>
+            <p>
+              Cycling on public roads involves serious risks. Human review and a recent ride record
+              do not guarantee that a route is safe for you or that roads, traffic, weather, access
+              and surfaces have not changed. Check current conditions, obey the law and road signs,
+              use appropriate equipment, and choose a route and workout suitable for your ability.
+              Workout suitability describes reviewed route characteristics; it is not coaching,
+              medical advice or a direction to perform an effort when conditions are unsafe.
             </p>
           </section>
 
@@ -62,7 +109,7 @@ export default function TermsPage() {
             </p>
           </section>
 
-          <p className="text-xs" style={{ color: "var(--text-muted)" }}>Last updated: March 2026</p>
+          <p className="text-xs" style={{ color: "var(--text-muted)" }}>Last updated: 25 August 2026</p>
         </div>
       </div>
     </div>

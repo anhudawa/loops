@@ -6,6 +6,10 @@ export interface RouteData {
   name: string | null;
   coordinates: [number, number][];
   elevations: number[];
+  timestamps: string[];
+  timestamped_point_count: number;
+  recorded_at_start: string | null;
+  recorded_at_end: string | null;
   distance_km: number;
   elevation_gain_m: number;
   elevation_loss_m: number;

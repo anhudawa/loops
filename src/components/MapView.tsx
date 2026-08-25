@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { MAP_ATTRIBUTION, MAP_TILE_URL } from "@/config/map-provider";
 
 interface Route {
   id: string;
@@ -63,7 +64,7 @@ export default function MapView({
   useEffect(() => { onMapClickRef.current = onMapClick; }, [onMapClick]);
 
   useEffect(() => {
-    if (mapRef.current) return;
+    if (mapRef.current || !MAP_TILE_URL) return;
 
     mapRef.current = L.map("map", {
       center: [53.5, -7.5],
@@ -72,8 +73,8 @@ export default function MapView({
       scrollWheelZoom: false,
     });
 
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-      attribution: '&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
+    L.tileLayer(MAP_TILE_URL, {
+      attribution: MAP_ATTRIBUTION,
       maxZoom: 18,
     }).addTo(mapRef.current);
 
@@ -288,6 +289,14 @@ export default function MapView({
       L.marker(coords[idx], { icon, interactive: false }).addTo(travelLayerRef.current!);
     }
   }, [travelOverlay, routes, selectedRouteId]);
+
+  if (!MAP_TILE_URL) {
+    return (
+      <div className="w-full h-full min-h-64 rounded-lg flex items-center justify-center p-6 text-center text-sm" style={{ background: "var(--bg-card)", color: "var(--text-muted)" }}>
+        Map unavailable: the production map provider is not configured.
+      </div>
+    );
+  }
 
   return <div id="map" role="application" aria-label="Interactive map showing cycling route locations" className="w-full h-full rounded-lg" />;
 }

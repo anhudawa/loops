@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { rerouteWaypoints } from "@/lib/route-generator";
 import { getUserBySession } from "@/lib/db";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { ALLOW_FRESH_PUBLIC_ROUTE_GENERATION } from "@/config/route-policy";
 
 export const maxDuration = 30;
 
@@ -10,6 +11,13 @@ export const maxDuration = 30;
 const RATE_LIMIT_PER_MIN = 30;
 
 export async function POST(request: NextRequest) {
+  if (!ALLOW_FRESH_PUBLIC_ROUTE_GENERATION) {
+    return NextResponse.json(
+      { error: "Route drawing is unavailable during the human-ridden Ireland beta.", code: "ROUTE_DRAWING_DISABLED" },
+      { status: 410 }
+    );
+  }
+
   const sessionToken = request.cookies.get("session")?.value;
   const user = sessionToken ? await getUserBySession(sessionToken).catch(() => null) : null;
   if (!user) {

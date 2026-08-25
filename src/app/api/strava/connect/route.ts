@@ -4,8 +4,19 @@ import { getUserBySession, clearStravaTokens } from "@/lib/db";
 import { getValidAccessToken, deauthorize } from "@/lib/strava-api";
 import { v4 as uuidv4 } from "uuid";
 import { sql } from "@vercel/postgres";
+import { ALLOW_STRAVA_ROUTE_IMPORT } from "@/config/route-policy";
 
 export async function GET(request: NextRequest) {
+  if (!ALLOW_STRAVA_ROUTE_IMPORT) {
+    return NextResponse.json(
+      {
+        error: "Strava connection is disabled for the commercial relaunch. Upload your own ride file instead.",
+        code: "STRAVA_DISABLED",
+      },
+      { status: 410 }
+    );
+  }
+
   const session = (await cookies()).get("session")?.value;
   if (!session) {
     return NextResponse.json({ error: "Not authenticated", code: "AUTH_REQUIRED" }, { status: 401 });

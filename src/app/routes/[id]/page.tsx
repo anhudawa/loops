@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -15,11 +15,9 @@ import RideDisclaimer from "@/components/RideDisclaimer";
 import ShareRide from "@/components/ShareRide";
 import WeatherCard from "@/components/WeatherCard";
 import { useAuth } from "@/components/AuthProvider";
-import { useToast } from "@/components/Toast";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import AppHeader from "@/components/AppHeader";
 import SendToGarmin from "@/components/SendToGarmin";
-import QualityFactors, { SurfaceSummary, type SurfaceBreakdown } from "@/components/QualityFactors";
 import RouteFaq from "@/components/RouteFaq";
 import RelatedRoutes from "@/components/RelatedRoutes";
 import { slugify } from "@/lib/seo";
@@ -53,19 +51,18 @@ interface Route {
   creator_rating_count?: number;
   operator_name?: string | null;
   operator_url?: string | null;
-}
-
-interface RouteQualityData {
-  total: number;
-  breakdown: Record<string, number>;
-  surface_breakdown?: SurfaceBreakdown;
+  publication_status?: "draft" | "in_review" | "published" | "stale" | "quarantined" | "retired";
+  human_ridden?: boolean;
+  last_ridden_at?: string | null;
+  ridden_by_name?: string | null;
+  ride_evidence_type?: string | null;
+  reviewed_at?: string | null;
 }
 
 export default function RouteDetail() {
   const params = useParams();
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
-  const { toast } = useToast();
   const [route, setRoute] = useState<Route | null>(null);
   const [loading, setLoading] = useState(true);
   const [windData, setWindData] = useState<{ direction: number; speed: number } | null>(null);
@@ -78,8 +75,6 @@ export default function RouteDetail() {
   const [favLoading, setFavLoading] = useState(false);
   const [fetchError, setFetchError] = useState(false);
   const [mutationError, setMutationError] = useState("");
-  // Quality/surface scoring (parity with /generate) — fetched fire-and-forget
-  const [quality, setQuality] = useState<RouteQualityData | null>(null);
   // Profile hover → map marker (set by profile, drives map)
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   // Map click → profile crosshair (set by map click, drives profile)
@@ -90,7 +85,7 @@ export default function RouteDetail() {
     color: string;
   } | null>(null);
 
-  const fetchRoute = async () => {
+  const fetchRoute = useCallback(async () => {
     if (!params.id) return;
     setFetchError(false);
     setLoading(true);
@@ -102,35 +97,39 @@ export default function RouteDetail() {
       setFetchError(true);
     }
     setLoading(false);
-  };
+  }, [params.id]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchRoute();
-  }, [params.id]);
+  }, [fetchRoute]);
 
 
   const [relatedRoutes, setRelatedRoutes] = useState<Route[]>([]);
+  const currentRouteId = route?.id;
+  const currentRouteCountry = route?.country;
+  const currentRouteRegion = route?.region;
 
   useEffect(() => {
-    if (!route) return;
-    fetch(`/api/routes?country=${encodeURIComponent(route.country)}`)
+    if (!currentRouteId || !currentRouteCountry || route?.is_verified !== 1) return;
+    fetch(`/api/routes?country=${encodeURIComponent(currentRouteCountry)}`)
       .then((r) => r.json())
       .then((data) => {
         const all = data.data || data;
-        const sameRegion = route.region
-          ? all.filter((r: Route) => r.id !== route.id && r.region === route.region)
+        const sameRegion = currentRouteRegion
+          ? all.filter((r: Route) => r.id !== currentRouteId && r.region === currentRouteRegion)
           : [];
         const filtered = sameRegion.length > 0
           ? sameRegion.slice(0, 4)
-          : all.filter((r: Route) => r.id !== route.id).slice(0, 4);
+          : all.filter((r: Route) => r.id !== currentRouteId).slice(0, 4);
         setRelatedRoutes(filtered);
       })
       .catch(() => {});
-  }, [route?.id, route?.country, route?.region]);
+  }, [currentRouteId, currentRouteCountry, currentRouteRegion, route?.is_verified]);
 
   // Check favourite status
   useEffect(() => {
-    if (!params.id) return;
+    if (!params.id || route?.is_verified !== 1) return;
     fetch(`/api/routes/${params.id}/favourite`)
       .then((r) => r.json())
       .then((data) => {
@@ -138,30 +137,7 @@ export default function RouteDetail() {
         setFavCount(data.count);
       })
       .catch(() => {});
-  }, [params.id]);
-
-  // Quality + surface scoring — same engine the generator uses, surfaced
-  // here for parity. Fire-and-forget: degrade silently if Overpass/the
-  // API is down, the page works without it.
-  useEffect(() => {
-    if (!route?.id || !route.coordinates) return;
-    let cancelled = false;
-    fetch("/api/routes/quality", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ routeId: route.id }),
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((body) => {
-        if (!cancelled && body?.data && typeof body.data.total === "number") {
-          setQuality(body.data as RouteQualityData);
-        }
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [route?.id, route?.coordinates]);
+  }, [params.id, route?.is_verified]);
 
   // Check if viewer follows the route creator
   useEffect(() => {
@@ -285,6 +261,7 @@ export default function RouteDetail() {
   const coordinates: [number, number][] = rawCoords.map((c) => [c[0], c[1]]);
   const elevations: number[] = rawCoords.map((c) => c[2] ?? 0);
   const climbs = detectClimbs(fullCoordinates);
+  const isPublicRoute = route.is_verified === 1;
 
   const handlePositionChange = (index: number | null) => {
     setHoverIndex(index);
@@ -340,17 +317,19 @@ export default function RouteDetail() {
 
       <div className="max-w-4xl mx-auto px-4 md:px-6 -mt-8 relative z-[2]">
         {/* Weather */}
-        <div className="mb-4">
-          <WeatherCard
-            routeId={route.id}
-            windOverlayEnabled={windOverlayEnabled}
-            onWindToggle={setWindOverlayEnabled}
-            travelOverlayEnabled={travelOverlayEnabled}
-            onTravelToggle={setTravelOverlayEnabled}
-            onWeatherLoaded={(wind) => setWindData(wind)}
-            coordinates={coordinates}
-          />
-        </div>
+        {isPublicRoute && (
+          <div className="mb-4">
+            <WeatherCard
+              routeId={route.id}
+              windOverlayEnabled={windOverlayEnabled}
+              onWindToggle={setWindOverlayEnabled}
+              travelOverlayEnabled={travelOverlayEnabled}
+              onTravelToggle={setTravelOverlayEnabled}
+              onWeatherLoaded={(wind) => setWindData(wind)}
+              coordinates={coordinates}
+            />
+          </div>
+        )}
 
         {/* Back + Breadcrumbs */}
         <div className="mb-3 flex items-center gap-1">
@@ -376,6 +355,22 @@ export default function RouteDetail() {
           />
         </div>
 
+        {!isPublicRoute && route.publication_status && (
+          <div className="rounded-xl p-4 mb-4 text-sm" style={{ background: "rgba(255, 184, 0, 0.1)", border: "1px solid rgba(255, 184, 0, 0.35)", color: "var(--text-secondary)" }}>
+            <p className="font-bold" style={{ color: "var(--warning)" }}>
+              {route.publication_status === "in_review" ? "Submission awaiting independent review" : `Private route · ${route.publication_status}`}
+            </p>
+            <p className="text-xs mt-1">
+              This exact route version is visible only to its contributor and LOOPS reviewers. Public actions are disabled until the ride evidence, rights, geometry and road suitability are approved.
+            </p>
+            {user?.role === "admin" && (
+              <Link href="/admin" className="inline-flex mt-3 text-xs font-bold underline" style={{ color: "var(--accent)" }}>
+                Return to the review queue
+              </Link>
+            )}
+          </div>
+        )}
+
         {/* Title card */}
         <div className="rounded-2xl p-4 md:p-7 mb-4 md:mb-6" style={{ background: "var(--bg-card)", border: "1px solid var(--border)", boxShadow: "0 8px 30px rgba(0,0,0,0.3)" }}>
           <div className="flex items-start justify-between gap-3 mb-3">
@@ -392,13 +387,13 @@ export default function RouteDetail() {
                     <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                     </svg>
-                    Verified
+                    Human-ridden
                   </span>
                 )}
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              {user ? (
+              {isPublicRoute && user ? (
               <button
                 onClick={handleFavourite}
                 disabled={favLoading}
@@ -426,7 +421,7 @@ export default function RouteDetail() {
                   </span>
                 )}
               </button>
-              ) : (
+              ) : isPublicRoute ? (
               <Link
                 href={`/login?redirect=/routes/${route.id}`}
                 className="flex items-center gap-1 px-2.5 py-2 min-h-[44px] rounded-lg transition-all hover:opacity-80"
@@ -451,12 +446,37 @@ export default function RouteDetail() {
                   </span>
                 )}
               </Link>
-              )}
+              ) : null}
             </div>
           </div>
           {mutationError && <p className="text-xs mt-1" style={{ color: "var(--danger)" }}>{mutationError}</p>}
 
-          {SOCIAL_FEATURES_ENABLED && (
+          {route.is_verified === 1 && route.ridden_by_name && route.last_ridden_at && (
+            <div
+              className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl px-3 py-2.5 mb-4 text-xs"
+              style={{ background: "rgba(0, 255, 136, 0.06)", border: "1px solid rgba(0, 255, 136, 0.18)", color: "var(--text-secondary)" }}
+            >
+              <span className="font-bold" style={{ color: "var(--success)" }}>Human-ridden evidence</span>
+              <span aria-hidden="true">·</span>
+              <span>Ridden by {route.ridden_by_name}</span>
+              <span aria-hidden="true">·</span>
+              <span>{new Date(route.last_ridden_at).toLocaleDateString("en-IE", { day: "numeric", month: "short", year: "numeric" })}</span>
+              {route.ride_evidence_type && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <span>{route.ride_evidence_type.toUpperCase()} evidence</span>
+                </>
+              )}
+              {route.reviewed_at && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <span>Reviewed {new Date(route.reviewed_at).toLocaleDateString("en-IE", { day: "numeric", month: "short", year: "numeric" })}</span>
+                </>
+              )}
+            </div>
+          )}
+
+          {isPublicRoute && SOCIAL_FEATURES_ENABLED && (
             <div className="mb-4">
               <StarRating routeId={route.id} />
             </div>
@@ -477,35 +497,20 @@ export default function RouteDetail() {
             ))}
           </div>
 
-          {/* Ride something like this — hand the route's shape to the generator */}
-          <Link
-            href={`/generate?q=${encodeURIComponent(`${route.distance_km}km ${route.discipline} loop from ${route.region || route.county}`)}`}
-            className="mt-4 w-full min-h-[44px] flex items-center justify-center gap-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all hover:brightness-110"
-            style={{ background: "var(--accent-glow)", color: "var(--accent)", border: "1px solid rgba(200,255,0,0.3)" }}
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-            Ride something like this
-          </Link>
+          {/* Search the reviewed library for a similar human-ridden loop. */}
+          {isPublicRoute && (
+            <Link
+              href={`/generate?q=${encodeURIComponent(`${route.distance_km}km ${route.discipline} loop from ${route.region || route.county}`)}`}
+              className="mt-4 w-full min-h-[44px] flex items-center justify-center gap-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all hover:brightness-110"
+              style={{ background: "var(--accent-glow)", color: "var(--accent)", border: "1px solid rgba(200,255,0,0.3)" }}
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              Find a similar reviewed loop
+            </Link>
+          )}
         </div>
-
-        {/* Route quality — same scoring engine as /generate; renders only
-            when the score arrives, degrades silently otherwise */}
-        {quality && (
-          <div className="rounded-2xl p-4 md:p-6 mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-xs font-extrabold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
-                Route Quality
-              </h2>
-              <span className="text-sm font-extrabold" style={{ color: "var(--accent)" }}>
-                {quality.total}/100
-              </span>
-            </div>
-            {quality.surface_breakdown && <SurfaceSummary breakdown={quality.surface_breakdown} />}
-            <QualityFactors breakdown={quality.breakdown} />
-          </div>
-        )}
 
         {/* Uploaded by */}
         {route.created_by && route.creator_name && (
@@ -553,7 +558,7 @@ export default function RouteDetail() {
                 )}
               </div>
             </div>
-            {user && user.id !== route.created_by && (
+            {isPublicRoute && user && user.id !== route.created_by && (
               <button
                 onClick={handleFollowCreator}
                 disabled={followLoading}
@@ -571,31 +576,32 @@ export default function RouteDetail() {
         )}
 
         {/* Photos */}
-        <div className="rounded-2xl p-4 md:p-6 mb-3 md:mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-          <PhotoGallery routeId={route.id} />
-        </div>
+        {isPublicRoute && (
+          <>
+            <div className="rounded-2xl p-4 md:p-6 mb-3 md:mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+              <PhotoGallery routeId={route.id} />
+            </div>
 
-        {/* Share Ride — prominent CTA */}
-        <div className="mb-4">
-          <ShareRide route={route} />
-        </div>
+            <div className="mb-4">
+              <ShareRide route={route} />
+            </div>
 
-        {/* Ride Actions */}
-        <div className="mb-6">
-          <RideActions routeId={route.id} routeName={route.name} />
-          {/* One-tap Send to Garmin — renders nothing until Garmin keys are configured */}
-          <div className="mt-2.5 flex justify-center empty:hidden">
-            <SendToGarmin
-              name={route.name}
-              coordinates={coordinates}
-              elevations={elevations}
-              distance_km={route.distance_km}
-              elevation_gain_m={route.elevation_gain_m}
-              discipline={route.discipline}
-            />
-          </div>
-          <RideDisclaimer />
-        </div>
+            <div className="mb-6">
+              <RideActions routeId={route.id} routeName={route.name} />
+              <div className="mt-2.5 flex justify-center empty:hidden">
+                <SendToGarmin
+                  name={route.name}
+                  coordinates={coordinates}
+                  elevations={elevations}
+                  distance_km={route.distance_km}
+                  elevation_gain_m={route.elevation_gain_m}
+                  discipline={route.discipline}
+                />
+              </div>
+              <RideDisclaimer />
+            </div>
+          </>
+        )}
 
         {/* Elevation Profile — full width */}
         <div className="rounded-2xl p-4 md:p-6 mb-3 md:mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
@@ -630,35 +636,38 @@ export default function RouteDetail() {
         </div>
 
         {/* FAQ */}
-        <div className="rounded-2xl p-4 md:p-6 mb-3 md:mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-          <RouteFaq
-            routeName={route.name}
-            distanceKm={route.distance_km}
-            elevationGainM={route.elevation_gain_m}
-            surfaceType={route.surface_type}
-            discipline={route.discipline}
-          />
-        </div>
+        {isPublicRoute && (
+          <>
+            <div className="rounded-2xl p-4 md:p-6 mb-3 md:mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+              <RouteFaq
+                routeName={route.name}
+                distanceKm={route.distance_km}
+                elevationGainM={route.elevation_gain_m}
+                surfaceType={route.surface_type}
+                discipline={route.discipline}
+              />
+            </div>
 
-        {/* Related Routes */}
-        <div className="rounded-2xl p-4 md:p-6 mb-3 md:mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-          <RelatedRoutes
-            routes={relatedRoutes}
-            regionOrCountry={route.region || route.country}
-            country={route.country}
-            isRegion={!!route.region}
-          />
-        </div>
+            <div className="rounded-2xl p-4 md:p-6 mb-3 md:mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+              <RelatedRoutes
+                routes={relatedRoutes}
+                regionOrCountry={route.region || route.country}
+                country={route.country}
+                isRegion={!!route.region}
+              />
+            </div>
+          </>
+        )}
 
         {/* Trail Conditions */}
-        {SOCIAL_FEATURES_ENABLED && (
+        {isPublicRoute && SOCIAL_FEATURES_ENABLED && (
           <div className="rounded-2xl p-4 md:p-6 mb-3 md:mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
             <ConditionReports routeId={route.id} />
           </div>
         )}
 
         {/* Comments */}
-        {SOCIAL_FEATURES_ENABLED && (
+        {isPublicRoute && SOCIAL_FEATURES_ENABLED && (
           <div className="rounded-2xl p-4 md:p-6 mb-6 md:mb-8" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
             <Comments routeId={route.id} />
           </div>

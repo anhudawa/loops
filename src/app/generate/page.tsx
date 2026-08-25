@@ -8,10 +8,7 @@ import dynamic from "next/dynamic";
 import AppHeader from "@/components/AppHeader";
 import RoutePreviewSvg from "@/components/RoutePreviewSvg";
 
-const RouteEditor = dynamic(() => import("@/components/RouteEditor"), { ssr: false });
 import RideDisclaimer from "@/components/RideDisclaimer";
-import SendToGarmin from "@/components/SendToGarmin";
-import QualityFactors, { SurfaceSummary } from "@/components/QualityFactors";
 import ShareButton from "@/components/ShareButton";
 import { useVoiceInput } from "@/lib/useVoiceInput";
 import { useGeolocation } from "@/lib/useGeolocation";
@@ -46,7 +43,7 @@ interface LibraryCandidate {
   distance_km: number;
   elevation_gain_m: number;
   elevation_loss_m: number;
-  discipline: "road" | "gravel" | "mtb";
+  discipline: "road";
   county: string;
   country: string;
   match_score: number;
@@ -55,27 +52,7 @@ interface LibraryCandidate {
   wind_note?: string;
 }
 
-interface GeneratedCandidate {
-  source: "generated";
-  coordinates: [number, number][];
-  elevations: number[];
-  distance_km: number;
-  elevation_gain_m: number;
-  elevation_loss_m: number;
-  quality_score: number;
-  quality_tier?: "excellent" | "good";
-  quality_breakdown?: Record<string, number>;
-  highlights?: string[];
-  surface_breakdown?: { paved_pct: number; unpaved_pct: number; unknown_pct: number };
-  gpx_data: string;
-  match_score: number;
-  workout_fit?: WorkoutFit;
-  wind_note?: string;
-  wind_forecast?: { direction_deg: number; speed_kmh: number };
-  waypoints_used?: [number, number][];
-}
-
-type Candidate = LibraryCandidate | GeneratedCandidate;
+type Candidate = LibraryCandidate;
 
 interface Interpreted {
   distance_km: number;
@@ -96,56 +73,12 @@ interface GenerateResponse {
 }
 
 const EXAMPLES = [
-  "2 hour ride with a few rolling hills on quiet lanes",
-  "90 min Zone 2 endurance ride, flat and steady",
-  "2 x 20 min threshold intervals, somewhere safe",
-  "5 x 5 min VO2 max efforts on a steady climb",
-  "60km gravel ride, scenic, rolling hills",
+  "2 hour road loop from Dublin on quiet lanes",
+  "90 min Zone 2 road ride from Bray",
+  "2 x 20 min threshold intervals near Blessington",
+  "3 x 12 min sweet spot on quiet roads near Dublin",
+  "60 km scenic road loop from Dún Laoghaire",
 ];
-
-function downloadGpx(gpx: string, filename: string) {
-  const blob = new Blob([gpx], { type: "application/gpx+xml" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-async function saveGeneratedRoute(
-  candidate: GeneratedCandidate,
-  submittedPrompt: string,
-  interpreted: Interpreted | null
-): Promise<{ ok: true; routeId: string } | { ok: false; error: string }> {
-  // Use the rider's prompt as the initial name — they can rename later.
-  const rawName = submittedPrompt.slice(0, 80).trim();
-  const name = rawName.length > 0 ? rawName : `Generated ${candidate.distance_km} km route`;
-
-  // Use the discipline the LLM parsed from the prompt; fall back to road
-  // only when we have no intent context (shouldn't happen in practice).
-  const discipline = interpreted?.discipline ?? "road";
-
-  const res = await fetch("/api/routes/from-generated", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      name,
-      description: `Generated from "${submittedPrompt}"`,
-      coordinates: candidate.coordinates,
-      elevations: candidate.elevations,
-      distance_km: candidate.distance_km,
-      elevation_gain_m: candidate.elevation_gain_m,
-      elevation_loss_m: candidate.elevation_loss_m,
-      discipline,
-      country: interpreted?.country,
-      region: interpreted?.region,
-    }),
-  });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) return { ok: false, error: body?.error ?? "Could not save route." };
-  return { ok: true, routeId: body?.data?.id };
-}
 
 export default function GeneratePage() {
   return (
@@ -167,6 +100,7 @@ function GenerateContent() {
   const [error, setError] = useState<{ message: string; code?: string } | null>(null);
   const [submittedPrompt, setSubmittedPrompt] = useState("");
   const [useMyLocation, setUseMyLocation] = useState(false);
+  const [betaAccess, setBetaAccess] = useState<boolean | null>(null);
 
   // Run a homepage-handed-off ?q= prompt exactly once.
   const autoRanRef = useRef(false);
@@ -186,17 +120,25 @@ function GenerateContent() {
     }
   }, [user, authLoading, router, searchParams]);
 
-  // Homepage answer machine hands off via /generate?q=… — prefill the
-  // prompt and, when it's substantial enough, run generation immediately.
   useEffect(() => {
-    if (authLoading || !user || autoRanRef.current) return;
+    if (!user) return;
+    fetch("/api/beta/application")
+      .then((response) => response.ok ? response.json() : Promise.reject())
+      .then((data) => setBetaAccess(data.access === true))
+      .catch(() => setBetaAccess(false));
+  }, [user]);
+
+  // Homepage answer machine hands off via /generate?q=… — prefill the
+  // prompt and, when it's substantial enough, run the library search immediately.
+  useEffect(() => {
+    if (authLoading || !user || betaAccess !== true || autoRanRef.current) return;
     const q = searchParams.get("q")?.trim() ?? "";
     if (!q) return;
     autoRanRef.current = true;
     setPrompt(q);
-    if (q.length >= 10) runGeneration(q);
+    if (q.length >= 10) runSearch(q);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, user, searchParams]);
+  }, [authLoading, user, betaAccess, searchParams]);
 
   // When results land, bring the first one into view. The submit lives in a
   // sticky bar inside the input card, so on mobile the rider would otherwise
@@ -232,16 +174,16 @@ function GenerateContent() {
       setError({ message: "Describe the route you want in a bit more detail.", code: "TOO_SHORT" });
       return;
     }
-    await runGeneration(trimmed);
+    await runSearch(trimmed);
   }
 
   // Retry the last submitted prompt — wired to the Retry button on errors so a
   // timeout or network blip is never a dead end.
   function retryLast() {
-    if (submittedPrompt) runGeneration(submittedPrompt);
+    if (submittedPrompt) runSearch(submittedPrompt);
   }
 
-  async function runGeneration(trimmed: string) {
+  async function runSearch(trimmed: string) {
     setLoading(true);
     setError(null);
     setCandidates([]);
@@ -252,7 +194,7 @@ function GenerateContent() {
     // point if their prompt doesn't name a place.
     const origin = useMyLocation ? geo.coords : null;
 
-    // Public routing can stall on busy roads. Cap the wait at 55s and turn a
+    // Cap the wait at 55s and turn a stalled search into an actionable,
     // hang into an actionable, retryable error instead of an endless spinner.
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 55_000);
@@ -266,7 +208,7 @@ function GenerateContent() {
       });
       const body = await res.json();
       if (!res.ok) {
-        setError({ message: body?.error ?? "Could not generate a route.", code: body?.code });
+        setError({ message: body?.error ?? "Could not search the route library.", code: body?.code });
       } else {
         const data = body.data as GenerateResponse | Candidate[] | undefined;
         // Tolerate both the new { interpreted, candidates } shape and the
@@ -281,7 +223,7 @@ function GenerateContent() {
     } catch (err) {
       if (controller.signal.aborted) {
         setError({
-          message: "This one took longer than a minute — busy roads can do that.",
+          message: "The route search took longer than a minute.",
           code: "TIMEOUT",
         });
       } else {
@@ -296,7 +238,7 @@ function GenerateContent() {
     }
   }
 
-  if (authLoading || !user) {
+  if (authLoading || !user || betaAccess === null) {
     return (
       <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)" }}>
         <AppHeader />
@@ -304,6 +246,22 @@ function GenerateContent() {
           <p style={{ color: "var(--text-muted)" }}>Loading…</p>
         </div>
       </div>
+    );
+  }
+
+  if (!betaAccess) {
+    return (
+      <main className="min-h-screen" style={{ background: "var(--bg)" }}>
+        <AppHeader />
+        <div className="max-w-xl mx-auto px-4 py-16 text-center">
+          <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--accent)" }}>Invitation-only beta</p>
+          <h1 className="text-3xl font-extrabold mb-3" style={{ color: "var(--text)" }}>Apply to search Irish routes</h1>
+          <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>
+            We are opening in small waves while the route evidence, coverage and review operation are proven.
+          </p>
+          <Link href="/beta" className="btn-accent inline-flex px-6 py-3 rounded-xl text-sm font-bold">Apply for beta access</Link>
+        </div>
+      </main>
     );
   }
 
@@ -316,9 +274,9 @@ function GenerateContent() {
             Plan a ride
           </h1>
           <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-            Type or talk. Ask for distance or duration, terrain, or a structured
-            workout — tap the mic to dictate, and turn on your location to start
-            from where you are.
+            Search Ireland&apos;s human-ridden road loops by distance, duration,
+            terrain or supported workout. Use your location or name an Irish
+            starting area.
           </p>
         </div>
 
@@ -469,10 +427,7 @@ function GenerateContent() {
           </div>
 
           <p className="text-xs mt-3" style={{ color: "var(--text-muted)" }}>
-            Prefer to draw it?{" "}
-            <Link href="/plan" className="font-bold hover:opacity-80" style={{ color: "var(--accent)" }}>
-              Open the map planner →
-            </Link>
+            Ireland road beta. Every result has been ridden by a person and independently reviewed.
           </p>
         </form>
 
@@ -486,7 +441,7 @@ function GenerateContent() {
           <FallbackForm
             onSubmit={(text) => {
               setPrompt(text);
-              runGeneration(text);
+              runSearch(text);
             }}
           />
         )}
@@ -511,18 +466,11 @@ function GenerateContent() {
         {!loading && candidates.length > 0 && (
           <div ref={resultsRef} style={{ scrollMarginTop: 16 }}>
             <h2 className="text-sm font-bold uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>
-              {candidates.some((c) => c.source === "library")
-                ? "Matched from our verified library"
-                : "Freshly built for you"}
+              Matched from our human-ridden library
             </h2>
             <div className="grid gap-4">
               {candidates.map((c, i) => (
-                <CandidateCard
-                  key={i}
-                  candidate={c}
-                  submittedPrompt={submittedPrompt}
-                  interpreted={interpreted}
-                />
+                <CandidateCard key={i} candidate={c} />
               ))}
             </div>
             <RideDisclaimer />
@@ -535,7 +483,9 @@ function GenerateContent() {
             style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
           >
             <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-              No matches found. Try a different area, distance, or session.
+              {interpreted?.is_workout
+                ? "No current human-reviewed segment assessment fits that exact session. Try a different area or supported session — LOOPS will not infer interval safety from a map."
+                : "No human-ridden match yet. Try a different area or distance — LOOPS will not invent a route to fill the gap."}
             </p>
           </div>
         )}
@@ -626,15 +576,21 @@ function ErrorPanel({
   const hint = (() => {
     switch (error.code) {
       case "FEATURE_DISABLED":
-        return "Route generation is not yet enabled on this environment.";
+        return "Route search is not yet enabled on this environment.";
+      case "UNSUPPORTED_DISCIPLINE":
+        return "The first LOOPS beta covers road cycling in Ireland only.";
+      case "UNSUPPORTED_MARKET":
+        return "Search an Irish starting area for now.";
+      case "BETA_ACCESS_REQUIRED":
+        return "The Ireland beta is invitation-only while we validate route trust and usefulness.";
       case "NO_WORKOUT_MATCH":
         return "Try a shorter interval, a different zone, or starting from a different location.";
       case "NO_ROUTES_FOUND":
-        return "Try a different distance, location, or discipline.";
+        return "Try a different distance or location in Ireland.";
       case "GEOCODE_FAILED":
         return "Name a town or landmark — e.g. 'from Blessington' or 'near Dalkey'.";
       case "TIMEOUT":
-        return "Busy roads can take a while to plot. Give it another go, or try a shorter distance or a more specific location.";
+        return "Give it another go, or try a more specific Irish starting area.";
       case "NETWORK":
         return "Check your connection and try again — your request is still here.";
       case "RATE_LIMITED":
@@ -650,6 +606,9 @@ function ErrorPanel({
   const isDecline =
     error.code === "NO_WORKOUT_MATCH" ||
     error.code === "NO_ROUTES_FOUND" ||
+    error.code === "BETA_ACCESS_REQUIRED" ||
+    error.code === "UNSUPPORTED_DISCIPLINE" ||
+    error.code === "UNSUPPORTED_MARKET" ||
     error.code === "GEOCODE_FAILED";
 
   return (
@@ -679,6 +638,15 @@ function ErrorPanel({
           {hint}
         </p>
       )}
+      {error.code === "BETA_ACCESS_REQUIRED" && (
+        <Link
+          href="/beta"
+          className="mt-3 inline-flex items-center justify-center min-h-[44px] px-5 rounded-xl text-sm font-bold uppercase tracking-wider"
+          style={{ background: "var(--accent)", color: "var(--bg)" }}
+        >
+          Apply for beta access
+        </Link>
+      )}
       {onRetry && (
         <button
           type="button"
@@ -698,11 +666,10 @@ function ErrorPanel({
 /**
  * Structured fallback when natural-language parsing fails (launch spec
  * resilience: fall back to a form instead of a dead end). Composes a
- * clean prompt from the fields and reruns generation.
+ * clean prompt from the fields and reruns the library search.
  */
 function FallbackForm({ onSubmit }: { onSubmit: (text: string) => void }) {
   const [hours, setHours] = useState("2");
-  const [discipline, setDiscipline] = useState("road");
   const [terrain, setTerrain] = useState("rolling");
   const [place, setPlace] = useState("");
 
@@ -720,26 +687,18 @@ function FallbackForm({ onSubmit }: { onSubmit: (text: string) => void }) {
         e.preventDefault();
         const placePart = place.trim() ? ` from ${place.trim()}` : "";
         onSubmit(
-          `${hours} hour ${discipline} loop, ${terrain} terrain${placePart}`
+          `${hours} hour road loop, ${terrain} terrain${placePart}`
         );
       }}
     >
       <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
         Quick form
       </p>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
         <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
           Hours
           <select value={hours} onChange={(e) => setHours(e.target.value)} className="w-full mt-1 rounded-lg px-2 py-2 text-sm" style={selectStyle}>
             {["1", "1.5", "2", "3", "4", "5"].map((h) => <option key={h} value={h}>{h}</option>)}
-          </select>
-        </label>
-        <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
-          Bike
-          <select value={discipline} onChange={(e) => setDiscipline(e.target.value)} className="w-full mt-1 rounded-lg px-2 py-2 text-sm" style={selectStyle}>
-            <option value="road">Road</option>
-            <option value="gravel">Gravel</option>
-            <option value="mtb">MTB</option>
           </select>
         </label>
         <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
@@ -819,16 +778,14 @@ function RouteViewerModal({
 // ── Loading stages ────────────────────────────────────────────────────────────
 
 /**
- * Honest progress narration while generation runs (launch spec: perceived
- * quality is quality). Stages mirror the real pipeline order; timings are
- * approximations of where the time actually goes.
+ * Honest progress narration while the reviewed route library is searched.
  */
 const LOADING_STAGES = [
   { at: 0, label: "Reading your request…" },
-  { at: 2000, label: "Checking the library of verified routes…" },
-  { at: 4500, label: "Plotting candidate loops…" },
-  { at: 8000, label: "Checking road quality and safety…" },
-  { at: 12000, label: "Scoring and ranking the best options…" },
+  { at: 2000, label: "Searching human-ridden Irish routes…" },
+  { at: 4500, label: "Checking ride and review status…" },
+  { at: 8000, label: "Matching distance, terrain and session…" },
+  { at: 12000, label: "Ranking the closest reviewed loops…" },
 ];
 
 function LoadingStages() {
@@ -841,9 +798,7 @@ function LoadingStages() {
     return () => timers.forEach(clearTimeout);
   }, []);
 
-  // Big, unmissable progress card. Slow-path honesty (spec): public routing can
-  // take up to a minute, so we say so plainly instead of leaving the rider
-  // wondering whether anything is happening.
+  // Big, unmissable progress card for the slow path.
   return (
     <div
       className="rounded-2xl p-5"
@@ -862,8 +817,8 @@ function LoadingStages() {
         </p>
       </div>
       <p className="text-sm mt-3" style={{ color: "var(--text-muted)" }}>
-        This can take up to a minute on busy roads — we&apos;re checking real
-        road quality, not just drawing a line. Hang tight.
+        We only return the exact, current version of routes that have been ridden
+        and independently reviewed.
       </p>
     </div>
   );
@@ -871,24 +826,7 @@ function LoadingStages() {
 
 // ── Candidate card ────────────────────────────────────────────────────────────
 
-function CandidateCard({
-  candidate,
-  submittedPrompt,
-  interpreted,
-}: {
-  candidate: Candidate;
-  submittedPrompt: string;
-  interpreted: Interpreted | null;
-}) {
-  const router = useRouter();
-  const isLibrary = candidate.source === "library";
-  const title = isLibrary
-    ? candidate.name
-    : `Generated ${candidate.distance_km} km route`;
-
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [editing, setEditing] = useState(false);
+function CandidateCard({ candidate }: { candidate: Candidate }) {
   const [viewing, setViewing] = useState(false);
 
   const workoutFit = candidate.workout_fit;
@@ -899,19 +837,6 @@ function CandidateCard({
         label: `Interval ${a.interval_index + 1}.${a.rep_index + 1}`,
       }))
     : [];
-
-  async function handleSave() {
-    if (isLibrary) return;
-    setSaving(true);
-    setSaveError(null);
-    const result = await saveGeneratedRoute(candidate, submittedPrompt, interpreted);
-    setSaving(false);
-    if (result.ok && result.routeId) {
-      router.push(`/routes/${result.routeId}`);
-    } else if (!result.ok) {
-      setSaveError(result.error);
-    }
-  }
 
   return (
     <article
@@ -929,7 +854,6 @@ function CandidateCard({
             <RoutePreviewSvg
               coordinates={candidate.coordinates}
               highlights={highlights}
-              wind={!isLibrary ? candidate.wind_forecast : undefined}
               width={640}
               height={300}
               className="w-full"
@@ -939,7 +863,6 @@ function CandidateCard({
             <RoutePreviewSvg
               coordinates={candidate.coordinates}
               highlights={highlights}
-              wind={!isLibrary ? candidate.wind_forecast : undefined}
               width={180}
               height={140}
             />
@@ -953,17 +876,13 @@ function CandidateCard({
           <div className="flex items-start justify-between gap-3 mb-2">
             <div>
               <h3 className="text-base font-bold" style={{ color: "var(--text)" }}>
-                {title}
+                {candidate.name}
               </h3>
               <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-                {isLibrary ? `${candidate.county} · verified` : "Freshly generated"}
+                {candidate.county} · human-ridden · independently reviewed
               </p>
             </div>
-            <SourceBadge
-              source={candidate.source}
-              score={candidate.match_score}
-              qualityTier={!isLibrary ? candidate.quality_tier : undefined}
-            />
+            <SourceBadge score={candidate.match_score} />
           </div>
 
           <dl className="flex flex-wrap gap-x-4 gap-y-1 text-xs mt-1" style={{ color: "var(--text-muted)" }}>
@@ -979,46 +898,12 @@ function CandidateCard({
                 {candidate.elevation_gain_m} m
               </dd>
             </div>
-            {!isLibrary && candidate.quality_score !== undefined && (
-              <div>
-                <dt className="inline">Quality </dt>
-                <dd className="inline font-bold" style={{ color: "var(--text)" }}>
-                  {candidate.quality_score}
-                </dd>
-              </div>
-            )}
           </dl>
-
-          {!isLibrary && candidate.highlights && candidate.highlights.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mt-2">
-              {candidate.highlights.map((h, i) => (
-                <span
-                  key={i}
-                  className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                  style={{
-                    background: "var(--accent-glow)",
-                    color: "var(--accent)",
-                    border: "1px solid rgba(200,255,0,0.2)",
-                  }}
-                >
-                  {h}
-                </span>
-              ))}
-            </div>
-          )}
-
-          {!isLibrary && candidate.surface_breakdown && (
-            <SurfaceSummary breakdown={candidate.surface_breakdown} />
-          )}
-
-          {!isLibrary && candidate.quality_breakdown && (
-            <QualityFactors breakdown={candidate.quality_breakdown} />
-          )}
 
           {viewing && (
             <RouteViewerModal
               coordinates={candidate.coordinates}
-              title={isLibrary ? candidate.name : `${candidate.distance_km} km ${interpreted?.discipline ?? ""} route`}
+              title={candidate.name}
               stats={`${candidate.distance_km} km · +${candidate.elevation_gain_m} m`}
               onClose={() => setViewing(false)}
             />
@@ -1032,137 +917,38 @@ function CandidateCard({
 
           {workoutFit?.fits && <WorkoutAssignment fit={workoutFit} coordinates={candidate.coordinates} />}
 
-          {!isLibrary && candidate.waypoints_used && candidate.waypoints_used.length >= 3 && !workoutFit?.fits && (
-            <div className="mt-2">
-              {!editing ? (
-                <button
-                  onClick={() => setEditing(true)}
-                  className="text-xs font-bold px-3 py-1.5 rounded-lg"
-                  style={{ border: "1px solid var(--border)", color: "var(--text)" }}
-                >
-                  ✎ Edit route
-                </button>
-              ) : (
-                <RouteEditor
-                  initialCoordinates={candidate.coordinates}
-                  initialWaypoints={candidate.waypoints_used}
-                  discipline={interpreted?.discipline ?? "road"}
-                  onClose={() => setEditing(false)}
-                />
-              )}
-            </div>
-          )}
-
           <div className="flex flex-wrap gap-2 mt-3">
-            {isLibrary ? (
-              <>
-                <Link
-                  href={`/routes/${candidate.route_id}`}
-                  className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider"
-                  style={{ background: "var(--accent)", color: "var(--bg)" }}
-                >
-                  View route
-                </Link>
-                <ShareButton
-                  routeId={candidate.route_id}
-                  title={candidate.name}
-                  distance={candidate.distance_km}
-                />
-              </>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider disabled:opacity-50"
-                  style={{ background: "var(--accent)", color: "var(--bg)" }}
-                >
-                  {saving ? "Saving…" : "Save to my routes"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const filename = `loops-${submittedPrompt.slice(0, 30).replace(/[^a-z0-9]+/gi, "-")}.gpx`;
-                    downloadGpx(candidate.gpx_data, filename);
-                  }}
-                  className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider"
-                  style={{
-                    background: "transparent",
-                    border: "1px solid var(--border)",
-                    color: "var(--text-secondary)",
-                  }}
-                >
-                  Download GPX
-                </button>
-                <SendToGarmin
-                  name={submittedPrompt.slice(0, 80) || `LOOPS ${candidate.distance_km} km`}
-                  coordinates={candidate.coordinates}
-                  elevations={candidate.elevations}
-                  distance_km={candidate.distance_km}
-                  elevation_gain_m={candidate.elevation_gain_m}
-                  discipline={interpreted?.discipline ?? "road"}
-                  course_points={
-                    workoutFit?.fits
-                      ? workoutFit.interval_segments.flatMap((a, i) => {
-                          const s = candidate.coordinates[a.segment.start_index];
-                          const e = candidate.coordinates[a.segment.end_index];
-                          if (!s || !e) return [];
-                          return [
-                            { lat: s[0], lng: s[1], name: `EFFORT ${i + 1} GO`, type: "SEGMENT_START" },
-                            { lat: e[0], lng: e[1], name: `EFFORT ${i + 1} END`, type: "SEGMENT_END" },
-                          ];
-                        })
-                      : undefined
-                  }
-                />
-              </>
-            )}
+            <Link
+              href={`/routes/${candidate.route_id}`}
+              className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider"
+              style={{ background: "var(--accent)", color: "var(--bg)" }}
+            >
+              View route
+            </Link>
+            <ShareButton
+              routeId={candidate.route_id}
+              title={candidate.name}
+              distance={candidate.distance_km}
+            />
           </div>
-          {saveError && (
-            <p className="text-xs mt-2" style={{ color: "#ff6b6b" }}>
-              {saveError}
-            </p>
-          )}
         </div>
       </div>
     </article>
   );
 }
 
-function SourceBadge({
-  source,
-  score,
-  qualityTier,
-}: {
-  source: "library" | "generated";
-  score: number;
-  qualityTier?: "excellent" | "good";
-}) {
-  let label: string;
-  let accent: boolean;
-  if (source === "library") {
-    label = "Verified";
-    accent = true;
-  } else if (qualityTier === "excellent") {
-    label = "Excellent";
-    accent = true;
-  } else {
-    label = "Good";
-    accent = false;
-  }
-
+function SourceBadge({ score }: { score: number }) {
   return (
     <div
       className="shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider"
       style={{
-        background: accent ? "var(--accent-glow)" : "var(--bg)",
-        color: accent ? "var(--accent)" : "var(--text-muted)",
-        border: `1px solid ${accent ? "var(--accent)" : "var(--border)"}`,
+        background: "var(--accent-glow)",
+        color: "var(--accent)",
+        border: "1px solid var(--accent)",
       }}
       title={`Match score ${score}/100`}
     >
-      {label} · {score}
+      Verified · {score}
     </div>
   );
 }
@@ -1217,7 +1003,7 @@ function WorkoutAssignment({
         ))}
       </ul>
       <p className="text-[10px] mt-1.5" style={{ color: "var(--text-muted)" }}>
-        Effort start/end markers are in the GPX — your head unit will alert you on course.
+        Review these effort points before riding. Conditions change; stop the effort whenever the road is not clear.
       </p>
     </div>
   );

@@ -15,6 +15,7 @@
 
 import { smoothElevations, interpolateNaN, haversine } from "./climb-detection";
 import { ZONES, type IntensityZone, type TerrainRequirements } from "./intensity";
+import type { WorkoutSessionType } from "./workout";
 
 export interface IntervalSegment {
   start_index: number;
@@ -24,6 +25,22 @@ export interface IntervalSegment {
   max_gradient_pct: number;
   gradient_variance: number;
   suitable_zones: IntensityZone[];
+  /** Present only when this segment came from a reviewed human assessment. */
+  assessment_id?: string;
+  session_type?: WorkoutSessionType;
+  direction?: "forward" | "reverse";
+  min_effort_seconds?: number;
+  max_effort_seconds?: number;
+  assessor_name?: string;
+  assessed_at?: string;
+  surface_rating?: "good" | "mixed" | "poor";
+  traffic_rating?: "low" | "moderate" | "high";
+  sightlines_rating?: "clear" | "mixed" | "poor";
+  junction_count?: number;
+  entry_notes?: string;
+  recovery_notes?: string;
+  runout_notes?: string;
+  hazards_notes?: string | null;
 }
 
 /** Bearing between two [lat, lng] points in degrees (0..360). */

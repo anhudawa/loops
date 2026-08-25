@@ -2,8 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getUserBySession, getRoutesByStravaActivityIds } from "@/lib/db";
 import { getValidAccessToken, fetchActivities, isCyclingWithGps } from "@/lib/strava-api";
+import { ALLOW_STRAVA_ROUTE_IMPORT } from "@/config/route-policy";
 
 export async function GET(request: NextRequest) {
+  if (!ALLOW_STRAVA_ROUTE_IMPORT) {
+    return NextResponse.json(
+      { error: "Strava activity importing is disabled.", code: "STRAVA_DISABLED" },
+      { status: 410 }
+    );
+  }
+
   const session = (await cookies()).get("session")?.value;
   if (!session) {
     return NextResponse.json({ error: "Not authenticated", code: "AUTH_REQUIRED" }, { status: 401 });

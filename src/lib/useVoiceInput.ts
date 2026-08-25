@@ -51,14 +51,13 @@ export interface VoiceInput {
 }
 
 export function useVoiceInput(lang = "en-IE"): VoiceInput {
-  const [supported, setSupported] = useState(false);
+  const [supported] = useState(() => getRecognitionCtor() !== null);
   const [listening, setListening] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const baseTextRef = useRef("");
 
   useEffect(() => {
-    setSupported(getRecognitionCtor() !== null);
     return () => {
       recognitionRef.current?.abort();
     };

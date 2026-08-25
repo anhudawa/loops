@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Sign In — LOOPS",
   description:
-    "Discover real cycling routes shared by real riders. Free GPX downloads, no paywall, no subscription. Browse gravel, road & MTB loops worldwide — human-curated, community-rated, open to everyone.",
+    "Discover human-ridden Irish road loops reviewed before publication. Search by location, ride time and training session during the LOOPS Ireland beta.",
   alternates: {
     canonical: "https://loops.ie/login",
   },
@@ -14,7 +14,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "LOOPS — Routes Worth Riding",
     description:
-      "Real routes from real riders. Free GPX downloads, community ratings, no paywall, no lock-in. Works with Strava, Komoot, Wahoo & Garmin.",
+      "Human-ridden Irish road loops, reviewed before publication and matched to the ride or training session you want.",
     siteName: "LOOPS",
     type: "website",
     images: [
@@ -22,7 +22,7 @@ export const metadata: Metadata = {
         url: "/api/og",
         width: 1200,
         height: 630,
-        alt: "LOOPS — Discover free cycling routes worldwide",
+        alt: "LOOPS — Human-ridden Irish road loops",
       },
     ],
   },
@@ -30,7 +30,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "LOOPS — Routes Worth Riding",
     description:
-      "Real routes from real riders. Free GPX downloads, community ratings, no paywall. Works with Strava, Komoot, Wahoo & Garmin.",
+      "Human-ridden Irish road loops, reviewed before publication and matched to your session.",
     images: ["/api/og"],
   },
 };

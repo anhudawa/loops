@@ -9,10 +9,10 @@ import FeaturedRouteTeaser, { type FeaturedRoute } from "@/components/FeaturedRo
 
 /* ── Demo prompts for the answer-machine preview ── */
 const DEMO_PROMPTS = [
-  "3 hours, quiet roads, tailwind home",
-  "80 km gravel loop from Girona",
-  "2 hours rolling hills, back for coffee",
-  "60 km road with 2x20 min threshold efforts",
+  "2 hours from Dublin on quiet road lanes",
+  "70 km scenic road loop from Bray",
+  "90 min Zone 2 road ride from Blessington",
+  "Road loop near Dún Laoghaire for 2x20 min threshold",
 ];
 
 /* ── Login page — everything answers "Where should I ride today?" ── */
@@ -23,8 +23,8 @@ function LoginPage() {
     routes: number;
     totalKm: number;
     countries: number;
+    counties?: number;
     featuredRoutes: FeaturedRoute[];
-    community: { riders: number; comments: number; ratings: number };
   } | null>(null);
   const [navSolid, setNavSolid] = useState(false);
   const [demoIndex, setDemoIndex] = useState(0);
@@ -65,7 +65,7 @@ function LoginPage() {
     try {
       // Store redirect URL in a cookie so the OAuth callback can send the
       // rider where they were headed — e.g. straight into /generate?q=…
-      const redirect = redirectOverride ?? searchParams.get("redirect");
+      const redirect = redirectOverride ?? searchParams.get("redirect") ?? "/beta";
       if (redirect) {
         document.cookie = `login_redirect=${encodeURIComponent(redirect)}; path=/; max-age=600; SameSite=Lax`;
       }
@@ -78,7 +78,7 @@ function LoginPage() {
     }
   }, [searchParams]);
 
-  // "Try it" carries the demo prompt through login into a real generation.
+  // "Try it" carries the demo prompt through login into a real library search.
   const handleTryDemo = useCallback(() => {
     handleGoogleLogin(`/generate?q=${encodeURIComponent(DEMO_PROMPTS[demoIndex])}`);
   }, [handleGoogleLogin, demoIndex]);
@@ -132,11 +132,11 @@ function LoginPage() {
             )}
             <GoogleButton onClick={() => handleGoogleLogin()} />
             <p className="text-[11px] text-center mt-2.5" style={{ color: "var(--text-muted)" }}>
-              Free forever. No credit card. No subscription.
+              Apply for the free, invitation-only Ireland beta. No credit card.
             </p>
           </div>
 
-          {/* Demo of the answer machine — ask it, sign in, get a real route */}
+          {/* Demo of the answer machine — ask it, sign in, search reviewed routes */}
           <div className="mt-10 max-w-md mx-auto">
             <p className="text-[10px] uppercase tracking-wider font-bold mb-2" style={{ color: "var(--text-muted)" }}>
               Ask it like you&apos;d ask a riding buddy
@@ -161,7 +161,7 @@ function LoginPage() {
               </button>
             </div>
             <p className="text-[11px] mt-2" style={{ color: "var(--text-muted)", opacity: 0.7 }}>
-              Sign in and we&apos;ll generate this ride for you — wind-aware, quality-scored.
+              Sign in and we&apos;ll search reviewed, human-ridden Irish road loops.
             </p>
           </div>
 
@@ -171,7 +171,7 @@ function LoginPage() {
               {[
                 { value: stats.routes, label: "Routes" },
                 { value: stats.totalKm, label: "Km Mapped" },
-                { value: stats.countries, label: "Countries" },
+                { value: stats.counties ?? 0, label: "Counties" },
               ].map((s) => (
                 <div key={s.label} className="text-center">
                   <p className="text-2xl md:text-3xl font-extrabold" style={{ color: "var(--accent)" }}>
@@ -195,7 +195,7 @@ function LoginPage() {
               Answers waiting inside
             </h2>
             <p className="text-center text-xs mb-8" style={{ color: "var(--text-muted)", opacity: 0.6 }}>
-              Verified routes, quality-scored — sign in to ride one
+              Human-ridden and independently reviewed — sign in to ride one
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -203,17 +203,6 @@ function LoginPage() {
                 <FeaturedRouteTeaser key={route.id} route={route} onClick={() => handleGoogleLogin()} />
               ))}
             </div>
-
-            {stats.community && (
-              <div className="flex items-center justify-center gap-6 mt-8">
-                <div className="text-center">
-                  <p className="text-sm font-extrabold" style={{ color: "var(--text-secondary)" }}>
-                    <AnimatedNumber target={stats.community.riders} duration={1200} />
-                  </p>
-                  <p className="text-[10px] uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>Riders</p>
-                </div>
-              </div>
-            )}
           </div>
         </FadeIn>
       )}
@@ -222,17 +211,17 @@ function LoginPage() {
       <FadeIn className="px-4 pb-20 md:pb-28">
         <div className="max-w-xl mx-auto">
           <h2 className="text-center font-extrabold text-sm uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>
-            Tired of the paywall?
+            Routes you can trust
           </h2>
           <p className="text-center text-xs mb-8" style={{ color: "var(--text-muted)" }}>
-            We built LOOPS because route discovery shouldn&apos;t cost a subscription.
+            Every published LOOPS route is ridden by a real person and reviewed before it reaches the library.
           </p>
           <div className="grid grid-cols-1 gap-3">
             {[
-              { them: "Device sync behind a paywall", us: "Every route free to download" },
-              { them: "Routes down busy roads", us: "Quality-scored, quiet-road loops" },
-              { them: "Locked into one ecosystem", us: "Open GPX export — works with every head unit" },
-              { them: "Bloated with features you don't use", us: "One question, answered well" },
+              { them: "Map-only routes with no ride evidence", us: "A recorded ride behind every published loop" },
+              { them: "One generic 'good for training' label", us: "Human assessment for each supported session type" },
+              { them: "Silent route changes", us: "The exact reviewed route version is preserved" },
+              { them: "A made-up route to fill every gap", us: "An honest no-match when evidence is missing" },
             ].map((item, i) => (
               <div
                 key={i}

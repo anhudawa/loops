@@ -8,11 +8,7 @@ import ShareButton from "@/components/ShareButton";
 
 const MapView = dynamic(() => import("@/components/MapView"), { ssr: false });
 
-const DISCIPLINE_COLORS: Record<string, string> = {
-  road: "#ffbb00",
-  gravel: "#ff6633",
-  mtb: "#bb44ff",
-};
+const ROAD_COLOR = "#ffbb00";
 
 interface SharedRoute {
   id: string;
@@ -76,7 +72,7 @@ export default function SharePage() {
           className="px-6 py-3 rounded-xl font-bold text-sm uppercase tracking-wider"
           style={{ background: "var(--accent)", color: "#0a0a0a" }}
         >
-          Plan your own ride
+          Find a reviewed route
         </Link>
       </div>
     );
@@ -89,7 +85,7 @@ export default function SharePage() {
     // invalid coordinates
   }
 
-  const color = DISCIPLINE_COLORS[route.discipline] || "#c8ff00";
+  const color = ROAD_COLOR;
   const location = route.region || route.county;
 
   const mapRoutes = coords.length > 0
@@ -187,20 +183,20 @@ export default function SharePage() {
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
             </svg>
-            Plan your own ride
+            Find another reviewed route
           </Link>
 
           {route.gpx_filename && (
-            <a
-              href={`/api/routes/${route.id}/gpx`}
+            <Link
+              href="/beta"
               className="flex-1 flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-bold text-sm uppercase tracking-wider transition-all hover:brightness-110"
               style={{ background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
               </svg>
-              Download GPX
-            </a>
+              Apply to download GPX
+            </Link>
           )}
         </div>
 
@@ -210,7 +206,7 @@ export default function SharePage() {
             <Link href="/" className="font-bold hover:underline" style={{ color: "var(--accent)" }}>
               loops.ie
             </Link>
-            {" "} — cycling routes worth riding
+            {" "} — human-ridden road routes worth riding
           </p>
         </div>
       </div>

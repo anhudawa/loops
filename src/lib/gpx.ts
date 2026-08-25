@@ -1,9 +1,14 @@
 import { calculateStats } from "./geo-utils";
+import { summariseRecordingTimestamps } from "./recording-evidence";
 
 export interface GpxData {
   name: string | null;
   coordinates: [number, number][]; // [lat, lng]
   elevations: number[];
+  timestamps: string[];
+  timestamped_point_count: number;
+  recorded_at_start: string | null;
+  recorded_at_end: string | null;
   distance_km: number;
   elevation_gain_m: number;
   elevation_loss_m: number;
@@ -12,6 +17,7 @@ export interface GpxData {
 export function parseGpx(xml: string): GpxData {
   const coordinates: [number, number][] = [];
   const elevations: number[] = [];
+  const timestamps: string[] = [];
 
   // Extract track name
   const nameMatch = xml.match(/<name>([^<]*)<\/name>/);
@@ -29,6 +35,9 @@ export function parseGpx(xml: string): GpxData {
     if (eleMatch) {
       elevations.push(parseFloat(eleMatch[1]));
     }
+
+    const timeMatch = match[3].match(/<time>([^<]+)<\/time>/);
+    if (timeMatch) timestamps.push(timeMatch[1]);
   }
 
   // Also try route points if no track points found
@@ -47,11 +56,14 @@ export function parseGpx(xml: string): GpxData {
   }
 
   const stats = calculateStats(coordinates, elevations);
+  const recording = summariseRecordingTimestamps(timestamps);
 
   return {
     name,
     coordinates,
     elevations,
+    timestamps,
+    ...recording,
     ...stats,
   };
 }

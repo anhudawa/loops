@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseBasicIntent } from "../route-intent";
+import { parseBasicIntent, sanitizeWorkout } from "../route-intent";
 
 describe("parseBasicIntent — duration parsing", () => {
   it('parses "2 hour" as 120 minutes', () => {
@@ -263,5 +263,41 @@ describe("parseBasicIntent — structured fallback form", () => {
     expect(r.country).toBe("Ireland");
     expect(r.workout).toBeNull();
     expect(r.distance_tolerance_km).toBeNull();
+  });
+});
+
+describe("sanitizeWorkout — workout precision", () => {
+  it("keeps 30-second efforts instead of rounding them to a minute", () => {
+    const workout = sanitizeWorkout({
+      intervals: [{
+        count: 8,
+        duration_minutes: 0.5,
+        duration_seconds: 30,
+        recovery_seconds: 150,
+        zone: "z7",
+        session_type: "sprint",
+      }],
+      warmup_minutes: 15,
+      cooldown_minutes: 10,
+      total_minutes: 0,
+    });
+    expect(workout?.intervals[0].duration_seconds).toBe(30);
+    expect(workout?.intervals[0].duration_minutes).toBe(0.5);
+    expect(workout?.intervals[0].recovery_seconds).toBe(150);
+  });
+
+  it("preserves sweet spot separately from tempo", () => {
+    const workout = sanitizeWorkout({
+      intervals: [{
+        count: 3,
+        duration_minutes: 12,
+        zone: "z3",
+        session_type: "sweet_spot",
+      }],
+      warmup_minutes: 15,
+      cooldown_minutes: 10,
+      total_minutes: 0,
+    });
+    expect(workout?.intervals[0].session_type).toBe("sweet_spot");
   });
 });

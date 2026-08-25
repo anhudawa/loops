@@ -1,3 +1,4 @@
+import "./legacy-route-materialization-disabled.mjs";
 import { createPool } from "@vercel/postgres";
 import { randomUUID } from "crypto";
 import { parseString } from "xml2js";

@@ -13,6 +13,7 @@ import {
   RATE_LIMIT_WRITE,
 } from "@/config/constants";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { ALLOW_FRESH_PUBLIC_ROUTE_GENERATION } from "@/config/route-policy";
 
 /**
  * POST /api/routes/from-generated
@@ -40,6 +41,14 @@ interface Body {
 }
 
 export async function POST(request: NextRequest) {
+  if (!ALLOW_FRESH_PUBLIC_ROUTE_GENERATION) {
+    return apiError(
+      "LOOPS only publishes routes ridden by a real person. Generated routes cannot be saved as public loops.",
+      "GENERATED_ROUTE_PUBLISHING_DISABLED",
+      410
+    );
+  }
+
   try {
     const sessionToken = request.cookies.get("session")?.value;
     if (!sessionToken) {

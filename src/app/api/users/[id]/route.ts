@@ -16,7 +16,6 @@ import {
   getUserFavourites,
   getCommunityScore,
   getUserLoopRating,
-  migrateDb,
 } from "@/lib/db";
 import { apiError, handleApiError } from "@/lib/api-utils";
 
@@ -31,8 +30,6 @@ export async function GET(
     if (!user) {
       return apiError("User not found", "NOT_FOUND", 404);
     }
-
-    await migrateDb();
 
     // Optional: return followers/following lists
     const include = request.nextUrl.searchParams.get("include");

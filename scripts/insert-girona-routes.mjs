@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import "./legacy-route-materialization-disabled.mjs";
 // scripts/insert-girona-routes.mjs
 //
 // Inserts all 11 Girona collection routes into the routes table.

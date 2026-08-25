@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { assignWorkout } from "../route-library";
+import { assignHumanAssessedWorkout, assignWorkout } from "../route-library";
 import type { WorkoutSpec } from "../route-intent";
 import type { IntervalSegment } from "../interval-segments";
+import type { ApprovedSegmentAssessment } from "../db";
+import type { WorkoutSessionType } from "../workout";
 
 function seg(
   startIdx: number,
@@ -113,5 +115,93 @@ describe("assignWorkout", () => {
     expect(fit.fits).toBe(false);
     // Should still report what it found as candidates
     expect(fit.candidate_segments.length).toBeGreaterThan(0);
+  });
+});
+
+function assessment(
+  id: string,
+  sessionType: WorkoutSessionType,
+  startIndex: number,
+  minSeconds: number,
+  maxSeconds: number
+): ApprovedSegmentAssessment {
+  return {
+    id,
+    route_id: "route-1",
+    route_version_id: "version-1",
+    assessor_name: "Aoife Rider",
+    assessed_at: "2026-08-01",
+    start_index: startIndex,
+    end_index: startIndex + 100,
+    direction: "forward",
+    session_type: sessionType,
+    min_effort_seconds: minSeconds,
+    max_effort_seconds: maxSeconds,
+    length_km: 10,
+    avg_gradient_pct: 1.5,
+    max_gradient_pct: 3,
+    gradient_variance: 0.5,
+    surface_rating: "good",
+    traffic_rating: "low",
+    sightlines_rating: "clear",
+    junction_count: 0,
+    entry_notes: "Enter after the bridge.",
+    recovery_notes: "Recover on the next quiet lane.",
+    runout_notes: "Clear run-out before the junction.",
+    hazards_notes: null,
+  };
+}
+
+describe("assignHumanAssessedWorkout", () => {
+  it("matches a threshold effort only inside the human-approved duration range", () => {
+    const fit = assignHumanAssessedWorkout(
+      [assessment("a1", "threshold", 0, 600, 1200)],
+      workout([{ count: 1, duration_minutes: 20, zone: "z4" }])
+    );
+    expect(fit.fits).toBe(true);
+    expect(fit.interval_segments[0].segment.assessment_id).toBe("a1");
+    expect(fit.interval_segments[0].segment.assessor_name).toBe("Aoife Rider");
+  });
+
+  it("keeps tempo and sweet spot as different human claims even though both are z3", () => {
+    const sweetSpotWorkout = workout([{ count: 1, duration_minutes: 12, zone: "z3" }]);
+    sweetSpotWorkout.intervals[0].session_type = "sweet_spot";
+    sweetSpotWorkout.intervals[0].duration_seconds = 720;
+
+    expect(
+      assignHumanAssessedWorkout(
+        [assessment("tempo-only", "tempo", 0, 300, 1200)],
+        sweetSpotWorkout
+      ).fits
+    ).toBe(false);
+    expect(
+      assignHumanAssessedWorkout(
+        [assessment("sweet", "sweet_spot", 0, 600, 900)],
+        sweetSpotWorkout
+      ).fits
+    ).toBe(true);
+  });
+
+  it("supports effort precision in seconds", () => {
+    const secondsWorkout = workout([{ count: 1, duration_minutes: 1.5, zone: "z3" }]);
+    secondsWorkout.intervals[0].session_type = "tempo";
+    secondsWorkout.intervals[0].duration_seconds = 90;
+    expect(
+      assignHumanAssessedWorkout(
+        [assessment("short-tempo", "tempo", 0, 60, 120)],
+        secondsWorkout
+      ).fits
+    ).toBe(true);
+  });
+
+  it("declines VO2, anaerobic and sprint during the Ireland beta", () => {
+    const vo2Workout = workout([{ count: 1, duration_minutes: 5, zone: "z5" }]);
+    vo2Workout.intervals[0].session_type = "vo2";
+    expect(
+      assignHumanAssessedWorkout(
+        [assessment("vo2", "vo2", 0, 180, 360)],
+        vo2Workout
+      ).fits
+    ).toBe(false);
   });
 });

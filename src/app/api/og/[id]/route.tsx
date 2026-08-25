@@ -1,5 +1,6 @@
 import { ImageResponse } from "next/og";
 import { getRoute, getRouteRating } from "@/lib/db";
+import { isEligibleForPublicLibrary } from "@/config/route-policy";
 
 export const runtime = "nodejs";
 
@@ -51,7 +52,7 @@ export async function GET(
     const { id } = await params;
     const route = await getRoute(id);
 
-    if (!route) {
+    if (!route || route.is_verified !== 1 || !isEligibleForPublicLibrary(route)) {
       return fallbackImage("Route not found");
     }
 
@@ -62,7 +63,7 @@ export async function GET(
       // continue without rating
     }
 
-    const isVerified = route.is_verified === 1;
+    const isVerified = true;
 
     // Parse coordinates and normalize for SVG path
     let svgPath = "";
@@ -157,7 +158,7 @@ export async function GET(
                       background: "rgba(0, 255, 136, 0.12)",
                     }}
                   >
-                    ✓ Verified
+                    ✓ Human-ridden
                   </span>
                 )}
               </div>

@@ -1,9 +1,14 @@
 import { calculateStats } from "./geo-utils";
+import { summariseRecordingTimestamps } from "./recording-evidence";
 
 export interface TcxData {
   name: string | null;
   coordinates: [number, number][];
   elevations: number[];
+  timestamps: string[];
+  timestamped_point_count: number;
+  recorded_at_start: string | null;
+  recorded_at_end: string | null;
   distance_km: number;
   elevation_gain_m: number;
   elevation_loss_m: number;
@@ -12,6 +17,7 @@ export interface TcxData {
 export function parseTcx(xml: string): TcxData {
   const coordinates: [number, number][] = [];
   const elevations: number[] = [];
+  const timestamps: string[] = [];
 
   // Extract activity name
   const nameMatch = xml.match(/<Activity\s+Sport="([^"]+)"/);
@@ -34,15 +40,20 @@ export function parseTcx(xml: string): TcxData {
       if (eleMatch) {
         elevations.push(parseFloat(eleMatch[1]));
       }
+      const timeMatch = block.match(/<Time>([^<]+)<\/Time>/);
+      if (timeMatch) timestamps.push(timeMatch[1]);
     }
   }
 
   const stats = calculateStats(coordinates, elevations);
+  const recording = summariseRecordingTimestamps(timestamps);
 
   return {
     name,
     coordinates,
     elevations,
+    timestamps,
+    ...recording,
     ...stats,
   };
 }

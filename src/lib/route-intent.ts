@@ -10,6 +10,11 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { IntensityZone } from "./intensity";
 import { ZONES } from "./intensity";
 import type { WindStrategy } from "./wind";
+import {
+  defaultSessionTypeForZone,
+  isWorkoutSessionType,
+  type WorkoutSessionType,
+} from "./workout";
 
 export type Discipline = "road" | "gravel" | "mtb";
 export type ElevationPreference = "flat" | "rolling" | "hilly" | "mountainous" | "any";
@@ -17,8 +22,11 @@ export type ElevationPreference = "flat" | "rolling" | "hilly" | "mountainous" |
 export interface WorkoutInterval {
   count: number;
   duration_minutes: number;
+  duration_seconds?: number;
   zone: IntensityZone;
   recovery_minutes?: number;
+  recovery_seconds?: number;
+  session_type?: WorkoutSessionType;
 }
 
 export interface WorkoutSpec {
@@ -138,9 +146,10 @@ Riders ask either by distance ("60km loop") OR by time ("2 hour ride", "90 minut
 - "village" → ["village"]
 
 ## Workouts (structured intervals):
-When the rider describes a structured session ("2x20 min threshold", "5x5 vo2", "4x8 tempo with 3 min rest"), extract a workout object. Map intensity labels to Coggan zones:
+When the rider describes a structured session ("2x20 min threshold", "5x5 vo2", "4x8 tempo with 3 min rest", "8x30 sec sprints"), extract a workout object. Preserve exact effort and recovery duration in seconds and map each block to both a session_type and Coggan zone:
 - "threshold" / "ftp" / "lactate threshold" / "lt" → z4
-- "tempo" / "sweet spot" → z3
+- "tempo" → session_type "tempo", z3
+- "sweet spot" / "sweetspot" → session_type "sweet_spot", z3
 - "vo2" / "vo2 max" / "vo2max" → z5
 - "sprints" / "sprint" / "neuromuscular" → z7
 - "anaerobic" → z6
@@ -149,7 +158,8 @@ When the rider describes a structured session ("2x20 min threshold", "5x5 vo2", 
 
 If the rider describes a workout:
 - Default warmup_minutes: 15, cooldown_minutes: 10
-- Default recovery_minutes per interval: half the interval duration (e.g. 10min recovery for a 20min interval) unless the rider specifies
+- Use duration_seconds and recovery_seconds for every interval block. For example 20 minutes = 1200 seconds and 30 seconds = 30 seconds.
+- Default recovery_seconds per interval: half the interval duration unless the rider specifies it.
 - total_minutes = warmup + (count × duration + (count-1) × recovery) summed over all interval blocks + cooldown
 - ALSO set duration_minutes at the top level to total_minutes so the route length honours the session length
 - Set elevation_preference to "flat" for threshold/tempo/sweet-spot workouts unless the rider asks for hills (these zones need steady terrain). VO2/hill-repeat workouts can use "rolling".
@@ -184,7 +194,7 @@ Return ONLY valid JSON matching this TypeScript interface (no markdown, no expla
   "wind_strategy": "tailwind_home" | "tailwind_out" | "headwind_out" | "none",
   "cafe_stop": boolean,
   "workout": null | {
-    "intervals": Array<{ "count": number, "duration_minutes": number, "zone": "z1"|"z2"|"z3"|"z4"|"z5"|"z6"|"z7", "recovery_minutes": number }>,
+    "intervals": Array<{ "count": number, "duration_seconds": number, "session_type": "endurance"|"tempo"|"sweet_spot"|"threshold"|"vo2"|"anaerobic"|"sprint", "zone": "z1"|"z2"|"z3"|"z4"|"z5"|"z6"|"z7", "recovery_seconds": number }>,
     "warmup_minutes": number,
     "cooldown_minutes": number,
     "total_minutes": number
@@ -244,7 +254,7 @@ export function sanitizeElevationPreference(value: unknown): ElevationPreference
 }
 
 /** Drop malformed workout objects — we never want to route a garbage workout. */
-function sanitizeWorkout(w: WorkoutSpec | null | undefined): WorkoutSpec | undefined {
+export function sanitizeWorkout(w: WorkoutSpec | null | undefined): WorkoutSpec | undefined {
   if (!w || !Array.isArray(w.intervals) || w.intervals.length === 0) return undefined;
   const validZones = new Set(Object.keys(ZONES));
   const intervals: WorkoutInterval[] = [];
@@ -252,18 +262,32 @@ function sanitizeWorkout(w: WorkoutSpec | null | undefined): WorkoutSpec | undef
     if (
       !iv ||
       typeof iv.count !== "number" ||
-      typeof iv.duration_minutes !== "number" ||
       !validZones.has(iv.zone)
     ) continue;
-    if (iv.count < 1 || iv.duration_minutes < 1) continue;
+    const durationSeconds =
+      typeof iv.duration_seconds === "number" && Number.isFinite(iv.duration_seconds)
+        ? Math.round(iv.duration_seconds)
+        : typeof iv.duration_minutes === "number" && Number.isFinite(iv.duration_minutes)
+          ? Math.round(iv.duration_minutes * 60)
+          : 0;
+    if (iv.count < 1 || durationSeconds < 15) continue;
+    const recoverySeconds =
+      typeof iv.recovery_seconds === "number" && iv.recovery_seconds >= 0
+        ? Math.round(iv.recovery_seconds)
+        : typeof iv.recovery_minutes === "number" && iv.recovery_minutes >= 0
+          ? Math.round(iv.recovery_minutes * 60)
+          : Math.round(durationSeconds / 2);
+    const sessionType = isWorkoutSessionType(iv.session_type)
+      ? iv.session_type
+      : defaultSessionTypeForZone(iv.zone);
     intervals.push({
       count: Math.floor(iv.count),
-      duration_minutes: Math.round(iv.duration_minutes),
+      duration_minutes: durationSeconds / 60,
+      duration_seconds: durationSeconds,
       zone: iv.zone,
-      recovery_minutes:
-        typeof iv.recovery_minutes === "number" && iv.recovery_minutes >= 0
-          ? Math.round(iv.recovery_minutes)
-          : Math.round(iv.duration_minutes / 2),
+      recovery_minutes: recoverySeconds / 60,
+      recovery_seconds: recoverySeconds,
+      session_type: sessionType ?? undefined,
     });
   }
   if (intervals.length === 0) return undefined;

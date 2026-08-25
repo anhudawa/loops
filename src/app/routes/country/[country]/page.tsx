@@ -34,7 +34,7 @@ export async function generateMetadata({
   if (!stats) return { title: "Not Found - LOOPS" };
 
   const title = `Cycling Routes in ${stats.displayName} — ${stats.routeCount} Routes | LOOPS`;
-  const description = `Discover ${stats.routeCount} cycling routes in ${stats.displayName}. Browse ${stats.disciplines.join(", ")} routes with free GPX downloads. Community rated.`;
+  const description = `Discover ${stats.routeCount} human-ridden road cycling routes in ${stats.displayName}, each permissioned and independently reviewed by LOOPS.`;
 
   return {
     title,
@@ -96,7 +96,7 @@ export default async function CountryPage({
     },
     {
       question: `Can I download GPX files for routes in ${stats.displayName}?`,
-      answer: `Yes — all ${stats.routeCount} routes in ${stats.displayName} include free GPX file downloads. Load them into Strava, Komoot, Wahoo, or Garmin.`,
+      answer: `Approved Ireland beta riders can download the current reviewed GPX version for routes in ${stats.displayName} and transfer it to their preferred cycling platform or head unit.`,
     },
   ];
 
@@ -131,8 +131,8 @@ export default async function CountryPage({
 
         <p className="text-sm leading-relaxed mb-8" style={{ color: "var(--text-secondary)" }}>
           {stats.routeCount} cycling routes in {stats.displayName} on LOOPS.
-          Browse {stats.disciplines.join(", ")} routes across {stats.regions.length} regions.
-          Free GPX downloads, community ratings.
+          Every route is road-only, human-ridden and independently reviewed across {stats.regions.length} regions.
+          GPX access is currently limited to approved Ireland beta riders.
         </p>
 
         {/* Stats bar */}

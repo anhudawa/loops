@@ -258,7 +258,7 @@ async function generateNearbyVariant(
   const bboxStr = `${minLat},${minLng},${maxLat},${maxLng}`;
   const query = `[out:json][timeout:15];way["highway"~"${allowed.join("|")}"](${bboxStr});out body;>;out skel qt;`;
 
-  let ways: OsmWaySegment[] = [];
+  const ways: OsmWaySegment[] = [];
   try {
     const resp = await fetch("https://overpass-api.de/api/interpreter", {
       method: "POST",

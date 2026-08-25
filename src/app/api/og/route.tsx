@@ -88,7 +88,7 @@ export async function GET() {
             position: "relative",
           }}
         >
-          Discover & share gravel, road & MTB routes worldwide
+          Human-ridden, independently reviewed Irish road routes
         </span>
       </div>
     ),

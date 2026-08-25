@@ -5,61 +5,42 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { useToast } from "@/components/Toast";
 import Link from "next/link";
-import StravaConnectButton from "@/components/StravaConnectButton";
-import StravaActivityBrowser from "@/components/StravaActivityBrowser";
 import { DEFAULT_COUNTRY } from "@/config/constants";
+import { RIDE_SOURCE_PLATFORMS } from "@/config/route-policy";
 
-const COUNTRIES = ["Ireland", "UK", "USA", "Spain"];
+const COUNTRIES = ["Ireland"];
 
 const DISCIPLINE_OPTIONS = [
-  { value: "gravel", label: "Gravel", icon: "🪨" },
   { value: "road", label: "Road", icon: "🚲" },
-  { value: "mtb", label: "MTB", icon: "🏔️" },
 ];
 
 const SUPPORTED_EXTENSIONS = [".gpx", ".fit", ".tcx"];
-
-function detectUrlProvider(url: string): { name: string; supported: boolean } | null {
-  if (/ridewithgps\.com\/(routes|trips)\/\d+/.test(url)) return { name: "RideWithGPS", supported: true };
-  if (/strava\.com\/(activities|routes)\/\d+/.test(url)) return { name: "Strava", supported: false };
-  return null;
-}
-
-interface ParsedRoute {
-  coordinates: number[][];
-  distance_km: number;
-  elevation_gain_m: number;
-  elevation_loss_m: number;
-  start_lat: number;
-  start_lng: number;
-  strava_activity_id: number;
-}
 
 export default function UploadPage() {
   const router = useRouter();
   const { user, loading } = useAuth();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [mode, setMode] = useState<"file" | "url">("file");
   const [file, setFile] = useState<File | null>(null);
-  const [importUrl, setImportUrl] = useState("");
-  const [urlProvider, setUrlProvider] = useState<{ name: string; supported: boolean } | null>(null);
   const [dragging, setDragging] = useState(false);
   const [regions, setRegions] = useState<string[]>([]);
   const [form, setForm] = useState({
     name: "",
     description: "",
-    surface_type: "gravel",
+    surface_type: "road",
     country: DEFAULT_COUNTRY,
     region: "",
-    discipline: "gravel",
+    discipline: "road",
   });
+  const [riddenAt, setRiddenAt] = useState("");
+  const [sourcePlatform, setSourcePlatform] = useState("");
+  const [sourceReference, setSourceReference] = useState("");
+  const [riddenBySubmitter, setRiddenBySubmitter] = useState(false);
+  const [rightsConfirmed, setRightsConfirmed] = useState(false);
+  const [privacyConfirmed, setPrivacyConfirmed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [stravaConnected, setStravaConnected] = useState(false);
-  const [importingActivity, setImportingActivity] = useState<number | null>(null);
-  const [showStravaImport, setShowStravaImport] = useState(false);
-  const [parsedRoute, setParsedRoute] = useState<ParsedRoute | null>(null);
+  const [contributorAccess, setContributorAccess] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -67,25 +48,13 @@ export default function UploadPage() {
     }
   }, [user, loading, router]);
 
-  // Initialize stravaConnected from auth context
   useEffect(() => {
-    if (user) {
-      setStravaConnected(!!user.strava_id);
-    }
+    if (!user) return;
+    fetch("/api/beta/application")
+      .then((response) => response.ok ? response.json() : Promise.reject())
+      .then((data) => setContributorAccess(data.contributorAccess === true))
+      .catch(() => setContributorAccess(false));
   }, [user]);
-
-  // Handle post-OAuth redirect URL params
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("strava_connected") === "true") {
-      setStravaConnected(true);
-      setShowStravaImport(true);
-      window.history.replaceState({}, "", "/upload");
-    }
-    if (params.get("strava_error")) {
-      window.history.replaceState({}, "", "/upload");
-    }
-  }, []);
 
   // Fetch regions when country changes
   useEffect(() => {
@@ -96,17 +65,29 @@ export default function UploadPage() {
       });
   }, [form.country]);
 
-  // Detect URL provider as user types
-  useEffect(() => {
-    setUrlProvider(importUrl ? detectUrlProvider(importUrl) : null);
-  }, [importUrl]);
-
-  if (loading || !user) {
+  if (loading || !user || contributorAccess === null) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--bg)" }}>
         <div className="animate-pulse flex flex-col items-center gap-3">
           <div className="w-10 h-10 rounded-full" style={{ background: "var(--border)" }} />
           <div className="h-3 rounded w-24" style={{ background: "var(--border)" }} />
+        </div>
+      </div>
+    );
+  }
+
+  if (!contributorAccess) {
+    return (
+      <div className="min-h-screen" style={{ background: "var(--bg)" }}>
+        <header className="px-4 md:px-6 py-3" style={{ background: "var(--bg-raised)", borderBottom: "1px solid var(--border)" }}>
+          <div className="max-w-2xl mx-auto"><Link href="/" className="logo-mark text-xl" style={{ color: "var(--text)" }}>LOOPS</Link></div>
+        </header>
+        <div className="max-w-xl mx-auto px-4 py-16 text-center">
+          <h1 className="text-2xl font-extrabold mb-3" style={{ color: "var(--text)" }}>Founding contributors only</h1>
+          <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>
+            Apply first so we can allocate coverage, confirm the contributor terms and keep independent review capacity manageable.
+          </p>
+          <Link href="/beta" className="btn-accent inline-flex px-6 py-3 rounded-xl text-sm font-bold">Apply as a contributor</Link>
         </div>
       </div>
     );
@@ -120,62 +101,17 @@ export default function UploadPage() {
     return filename.replace(/\.(gpx|fit|tcx)$/i, "");
   };
 
-  async function handleStravaImport(activityId: number) {
-    setImportingActivity(activityId);
-    try {
-      const res = await fetch(`/api/strava/activities/${activityId}`);
-      const json = await res.json();
-      if (!res.ok) {
-        toast(json.error || "Import failed. Try again.", "error");
-        return;
-      }
-      const d = json.data;
-      setForm((prev) => ({
-        ...prev,
-        name: d.name,
-        discipline: d.discipline,
-        surface_type: d.discipline === "mtb" ? "trail" : d.discipline === "gravel" ? "gravel" : "road",
-        country: DEFAULT_COUNTRY,
-        region: "",
-      }));
-      setParsedRoute({
-        coordinates: d.coordinates,
-        distance_km: d.distance_km,
-        elevation_gain_m: d.elevation_gain_m,
-        elevation_loss_m: d.elevation_loss_m,
-        start_lat: d.start_lat,
-        start_lng: d.start_lng,
-        strava_activity_id: d.strava_activity_id,
-      });
-      setShowStravaImport(false);
-    } catch {
-      toast("Import failed. Try again.", "error");
-    } finally {
-      setImportingActivity(null);
-    }
-  }
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // If a Strava activity was imported, we only need form metadata (no file/url required)
-    if (!parsedRoute) {
-      if (mode === "file" && !file) {
-        setError("Please select a route file");
-        return;
-      }
-      if (mode === "url" && !importUrl) {
-        setError("Please paste a URL");
-        return;
-      }
-      if (mode === "url" && !urlProvider) {
-        setError("Unsupported URL. Paste a RideWithGPS route link.");
-        return;
-      }
-      if (mode === "url" && urlProvider && !urlProvider.supported) {
-        setError("Strava requires login, so we can't import directly. Export the activity as GPX or FIT from Strava, then upload the file here.");
-        return;
-      }
+    // Ireland road beta: only a rider-owned recording can enter review.
+    if (!file) {
+      setError("Please upload the GPX, FIT, or TCX recording from a ride you completed");
+      return;
+    }
+    if (!riddenAt || !sourcePlatform || !riddenBySubmitter || !rightsConfirmed || !privacyConfirmed) {
+      setError("Select the recording source, confirm when you rode it, and accept the contributor declarations");
+      return;
     }
     if (!form.name || !form.region) {
       setError("Please fill in all required fields");
@@ -186,14 +122,7 @@ export default function UploadPage() {
     setError("");
 
     const formData = new FormData();
-    if (parsedRoute) {
-      // Strava import path — send strava_activity_id instead of a file
-      formData.append("strava_activity_id", String(parsedRoute.strava_activity_id));
-    } else if (mode === "file" && file) {
-      formData.append("route_file", file);
-    } else if (mode === "url") {
-      formData.append("url", importUrl);
-    }
+    formData.append("route_file", file);
     formData.append("name", form.name);
     formData.append("description", form.description);
     formData.append("surface_type", form.surface_type);
@@ -201,6 +130,12 @@ export default function UploadPage() {
     formData.append("country", form.country);
     formData.append("region", form.region);
     formData.append("discipline", form.discipline);
+    formData.append("ridden_at", riddenAt);
+    formData.append("source_platform", sourcePlatform);
+    formData.append("source_reference", sourceReference.trim());
+    formData.append("ridden_by_submitter", String(riddenBySubmitter));
+    formData.append("rights_confirmed", String(rightsConfirmed));
+    formData.append("privacy_confirmed", String(privacyConfirmed));
 
     try {
       const res = await fetch("/api/routes", { method: "POST", body: formData });
@@ -208,9 +143,9 @@ export default function UploadPage() {
         const data = await res.json();
         throw new Error(data.error || "Failed to upload route");
       }
-      const route = await res.json();
-      toast("Route uploaded successfully!", "success");
-      router.push(`/routes/${route.id}`);
+      await res.json();
+      toast("Route submitted for human review.", "success");
+      router.push("/submissions");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
       setSubmitting(false);
@@ -240,183 +175,69 @@ export default function UploadPage() {
 
       <div className="max-w-2xl mx-auto px-4 md:px-6 py-8">
         <h1 className="text-xl md:text-2xl font-extrabold tracking-tight uppercase mb-2" style={{ color: "var(--text)" }}>Share a Loop</h1>
-        <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>Upload a route file or import from RideWithGPS.</p>
-
-        {/* Strava Import Section */}
-        <div className="mb-6 p-4 rounded-xl" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-bold">Import from Strava</h3>
-            <StravaConnectButton
-              isConnected={stravaConnected}
-              returnTo="/upload"
-              onDisconnected={() => {
-                setStravaConnected(false);
-                setShowStravaImport(false);
-              }}
-            />
-          </div>
-
-          {stravaConnected ? (
-            showStravaImport ? (
-              <StravaActivityBrowser
-                onImport={handleStravaImport}
-                importing={importingActivity}
-              />
-            ) : (
-              <button
-                onClick={() => setShowStravaImport(true)}
-                className="w-full py-3 rounded-xl text-sm font-medium transition-colors"
-                style={{ color: "var(--accent)", border: "1px dashed var(--border)" }}
-              >
-                Browse Strava activities
-              </button>
-            )
-          ) : (
-            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-              Import your rides directly from Strava — no file download needed.
-            </p>
-          )}
-        </div>
-
-        {/* Show imported Strava activity indicator */}
-        {parsedRoute && (
-          <div className="mb-6 px-4 py-3 rounded-xl flex items-center justify-between" style={{ background: "var(--accent-glow)", border: "1px solid var(--accent)" }}>
-            <div>
-              <p className="text-sm font-bold" style={{ color: "var(--accent)" }}>Strava activity imported</p>
-              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                {parsedRoute.distance_km} km · {parsedRoute.elevation_gain_m}m gain · Fill in the details below to publish
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setParsedRoute(null)}
-              className="text-xs px-3 py-1.5 rounded-lg"
-              style={{ color: "var(--text-muted)", border: "1px solid var(--border)" }}
-            >
-              Clear
-            </button>
-          </div>
-        )}
-
-        {/* Mode Toggle — only show when no Strava activity is imported */}
-        {!parsedRoute && (
-          <div className="flex rounded-xl overflow-hidden mb-6" style={{ border: "1px solid var(--border)" }}>
-            <button
-              type="button"
-              onClick={() => setMode("file")}
-              className="flex-1 py-2.5 text-sm font-bold uppercase tracking-wider transition-all"
-              style={{
-                background: mode === "file" ? "var(--accent)" : "var(--bg-card)",
-                color: mode === "file" ? "var(--bg)" : "var(--text-muted)",
-              }}
-            >
-              Upload File
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode("url")}
-              className="flex-1 py-2.5 text-sm font-bold uppercase tracking-wider transition-all"
-              style={{
-                background: mode === "url" ? "var(--accent)" : "var(--bg-card)",
-                color: mode === "url" ? "var(--bg)" : "var(--text-muted)",
-              }}
-            >
-              Import URL
-            </button>
-          </div>
-        )}
+        <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>
+          Ireland road beta: submit the recording from a loop you personally rode. Every submission is reviewed before publication.
+        </p>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {!parsedRoute && (mode === "file" ? (
-            /* File Upload Drop Zone */
-            <div
-              className="border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all"
-              style={{
-                borderColor: dragging ? "var(--accent)" : file ? "var(--accent)" : "var(--border)",
-                background: dragging ? "var(--accent-glow-strong)" : file ? "var(--accent-glow)" : "transparent",
-              }}
-              onClick={() => fileInputRef.current?.click()}
-              onDragOver={(e: DragEvent) => { e.preventDefault(); setDragging(true); }}
-              onDragLeave={() => setDragging(false)}
-              onDrop={(e: DragEvent) => {
-                e.preventDefault();
-                setDragging(false);
-                const f = e.dataTransfer.files?.[0];
+          <div
+            className="border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all"
+            style={{
+              borderColor: dragging ? "var(--accent)" : file ? "var(--accent)" : "var(--border)",
+              background: dragging ? "var(--accent-glow-strong)" : file ? "var(--accent-glow)" : "transparent",
+            }}
+            onClick={() => fileInputRef.current?.click()}
+            onDragOver={(e: DragEvent) => { e.preventDefault(); setDragging(true); }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(e: DragEvent) => {
+              e.preventDefault();
+              setDragging(false);
+              const f = e.dataTransfer.files?.[0];
+              if (f && isValidFile(f)) {
+                setFile(f);
+                if (!form.name) setForm((prev) => ({ ...prev, name: stripExtension(f.name) }));
+              } else {
+                setError("Unsupported file. Please use .gpx, .fit, or .tcx files.");
+              }
+            }}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".gpx,.fit,.tcx"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
                 if (f && isValidFile(f)) {
                   setFile(f);
-                  if (!form.name) setForm((prev) => ({ ...prev, name: stripExtension(f.name) }));
-                } else {
+                  setError("");
+                  if (!form.name) {
+                    setForm((prev) => ({ ...prev, name: stripExtension(f.name) }));
+                  }
+                } else if (f) {
+                  setFile(null);
                   setError("Unsupported file. Please use .gpx, .fit, or .tcx files.");
                 }
               }}
-            >
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".gpx,.fit,.tcx"
-                className="hidden"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) {
-                    setFile(f);
-                    if (!form.name) {
-                      setForm((prev) => ({ ...prev, name: stripExtension(f.name) }));
-                    }
-                  }
-                }}
-              />
-              {file ? (
-                <div>
-                  <svg className="w-10 h-10 mx-auto mb-2" style={{ color: "var(--accent)" }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <p className="font-bold" style={{ color: "var(--text)" }}>{file.name}</p>
-                  <p className="text-sm" style={{ color: "var(--text-muted)" }}>{(file.size / 1024).toFixed(1)} KB</p>
-                </div>
-              ) : (
-                <div>
-                  <svg className="w-10 h-10 mx-auto mb-2" style={{ color: "var(--text-muted)" }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                  </svg>
-                  <p className="font-bold" style={{ color: "var(--text-secondary)" }}>Click to upload route file</p>
-                  <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Supports .gpx, .fit, and .tcx files from Strava, Garmin, Wahoo, Komoot</p>
-                </div>
-              )}
-            </div>
-          ) : (
-            /* URL Import */
-            <div>
-              <div className="relative">
-                <input
-                  type="url"
-                  value={importUrl}
-                  onChange={(e) => setImportUrl(e.target.value)}
-                  placeholder="https://ridewithgps.com/routes/..."
-                  className="w-full rounded-xl px-4 py-3.5 text-sm pr-32"
-                  style={inputStyle}
-                />
-                {urlProvider && (
-                  <span
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold px-2.5 py-1 rounded-lg"
-                    style={{
-                      background: urlProvider.supported ? "var(--accent-glow)" : "rgba(255,51,85,0.15)",
-                      color: urlProvider.supported ? "var(--accent)" : "var(--danger)",
-                    }}
-                  >
-                    {urlProvider.name}
-                  </span>
-                )}
+            />
+            {file ? (
+              <div>
+                <svg className="w-10 h-10 mx-auto mb-2" style={{ color: "var(--accent)" }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <p className="font-bold" style={{ color: "var(--text)" }}>{file.name}</p>
+                <p className="text-sm" style={{ color: "var(--text-muted)" }}>{(file.size / 1024).toFixed(1)} KB</p>
               </div>
-              <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>
-                Paste a RideWithGPS route URL to import directly
-              </p>
-              {urlProvider && !urlProvider.supported && (
-                <p className="text-xs mt-1.5 leading-relaxed" style={{ color: "var(--danger)" }}>
-                  Strava requires login — export your activity as GPX or FIT from Strava, then switch to &quot;Upload File&quot; above.
-                </p>
-              )}
-            </div>
-          ))}
+            ) : (
+              <div>
+                <svg className="w-10 h-10 mx-auto mb-2" style={{ color: "var(--text-muted)" }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                <p className="font-bold" style={{ color: "var(--text-secondary)" }}>Upload your completed ride file</p>
+                <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>GPX, FIT or TCX exported from your recording app or bike computer</p>
+              </div>
+            )}
+          </div>
 
           {/* Route Name */}
           <div>
@@ -432,6 +253,100 @@ export default function UploadPage() {
               className="w-full rounded-lg px-4 py-2.5 text-sm"
               style={inputStyle}
             />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>
+                Recording source <span style={{ color: "var(--danger)" }}>*</span>
+              </label>
+              <select
+                value={sourcePlatform}
+                onChange={(e) => setSourcePlatform(e.target.value)}
+                className="w-full rounded-lg px-4 py-2.5 text-sm cursor-pointer"
+                style={inputStyle}
+              >
+                <option value="">Select the source</option>
+                {RIDE_SOURCE_PLATFORMS.map((platform) => (
+                  <option key={platform.value} value={platform.value}>{platform.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>
+                Activity or route reference <span className="normal-case font-normal">(optional)</span>
+              </label>
+              <input
+                type="text"
+                value={sourceReference}
+                onChange={(e) => setSourceReference(e.target.value)}
+                maxLength={500}
+                placeholder="Private activity ID or your own link"
+                className="w-full rounded-lg px-4 py-2.5 text-sm"
+                style={inputStyle}
+              />
+              <p className="text-[11px] mt-1.5" style={{ color: "var(--text-muted)" }}>
+                Used by reviewers only; LOOPS never republishes this reference.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>
+                Date ridden <span style={{ color: "var(--danger)" }}>*</span>
+              </label>
+              <input
+                type="date"
+                value={riddenAt}
+                max={new Date().toISOString().slice(0, 10)}
+                onChange={(e) => setRiddenAt(e.target.value)}
+                className="w-full rounded-lg px-4 py-2.5 text-sm"
+                style={inputStyle}
+              />
+            </div>
+            <div className="rounded-xl p-3 text-xs leading-relaxed" style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-muted)" }}>
+              Submission does not mean publication. LOOPS checks the exact geometry, evidence, road suitability and rights before the loop appears publicly.
+            </div>
+          </div>
+
+          <div className="space-y-3 rounded-xl p-4" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+            <label className="flex items-start gap-3 text-sm" style={{ color: "var(--text-secondary)" }}>
+              <input
+                type="checkbox"
+                checked={riddenBySubmitter}
+                onChange={(e) => setRiddenBySubmitter(e.target.checked)}
+                className="mt-1"
+              />
+              <span>I personally rode this exact loop and the uploaded file records that ride.</span>
+            </label>
+            <label className="flex items-start gap-3 text-sm" style={{ color: "var(--text-secondary)" }}>
+              <input
+                type="checkbox"
+                checked={rightsConfirmed}
+                onChange={(e) => setRightsConfirmed(e.target.checked)}
+                className="mt-1"
+              />
+              <span>
+                I own or control this recording, have checked the recording source permits my use,
+                and accept the route-contributor licence in the{" "}
+                <Link href="/terms" target="_blank" className="font-bold underline" style={{ color: "var(--accent)" }}>Terms</Link>.
+              </span>
+            </label>
+            <label className="flex items-start gap-3 text-sm" style={{ color: "var(--text-secondary)" }}>
+              <input
+                type="checkbox"
+                checked={privacyConfirmed}
+                onChange={(e) => setPrivacyConfirmed(e.target.checked)}
+                className="mt-1"
+              />
+              <span>
+                I understand the approved loop, my contributor name and ride date will be public,
+                and I have checked the start and finish do not reveal my home or another sensitive
+                location. See the{" "}
+                <Link href="/privacy" target="_blank" className="font-bold underline" style={{ color: "var(--accent)" }}>Privacy Policy</Link>.
+              </span>
+            </label>
           </div>
 
           {/* Description */}
@@ -520,16 +435,11 @@ export default function UploadPage() {
               </label>
               <select
                 value={form.surface_type}
-                onChange={(e) => setForm((prev) => ({ ...prev, surface_type: e.target.value }))}
+                disabled
                 className="w-full rounded-lg px-4 py-2.5 text-sm cursor-pointer"
                 style={inputStyle}
               >
-                <option value="gravel">Gravel</option>
-                <option value="mixed">Mixed</option>
-                <option value="trail">Trail</option>
                 <option value="road">Road</option>
-                <option value="singletrack">Singletrack</option>
-                <option value="technical">Technical</option>
               </select>
             </div>
           </div>
@@ -556,10 +466,10 @@ export default function UploadPage() {
                 <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" d="M12 2a10 10 0 0 1 10 10" />
                 </svg>
-                {parsedRoute ? "Saving route..." : mode === "url" ? "Importing route..." : "Parsing & uploading..."}
+                Checking &amp; uploading...
               </span>
             ) : (
-              parsedRoute ? "Save Strava Route" : mode === "url" ? "Import Route" : "Upload Route"
+              "Submit for review"
             )}
           </button>
         </form>

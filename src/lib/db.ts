@@ -1,270 +1,11 @@
 import { sql } from "@vercel/postgres";
 import { v4 as uuidv4 } from "uuid";
+import { createHash } from "node:crypto";
 import { DURATION_TIERS, DEFAULT_SPEED_KMH } from "@/config/constants";
-
-// ──── Init ────
-export async function initDb() {
-  await sql`
-    CREATE TABLE IF NOT EXISTS users (
-      id TEXT PRIMARY KEY,
-      email TEXT NOT NULL UNIQUE,
-      name TEXT,
-      role TEXT NOT NULL DEFAULT 'user',
-      bio TEXT,
-      avatar_url TEXT,
-      location TEXT,
-      session_token TEXT UNIQUE,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `;
-
-  await sql`
-    CREATE TABLE IF NOT EXISTS routes (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      description TEXT,
-      distance_km REAL NOT NULL,
-      elevation_gain_m REAL NOT NULL,
-      elevation_loss_m REAL NOT NULL,
-      surface_type TEXT NOT NULL CHECK(surface_type IN ('gravel', 'mixed', 'trail', 'road')),
-      county TEXT NOT NULL,
-      start_lat REAL NOT NULL,
-      start_lng REAL NOT NULL,
-      gpx_filename TEXT,
-      coordinates TEXT NOT NULL,
-      created_by TEXT REFERENCES users(id),
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `;
-
-  await sql`
-    CREATE TABLE IF NOT EXISTS ratings (
-      id TEXT PRIMARY KEY,
-      route_id TEXT NOT NULL REFERENCES routes(id),
-      user_id TEXT NOT NULL REFERENCES users(id),
-      score INTEGER NOT NULL CHECK(score >= 1 AND score <= 5),
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      UNIQUE(route_id, user_id)
-    )
-  `;
-
-  await sql`
-    CREATE TABLE IF NOT EXISTS comments (
-      id TEXT PRIMARY KEY,
-      route_id TEXT NOT NULL REFERENCES routes(id),
-      user_id TEXT NOT NULL REFERENCES users(id),
-      body TEXT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `;
-
-  await sql`
-    CREATE TABLE IF NOT EXISTS photos (
-      id TEXT PRIMARY KEY,
-      route_id TEXT NOT NULL REFERENCES routes(id),
-      user_id TEXT NOT NULL REFERENCES users(id),
-      filename TEXT NOT NULL,
-      caption TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `;
-
-  await sql`
-    CREATE TABLE IF NOT EXISTS conditions (
-      id TEXT PRIMARY KEY,
-      route_id TEXT NOT NULL REFERENCES routes(id),
-      user_id TEXT NOT NULL REFERENCES users(id),
-      status TEXT NOT NULL CHECK(status IN ('good', 'fair', 'poor', 'closed')),
-      note TEXT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `;
-
-  await sql`
-    CREATE TABLE IF NOT EXISTS magic_links (
-      id TEXT PRIMARY KEY,
-      email TEXT NOT NULL,
-      token TEXT NOT NULL UNIQUE,
-      expires_at TIMESTAMPTZ NOT NULL,
-      used BOOLEAN NOT NULL DEFAULT FALSE,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `;
-
-  await sql`
-    CREATE TABLE IF NOT EXISTS follows (
-      id TEXT PRIMARY KEY,
-      follower_id TEXT NOT NULL REFERENCES users(id),
-      following_id TEXT NOT NULL REFERENCES users(id),
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      UNIQUE(follower_id, following_id),
-      CHECK(follower_id != following_id)
-    )
-  `;
-}
-
-// ──── Migrations ────
-export async function migrateDb() {
-  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS strava_id TEXT UNIQUE`;
-  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id TEXT UNIQUE`;
-
-  // Downloads tracking
-  await sql`
-    CREATE TABLE IF NOT EXISTS downloads (
-      id TEXT PRIMARY KEY,
-      route_id TEXT NOT NULL REFERENCES routes(id),
-      user_id TEXT REFERENCES users(id),
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      UNIQUE(route_id, user_id)
-    )
-  `;
-
-  // Verified column on routes
-  await sql`ALTER TABLE routes ADD COLUMN IF NOT EXISTS verified BOOLEAN NOT NULL DEFAULT FALSE`;
-
-  // Favourites
-  await sql`
-    CREATE TABLE IF NOT EXISTS favourites (
-      id TEXT PRIMARY KEY,
-      route_id TEXT NOT NULL REFERENCES routes(id),
-      user_id TEXT NOT NULL REFERENCES users(id),
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      UNIQUE(route_id, user_id)
-    )
-  `;
-
-  // Push tokens
-  await sql`
-    CREATE TABLE IF NOT EXISTS push_tokens (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL REFERENCES users(id),
-      token TEXT NOT NULL,
-      platform TEXT NOT NULL CHECK(platform IN ('ios', 'android')),
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      UNIQUE(user_id, token)
-    )
-  `;
-
-  // Conversations
-  await sql`
-    CREATE TABLE IF NOT EXISTS conversations (
-      id TEXT PRIMARY KEY,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `;
-
-  await sql`
-    CREATE TABLE IF NOT EXISTS conversation_participants (
-      conversation_id TEXT NOT NULL REFERENCES conversations(id),
-      user_id TEXT NOT NULL REFERENCES users(id),
-      last_read_at TIMESTAMPTZ DEFAULT NOW(),
-      PRIMARY KEY (conversation_id, user_id)
-    )
-  `;
-
-  await sql`
-    CREATE TABLE IF NOT EXISTS messages (
-      id TEXT PRIMARY KEY,
-      conversation_id TEXT NOT NULL REFERENCES conversations(id),
-      sender_id TEXT NOT NULL REFERENCES users(id),
-      body TEXT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `;
-
-  // User speed preference for duration filtering
-  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS avg_speed_kmh REAL DEFAULT 25`;
-
-  // Indexes for filter performance
-  await sql`CREATE INDEX IF NOT EXISTS idx_routes_discipline ON routes(discipline)`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_routes_surface_type ON routes(surface_type)`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_route_ratings_route_id ON ratings(route_id)`;
-
-  // Backfill orphaned routes — assign to first user (site creator)
-  await sql`
-    UPDATE routes SET created_by = (
-      SELECT id FROM users ORDER BY created_at ASC LIMIT 1
-    )
-    WHERE created_by IS NULL
-    AND EXISTS (SELECT 1 FROM users)
-  `;
-
-  // OAuth CSRF state tokens
-  await sql`
-    CREATE TABLE IF NOT EXISTS oauth_states (
-      state TEXT PRIMARY KEY,
-      return_to TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `;
-  await sql`ALTER TABLE oauth_states ADD COLUMN IF NOT EXISTS return_to TEXT`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_oauth_states_created_at ON oauth_states(created_at)`;
-
-  // Strava OAuth tokens
-  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS strava_access_token TEXT`;
-  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS strava_refresh_token TEXT`;
-  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS strava_token_expires_at BIGINT`;
-
-  // Strava activity reference on routes for deduplication
-  await sql`ALTER TABLE routes ADD COLUMN IF NOT EXISTS strava_activity_id BIGINT`;
-
-  // Difficulty: relax NOT NULL constraint so new routes can omit it
-  await sql`ALTER TABLE routes ALTER COLUMN difficulty DROP NOT NULL`;
-  await sql`ALTER TABLE routes DROP CONSTRAINT IF EXISTS routes_difficulty_check`;
-  await sql`ALTER TABLE routes ALTER COLUMN difficulty SET DEFAULT NULL`;
-
-  // Collections
-  await sql`
-    CREATE TABLE IF NOT EXISTS collections (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      slug TEXT NOT NULL UNIQUE,
-      description TEXT,
-      location TEXT,
-      country TEXT,
-      cover_image_url TEXT,
-      discipline TEXT NOT NULL DEFAULT 'mixed' CHECK(discipline IN ('road', 'gravel', 'mtb', 'mixed')),
-      difficulty_range TEXT,
-      total_routes_count INTEGER NOT NULL DEFAULT 0,
-      featured BOOLEAN NOT NULL DEFAULT FALSE,
-      seo_title TEXT,
-      seo_description TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `;
-
-  await sql`
-    CREATE TABLE IF NOT EXISTS collection_routes (
-      collection_id TEXT NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
-      route_id TEXT NOT NULL REFERENCES routes(id) ON DELETE CASCADE,
-      display_order INTEGER NOT NULL DEFAULT 0,
-      PRIMARY KEY (collection_id, route_id)
-    )
-  `;
-
-  await sql`CREATE INDEX IF NOT EXISTS idx_collections_slug ON collections(slug)`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_collections_featured ON collections(featured)`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_collection_routes_collection_id ON collection_routes(collection_id)`;
-
-  // Route quality status (set by scripts/run-full-quality-audit.mjs)
-  await sql`ALTER TABLE routes ADD COLUMN IF NOT EXISTS quality_status TEXT DEFAULT 'pending'`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_routes_quality_status ON routes(quality_status)`;
-
-  // Operator attribution — whose routes these are (e.g. "Eat Sleep Cycle")
-  await sql`ALTER TABLE routes ADD COLUMN IF NOT EXISTS operator_name TEXT`;
-  await sql`ALTER TABLE routes ADD COLUMN IF NOT EXISTS operator_url TEXT`;
-
-  // Garmin Connect tokens (Courses API push)
-  await sql`
-    CREATE TABLE IF NOT EXISTS garmin_tokens (
-      user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-      access_token TEXT NOT NULL,
-      token_secret TEXT NOT NULL,
-      connected_at TIMESTAMPTZ DEFAULT NOW()
-    )
-  `;
-}
+import { INTERVAL_FRESHNESS_DAYS, type PublicationStatus } from "@/config/route-policy";
+import type { WorkoutSessionType } from "@/lib/workout";
+import { openToken, sealToken } from "@/lib/token-crypto";
+import { buildIrelandBetaMetricsQuery, ratePercent } from "@/lib/beta-metrics";
 
 // ──── Types ────
 export interface Route {
@@ -289,6 +30,14 @@ export interface Route {
   quality_status: "approved" | "failed" | "pending" | null;
   operator_name: string | null;
   operator_url: string | null;
+  publication_status?: PublicationStatus;
+  human_ridden?: boolean;
+  last_ridden_at?: string | null;
+  rights_confirmed_at?: string | null;
+  current_version_id?: string | null;
+  ridden_by_name?: string | null;
+  ride_evidence_type?: string | null;
+  reviewed_at?: string | null;
 }
 
 export interface RouteFilters {
@@ -381,6 +130,187 @@ export type ActivityItem = {
   created_at: string;
 };
 
+export type BetaProductEventType =
+  | "route_view"
+  | "route_saved"
+  | "gpx_download"
+  | "device_transfer"
+  | "route_planned"
+  | "ride_confirmed";
+
+export interface RidePlan {
+  id: string;
+  user_id: string;
+  route_id: string;
+  route_version_id: string;
+  status: "planned" | "completed" | "cancelled";
+  planned_at: string;
+  completed_at: string | null;
+  cancelled_at: string | null;
+}
+
+export interface IrelandBetaMetrics {
+  publicRoutes: number;
+  activeRiders28d: number;
+  routeViews28d: number;
+  actionConversions28d: number;
+  routeActionRatePct: number | null;
+  eligibleRidePlans: number;
+  confirmedWithin14Days: number;
+  rideConfirmationRatePct: number | null;
+  retentionCohortSize: number;
+  retainedAtFourWeeks: number;
+  fourWeekRetentionPct: number | null;
+}
+
+const PUBLIC_ROUTE_PREDICATE = `
+  r.discipline = 'road'
+  AND r.surface_type = 'road'
+  AND r.country = 'Ireland'
+  AND r.publication_status = 'published'
+  AND r.human_ridden = TRUE
+  AND r.last_ridden_at >= CURRENT_DATE - INTERVAL '365 days'
+  AND r.rights_confirmed_at IS NOT NULL
+  AND r.current_version_id IS NOT NULL
+  AND EXISTS (
+    SELECT 1 FROM ride_attestations ra
+    WHERE ra.route_id = r.id
+      AND ra.route_version_id = r.current_version_id
+      AND ra.review_status = 'approved'
+      AND ra.rights_granted_at IS NOT NULL
+  )
+  AND EXISTS (
+    SELECT 1 FROM route_reviews rr
+    WHERE rr.route_id = r.id
+      AND rr.route_version_id = r.current_version_id
+      AND rr.decision = 'approved'
+  )
+`;
+
+/**
+ * Record a privacy-minimised beta action only when it belongs to the exact
+ * currently published route version. The database uniqueness constraint
+ * reduces repeat renders/clicks to one event per rider, route, action and day.
+ */
+export async function recordBetaProductEvent(
+  userId: string,
+  routeId: string,
+  routeVersionId: string,
+  eventType: BetaProductEventType
+): Promise<void> {
+  const id = uuidv4();
+  await sql.query(
+    `INSERT INTO beta_product_events (
+       id, user_id, route_id, route_version_id, event_type
+     )
+     SELECT $1, $2, r.id, r.current_version_id, $3
+     FROM routes r
+     WHERE r.id = $4
+       AND r.current_version_id = $5
+       AND ${PUBLIC_ROUTE_PREDICATE}
+     ON CONFLICT (user_id, route_id, event_type, event_date) DO NOTHING`,
+    [id, userId, eventType, routeId, routeVersionId]
+  );
+}
+
+export async function getLatestRidePlan(
+  userId: string,
+  routeId: string
+): Promise<RidePlan | undefined> {
+  const { rows } = await sql.query(
+    `SELECT rp.*
+     FROM ride_plans rp
+     JOIN routes r ON r.id = rp.route_id
+     WHERE rp.user_id = $1
+       AND rp.route_id = $2
+       AND ${PUBLIC_ROUTE_PREDICATE}
+     ORDER BY (rp.status = 'planned') DESC, rp.planned_at DESC
+     LIMIT 1`,
+    [userId, routeId]
+  );
+  return rows[0] as RidePlan | undefined;
+}
+
+export async function createRidePlan(
+  userId: string,
+  routeId: string
+): Promise<RidePlan | undefined> {
+  const id = uuidv4();
+  await sql.query(
+    `INSERT INTO ride_plans (id, user_id, route_id, route_version_id)
+     SELECT $1, $2, r.id, r.current_version_id
+     FROM routes r
+     WHERE r.id = $3
+       AND ${PUBLIC_ROUTE_PREDICATE}
+     ON CONFLICT (user_id, route_id) WHERE status = 'planned' DO NOTHING`,
+    [id, userId, routeId]
+  );
+
+  const plan = await getLatestRidePlan(userId, routeId);
+  if (plan?.status === "planned") {
+    await recordBetaProductEvent(
+      userId,
+      routeId,
+      plan.route_version_id,
+      "route_planned"
+    );
+    return plan;
+  }
+  return undefined;
+}
+
+export async function completeRidePlan(
+  userId: string,
+  routeId: string
+): Promise<RidePlan | undefined> {
+  const { rows } = await sql.query(
+    `UPDATE ride_plans
+     SET status = 'completed', completed_at = NOW()
+     WHERE id = (
+       SELECT rp.id
+       FROM ride_plans rp
+       JOIN routes r ON r.id = rp.route_id
+       WHERE rp.user_id = $1
+         AND rp.route_id = $2
+         AND rp.status = 'planned'
+         AND rp.route_version_id = r.current_version_id
+         AND ${PUBLIC_ROUTE_PREDICATE}
+       ORDER BY rp.planned_at DESC
+       LIMIT 1
+     )
+     RETURNING *`,
+    [userId, routeId]
+  );
+  const plan = rows[0] as RidePlan | undefined;
+  if (plan) {
+    await recordBetaProductEvent(
+      userId,
+      routeId,
+      plan.route_version_id,
+      "ride_confirmed"
+    );
+  }
+  return plan;
+}
+
+export async function cancelRidePlan(
+  userId: string,
+  routeId: string
+): Promise<boolean> {
+  const { rowCount } = await sql.query(
+    `UPDATE ride_plans
+     SET status = 'cancelled', cancelled_at = NOW()
+     WHERE id = (
+       SELECT id FROM ride_plans
+       WHERE user_id = $1 AND route_id = $2 AND status = 'planned'
+       ORDER BY planned_at DESC
+       LIMIT 1
+     )`,
+    [userId, routeId]
+  );
+  return (rowCount ?? 0) > 0;
+}
+
 // ──── Routes ────
 export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
   const conditions: string[] = [];
@@ -409,8 +339,31 @@ export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
     idx++;
   }
 
-  // Only show approved routes (or legacy routes without a quality_status yet)
-  conditions.push(`(r.quality_status = 'approved' OR r.quality_status IS NULL)`);
+  // Commercial relaunch trust gate. A public route must be an Irish road
+  // route, published by a human reviewer, tied to a completed ride, and
+  // accompanied by an explicit rights grant. Legacy verified flags and
+  // community ratings are not provenance.
+  conditions.push(`r.discipline = 'road'`);
+  conditions.push(`r.surface_type = 'road'`);
+  conditions.push(`r.country = 'Ireland'`);
+  conditions.push(`r.publication_status = 'published'`);
+  conditions.push(`r.human_ridden = TRUE`);
+  conditions.push(`r.last_ridden_at >= CURRENT_DATE - INTERVAL '365 days'`);
+  conditions.push(`r.rights_confirmed_at IS NOT NULL`);
+  conditions.push(`r.current_version_id IS NOT NULL`);
+  conditions.push(`EXISTS (
+    SELECT 1 FROM ride_attestations ra
+    WHERE ra.route_id = r.id
+      AND ra.route_version_id = r.current_version_id
+      AND ra.review_status = 'approved'
+      AND ra.rights_granted_at IS NOT NULL
+  )`);
+  conditions.push(`EXISTS (
+    SELECT 1 FROM route_reviews rr
+    WHERE rr.route_id = r.id
+      AND rr.route_version_id = r.current_version_id
+      AND rr.decision = 'approved'
+  )`);
 
   // Duration filtering (uses route fields directly, no aggregation needed)
   const avgSpeed = filters.avgSpeedKmh ?? DEFAULT_SPEED_KMH;
@@ -448,7 +401,8 @@ export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
   // Build HAVING clauses
   const havingClauses: string[] = [];
   if (filters.verified) {
-    havingClauses.push("(bool_or(r.verified) = true OR (COUNT(rt.id) >= 3 AND COALESCE(AVG(rt.score), 0) >= 3.0))");
+    // All rows that survive the public trust gate above are human-ridden.
+    havingClauses.push("bool_or(r.human_ridden) = true");
   }
   if (hasLocation && filters.maxRadius !== undefined) {
     havingClauses.push(`(6371 * acos(
@@ -501,7 +455,16 @@ export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
         COALESCE(AVG(rt.score), 0) as avg_rating,
         COUNT(rt.id) as rating_count,
         (SELECT p.filename FROM photos p WHERE p.route_id = r.id ORDER BY p.created_at LIMIT 1) as cover_photo,
-        CASE WHEN r.verified = true OR (COUNT(rt.id) >= 3 AND COALESCE(AVG(rt.score), 0) >= 3.0) THEN 1 ELSE 0 END as is_verified,
+        (SELECT ra.rider_name FROM ride_attestations ra
+          WHERE ra.route_id = r.id AND ra.route_version_id = r.current_version_id
+            AND ra.review_status = 'approved' ORDER BY ra.reviewed_at DESC LIMIT 1) as ridden_by_name,
+        (SELECT ra.evidence_type FROM ride_attestations ra
+          WHERE ra.route_id = r.id AND ra.route_version_id = r.current_version_id
+            AND ra.review_status = 'approved' ORDER BY ra.reviewed_at DESC LIMIT 1) as ride_evidence_type,
+        (SELECT rr.created_at FROM route_reviews rr
+          WHERE rr.route_id = r.id AND rr.route_version_id = r.current_version_id
+            AND rr.decision = 'approved' ORDER BY rr.created_at DESC LIMIT 1) as reviewed_at,
+        1 as is_verified,
         u.name as creator_name, u.avatar_url as creator_avatar,
         COALESCE((SELECT AVG(rt2.score) FROM routes r2 JOIN ratings rt2 ON rt2.route_id = r2.id WHERE r2.created_by = r.created_by), 0) as creator_rating,
         COALESCE((SELECT COUNT(rt2.id) FROM routes r2 JOIN ratings rt2 ON rt2.route_id = r2.id WHERE r2.created_by = r.created_by), 0) as creator_rating_count,
@@ -538,10 +501,38 @@ export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
 export async function getRoute(id: string): Promise<(Route & { is_verified?: number; creator_name?: string | null; creator_avatar?: string | null; creator_rating?: number; creator_rating_count?: number }) | undefined> {
   const { rows } = await sql`
     SELECT r.*,
-      CASE WHEN r.verified = true
-        OR ((SELECT COUNT(*) FROM ratings WHERE route_id = r.id) >= 3
-            AND (SELECT COALESCE(AVG(score), 0) FROM ratings WHERE route_id = r.id) >= 3.0)
-        THEN 1 ELSE 0 END as is_verified,
+      (SELECT ra.rider_name FROM ride_attestations ra
+        WHERE ra.route_id = r.id AND ra.route_version_id = r.current_version_id
+          AND ra.review_status = 'approved' AND ra.rights_granted_at IS NOT NULL
+        ORDER BY ra.created_at DESC LIMIT 1) as ridden_by_name,
+      (SELECT ra.evidence_type FROM ride_attestations ra
+        WHERE ra.route_id = r.id AND ra.route_version_id = r.current_version_id
+          AND ra.review_status = 'approved' AND ra.rights_granted_at IS NOT NULL
+        ORDER BY ra.created_at DESC LIMIT 1) as ride_evidence_type,
+      (SELECT rr.created_at FROM route_reviews rr
+        WHERE rr.route_id = r.id AND rr.route_version_id = r.current_version_id
+          AND rr.decision = 'approved' ORDER BY rr.created_at DESC LIMIT 1) as reviewed_at,
+      CASE WHEN r.publication_status = 'published'
+        AND r.discipline = 'road'
+        AND r.surface_type = 'road'
+        AND r.country = 'Ireland'
+        AND r.human_ridden = TRUE
+        AND r.last_ridden_at >= CURRENT_DATE - INTERVAL '365 days'
+        AND r.rights_confirmed_at IS NOT NULL
+        AND r.current_version_id IS NOT NULL
+        AND EXISTS (
+          SELECT 1 FROM ride_attestations ra
+          WHERE ra.route_id = r.id
+            AND ra.route_version_id = r.current_version_id
+            AND ra.review_status = 'approved'
+            AND ra.rights_granted_at IS NOT NULL
+        )
+        AND EXISTS (
+          SELECT 1 FROM route_reviews rr
+          WHERE rr.route_id = r.id
+            AND rr.route_version_id = r.current_version_id
+            AND rr.decision = 'approved'
+        ) THEN 1 ELSE 0 END as is_verified,
       u.name as creator_name, u.avatar_url as creator_avatar,
       COALESCE((SELECT AVG(rt2.score) FROM routes r2 JOIN ratings rt2 ON rt2.route_id = r2.id WHERE r2.created_by = r.created_by), 0) as creator_rating,
       COALESCE((SELECT COUNT(rt2.id) FROM routes r2 JOIN ratings rt2 ON rt2.route_id = r2.id WHERE r2.created_by = r.created_by), 0) as creator_rating_count
@@ -552,15 +543,303 @@ export async function getRoute(id: string): Promise<(Route & { is_verified?: num
   return rows[0] as (Route & { is_verified?: number; creator_name?: string | null; creator_avatar?: string | null; creator_rating?: number; creator_rating_count?: number }) | undefined;
 }
 
-export async function insertRoute(
-  route: Omit<Route, "created_at" | "quality_status" | "operator_name" | "operator_url"> &
-    Partial<Pick<Route, "quality_status" | "operator_name" | "operator_url">>
-): Promise<Route> {
+export type NewRouteRecord = Omit<
+  Route,
+  "created_at" | "quality_status" | "operator_name" | "operator_url"
+> & Partial<Pick<Route, "quality_status" | "operator_name" | "operator_url">>;
+
+export async function insertRoute(route: NewRouteRecord): Promise<Route> {
   await sql`
-    INSERT INTO routes (id, name, description, distance_km, elevation_gain_m, elevation_loss_m, surface_type, county, country, region, discipline, start_lat, start_lng, gpx_filename, coordinates, created_by, strava_activity_id, operator_name, operator_url)
-    VALUES (${route.id}, ${route.name}, ${route.description}, ${route.distance_km}, ${route.elevation_gain_m}, ${route.elevation_loss_m}, ${route.surface_type}, ${route.county}, ${route.country}, ${route.region}, ${route.discipline}, ${route.start_lat}, ${route.start_lng}, ${route.gpx_filename}, ${route.coordinates}, ${route.created_by}, ${route.strava_activity_id ?? null}, ${route.operator_name ?? null}, ${route.operator_url ?? null})
+    INSERT INTO routes (
+      id, name, description, distance_km, elevation_gain_m, elevation_loss_m,
+      surface_type, county, country, region, discipline, start_lat, start_lng,
+      gpx_filename, coordinates, created_by, strava_activity_id,
+      quality_status, operator_name, operator_url, publication_status,
+      human_ridden, last_ridden_at, rights_confirmed_at
+    )
+    VALUES (
+      ${route.id}, ${route.name}, ${route.description}, ${route.distance_km},
+      ${route.elevation_gain_m}, ${route.elevation_loss_m}, ${route.surface_type},
+      ${route.county}, ${route.country}, ${route.region}, ${route.discipline},
+      ${route.start_lat}, ${route.start_lng}, ${route.gpx_filename},
+      ${route.coordinates}, ${route.created_by}, ${route.strava_activity_id ?? null},
+      ${route.quality_status ?? "pending"}, ${route.operator_name ?? null},
+      ${route.operator_url ?? null}, ${route.publication_status ?? "draft"},
+      ${route.human_ridden ?? false}, ${route.last_ridden_at ?? null},
+      ${route.rights_confirmed_at ?? null}
+    )
   `;
   return (await getRoute(route.id))!;
+}
+
+export interface InitialRouteProvenance {
+  routeId: string;
+  userId: string;
+  riderName: string;
+  riddenAt: string;
+  evidenceType: "gpx" | "fit" | "tcx";
+  evidenceReference?: string | null;
+  sourcePlatform: "garmin" | "ridewithgps" | "komoot" | "wahoo" | "strava_export" | "other";
+  sourceReference?: string | null;
+  evidenceFileHash: string;
+  evidenceStartedAt: string;
+  evidenceEndedAt: string;
+  evidencePointCount: number;
+  evidenceTimestampedPointCount: number;
+  coordinates: string;
+  distanceKm: number;
+  elevationGainM: number;
+  elevationLossM: number;
+}
+
+/**
+ * Create the route, immutable first version and ride attestation in one SQL
+ * statement. A failed version or attestation therefore cannot leave an
+ * orphaned route that the contributor cannot safely retry.
+ */
+export async function createRiddenRouteSubmission(
+  route: NewRouteRecord,
+  evidence: Omit<InitialRouteProvenance, "routeId">
+): Promise<Route> {
+  const versionId = uuidv4();
+  const attestationId = uuidv4();
+  const geometryHash = createHash("sha256").update(evidence.coordinates).digest("hex");
+  const confirmedAt = new Date().toISOString();
+
+  const { rows } = await sql`
+    WITH inserted_route AS (
+      INSERT INTO routes (
+        id, name, description, distance_km, elevation_gain_m, elevation_loss_m,
+        surface_type, county, country, region, discipline, start_lat, start_lng,
+        gpx_filename, coordinates, created_by, strava_activity_id,
+        quality_status, operator_name, operator_url, publication_status,
+        human_ridden, last_ridden_at, rights_confirmed_at
+      ) VALUES (
+        ${route.id}, ${route.name}, ${route.description}, ${route.distance_km},
+        ${route.elevation_gain_m}, ${route.elevation_loss_m}, ${route.surface_type},
+        ${route.county}, ${route.country}, ${route.region}, ${route.discipline},
+        ${route.start_lat}, ${route.start_lng}, ${route.gpx_filename},
+        ${route.coordinates}, ${route.created_by}, ${route.strava_activity_id ?? null},
+        ${route.quality_status ?? "pending"}, ${route.operator_name ?? null},
+        ${route.operator_url ?? null}, 'draft', FALSE, NULL, NULL
+      )
+      RETURNING id
+    ), inserted_version AS (
+      INSERT INTO route_versions (
+        id, route_id, version_number, geometry_hash, coordinates, distance_km,
+        elevation_gain_m, elevation_loss_m, created_by
+      )
+      SELECT
+        ${versionId}, ir.id, 1, ${geometryHash}, ${evidence.coordinates},
+        ${evidence.distanceKm}, ${evidence.elevationGainM}, ${evidence.elevationLossM},
+        ${evidence.userId}
+      FROM inserted_route ir
+      RETURNING id, route_id
+    ), inserted_attestation AS (
+      INSERT INTO ride_attestations (
+        id, route_id, route_version_id, rider_user_id, rider_name, ridden_at,
+        evidence_type, evidence_reference, file_format, source_platform,
+        source_reference, evidence_file_hash, evidence_started_at,
+        evidence_ended_at, evidence_point_count,
+        evidence_timestamped_point_count, rights_statement_version,
+        rights_granted_at, privacy_confirmed_at, review_status
+      )
+      SELECT
+        ${attestationId}, iv.route_id, iv.id, ${evidence.userId},
+        ${evidence.riderName}, ${evidence.riddenAt}, ${evidence.evidenceType},
+        ${evidence.evidenceReference ?? null}, ${evidence.evidenceType},
+        ${evidence.sourcePlatform}, ${evidence.sourceReference ?? null},
+        ${evidence.evidenceFileHash}, ${evidence.evidenceStartedAt},
+        ${evidence.evidenceEndedAt}, ${evidence.evidencePointCount},
+        ${evidence.evidenceTimestampedPointCount}, ${"2026-08-ireland-beta-v2"},
+        ${confirmedAt}, ${confirmedAt}, 'pending'
+      FROM inserted_version iv
+      RETURNING route_id
+    )
+    UPDATE routes r
+    SET current_version_id = iv.id,
+        human_ridden = TRUE,
+        last_ridden_at = ${evidence.riddenAt},
+        rights_confirmed_at = ${confirmedAt},
+        publication_status = 'in_review'
+    FROM inserted_version iv
+    WHERE r.id = iv.route_id
+      AND EXISTS (
+        SELECT 1 FROM inserted_attestation ia WHERE ia.route_id = r.id
+      )
+    RETURNING r.*
+  `;
+
+  const submitted = rows[0] as Route | undefined;
+  if (!submitted) throw new Error("Route submission was not created atomically");
+  return submitted;
+}
+
+export interface RouteRevisionInput {
+  routeId: string;
+  userId: string;
+  riderName: string;
+  description: string | null;
+  riddenAt: string;
+  evidenceType: "gpx" | "fit" | "tcx";
+  evidenceReference: string;
+  sourcePlatform: "garmin" | "ridewithgps" | "komoot" | "wahoo" | "strava_export" | "other";
+  sourceReference: string | null;
+  evidenceFileHash: string;
+  evidenceStartedAt: string;
+  evidenceEndedAt: string;
+  evidencePointCount: number;
+  evidenceTimestampedPointCount: number;
+  coordinates: string;
+  distanceKm: number;
+  elevationGainM: number;
+  elevationLossM: number;
+  startLat: number;
+  startLng: number;
+}
+
+/**
+ * Supply fresh human evidence for a private/stale/quarantined route. Identical
+ * geometry reuses its immutable version; changed geometry creates the next
+ * version. Either path takes the route offline and back through review.
+ */
+export async function createRiddenRouteRevision(
+  input: RouteRevisionInput
+): Promise<Route | undefined> {
+  const newVersionId = uuidv4();
+  const attestationId = uuidv4();
+  const geometryHash = createHash("sha256").update(input.coordinates).digest("hex");
+  const confirmedAt = new Date().toISOString();
+
+  const { rows } = await sql`
+    WITH eligible_route AS (
+      SELECT r.id,
+        COALESCE((SELECT MAX(version_number) FROM route_versions WHERE route_id = r.id), 0) + 1 AS next_version
+      FROM routes r
+      WHERE r.id = ${input.routeId}
+        AND r.created_by = ${input.userId}
+        AND r.country = 'Ireland'
+        AND r.discipline = 'road'
+        AND r.surface_type = 'road'
+        AND r.publication_status IN ('draft', 'stale', 'quarantined', 'retired')
+      FOR UPDATE
+    ), existing_version AS (
+      SELECT rv.id, rv.route_id
+      FROM route_versions rv
+      JOIN eligible_route er ON er.id = rv.route_id
+      WHERE rv.geometry_hash = ${geometryHash}
+      LIMIT 1
+    ), inserted_version AS (
+      INSERT INTO route_versions (
+        id, route_id, version_number, geometry_hash, coordinates, distance_km,
+        elevation_gain_m, elevation_loss_m, created_by
+      )
+      SELECT
+        ${newVersionId}, er.id, er.next_version, ${geometryHash},
+        ${input.coordinates}, ${input.distanceKm}, ${input.elevationGainM},
+        ${input.elevationLossM}, ${input.userId}
+      FROM eligible_route er
+      WHERE NOT EXISTS (SELECT 1 FROM existing_version)
+      RETURNING id, route_id
+    ), selected_version AS (
+      SELECT id, route_id FROM existing_version
+      UNION ALL
+      SELECT id, route_id FROM inserted_version
+    ), inserted_attestation AS (
+      INSERT INTO ride_attestations (
+        id, route_id, route_version_id, rider_user_id, rider_name, ridden_at,
+        evidence_type, evidence_reference, file_format, source_platform,
+        source_reference, evidence_file_hash, evidence_started_at,
+        evidence_ended_at, evidence_point_count,
+        evidence_timestamped_point_count, rights_statement_version,
+        rights_granted_at, privacy_confirmed_at, review_status
+      )
+      SELECT
+        ${attestationId}, sv.route_id, sv.id, ${input.userId},
+        ${input.riderName}, ${input.riddenAt}, ${input.evidenceType},
+        ${input.evidenceReference}, ${input.evidenceType}, ${input.sourcePlatform},
+        ${input.sourceReference}, ${input.evidenceFileHash},
+        ${input.evidenceStartedAt}, ${input.evidenceEndedAt},
+        ${input.evidencePointCount}, ${input.evidenceTimestampedPointCount},
+        ${"2026-08-ireland-beta-v2"}, ${confirmedAt}, ${confirmedAt}, 'pending'
+      FROM selected_version sv
+      RETURNING route_id, route_version_id
+    )
+    UPDATE routes r
+    SET current_version_id = ia.route_version_id,
+        description = ${input.description},
+        distance_km = ${input.distanceKm},
+        elevation_gain_m = ${input.elevationGainM},
+        elevation_loss_m = ${input.elevationLossM},
+        start_lat = ${input.startLat},
+        start_lng = ${input.startLng},
+        gpx_filename = ${input.evidenceReference},
+        coordinates = ${input.coordinates},
+        human_ridden = TRUE,
+        last_ridden_at = ${input.riddenAt},
+        rights_confirmed_at = ${confirmedAt},
+        publication_status = 'in_review',
+        verified = FALSE,
+        quality_status = 'pending'
+    FROM inserted_attestation ia
+    WHERE r.id = ia.route_id
+    RETURNING r.*
+  `;
+
+  return rows[0] as Route | undefined;
+}
+
+/**
+ * Attach the first immutable geometry version and the rider's attestation.
+ * The submission enters human review; this function never publishes it.
+ */
+export async function createInitialRouteProvenance(
+  input: InitialRouteProvenance
+): Promise<void> {
+  const versionId = uuidv4();
+  const attestationId = uuidv4();
+  const geometryHash = createHash("sha256").update(input.coordinates).digest("hex");
+  const rightsGrantedAt = new Date().toISOString();
+
+  await sql`
+    WITH inserted_version AS (
+      INSERT INTO route_versions (
+        id, route_id, version_number, geometry_hash, coordinates, distance_km,
+        elevation_gain_m, elevation_loss_m, created_by
+      ) VALUES (
+        ${versionId}, ${input.routeId}, 1, ${geometryHash}, ${input.coordinates},
+        ${input.distanceKm}, ${input.elevationGainM}, ${input.elevationLossM},
+        ${input.userId}
+      )
+      RETURNING id
+    ), inserted_attestation AS (
+      INSERT INTO ride_attestations (
+        id, route_id, route_version_id, rider_user_id, rider_name, ridden_at,
+        evidence_type, evidence_reference, file_format, source_platform,
+        source_reference, evidence_file_hash, evidence_started_at,
+        evidence_ended_at, evidence_point_count,
+        evidence_timestamped_point_count, rights_statement_version,
+        rights_granted_at, privacy_confirmed_at, review_status
+      )
+      SELECT
+        ${attestationId}, ${input.routeId}, id, ${input.userId},
+        ${input.riderName}, ${input.riddenAt}, ${input.evidenceType},
+        ${input.evidenceReference ?? null}, ${input.evidenceType},
+        ${input.sourcePlatform}, ${input.sourceReference ?? null},
+        ${input.evidenceFileHash}, ${input.evidenceStartedAt},
+        ${input.evidenceEndedAt}, ${input.evidencePointCount},
+        ${input.evidenceTimestampedPointCount}, ${"2026-08-ireland-beta-v2"},
+        ${rightsGrantedAt}, ${rightsGrantedAt}, 'pending'
+      FROM inserted_version
+    )
+    UPDATE routes
+    SET current_version_id = ${versionId},
+        human_ridden = TRUE,
+        last_ridden_at = ${input.riddenAt},
+        rights_confirmed_at = ${rightsGrantedAt},
+        publication_status = 'in_review'
+    WHERE id = ${input.routeId}
+  `;
 }
 
 // ──── Users ────
@@ -656,11 +935,13 @@ export async function saveStravaTokens(
   refreshToken: string,
   expiresAt: number
 ): Promise<void> {
+  const encryptedAccessToken = sealToken(accessToken);
+  const encryptedRefreshToken = sealToken(refreshToken);
   await sql`
     UPDATE users
     SET strava_id = ${stravaId},
-        strava_access_token = ${accessToken},
-        strava_refresh_token = ${refreshToken},
+        strava_access_token = ${encryptedAccessToken},
+        strava_refresh_token = ${encryptedRefreshToken},
         strava_token_expires_at = ${expiresAt}
     WHERE id = ${userId}
   `;
@@ -672,10 +953,12 @@ export async function updateStravaTokens(
   refreshToken: string,
   expiresAt: number
 ): Promise<void> {
+  const encryptedAccessToken = sealToken(accessToken);
+  const encryptedRefreshToken = sealToken(refreshToken);
   await sql`
     UPDATE users
-    SET strava_access_token = ${accessToken},
-        strava_refresh_token = ${refreshToken},
+    SET strava_access_token = ${encryptedAccessToken},
+        strava_refresh_token = ${encryptedRefreshToken},
         strava_token_expires_at = ${expiresAt}
     WHERE id = ${userId}
   `;
@@ -778,28 +1061,28 @@ export async function getUserActivityFeed(userId: string, page = 1, limit = 20):
       SELECT 'rating' as type, rt.route_id, r.name as route_name,
         CAST(rt.score AS TEXT) as detail, rt.created_at
       FROM ratings rt JOIN routes r ON r.id = rt.route_id
-      WHERE rt.user_id = $1
+      WHERE rt.user_id = $1 AND ${PUBLIC_ROUTE_PREDICATE}
 
       UNION ALL
 
       SELECT 'comment' as type, c.route_id, r.name as route_name,
         LEFT(c.body, 80) as detail, c.created_at
       FROM comments c JOIN routes r ON r.id = c.route_id
-      WHERE c.user_id = $1
+      WHERE c.user_id = $1 AND ${PUBLIC_ROUTE_PREDICATE}
 
       UNION ALL
 
       SELECT 'condition' as type, co.route_id, r.name as route_name,
         co.status as detail, co.created_at
       FROM conditions co JOIN routes r ON r.id = co.route_id
-      WHERE co.user_id = $1
+      WHERE co.user_id = $1 AND ${PUBLIC_ROUTE_PREDICATE}
 
       UNION ALL
 
       SELECT 'photo' as type, p.route_id, r.name as route_name,
         COALESCE(p.caption, 'Photo') as detail, p.created_at
       FROM photos p JOIN routes r ON r.id = p.route_id
-      WHERE p.user_id = $1
+      WHERE p.user_id = $1 AND ${PUBLIC_ROUTE_PREDICATE}
     ) activity
     ORDER BY created_at DESC
     LIMIT $2::int OFFSET $3::int
@@ -810,11 +1093,13 @@ export async function getUserActivityFeed(userId: string, page = 1, limit = 20):
 }
 
 export async function getUserTotalKm(userId: string): Promise<number> {
-  const { rows } = await sql`
-    SELECT COALESCE(SUM(r.distance_km), 0) as total
-    FROM routes r
-    WHERE r.id IN (SELECT route_id FROM ratings WHERE user_id = ${userId})
-  `;
+  const { rows } = await sql.query(
+    `SELECT COALESCE(SUM(r.distance_km), 0) as total
+     FROM routes r
+     WHERE r.id IN (SELECT route_id FROM ratings WHERE user_id = $1)
+       AND ${PUBLIC_ROUTE_PREDICATE}`,
+    [userId]
+  );
   return Math.round(Number(rows[0].total));
 }
 
@@ -912,27 +1197,70 @@ export async function getLatestCondition(routeId: string): Promise<Condition | u
 }
 
 export async function insertCondition(id: string, routeId: string, userId: string, status: string, note: string): Promise<void> {
-  await sql`INSERT INTO conditions (id, route_id, user_id, status, note) VALUES (${id}, ${routeId}, ${userId}, ${status}, ${note})`;
+  if (status === "closed") {
+    const incidentId = uuidv4();
+    await sql`
+      WITH inserted_condition AS (
+        INSERT INTO conditions (id, route_id, user_id, status, note)
+        VALUES (${id}, ${routeId}, ${userId}, ${status}, ${note})
+        RETURNING id
+      ), inserted_incident AS (
+        INSERT INTO route_incidents (
+          id, route_id, reported_by, condition_id, severity, status, summary
+        )
+        SELECT ${incidentId}, ${routeId}, ${userId}, id, 'critical', 'open', ${note}
+        FROM inserted_condition
+      )
+      UPDATE routes
+      SET publication_status = 'quarantined', verified = FALSE
+      WHERE id = ${routeId}
+    `;
+    return;
+  }
+
+  if (status === "poor") {
+    const incidentId = uuidv4();
+    await sql`
+      WITH inserted_condition AS (
+        INSERT INTO conditions (id, route_id, user_id, status, note)
+        VALUES (${id}, ${routeId}, ${userId}, ${status}, ${note})
+        RETURNING id
+      )
+      INSERT INTO route_incidents (
+        id, route_id, reported_by, condition_id, severity, status, summary
+      )
+      SELECT ${incidentId}, ${routeId}, ${userId}, id, 'review', 'open', ${note}
+      FROM inserted_condition
+    `;
+    return;
+  }
+
+  await sql`
+    INSERT INTO conditions (id, route_id, user_id, status, note)
+    VALUES (${id}, ${routeId}, ${userId}, ${status}, ${note})
+  `;
 }
 
 // ──── User profiles ────
 export async function getUserRoutes(userId: string): Promise<Route[]> {
-  const { rows } = await sql`
-    SELECT * FROM routes WHERE id IN (
-      SELECT route_id FROM comments WHERE user_id = ${userId}
+  const { rows } = await sql.query(
+    `SELECT r.* FROM routes r WHERE r.id IN (
+      SELECT route_id FROM comments WHERE user_id = $1
       UNION
-      SELECT route_id FROM ratings WHERE user_id = ${userId}
-    ) ORDER BY name
-  `;
+      SELECT route_id FROM ratings WHERE user_id = $1
+    ) AND ${PUBLIC_ROUTE_PREDICATE}
+    ORDER BY r.name`,
+    [userId]
+  );
   return rows as Route[];
 }
 
 export async function getUserStats(userId: string): Promise<UserStats> {
   const [rated, commented, conds, photos] = await Promise.all([
-    sql`SELECT COUNT(*) as c FROM ratings WHERE user_id = ${userId}`,
-    sql`SELECT COUNT(*) as c FROM comments WHERE user_id = ${userId}`,
-    sql`SELECT COUNT(*) as c FROM conditions WHERE user_id = ${userId}`,
-    sql`SELECT COUNT(*) as c FROM photos WHERE user_id = ${userId}`,
+    sql.query(`SELECT COUNT(*) as c FROM ratings x JOIN routes r ON r.id = x.route_id WHERE x.user_id = $1 AND ${PUBLIC_ROUTE_PREDICATE}`, [userId]),
+    sql.query(`SELECT COUNT(*) as c FROM comments x JOIN routes r ON r.id = x.route_id WHERE x.user_id = $1 AND ${PUBLIC_ROUTE_PREDICATE}`, [userId]),
+    sql.query(`SELECT COUNT(*) as c FROM conditions x JOIN routes r ON r.id = x.route_id WHERE x.user_id = $1 AND ${PUBLIC_ROUTE_PREDICATE}`, [userId]),
+    sql.query(`SELECT COUNT(*) as c FROM photos x JOIN routes r ON r.id = x.route_id WHERE x.user_id = $1 AND ${PUBLIC_ROUTE_PREDICATE}`, [userId]),
   ]);
   return {
     routesRated: Number(rated.rows[0].c),
@@ -943,21 +1271,33 @@ export async function getUserStats(userId: string): Promise<UserStats> {
 }
 
 export async function getCounties(): Promise<string[]> {
-  const { rows } = await sql`SELECT DISTINCT county FROM routes ORDER BY county`;
+  const { rows } = await sql.query(
+    `SELECT DISTINCT r.county FROM routes r WHERE ${PUBLIC_ROUTE_PREDICATE} ORDER BY r.county`
+  );
   return rows.map((r) => r.county);
 }
 
 export async function getRegions(country?: string): Promise<string[]> {
   if (country) {
-    const { rows } = await sql`SELECT DISTINCT region FROM routes WHERE country = ${country} AND region IS NOT NULL ORDER BY region`;
+    const { rows } = await sql.query(
+      `SELECT DISTINCT r.region FROM routes r
+       WHERE ${PUBLIC_ROUTE_PREDICATE} AND r.country = $1 AND r.region IS NOT NULL
+       ORDER BY r.region`,
+      [country]
+    );
     return rows.map((r) => r.region);
   }
-  const { rows } = await sql`SELECT DISTINCT region FROM routes WHERE region IS NOT NULL ORDER BY region`;
+  const { rows } = await sql.query(
+    `SELECT DISTINCT r.region FROM routes r
+     WHERE ${PUBLIC_ROUTE_PREDICATE} AND r.region IS NOT NULL ORDER BY r.region`
+  );
   return rows.map((r) => r.region);
 }
 
 export async function getCountries(): Promise<string[]> {
-  const { rows } = await sql`SELECT DISTINCT country FROM routes ORDER BY country`;
+  const { rows } = await sql.query(
+    `SELECT DISTINCT r.country FROM routes r WHERE ${PUBLIC_ROUTE_PREDICATE} ORDER BY r.country`
+  );
   return rows.map((r) => r.country);
 }
 
@@ -989,7 +1329,12 @@ export async function unbanUser(id: string): Promise<void> {
 export async function getAllUsers(page = 1, limit = 50): Promise<{ users: User[]; total: number }> {
   const offset = (page - 1) * limit;
   const [data, count] = await Promise.all([
-    sql.query(`SELECT * FROM users ORDER BY created_at DESC LIMIT $1::int OFFSET $2::int`, [limit, offset]),
+    sql.query(
+      `SELECT id, email, name, role, bio, avatar_url, location, created_at,
+         avg_speed_kmh, strava_id
+       FROM users ORDER BY created_at DESC LIMIT $1::int OFFSET $2::int`,
+      [limit, offset]
+    ),
     sql`SELECT COUNT(*) as c FROM users`,
   ]);
   return { users: data.rows as User[], total: Number(count.rows[0].c) };
@@ -1012,19 +1357,612 @@ export async function getAllComments(page = 1, limit = 50): Promise<{ comments: 
   return { comments: data.rows as (Comment & { route_name: string })[], total: Number(count.rows[0].c) };
 }
 
-export async function getAllRoutes(page = 1, limit = 50): Promise<{ routes: Route[]; total: number }> {
+export interface AdminRouteReview extends Route {
+  version_number: number | null;
+  geometry_hash: string | null;
+  rider_name: string | null;
+  ridden_at: string | null;
+  evidence_type: string | null;
+  evidence_reference: string | null;
+  source_platform: string | null;
+  evidence_file_hash: string | null;
+  evidence_started_at: string | null;
+  evidence_ended_at: string | null;
+  evidence_point_count: number | null;
+  evidence_timestamped_point_count: number | null;
+  attestation_status: string | null;
+  latest_review_decision: string | null;
+  latest_review_notes: string | null;
+  open_incidents: number;
+}
+
+export interface ContributorRouteSubmission {
+  id: string;
+  name: string;
+  description: string | null;
+  distance_km: number;
+  elevation_gain_m: number;
+  county: string;
+  country: string;
+  region: string | null;
+  publication_status: PublicationStatus;
+  version_number: number | null;
+  geometry_hash: string | null;
+  ridden_at: string | null;
+  evidence_type: string | null;
+  source_platform: string | null;
+  attestation_status: string | null;
+  latest_review_decision: string | null;
+  latest_review_notes: string | null;
+  created_at: string;
+}
+
+export async function getRouteSubmissionsByContributor(
+  contributorId: string
+): Promise<ContributorRouteSubmission[]> {
+  const { rows } = await sql.query(
+    `SELECT r.id, r.name, r.description, r.distance_km, r.elevation_gain_m,
+       r.county, r.country, r.region, r.publication_status, r.created_at,
+       rv.version_number, rv.geometry_hash,
+       ra.ridden_at, ra.evidence_type, ra.source_platform,
+       ra.review_status AS attestation_status,
+       rr.decision AS latest_review_decision,
+       rr.review_notes AS latest_review_notes
+     FROM routes r
+     LEFT JOIN route_versions rv ON rv.id = r.current_version_id
+     LEFT JOIN LATERAL (
+       SELECT ridden_at, evidence_type, source_platform, review_status
+       FROM ride_attestations
+       WHERE route_id = r.id AND route_version_id = r.current_version_id
+       ORDER BY created_at DESC LIMIT 1
+     ) ra ON TRUE
+     LEFT JOIN LATERAL (
+       SELECT decision, review_notes
+       FROM route_reviews
+       WHERE route_id = r.id AND route_version_id = r.current_version_id
+       ORDER BY created_at DESC LIMIT 1
+     ) rr ON TRUE
+     WHERE r.created_by = $1
+     ORDER BY r.created_at DESC`,
+    [contributorId]
+  );
+  return rows as ContributorRouteSubmission[];
+}
+
+export interface AdminRouteIncident {
+  id: string;
+  route_id: string;
+  route_name: string;
+  reporter_name: string | null;
+  reporter_email: string | null;
+  condition_status: string | null;
+  severity: "review" | "critical";
+  status: "open" | "resolved" | "dismissed";
+  summary: string;
+  created_at: string;
+}
+
+export interface ApprovedSegmentAssessment {
+  id: string;
+  route_id: string;
+  route_version_id: string;
+  assessor_name: string;
+  assessed_at: string;
+  start_index: number;
+  end_index: number;
+  direction: "forward" | "reverse";
+  session_type: WorkoutSessionType;
+  min_effort_seconds: number;
+  max_effort_seconds: number;
+  length_km: number;
+  avg_gradient_pct: number;
+  max_gradient_pct: number;
+  gradient_variance: number;
+  surface_rating: "good" | "mixed" | "poor";
+  traffic_rating: "low" | "moderate" | "high";
+  sightlines_rating: "clear" | "mixed" | "poor";
+  junction_count: number;
+  entry_notes: string;
+  recovery_notes: string;
+  runout_notes: string;
+  hazards_notes: string | null;
+}
+
+export interface AdminSegmentAssessment extends ApprovedSegmentAssessment {
+  ride_attestation_id: string;
+  confirmed_by: string;
+  confirmed_at: string;
+  review_status: "pending" | "approved" | "rejected" | "revoked";
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  review_notes: string | null;
+  created_at: string;
+}
+
+export interface SegmentAssessmentInput {
+  start_index: number;
+  end_index: number;
+  direction: "forward" | "reverse";
+  session_type: WorkoutSessionType;
+  min_effort_seconds: number;
+  max_effort_seconds: number;
+  length_km: number;
+  avg_gradient_pct: number;
+  max_gradient_pct: number;
+  gradient_variance: number;
+  surface_rating: "good" | "mixed" | "poor";
+  traffic_rating: "low" | "moderate" | "high";
+  sightlines_rating: "clear" | "mixed" | "poor";
+  junction_count: number;
+  entry_notes: string;
+  recovery_notes: string;
+  runout_notes: string;
+  hazards_notes?: string | null;
+}
+
+export async function getRouteSegmentAssessments(routeId: string): Promise<AdminSegmentAssessment[]> {
+  const { rows } = await sql`
+    SELECT rsa.*
+    FROM route_segment_assessments rsa
+    JOIN routes r ON r.id = rsa.route_id
+    WHERE rsa.route_id = ${routeId}
+      AND rsa.route_version_id = r.current_version_id
+    ORDER BY rsa.created_at DESC
+  `;
+  return rows as AdminSegmentAssessment[];
+}
+
+export async function createRouteSegmentAssessment(
+  routeId: string,
+  input: SegmentAssessmentInput,
+  confirmedBy: string
+): Promise<AdminSegmentAssessment | undefined> {
+  const id = uuidv4();
+  const { rows } = await sql`
+    INSERT INTO route_segment_assessments (
+      id, route_id, route_version_id, ride_attestation_id,
+      assessor_user_id, assessor_name, assessed_at,
+      assessment_statement_version, confirmed_by, confirmed_at,
+      start_index, end_index, direction, session_type,
+      min_effort_seconds, max_effort_seconds, length_km,
+      avg_gradient_pct, max_gradient_pct, gradient_variance,
+      surface_rating, traffic_rating, sightlines_rating, junction_count,
+      entry_notes, recovery_notes, runout_notes, hazards_notes
+    )
+    SELECT
+      ${id}, r.id, r.current_version_id, ra.id,
+      ra.rider_user_id, ra.rider_name, ra.ridden_at,
+      'segment-assessment-v1', ${confirmedBy}, NOW(),
+      ${input.start_index}, ${input.end_index}, ${input.direction}, ${input.session_type},
+      ${input.min_effort_seconds}, ${input.max_effort_seconds}, ${input.length_km},
+      ${input.avg_gradient_pct}, ${input.max_gradient_pct}, ${input.gradient_variance},
+      ${input.surface_rating}, ${input.traffic_rating}, ${input.sightlines_rating}, ${input.junction_count},
+      ${input.entry_notes.trim()}, ${input.recovery_notes.trim()},
+      ${input.runout_notes.trim()}, ${input.hazards_notes?.trim() || null}
+    FROM routes r
+    JOIN LATERAL (
+      SELECT id, rider_user_id, rider_name, ridden_at
+      FROM ride_attestations
+      WHERE route_id = r.id
+        AND route_version_id = r.current_version_id
+        AND review_status = 'approved'
+      ORDER BY reviewed_at DESC
+      LIMIT 1
+    ) ra ON TRUE
+    WHERE r.id = ${routeId}
+      AND r.publication_status = 'published'
+      AND r.current_version_id IS NOT NULL
+      AND ${input.end_index} < jsonb_array_length(r.coordinates::jsonb)
+    RETURNING *
+  `;
+  return rows[0] as AdminSegmentAssessment | undefined;
+}
+
+export async function reviewRouteSegmentAssessment(
+  assessmentId: string,
+  decision: "approved" | "rejected",
+  reviewerId: string,
+  notes: string
+): Promise<AdminSegmentAssessment | undefined> {
+  const { rows } = await sql`
+    UPDATE route_segment_assessments rsa
+    SET review_status = ${decision},
+        reviewed_by = ${reviewerId},
+        reviewed_at = NOW(),
+        review_notes = ${notes.trim()}
+    FROM routes r, ride_attestations ra
+    WHERE rsa.id = ${assessmentId}
+      AND rsa.review_status = 'pending'
+      AND r.id = rsa.route_id
+      AND r.current_version_id = rsa.route_version_id
+      AND ra.id = rsa.ride_attestation_id
+      AND ra.route_id = rsa.route_id
+      AND ra.route_version_id = rsa.route_version_id
+      AND ra.review_status = 'approved'
+      AND (rsa.assessor_user_id IS NULL OR rsa.assessor_user_id <> ${reviewerId})
+      AND (
+        ${decision} = 'rejected'
+        OR (
+          rsa.session_type IN ('endurance', 'tempo', 'sweet_spot', 'threshold')
+          AND rsa.assessed_at >= CURRENT_DATE - (${INTERVAL_FRESHNESS_DAYS} * INTERVAL '1 day')
+          AND rsa.surface_rating <> 'poor'
+          AND rsa.traffic_rating = 'low'
+          AND rsa.sightlines_rating = 'clear'
+          AND rsa.junction_count = 0
+        )
+      )
+    RETURNING rsa.*
+  `;
+  return rows[0] as AdminSegmentAssessment | undefined;
+}
+
+export async function getApprovedSegmentAssessments(
+  routeIds: string[]
+): Promise<ApprovedSegmentAssessment[]> {
+  if (routeIds.length === 0) return [];
+  const { rows } = await sql.query(
+    `SELECT rsa.id, rsa.route_id, rsa.route_version_id,
+       rsa.assessor_name, rsa.assessed_at, rsa.start_index, rsa.end_index,
+       rsa.direction, rsa.session_type, rsa.min_effort_seconds,
+       rsa.max_effort_seconds, rsa.length_km, rsa.avg_gradient_pct,
+       rsa.max_gradient_pct, rsa.gradient_variance, rsa.surface_rating,
+       rsa.traffic_rating, rsa.sightlines_rating, rsa.junction_count,
+       rsa.entry_notes, rsa.recovery_notes, rsa.runout_notes, rsa.hazards_notes
+     FROM route_segment_assessments rsa
+     JOIN routes r ON r.id = rsa.route_id
+     JOIN ride_attestations ra ON ra.id = rsa.ride_attestation_id
+     WHERE rsa.route_id = ANY($1::text[])
+       AND rsa.route_version_id = r.current_version_id
+       AND rsa.review_status = 'approved'
+       AND rsa.assessed_at >= CURRENT_DATE - ($2::int * INTERVAL '1 day')
+       AND ra.route_id = rsa.route_id
+       AND ra.route_version_id = rsa.route_version_id
+       AND ra.review_status = 'approved'
+     ORDER BY rsa.route_id, rsa.start_index, rsa.end_index`,
+    [routeIds, INTERVAL_FRESHNESS_DAYS]
+  );
+  return rows as ApprovedSegmentAssessment[];
+}
+
+export async function getOpenRouteIncidents(
+  page = 1,
+  limit = 50
+): Promise<{ incidents: AdminRouteIncident[]; total: number }> {
   const offset = (page - 1) * limit;
   const [data, count] = await Promise.all([
-    sql.query(`SELECT * FROM routes ORDER BY created_at DESC LIMIT $1::int OFFSET $2::int`, [limit, offset]),
+    sql.query(
+      `SELECT ri.id, ri.route_id, r.name AS route_name,
+         u.name AS reporter_name, u.email AS reporter_email,
+         c.status AS condition_status, ri.severity, ri.status,
+         ri.summary, ri.created_at
+       FROM route_incidents ri
+       JOIN routes r ON r.id = ri.route_id
+       LEFT JOIN users u ON u.id = ri.reported_by
+       LEFT JOIN conditions c ON c.id = ri.condition_id
+       WHERE ri.status = 'open'
+       ORDER BY CASE ri.severity WHEN 'critical' THEN 0 ELSE 1 END, ri.created_at DESC
+       LIMIT $1::int OFFSET $2::int`,
+      [limit, offset]
+    ),
+    sql`SELECT COUNT(*) AS c FROM route_incidents WHERE status = 'open'`,
+  ]);
+  return {
+    incidents: data.rows as AdminRouteIncident[],
+    total: Number(count.rows[0].c),
+  };
+}
+
+export async function resolveRouteIncident(
+  incidentId: string,
+  status: "resolved" | "dismissed",
+  resolverId: string,
+  resolutionNotes: string
+): Promise<AdminRouteIncident | undefined> {
+  const { rows } = await sql`
+    WITH updated AS (
+      UPDATE route_incidents
+      SET status = ${status},
+          resolution_notes = ${resolutionNotes.trim()},
+          resolved_by = ${resolverId},
+          resolved_at = NOW()
+      WHERE id = ${incidentId}
+        AND status = 'open'
+      RETURNING *
+    )
+    SELECT u.id, u.route_id, r.name AS route_name,
+      reporter.name AS reporter_name, reporter.email AS reporter_email,
+      c.status AS condition_status, u.severity, u.status,
+      u.summary, u.created_at
+    FROM updated u
+    JOIN routes r ON r.id = u.route_id
+    LEFT JOIN users reporter ON reporter.id = u.reported_by
+    LEFT JOIN conditions c ON c.id = u.condition_id
+  `;
+  return rows[0] as AdminRouteIncident | undefined;
+}
+
+export async function getAllRoutes(page = 1, limit = 50): Promise<{ routes: AdminRouteReview[]; total: number }> {
+  const offset = (page - 1) * limit;
+  const [data, count] = await Promise.all([
+    sql.query(
+      `SELECT r.*,
+         rv.version_number,
+         rv.geometry_hash,
+         ra.rider_name,
+         ra.ridden_at,
+         ra.evidence_type,
+         ra.evidence_reference,
+         ra.source_platform,
+         ra.evidence_file_hash,
+         ra.evidence_started_at,
+         ra.evidence_ended_at,
+         ra.evidence_point_count,
+         ra.evidence_timestamped_point_count,
+         ra.review_status AS attestation_status,
+         rr.decision AS latest_review_decision,
+         rr.review_notes AS latest_review_notes,
+         COALESCE(ri.open_incidents, 0)::int AS open_incidents
+       FROM routes r
+       LEFT JOIN route_versions rv ON rv.id = r.current_version_id
+       LEFT JOIN LATERAL (
+         SELECT rider_name, ridden_at, evidence_type, evidence_reference, source_platform,
+           evidence_file_hash, evidence_started_at, evidence_ended_at,
+           evidence_point_count, evidence_timestamped_point_count, review_status
+         FROM ride_attestations
+         WHERE route_id = r.id AND route_version_id = r.current_version_id
+         ORDER BY created_at DESC LIMIT 1
+       ) ra ON TRUE
+       LEFT JOIN LATERAL (
+         SELECT decision, review_notes
+         FROM route_reviews
+         WHERE route_id = r.id AND route_version_id = r.current_version_id
+         ORDER BY created_at DESC LIMIT 1
+       ) rr ON TRUE
+       LEFT JOIN LATERAL (
+         SELECT COUNT(*) AS open_incidents
+         FROM route_incidents
+         WHERE route_id = r.id AND status = 'open'
+       ) ri ON TRUE
+       ORDER BY
+         CASE r.publication_status
+           WHEN 'in_review' THEN 0
+           WHEN 'quarantined' THEN 1
+           WHEN 'stale' THEN 2
+           WHEN 'draft' THEN 3
+           WHEN 'published' THEN 4
+           ELSE 5
+         END,
+         r.created_at DESC
+       LIMIT $1::int OFFSET $2::int`,
+      [limit, offset]
+    ),
     sql`SELECT COUNT(*) as c FROM routes`,
   ]);
-  return { routes: data.rows as Route[], total: Number(count.rows[0].c) };
+  return { routes: data.rows as AdminRouteReview[], total: Number(count.rows[0].c) };
+}
+
+export async function markExpiredRoutesStale(): Promise<number> {
+  const { rowCount } = await sql`
+    UPDATE routes
+    SET publication_status = 'stale', verified = FALSE
+    WHERE publication_status = 'published'
+      AND (
+        last_ridden_at IS NULL
+        OR last_ridden_at < CURRENT_DATE - INTERVAL '365 days'
+      )
+  `;
+  return rowCount ?? 0;
+}
+
+export async function setRoutePublicationStatus(
+  routeId: string,
+  status: "published" | "stale" | "quarantined" | "retired",
+  reviewerId: string,
+  reviewNotes?: string | null,
+  checklist?: {
+    evidence_checked: boolean;
+    rights_checked: boolean;
+    geometry_checked: boolean;
+    start_finish_checked: boolean;
+    road_suitability_checked: boolean;
+    description_checked: boolean;
+  }
+): Promise<Route | undefined> {
+  if (status === "published") {
+    if (
+      !checklist ||
+      !Object.values(checklist).every(Boolean) ||
+      !reviewNotes ||
+      reviewNotes.trim().length < 20
+    ) {
+      return undefined;
+    }
+    const reviewId = uuidv4();
+    const eventId = uuidv4();
+    const { rowCount } = await sql`
+      WITH eligible_route AS (
+        SELECT r.id, r.current_version_id, r.publication_status, ra.id AS attestation_id
+        FROM routes r
+        JOIN LATERAL (
+          SELECT id, rider_user_id
+          FROM ride_attestations
+          WHERE route_id = r.id
+            AND route_version_id = r.current_version_id
+            AND rights_granted_at IS NOT NULL
+            AND review_status = 'pending'
+          ORDER BY created_at DESC
+          LIMIT 1
+        ) ra ON TRUE
+        WHERE r.id = ${routeId}
+          AND r.publication_status = 'in_review'
+          AND r.discipline = 'road'
+          AND r.country = 'Ireland'
+          AND r.human_ridden = TRUE
+          AND r.last_ridden_at >= CURRENT_DATE - INTERVAL '365 days'
+          AND r.rights_confirmed_at IS NOT NULL
+          AND r.current_version_id IS NOT NULL
+          AND (r.created_by IS NULL OR r.created_by <> ${reviewerId})
+          AND (ra.rider_user_id IS NULL OR ra.rider_user_id <> ${reviewerId})
+          AND NOT EXISTS (
+            SELECT 1 FROM route_incidents ri
+            WHERE ri.route_id = r.id AND ri.status = 'open'
+          )
+        FOR UPDATE OF r
+      ), approved_attestation AS (
+        UPDATE ride_attestations ra
+        SET review_status = 'approved',
+            reviewed_by = ${reviewerId},
+            reviewed_at = NOW(),
+            review_notes = ${reviewNotes ?? null}
+        FROM eligible_route er
+        WHERE ra.id = er.attestation_id
+        RETURNING ra.route_id, ra.route_version_id
+      ), inserted_review AS (
+        INSERT INTO route_reviews (
+          id, route_id, route_version_id, reviewer_id,
+          evidence_checked, rights_checked, geometry_checked,
+          start_finish_checked, road_suitability_checked, description_checked,
+          review_notes, decision
+        )
+        SELECT
+          ${reviewId}, ${routeId}, route_version_id, ${reviewerId},
+          ${checklist.evidence_checked}, ${checklist.rights_checked},
+          ${checklist.geometry_checked}, ${checklist.start_finish_checked},
+          ${checklist.road_suitability_checked}, ${checklist.description_checked},
+          ${reviewNotes.trim()}, 'approved'
+        FROM approved_attestation
+        RETURNING route_id, route_version_id
+      ), updated_route AS (
+        UPDATE routes r
+        SET publication_status = 'published',
+            verified = TRUE,
+            quality_status = 'approved'
+        FROM inserted_review ir
+        WHERE r.id = ir.route_id
+          AND r.current_version_id = ir.route_version_id
+        RETURNING r.id, r.current_version_id
+      )
+      INSERT INTO route_publication_events (
+        id, route_id, route_version_id, actor_id, from_status, to_status, reason
+      )
+      SELECT ${eventId}, ur.id, ur.current_version_id, ${reviewerId},
+        er.publication_status, 'published', ${reviewNotes.trim()}
+      FROM updated_route ur
+      JOIN eligible_route er ON er.id = ur.id
+    `;
+    if (!rowCount) return undefined;
+  } else {
+    const eventId = uuidv4();
+    const reason = reviewNotes?.trim() || `Administrator changed route status to ${status}`;
+    await sql`
+      WITH previous AS (
+        SELECT id, current_version_id, publication_status
+        FROM routes
+        WHERE id = ${routeId}
+        FOR UPDATE
+      ), updated_route AS (
+        UPDATE routes r
+        SET publication_status = ${status}, verified = FALSE
+        FROM previous p
+        WHERE r.id = p.id
+        RETURNING r.id, r.current_version_id
+      )
+      INSERT INTO route_publication_events (
+        id, route_id, route_version_id, actor_id, from_status, to_status, reason
+      )
+      SELECT ${eventId}, ur.id, ur.current_version_id, ${reviewerId},
+        p.publication_status, ${status}, ${reason}
+      FROM updated_route ur
+      JOIN previous p ON p.id = ur.id
+    `;
+  }
+
+  return getRoute(routeId);
+}
+
+export async function rejectRouteSubmission(
+  routeId: string,
+  reviewerId: string,
+  reviewNotes: string,
+  checklist: {
+    evidence_checked: boolean;
+    rights_checked: boolean;
+    geometry_checked: boolean;
+    start_finish_checked: boolean;
+    road_suitability_checked: boolean;
+    description_checked: boolean;
+  }
+): Promise<Route | undefined> {
+  if (reviewNotes.trim().length < 20) return undefined;
+  const reviewId = uuidv4();
+  const eventId = uuidv4();
+  const { rowCount } = await sql`
+    WITH eligible_route AS (
+      SELECT r.id, r.current_version_id, r.publication_status, ra.id AS attestation_id
+      FROM routes r
+      JOIN LATERAL (
+        SELECT id, rider_user_id
+        FROM ride_attestations
+        WHERE route_id = r.id
+          AND route_version_id = r.current_version_id
+          AND review_status = 'pending'
+        ORDER BY created_at DESC
+        LIMIT 1
+      ) ra ON TRUE
+      WHERE r.id = ${routeId}
+        AND r.publication_status = 'in_review'
+        AND r.current_version_id IS NOT NULL
+        AND (r.created_by IS NULL OR r.created_by <> ${reviewerId})
+        AND (ra.rider_user_id IS NULL OR ra.rider_user_id <> ${reviewerId})
+      FOR UPDATE OF r
+    ), rejected_attestation AS (
+      UPDATE ride_attestations ra
+      SET review_status = 'rejected', reviewed_by = ${reviewerId},
+          reviewed_at = NOW(), review_notes = ${reviewNotes.trim()}
+      FROM eligible_route er
+      WHERE ra.id = er.attestation_id
+      RETURNING ra.route_id, ra.route_version_id
+    ), inserted_review AS (
+      INSERT INTO route_reviews (
+        id, route_id, route_version_id, reviewer_id,
+        evidence_checked, rights_checked, geometry_checked,
+        start_finish_checked, road_suitability_checked, description_checked,
+        review_notes, decision
+      )
+      SELECT
+        ${reviewId}, route_id, route_version_id, ${reviewerId},
+        ${checklist.evidence_checked}, ${checklist.rights_checked},
+        ${checklist.geometry_checked}, ${checklist.start_finish_checked},
+        ${checklist.road_suitability_checked}, ${checklist.description_checked},
+        ${reviewNotes.trim()}, 'rejected'
+      FROM rejected_attestation
+      RETURNING route_id, route_version_id
+    ), updated_route AS (
+      UPDATE routes r
+      SET publication_status = 'retired', verified = FALSE,
+          quality_status = 'failed'
+      FROM inserted_review ir
+      WHERE r.id = ir.route_id AND r.current_version_id = ir.route_version_id
+      RETURNING r.id, r.current_version_id
+    )
+    INSERT INTO route_publication_events (
+      id, route_id, route_version_id, actor_id, from_status, to_status, reason
+    )
+    SELECT ${eventId}, ur.id, ur.current_version_id, ${reviewerId},
+      er.publication_status, 'retired', ${reviewNotes.trim()}
+    FROM updated_route ur
+    JOIN eligible_route er ON er.id = ur.id
+  `;
+  if (!rowCount) return undefined;
+  return getRoute(routeId);
 }
 
 // ──── SEO Queries ────
 
 export async function getAllRoutesForSitemap(): Promise<{ id: string; created_at: string }[]> {
-  const { rows } = await sql`SELECT id, created_at FROM routes ORDER BY created_at DESC`;
+  const { rows } = await sql.query(
+    `SELECT r.id, r.created_at FROM routes r WHERE ${PUBLIC_ROUTE_PREDICATE} ORDER BY r.created_at DESC`
+  );
   return rows as { id: string; created_at: string }[];
 }
 
@@ -1033,7 +1971,8 @@ export async function getRoutesByCountrySlug(slug: string): Promise<Route[]> {
     `SELECT r.*, COALESCE(AVG(rt.score), 0) as avg_score, COUNT(rt.id) as rating_count
      FROM routes r
      LEFT JOIN ratings rt ON rt.route_id = r.id
-     WHERE LOWER(REPLACE(r.country, ' ', '-')) = $1
+     WHERE ${PUBLIC_ROUTE_PREDICATE}
+       AND LOWER(REPLACE(r.country, ' ', '-')) = $1
      GROUP BY r.id
      ORDER BY COALESCE(AVG(rt.score), 0) DESC, r.created_at DESC`,
     [slug]
@@ -1046,7 +1985,8 @@ export async function getRoutesByRegionSlug(countrySlug: string, regionSlug: str
     `SELECT r.*, COALESCE(AVG(rt.score), 0) as avg_score, COUNT(rt.id) as rating_count
      FROM routes r
      LEFT JOIN ratings rt ON rt.route_id = r.id
-     WHERE LOWER(REPLACE(r.country, ' ', '-')) = $1
+     WHERE ${PUBLIC_ROUTE_PREDICATE}
+       AND LOWER(REPLACE(r.country, ' ', '-')) = $1
        AND LOWER(REPLACE(r.region, ' ', '-')) = $2
      GROUP BY r.id
      ORDER BY COALESCE(AVG(rt.score), 0) DESC, r.created_at DESC`,
@@ -1064,29 +2004,38 @@ export async function getCountryStats(countrySlug: string): Promise<{
   regions: { name: string; routeCount: number }[];
 } | null> {
   const { rows } = await sql.query(
-    `SELECT
+    `WITH eligible AS (
+       SELECT r.* FROM routes r
+       WHERE ${PUBLIC_ROUTE_PREDICATE}
+         AND LOWER(REPLACE(r.country, ' ', '-')) = $1
+     )
+     SELECT
        COUNT(*) as route_count,
-       COALESCE(SUM(distance_km), 0) as total_distance,
-       COALESCE((SELECT AVG(rt.score) FROM ratings rt JOIN routes r2 ON rt.route_id = r2.id WHERE LOWER(REPLACE(r2.country, ' ', '-')) = $1), 0) as avg_rating,
-       MIN(country) as display_name
-     FROM routes
-     WHERE LOWER(REPLACE(country, ' ', '-')) = $1`,
+       COALESCE(SUM(r.distance_km), 0) as total_distance,
+       COALESCE((SELECT AVG(rt.score) FROM ratings rt JOIN eligible e ON e.id = rt.route_id), 0) as avg_rating,
+       MIN(r.country) as display_name
+     FROM eligible r`,
     [countrySlug]
   );
 
   if (!rows[0] || Number(rows[0].route_count) === 0) return null;
 
   const { rows: disciplineRows } = await sql.query(
-    `SELECT DISTINCT discipline FROM routes WHERE LOWER(REPLACE(country, ' ', '-')) = $1 ORDER BY discipline`,
+    `SELECT DISTINCT r.discipline FROM routes r
+     WHERE ${PUBLIC_ROUTE_PREDICATE}
+       AND LOWER(REPLACE(r.country, ' ', '-')) = $1
+     ORDER BY r.discipline`,
     [countrySlug]
   );
 
   const { rows: regionRows } = await sql.query(
-    `SELECT region as name, COUNT(*) as route_count
-     FROM routes
-     WHERE LOWER(REPLACE(country, ' ', '-')) = $1 AND region IS NOT NULL
-     GROUP BY region
-     ORDER BY region`,
+    `SELECT r.region as name, COUNT(*) as route_count
+     FROM routes r
+     WHERE ${PUBLIC_ROUTE_PREDICATE}
+       AND LOWER(REPLACE(r.country, ' ', '-')) = $1
+       AND r.region IS NOT NULL
+     GROUP BY r.region
+     ORDER BY r.region`,
     [countrySlug]
   );
 
@@ -1109,22 +2058,30 @@ export async function getRegionStats(countrySlug: string, regionSlug: string): P
   countryDisplayName: string;
 } | null> {
   const { rows } = await sql.query(
-    `SELECT
+    `WITH eligible AS (
+       SELECT r.* FROM routes r
+       WHERE ${PUBLIC_ROUTE_PREDICATE}
+         AND LOWER(REPLACE(r.country, ' ', '-')) = $1
+         AND LOWER(REPLACE(r.region, ' ', '-')) = $2
+     )
+     SELECT
        COUNT(*) as route_count,
-       COALESCE(SUM(distance_km), 0) as total_distance,
-       COALESCE((SELECT AVG(rt.score) FROM ratings rt JOIN routes r2 ON rt.route_id = r2.id WHERE LOWER(REPLACE(r2.country, ' ', '-')) = $1 AND LOWER(REPLACE(r2.region, ' ', '-')) = $2), 0) as avg_rating,
-       MIN(region) as display_name,
-       MIN(country) as country_display_name
-     FROM routes
-     WHERE LOWER(REPLACE(country, ' ', '-')) = $1
-       AND LOWER(REPLACE(region, ' ', '-')) = $2`,
+       COALESCE(SUM(r.distance_km), 0) as total_distance,
+       COALESCE((SELECT AVG(rt.score) FROM ratings rt JOIN eligible e ON e.id = rt.route_id), 0) as avg_rating,
+       MIN(r.region) as display_name,
+       MIN(r.country) as country_display_name
+     FROM eligible r`,
     [countrySlug, regionSlug]
   );
 
   if (!rows[0] || Number(rows[0].route_count) === 0) return null;
 
   const { rows: disciplineRows } = await sql.query(
-    `SELECT DISTINCT discipline FROM routes WHERE LOWER(REPLACE(country, ' ', '-')) = $1 AND LOWER(REPLACE(region, ' ', '-')) = $2 ORDER BY discipline`,
+    `SELECT DISTINCT r.discipline FROM routes r
+     WHERE ${PUBLIC_ROUTE_PREDICATE}
+       AND LOWER(REPLACE(r.country, ' ', '-')) = $1
+       AND LOWER(REPLACE(r.region, ' ', '-')) = $2
+     ORDER BY r.discipline`,
     [countrySlug, regionSlug]
   );
 
@@ -1146,14 +2103,16 @@ export async function getRelatedRoutes(
 ): Promise<Route[]> {
   if (region) {
     const { rows } = await sql.query(
-      `SELECT * FROM routes WHERE country = $1 AND region = $2 AND id != $3 ORDER BY created_at DESC LIMIT $4`,
+      `SELECT r.* FROM routes r WHERE ${PUBLIC_ROUTE_PREDICATE}
+       AND r.country = $1 AND r.region = $2 AND r.id != $3 ORDER BY r.created_at DESC LIMIT $4`,
       [country, region, routeId, limit]
     );
     if (rows.length > 0) return rows as Route[];
   }
   // Fall back to same country
   const { rows } = await sql.query(
-    `SELECT * FROM routes WHERE country = $1 AND id != $2 ORDER BY created_at DESC LIMIT $3`,
+    `SELECT r.* FROM routes r WHERE ${PUBLIC_ROUTE_PREDICATE}
+     AND r.country = $1 AND r.id != $2 ORDER BY r.created_at DESC LIMIT $3`,
     [country, routeId, limit]
   );
   return rows as Route[];
@@ -1169,12 +2128,14 @@ export async function trackDownload(id: string, routeId: string, userId: string)
 }
 
 export async function getUserDownloads(userId: string): Promise<Route[]> {
-  const { rows } = await sql`
-    SELECT r.* FROM routes r
-    JOIN downloads d ON d.route_id = r.id
-    WHERE d.user_id = ${userId}
-    ORDER BY d.created_at DESC
-  `;
+  const { rows } = await sql.query(
+    `SELECT r.* FROM routes r
+     JOIN downloads d ON d.route_id = r.id
+     WHERE d.user_id = $1
+       AND ${PUBLIC_ROUTE_PREDICATE}
+     ORDER BY d.created_at DESC`,
+    [userId]
+  );
   return rows as Route[];
 }
 
@@ -1200,12 +2161,14 @@ export async function removeFavourite(routeId: string, userId: string): Promise<
 }
 
 export async function getUserFavourites(userId: string): Promise<Route[]> {
-  const { rows } = await sql`
-    SELECT r.* FROM routes r
-    JOIN favourites f ON f.route_id = r.id
-    WHERE f.user_id = ${userId}
-    ORDER BY f.created_at DESC
-  `;
+  const { rows } = await sql.query(
+    `SELECT r.* FROM routes r
+     JOIN favourites f ON f.route_id = r.id
+     WHERE f.user_id = $1
+       AND ${PUBLIC_ROUTE_PREDICATE}
+     ORDER BY f.created_at DESC`,
+    [userId]
+  );
   return rows as Route[];
 }
 
@@ -1226,10 +2189,10 @@ export async function getCommunityScore(userId: string): Promise<{ score: number
   const { rows } = await sql.query(
     `
     SELECT
-      COALESCE((SELECT COUNT(*) FROM routes WHERE created_by = $1), 0) as routes_uploaded,
-      COALESCE((SELECT COUNT(*) FROM ratings WHERE user_id = $1), 0) as ratings_given,
-      COALESCE((SELECT COUNT(*) FROM comments WHERE user_id = $1), 0) as comments_posted,
-      COALESCE((SELECT COUNT(*) FROM photos WHERE user_id = $1), 0) as photos_uploaded,
+      COALESCE((SELECT COUNT(*) FROM routes r WHERE r.created_by = $1 AND ${PUBLIC_ROUTE_PREDICATE}), 0) as routes_uploaded,
+      COALESCE((SELECT COUNT(*) FROM ratings x JOIN routes r ON r.id = x.route_id WHERE x.user_id = $1 AND ${PUBLIC_ROUTE_PREDICATE}), 0) as ratings_given,
+      COALESCE((SELECT COUNT(*) FROM comments x JOIN routes r ON r.id = x.route_id WHERE x.user_id = $1 AND ${PUBLIC_ROUTE_PREDICATE}), 0) as comments_posted,
+      COALESCE((SELECT COUNT(*) FROM photos x JOIN routes r ON r.id = x.route_id WHERE x.user_id = $1 AND ${PUBLIC_ROUTE_PREDICATE}), 0) as photos_uploaded,
       COALESCE((SELECT COUNT(*) FROM follows WHERE following_id = $1), 0) as followers,
       COALESCE((
         SELECT SUM(avg_score * 5)
@@ -1238,6 +2201,7 @@ export async function getCommunityScore(userId: string): Promise<{ score: number
           FROM routes r
           JOIN ratings rt ON rt.route_id = r.id
           WHERE r.created_by = $1
+            AND ${PUBLIC_ROUTE_PREDICATE}
           GROUP BY r.id
           HAVING COUNT(rt.id) >= 3
         ) rated_routes
@@ -1274,6 +2238,7 @@ export async function getUserLoopRating(userId: string): Promise<{ average: numb
     FROM routes r
     JOIN ratings rt ON rt.route_id = r.id
     WHERE r.created_by = $1
+      AND ${PUBLIC_ROUTE_PREDICATE}
     `,
     [userId]
   );
@@ -1286,14 +2251,16 @@ export async function getUserLoopRating(userId: string): Promise<{ average: numb
 
 // ──── Uploaded Routes ────
 export async function getUserUploadedRoutes(userId: string): Promise<Route[]> {
-  const { rows } = await sql`
-    SELECT r.*, COALESCE(AVG(rt.score), 0) as avg_score, COUNT(rt.id) as rating_count
-    FROM routes r
-    LEFT JOIN ratings rt ON rt.route_id = r.id
-    WHERE r.created_by = ${userId}
-    GROUP BY r.id
-    ORDER BY r.created_at DESC
-  `;
+  const { rows } = await sql.query(
+    `SELECT r.*, COALESCE(AVG(rt.score), 0) as avg_score, COUNT(rt.id) as rating_count
+     FROM routes r
+     LEFT JOIN ratings rt ON rt.route_id = r.id
+     WHERE r.created_by = $1
+       AND ${PUBLIC_ROUTE_PREDICATE}
+     GROUP BY r.id
+     ORDER BY r.created_at DESC`,
+    [userId]
+  );
   return rows as Route[];
 }
 
@@ -1421,18 +2388,47 @@ export async function getAdminStats(): Promise<{
   totalRoutes: number;
   totalComments: number;
   bannedUsers: number;
+  beta: IrelandBetaMetrics;
 }> {
-  const [users, routes, comments, banned] = await Promise.all([
+  const [users, routes, comments, banned, beta] = await Promise.all([
     sql`SELECT COUNT(*) as c FROM users`,
     sql`SELECT COUNT(*) as c FROM routes`,
     sql`SELECT COUNT(*) as c FROM comments`,
     sql`SELECT COUNT(*) as c FROM users WHERE role = 'banned'`,
+    getIrelandBetaMetrics(),
   ]);
   return {
     totalUsers: Number(users.rows[0].c),
     totalRoutes: Number(routes.rows[0].c),
     totalComments: Number(comments.rows[0].c),
     bannedUsers: Number(banned.rows[0].c),
+    beta,
+  };
+}
+
+export async function getIrelandBetaMetrics(): Promise<IrelandBetaMetrics> {
+  const { rows } = await sql.query(buildIrelandBetaMetricsQuery(PUBLIC_ROUTE_PREDICATE));
+
+  const row = rows[0];
+  const routeViews28d = Number(row.route_views_28d);
+  const actionConversions28d = Number(row.action_conversions_28d);
+  const eligibleRidePlans = Number(row.eligible_ride_plans);
+  const confirmedWithin14Days = Number(row.confirmed_within_14_days);
+  const retentionCohortSize = Number(row.retention_cohort_size);
+  const retainedAtFourWeeks = Number(row.retained_at_four_weeks);
+
+  return {
+    publicRoutes: Number(row.public_routes),
+    activeRiders28d: Number(row.active_riders_28d),
+    routeViews28d,
+    actionConversions28d,
+    routeActionRatePct: ratePercent(actionConversions28d, routeViews28d),
+    eligibleRidePlans,
+    confirmedWithin14Days,
+    rideConfirmationRatePct: ratePercent(confirmedWithin14Days, eligibleRidePlans),
+    retentionCohortSize,
+    retainedAtFourWeeks,
+    fourWeekRetentionPct: ratePercent(retainedAtFourWeeks, retentionCohortSize),
   };
 }
 
@@ -1475,35 +2471,57 @@ export interface CollectionWithRoutes extends Collection {
 }
 
 export async function getCollections(): Promise<Collection[]> {
-  const { rows } = await sql`
-    SELECT * FROM collections ORDER BY featured DESC, created_at DESC
-  `;
+  const { rows } = await sql.query(`
+    SELECT c.*, COUNT(DISTINCT r.id)::int AS total_routes_count
+    FROM collections c
+    JOIN collection_routes cr ON cr.collection_id = c.id
+    JOIN routes r ON r.id = cr.route_id
+    WHERE c.country = 'Ireland'
+      AND ${PUBLIC_ROUTE_PREDICATE}
+    GROUP BY c.id
+    ORDER BY c.featured DESC, c.created_at DESC
+  `);
   return rows as Collection[];
 }
 
 export async function getFeaturedCollections(): Promise<Collection[]> {
-  const { rows } = await sql`
-    SELECT * FROM collections WHERE featured = TRUE ORDER BY created_at DESC LIMIT 6
-  `;
+  const { rows } = await sql.query(`
+    SELECT c.*, COUNT(DISTINCT r.id)::int AS total_routes_count
+    FROM collections c
+    JOIN collection_routes cr ON cr.collection_id = c.id
+    JOIN routes r ON r.id = cr.route_id
+    WHERE c.country = 'Ireland'
+      AND c.featured = TRUE
+      AND ${PUBLIC_ROUTE_PREDICATE}
+    GROUP BY c.id
+    ORDER BY c.created_at DESC
+    LIMIT 6
+  `);
   return rows as Collection[];
 }
 
 export async function getCollectionBySlug(slug: string): Promise<CollectionWithRoutes | null> {
   const { rows: collRows } = await sql`
-    SELECT * FROM collections WHERE slug = ${slug} LIMIT 1
+    SELECT * FROM collections
+    WHERE slug = ${slug} AND country = 'Ireland'
+    LIMIT 1
   `;
   if (collRows.length === 0) return null;
   const collection = collRows[0] as Collection;
 
-  const { rows: routeRows } = await sql`
-    SELECT r.*, cr.display_order
-    FROM routes r
-    JOIN collection_routes cr ON cr.route_id = r.id
-    WHERE cr.collection_id = ${collection.id}
-    ORDER BY cr.display_order ASC, r.created_at ASC
-  `;
+  const { rows: routeRows } = await sql.query(
+    `SELECT r.*, cr.display_order
+     FROM routes r
+     JOIN collection_routes cr ON cr.route_id = r.id
+     WHERE cr.collection_id = $1
+       AND ${PUBLIC_ROUTE_PREDICATE}
+     ORDER BY cr.display_order ASC, r.created_at ASC`,
+    [collection.id]
+  );
 
-  return { ...collection, routes: routeRows as Route[] };
+  if (routeRows.length === 0) return null;
+
+  return { ...collection, total_routes_count: routeRows.length, routes: routeRows as Route[] };
 }
 
 export async function insertCollection(data: {
@@ -1563,11 +2581,13 @@ export async function saveGarminTokens(
   accessToken: string,
   tokenSecret: string
 ): Promise<void> {
+  const encryptedAccessToken = sealToken(accessToken);
+  const encryptedTokenSecret = sealToken(tokenSecret);
   await sql`
     INSERT INTO garmin_tokens (user_id, access_token, token_secret)
-    VALUES (${userId}, ${accessToken}, ${tokenSecret})
+    VALUES (${userId}, ${encryptedAccessToken}, ${encryptedTokenSecret})
     ON CONFLICT (user_id)
-    DO UPDATE SET access_token = ${accessToken}, token_secret = ${tokenSecret}, connected_at = NOW()
+    DO UPDATE SET access_token = ${encryptedAccessToken}, token_secret = ${encryptedTokenSecret}, connected_at = NOW()
   `;
 }
 
@@ -1575,26 +2595,19 @@ export async function getGarminTokens(userId: string): Promise<GarminTokens | nu
   const { rows } = await sql`
     SELECT access_token, token_secret FROM garmin_tokens WHERE user_id = ${userId}
   `;
-  return rows.length > 0
-    ? { access_token: rows[0].access_token, token_secret: rows[0].token_secret }
-    : null;
+  if (rows.length === 0) return null;
+  try {
+    return {
+      access_token: openToken(rows[0].access_token),
+      token_secret: openToken(rows[0].token_secret),
+    };
+  } catch {
+    // Legacy plaintext or corrupted ciphertext must never be reused.
+    await deleteGarminTokens(userId);
+    return null;
+  }
 }
 
 export async function deleteGarminTokens(userId: string): Promise<void> {
   await sql`DELETE FROM garmin_tokens WHERE user_id = ${userId}`;
-}
-
-
-/** Persist repaired coordinates/elevation after an elevation backfill. */
-export async function updateRouteElevation(
-  id: string,
-  coordinates: string,
-  gainM: number,
-  lossM: number
-): Promise<void> {
-  await sql`
-    UPDATE routes
-    SET coordinates = ${coordinates}, elevation_gain_m = ${gainM}, elevation_loss_m = ${lossM}
-    WHERE id = ${id}
-  `;
 }

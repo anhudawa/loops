@@ -1,23 +1,29 @@
 /**
  * Route Library Matcher
  *
- * Before we fresh-generate a route, check the library of verified routes
- * for a good match. This is the "safety net" — serving a known-good
- * verified route is always preferable to a freshly generated one.
+ * Search the human-ridden route library for a good match. The commercial
+ * product returns an honest no-match when the library has no suitable route;
+ * it never falls through to invented consumer geometry.
  *
- * A library match must beat a score threshold to be served. If nothing in
- * the library fits, the caller falls back to fresh generation.
+ * A library match must beat a score threshold to be served.
  */
 
 import type { RouteSpec, WorkoutSpec } from "./route-intent";
-import { getRoutes, type Route } from "./db";
 import {
-  detectIntervalSegments,
+  getApprovedSegmentAssessments,
+  getRoutes,
+  type ApprovedSegmentAssessment,
+  type Route,
+} from "./db";
+import {
   segmentsForInterval,
   type IntervalSegment,
 } from "./interval-segments";
-import { validateSegments, filterCleanSegments } from "./interval-validation";
-import { sampleRouteElevation, interpolateToFullPath } from "./elevation";
+import {
+  defaultSessionTypeForZone,
+  IRELAND_BETA_SESSION_TYPES,
+  zoneForSessionType,
+} from "./workout";
 
 export interface LibraryMatch {
   route_id: string;
@@ -258,6 +264,79 @@ function dedupeSegments(segments: IntervalSegment[]): IntervalSegment[] {
   return out;
 }
 
+function assessmentToSegment(assessment: ApprovedSegmentAssessment): IntervalSegment {
+  return {
+    start_index: Number(assessment.start_index),
+    end_index: Number(assessment.end_index),
+    length_km: Number(assessment.length_km),
+    avg_gradient_pct: Number(assessment.avg_gradient_pct),
+    max_gradient_pct: Number(assessment.max_gradient_pct),
+    gradient_variance: Number(assessment.gradient_variance),
+    suitable_zones: [zoneForSessionType(assessment.session_type)],
+    assessment_id: assessment.id,
+    session_type: assessment.session_type,
+    direction: assessment.direction,
+    min_effort_seconds: Number(assessment.min_effort_seconds),
+    max_effort_seconds: Number(assessment.max_effort_seconds),
+    assessor_name: assessment.assessor_name,
+    assessed_at: assessment.assessed_at,
+    surface_rating: assessment.surface_rating,
+    traffic_rating: assessment.traffic_rating,
+    sightlines_rating: assessment.sightlines_rating,
+    junction_count: Number(assessment.junction_count),
+    entry_notes: assessment.entry_notes,
+    recovery_notes: assessment.recovery_notes,
+    runout_notes: assessment.runout_notes,
+    hazards_notes: assessment.hazards_notes,
+  };
+}
+
+/**
+ * Assign a structured workout exclusively from current, approved human
+ * segment assessments. Automated terrain detection can assist curators, but
+ * it is never passed to this function and can never create a workout claim.
+ */
+export function assignHumanAssessedWorkout(
+  assessments: ApprovedSegmentAssessment[],
+  workout: WorkoutSpec
+): WorkoutFit {
+  const segments = assessments.map(assessmentToSegment);
+  const assignments: WorkoutFit["interval_segments"] = [];
+  const allCandidates: IntervalSegment[] = [];
+  const usedGeometry = new Set<string>();
+
+  for (let intervalIndex = 0; intervalIndex < workout.intervals.length; intervalIndex++) {
+    const interval = workout.intervals[intervalIndex];
+    const sessionType = interval.session_type ?? defaultSessionTypeForZone(interval.zone);
+    const durationSeconds = interval.duration_seconds ?? Math.round(interval.duration_minutes * 60);
+
+    if (!sessionType || !IRELAND_BETA_SESSION_TYPES.has(sessionType)) {
+      return { fits: false, interval_segments: assignments, candidate_segments: dedupeSegments(allCandidates) };
+    }
+
+    const candidates = segments.filter((segment) =>
+      segment.session_type === sessionType &&
+      durationSeconds >= (segment.min_effort_seconds ?? Infinity) &&
+      durationSeconds <= (segment.max_effort_seconds ?? -Infinity)
+    );
+    allCandidates.push(...candidates);
+
+    for (let repIndex = 0; repIndex < interval.count; repIndex++) {
+      const segment = candidates.find((candidate) => {
+        const key = `${candidate.start_index}-${candidate.end_index}-${candidate.direction}`;
+        return !usedGeometry.has(key);
+      });
+      if (!segment) {
+        return { fits: false, interval_segments: assignments, candidate_segments: dedupeSegments(allCandidates) };
+      }
+      assignments.push({ interval_index: intervalIndex, rep_index: repIndex, segment });
+      usedGeometry.add(`${segment.start_index}-${segment.end_index}-${segment.direction}`);
+    }
+  }
+
+  return { fits: true, interval_segments: assignments, candidate_segments: dedupeSegments(allCandidates) };
+}
+
 /**
  * Find library routes that can host the requested workout.
  *
@@ -267,15 +346,10 @@ function dedupeSegments(segments: IntervalSegment[]): IntervalSegment[] {
  *     (we don't want a 100km route for a 90-minute session)
  *   - it contains enough interval-suitable segments to host each rep
  *
- * Elevation data is required to detect segments. When a route's stored
- * coordinates lack per-point elevation, we sample on-demand via Open-Meteo.
- * Results are returned sorted by workout fit quality + base match score.
+ * Every workout match must come from a current, approved human segment
+ * assessment tied to the route's immutable current version. Results are
+ * returned sorted by workout fit quality + base match score.
  */
-/** Max candidates we'll run segment detection over. Each triggers at most
- * one Open-Meteo elevation call; we parallelise but cap to protect the
- * Vercel 28s pipeline budget. */
-const WORKOUT_ANALYSIS_CAP = 8;
-
 export async function matchLibraryForWorkout(
   spec: RouteSpec,
   maxResults = 3
@@ -294,13 +368,10 @@ export async function matchLibraryForWorkout(
     limit: 100,
   });
 
-  // ── Step 1: pre-filter cheaply by base score ────────────────────────────────
-  // Workout analysis (elevation sampling + segment detection) is expensive.
-  // Cut the pool down before touching the network.
+  // Pre-filter by route, distance and proximity before loading its human
+  // assessments. This path intentionally performs no segment inference.
   type Prefiltered = {
     route: (typeof pool)[number];
-    coords: [number, number][];
-    rawCoords: number[][];
     distFromStart: number;
     baseScore: number;
   };
@@ -308,14 +379,6 @@ export async function matchLibraryForWorkout(
   const prefiltered: Prefiltered[] = [];
   for (const route of pool) {
     if (route.coordinates == null) continue;
-
-    let rawCoords: number[][];
-    try {
-      rawCoords = JSON.parse(route.coordinates) as number[][];
-    } catch {
-      continue;
-    }
-    if (rawCoords.length < 10) continue;
 
     const distFromStart = haversineKm(
       startLat,
@@ -331,52 +394,32 @@ export async function matchLibraryForWorkout(
 
     prefiltered.push({
       route,
-      coords: rawCoords.map(([lat, lng]) => [lat, lng]) as [number, number][],
-      rawCoords,
       distFromStart,
       baseScore,
     });
   }
 
   prefiltered.sort((a, b) => b.baseScore - a.baseScore);
-  const topCandidates = prefiltered.slice(0, WORKOUT_ANALYSIS_CAP);
+  const assessments = await getApprovedSegmentAssessments(prefiltered.map((candidate) => candidate.route.id));
+  const assessmentsByRoute = new Map<string, ApprovedSegmentAssessment[]>();
+  for (const assessment of assessments) {
+    const existing = assessmentsByRoute.get(assessment.route_id) ?? [];
+    existing.push(assessment);
+    assessmentsByRoute.set(assessment.route_id, existing);
+  }
 
-  // ── Step 2: run segment detection in parallel ───────────────────────────────
-  const analysed = await Promise.all(
-    topCandidates.map(async (c): Promise<LibraryMatch | null> => {
-      let elevations: number[] = c.rawCoords.map((p) =>
-        typeof p[2] === "number" ? p[2] : NaN
-      );
-      const hasElevation = elevations.some((e) => !Number.isNaN(e));
-      if (!hasElevation) {
-        try {
-          const sampled = await sampleRouteElevation(c.coords, 200);
-          elevations = interpolateToFullPath(c.coords, sampled.sampled_coords, sampled.elevations);
-        } catch {
-          return null; // can't analyse without elevation
-        }
-      }
-
-      const rawSegments = detectIntervalSegments(c.coords, elevations);
-      // Drop segments with traffic signals or bicycle-restricted roads —
-      // the "no traffic lights" promise for interval work.
-      const validated = await validateSegments(rawSegments, c.coords);
-      const cleanSegments = filterCleanSegments(validated);
-      const fit = assignWorkout(cleanSegments, workout);
-      if (!fit.fits) return null;
-
-      // Small bonus for fitting the workout — the base score already encodes
-      // distance/elevation/proximity so we don't want to drown it out.
-      const score = Math.min(100, c.baseScore + 5);
-
-      return {
-        ...toLibraryMatch(c.route, spec, score, c.distFromStart),
-        workout_fit: fit,
-      };
-    })
-  );
-
-  const scored = analysed.filter((x): x is LibraryMatch => x !== null);
+  const scored: LibraryMatch[] = [];
+  for (const candidate of prefiltered) {
+    const fit = assignHumanAssessedWorkout(
+      assessmentsByRoute.get(candidate.route.id) ?? [],
+      workout
+    );
+    if (!fit.fits) continue;
+    scored.push({
+      ...toLibraryMatch(candidate.route, spec, Math.min(100, candidate.baseScore + 5), candidate.distFromStart),
+      workout_fit: fit,
+    });
+  }
   scored.sort((a, b) => b.match_score - a.match_score);
   return scored.slice(0, maxResults);
 }

@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   getUserBySession,
+  getRoute,
   addFavourite,
   removeFavourite,
   isFavourited,
   getFavouriteCount,
-  migrateDb,
+  recordBetaProductEvent,
 } from "@/lib/db";
 import { apiError, handleApiError } from "@/lib/api-utils";
+import { hasActiveBetaAccess } from "@/lib/beta-intake";
 import { v4 as uuidv4 } from "uuid";
 
 export async function GET(
@@ -16,8 +18,10 @@ export async function GET(
 ) {
   try {
     const { id: routeId } = await params;
-    await migrateDb();
-
+    const route = await getRoute(routeId);
+    if (!route || route.is_verified !== 1) {
+      return apiError("Route not found", "NOT_FOUND", 404);
+    }
     const sessionToken = request.cookies.get("session")?.value;
     let favourited = false;
 
@@ -51,8 +55,14 @@ export async function POST(
     if (!user) {
       return apiError("Invalid session", "UNAUTHORIZED", 401);
     }
+    if (user.role !== "admin" && !(await hasActiveBetaAccess(user.id))) {
+      return apiError("Ireland beta access is required to save routes", "BETA_ACCESS_REQUIRED", 403);
+    }
 
-    await migrateDb();
+    const route = await getRoute(routeId);
+    if (!route || route.is_verified !== 1 || !route.current_version_id) {
+      return apiError("Route not found", "NOT_FOUND", 404);
+    }
 
     // Toggle: if already favourited, remove; otherwise add
     const alreadyFav = await isFavourited(routeId, user.id);
@@ -60,6 +70,16 @@ export async function POST(
       await removeFavourite(routeId, user.id);
     } else {
       await addFavourite(uuidv4(), routeId, user.id);
+      try {
+        await recordBetaProductEvent(
+          user.id,
+          routeId,
+          route.current_version_id,
+          "route_saved"
+        );
+      } catch {
+        // Measurement must never prevent a rider from saving a route.
+      }
     }
 
     const favourited = !alreadyFav;

@@ -20,24 +20,24 @@ const outfit = Outfit({
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.loops.ie"),
   alternates: { canonical: "/" },
-  title: "LOOPS — Cycling Routes Worldwide | Free GPX Downloads",
-  description: "Discover cycling routes worldwide. Free GPX downloads, community ratings, elevation profiles. Gravel, road & MTB routes from real riders.",
-  keywords: ["cycling routes", "gravel cycling", "GPX", "bike routes", "MTB trails", "road cycling", "route sharing", "cycling community"],
+  title: "LOOPS — Human-Ridden Road Cycling Routes in Ireland",
+  description: "Find human-ridden Irish road loops matched to your location, available time and training session. Every published route is reviewed before it enters the library.",
+  keywords: ["Ireland cycling routes", "road cycling Ireland", "cycling loops", "GPX", "Wicklow cycling", "cycling training routes"],
   verification: {
     google: "0-mGmMRQK6Iu8na6wuEcwzm1I7RO2uT3-XJ3T8C5wys",
   },
   openGraph: {
     title: "LOOPS — Routes Worth Riding",
-    description: "Discover and share the best gravel, road & MTB loops worldwide. Built by riders, for riders.",
+    description: "Human-ridden Irish road loops, reviewed before publication and matched to the ride you want.",
     siteName: "LOOPS",
     type: "website",
     locale: "en_IE",
-    images: [{ url: "/api/og", width: 1200, height: 630, alt: "LOOPS — Discover cycling routes worldwide" }],
+    images: [{ url: "/api/og", width: 1200, height: 630, alt: "LOOPS — Human-ridden Irish road cycling routes" }],
   },
   twitter: {
     card: "summary_large_image",
     title: "LOOPS — Routes Worth Riding",
-    description: "Discover and share the best gravel, road & MTB loops worldwide. Built by riders, for riders.",
+    description: "Human-ridden Irish road loops, reviewed before publication and matched to the ride you want.",
     images: ["/api/og"],
   },
 };

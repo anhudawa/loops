@@ -36,6 +36,7 @@ import { useRouter } from "next/navigation";
 import { MapContainer, TileLayer, Polyline, Marker, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { MAP_ATTRIBUTION, MAP_TILE_URL } from "@/config/map-provider";
 import ElevationProfile from "@/components/ElevationProfile";
 import {
   haversineKm,
@@ -597,10 +598,7 @@ export default function MapPlanner() {
           style={{ height: "100%", width: "100%" }}
           scrollWheelZoom
         >
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
+          {MAP_TILE_URL && <TileLayer attribution={MAP_ATTRIBUTION} url={MAP_TILE_URL} />}
           <RecenterOnce target={geoCenter} />
           <ClickToAdd onAdd={addAnchor} />
           {/* Each leg renders itself: solid = genuine snapped geometry,

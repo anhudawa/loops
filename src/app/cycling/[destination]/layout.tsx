@@ -15,14 +15,20 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { destination } = await params;
   const dest = getDestinationBySlug(destination);
   if (!dest) return {};
+  const active = dest.country === "Ireland";
 
-  const title = `Cycling in ${dest.name} — Routes, Climbs & Practical Guide | LOOPS`;
-  const description = `Plan your cycling trip to ${dest.name}, ${dest.country}. Best months, key climbs, road conditions, bike hire, and route suggestions from riders who know the roads.`;
+  const title = active
+    ? `Cycling in ${dest.name} | LOOPS Ireland`
+    : `Cycling in ${dest.name} | Planned LOOPS market`;
+  const description = active
+    ? `${dest.tagline}. Discover reviewed, human-ridden Irish road loops.`
+    : `${dest.name} is planned after the Ireland beta passes its trust and usage gates.`;
 
   return {
     title,
     description,
     alternates: { canonical: `/cycling/${dest.slug}` },
+    robots: active ? undefined : { index: false, follow: true },
     openGraph: {
       title,
       description,

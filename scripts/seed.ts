@@ -5,6 +5,10 @@ import { join } from "path";
 import { parseGpx } from "../src/lib/gpx";
 import { parseFit } from "../src/lib/fit";
 
+throw new Error(
+  "Disabled by the LOOPS commercial trust policy: synthetic users and routes cannot seed a product database. Use the contributor upload and independent review workflow."
+);
+
 // ── Deterministic UUIDs ──
 // All seed data uses UUID v5 with this namespace so we can identify and clean up seed data
 const SEED_NAMESPACE = "6ba7b810-9dad-11d1-80b4-00c04fd430c8"; // DNS namespace
@@ -49,6 +53,12 @@ function daysAgo(days: number): Date {
 
 // ── Main ──
 async function seed() {
+  if (process.env.NODE_ENV === "production" || process.env.LOOPS_ALLOW_SYNTHETIC_SEED !== "true") {
+    throw new Error(
+      "Synthetic community seeding is disabled. It may only run in an isolated local database with LOOPS_ALLOW_SYNTHETIC_SEED=true."
+    );
+  }
+
   console.log("🌱 Dublin Route Seeding");
   console.log("=======================\n");
 
@@ -181,9 +191,8 @@ async function seed() {
       return [coord[0], coord[1], Math.round(ele * 10) / 10];
     });
 
-    // Mark seeded routes approved + verified so the library matcher
-    // always picks them up for relevant prompts. The whole point of the
-    // seed is to give the generator a known-good library to serve.
+    // Synthetic routes are test fixtures only. They must never acquire
+    // publication or human-ridden status from a seed script.
     await sql`
       INSERT INTO routes (
         id, name, description, distance_km,
@@ -196,7 +205,7 @@ async function seed() {
         ${parsed.elevation_gain_m}, ${parsed.elevation_loss_m}, ${"road"},
         ${r.county}, ${r.country}, ${r.county}, ${"road"},
         ${startLat}, ${startLng}, ${r.gpx}, ${JSON.stringify(coordsWithElevation)},
-        ${createdBy}, ${createdAt.toISOString()}, ${true}, ${"approved"}
+        ${createdBy}, ${createdAt.toISOString()}, ${false}, ${"pending"}
       )
     `;
 

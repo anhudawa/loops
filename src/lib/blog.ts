@@ -59,20 +59,16 @@ import { winterCamps } from "@/content/blog/best-winter-cycling-training-camps-e
 import { zone2 } from "@/content/blog/how-to-structure-a-zone-2-endurance-ride";
 import { thresholdIntervals } from "@/content/blog/where-to-do-threshold-intervals-safely-outdoors";
 import { vo2max } from "@/content/blog/vo2-max-intervals-complete-outdoor-guide";
-import { aiRoutePlanning } from "@/content/blog/how-to-plan-a-cycling-route-with-ai";
 import { wicklow } from "@/content/blog/cycling-in-wicklow-dublins-mountain-playground";
-import { komootAlternative } from "@/content/blog/komoot-alternative-for-road-cyclists";
 
 /** All posts. Newest-first ordering is applied by helpers. */
 const POSTS: BlogPost[] = [
-  komootAlternative,
   girona,
   mallorca,
   winterCamps,
   zone2,
   thresholdIntervals,
   vo2max,
-  aiRoutePlanning,
   wicklow,
 ];
 

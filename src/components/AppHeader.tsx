@@ -12,8 +12,7 @@ import { useAuth } from "@/components/AuthProvider";
  */
 
 const NAV = [
-  { href: "/generate", label: "Plan" },
-  { href: "/plan", label: "Draw" },
+  { href: "/generate", label: "Find" },
   { href: "/", label: "Routes" },
   { href: "/cycling", label: "Destinations" },
 ] as const;

@@ -8,6 +8,8 @@
  *   node scripts/build-all-girona-gpx.mjs
  */
 
+import "./legacy-route-materialization-disabled.mjs";
+
 import { writeFileSync, mkdirSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";

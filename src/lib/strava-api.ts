@@ -1,4 +1,5 @@
 import { getUserById, updateStravaTokens, clearStravaTokens } from "./db";
+import { openToken } from "./token-crypto";
 
 const STRAVA_API_BASE = "https://www.strava.com/api/v3";
 
@@ -129,14 +130,24 @@ export async function getValidAccessToken(userId: string): Promise<string | null
     return null;
   }
 
+  let accessToken: string;
+  let refreshToken: string;
+  try {
+    accessToken = openToken(user.strava_access_token);
+    refreshToken = openToken(user.strava_refresh_token);
+  } catch {
+    await clearStravaTokens(userId);
+    return null;
+  }
+
   // Check if token is still valid (with 5-minute buffer)
   const now = Math.floor(Date.now() / 1000);
   if (user.strava_token_expires_at > now + 300) {
-    return user.strava_access_token;
+    return accessToken;
   }
 
   // Token expired — refresh it
-  const refreshed = await refreshAccessToken(userId, user.strava_refresh_token);
+  const refreshed = await refreshAccessToken(userId, refreshToken);
   return refreshed?.accessToken ?? null;
 }
 

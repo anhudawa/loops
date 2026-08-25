@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getRoutePhotos, insertPhoto, getUserBySession } from "@/lib/db";
+import { getRoute, getRoutePhotos, insertPhoto, getUserBySession } from "@/lib/db";
 import { apiError, handleApiError } from "@/lib/api-utils";
 import { v4 as uuidv4 } from "uuid";
 
@@ -9,6 +9,8 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    const route = await getRoute(id);
+    if (!route || route.is_verified !== 1) return apiError("Route not found", "NOT_FOUND", 404);
     const photos = await getRoutePhotos(id);
     return NextResponse.json(photos);
   } catch (err) {
@@ -22,6 +24,8 @@ export async function POST(
 ) {
   try {
     const { id: routeId } = await params;
+    const route = await getRoute(routeId);
+    if (!route || route.is_verified !== 1) return apiError("Route not found", "NOT_FOUND", 404);
     const sessionToken = request.cookies.get("session")?.value;
 
     if (!sessionToken) {

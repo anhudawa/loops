@@ -34,7 +34,6 @@ export default function ElevationProfile({
   highlightIndex,
 }: ElevationProfileProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number | null>(null);
   const [tooltip, setTooltip] = useState<{
     x: number;
@@ -212,7 +211,13 @@ export default function ElevationProfile({
       const distance = ratio * distanceKm;
       const gradient = tooltipGradient(chartData.gradients, idx);
 
-      setTooltip({ x: mouseX, y: clientY - rect.top, elevation, distance, gradient });
+      setTooltip({
+        x: Math.max(0, Math.min(mouseX, rect.width - 140)),
+        y: clientY - rect.top,
+        elevation,
+        distance,
+        gradient,
+      });
 
       // Map the sampled index back to original coordinates index
       if (onPositionChange) {
@@ -251,7 +256,7 @@ export default function ElevationProfile({
   }
 
   return (
-    <div ref={containerRef}>
+    <div>
       <div className="relative">
         <canvas
           ref={canvasRef}
@@ -267,7 +272,7 @@ export default function ElevationProfile({
           <div
             className="absolute pointer-events-none z-10 px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap"
             style={{
-              left: Math.min(tooltip.x, (containerRef.current?.offsetWidth ?? 300) - 140),
+              left: tooltip.x,
               top: Math.max(0, tooltip.y - 48),
               background: "rgba(0,0,0,0.85)",
               border: "1px solid rgba(200,255,0,0.3)",

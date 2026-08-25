@@ -3,6 +3,7 @@ import { explodeRoute, type Discipline, type VariantType } from "@/lib/route-exp
 import { getRoute } from "@/lib/db";
 import { apiError, handleApiError } from "@/lib/api-utils";
 import { DISCIPLINES } from "@/config/constants";
+import { ALLOW_FRESH_PUBLIC_ROUTE_GENERATION } from "@/config/route-policy";
 
 /**
  * POST /api/routes/explode
@@ -22,6 +23,14 @@ import { DISCIPLINES } from "@/config/constants";
  *   { data: RouteVariant[] }
  */
 export async function POST(request: NextRequest) {
+  if (!ALLOW_FRESH_PUBLIC_ROUTE_GENERATION) {
+    return apiError(
+      "Unridden route variants are unavailable during the Ireland beta.",
+      "ROUTE_VARIANTS_DISABLED",
+      410
+    );
+  }
+
   try {
     const body = await request.json() as {
       routeId?: string;

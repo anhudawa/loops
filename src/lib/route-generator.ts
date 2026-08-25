@@ -36,6 +36,7 @@ import {
   type LibraryMatch,
   type WorkoutFit,
 } from "./route-library";
+import { ALLOW_FRESH_PUBLIC_ROUTE_GENERATION } from "@/config/route-policy";
 import {
   detectIntervalSegments,
   segmentsForInterval,
@@ -658,6 +659,9 @@ async function candidatesFromSpecInner(
     if (workoutMatches.length > 0) {
       return workoutMatches.map((m) => ({ source: "library" as const, ...m }));
     }
+    if (!ALLOW_FRESH_PUBLIC_ROUTE_GENERATION) {
+      return [];
+    }
     // Anchor-first (spec §3): find the effort road, build the loop
     // around it. Falls back to route-first wide search, then declines.
     const anchored = await assembleAnchorFirstWorkout(spec, spec.workout);
@@ -676,6 +680,12 @@ async function candidatesFromSpecInner(
   const libraryMatches = await matchLibraryRoutes(spec, 3).catch(() => []);
   if (libraryMatches.length > 0) {
     return libraryMatches.map((m) => ({ source: "library" as const, ...m }));
+  }
+
+  // Commercial relaunch invariant: an empty human-ridden library result is
+  // an honest "no match", never permission to invent a consumer route.
+  if (!ALLOW_FRESH_PUBLIC_ROUTE_GENERATION) {
+    return [];
   }
 
   // ── Fresh generation ───────────────────────────────────────────────────────

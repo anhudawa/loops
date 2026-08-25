@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserBySession, getMessages, sendMessage, isConversationParticipant, migrateDb } from "@/lib/db";
+import { getUserBySession, getMessages, sendMessage, isConversationParticipant } from "@/lib/db";
 import { apiError, handleApiError } from "@/lib/api-utils";
 import { MAX_MESSAGE_LENGTH } from "@/config/constants";
 import { v4 as uuidv4 } from "uuid";
@@ -19,8 +19,6 @@ export async function GET(
     if (!user) {
       return apiError("Not authenticated", "UNAUTHORIZED", 401);
     }
-
-    await migrateDb();
 
     const isParticipant = await isConversationParticipant(conversationId, user.id);
     if (!isParticipant) {
@@ -51,8 +49,6 @@ export async function POST(
     if (!user) {
       return apiError("Not authenticated", "UNAUTHORIZED", 401);
     }
-
-    await migrateDb();
 
     const isParticipant = await isConversationParticipant(conversationId, user.id);
     if (!isParticipant) {

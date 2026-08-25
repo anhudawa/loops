@@ -178,18 +178,18 @@ export default async function BlogPostPage({ params }: Props) {
             style={{ background: "var(--bg-raised)", border: "1px solid var(--border)" }}
           >
             <h2 className="text-xl font-black tracking-tight mb-2" style={{ color: "var(--text)" }}>
-              Plan your next ride with LOOPS
+              Find a route a rider can stand over
             </h2>
             <p className="text-sm leading-relaxed mb-4 max-w-md mx-auto" style={{ color: "var(--text-muted)" }}>
-              Tell our AI where you are, how long you want to ride and the training you&apos;re doing — get a
-              route that fits.
+              LOOPS matches approved beta riders to current Irish road loops that have been ridden,
+              permissioned and independently reviewed. If there is no suitable loop, we say so.
             </p>
             <Link
-              href="/generate"
+              href="/beta"
               className="inline-flex items-center justify-center font-bold text-sm px-6 py-3 rounded-lg"
               style={{ background: "var(--accent)", color: "#0a0a0a" }}
             >
-              Generate a route
+              Apply for the Ireland beta
             </Link>
           </div>
         </article>

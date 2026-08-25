@@ -79,13 +79,13 @@ export const zone2: BlogPost = {
     },
     {
       type: "p",
-      text: "Terrain choice matters more than people think. The ideal Zone 2 route is rolling-to-flat with few stop signs, junctions or steep pitches that force you out of the zone. Long valley roads, coastal flats and quiet gravel are perfect; a hilly, technical loop full of climbs will repeatedly spike you into Zone 3 or 4.",
+      text: "Terrain choice matters more than people think. The ideal Zone 2 road route is rolling-to-flat with few stop signs, junctions or steep pitches that force you out of the zone. Long valley roads, coastal flats and quiet surfaced lanes work well; a hilly, technical loop full of climbs will repeatedly spike you into Zone 3 or 4.",
     },
     {
       type: "cta",
-      text: "Want a route that stays in your zone? Our AI can build a rolling, low-interruption endurance loop from your location and target duration.",
+      text: "LOOPS can match your target duration to an Irish road loop whose endurance suitability has been assessed by a rider and independently reviewed.",
       href: "/generate",
-      label: "Plan a Zone 2 route",
+      label: "Find a reviewed endurance route",
     },
     { type: "h2", text: "Fuelling Zone 2" },
     {

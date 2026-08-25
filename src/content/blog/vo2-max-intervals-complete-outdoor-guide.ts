@@ -58,9 +58,9 @@ export const vo2max: BlogPost = {
     },
     {
       type: "cta",
-      text: "Need a 5-minute climb or a quiet rolling stretch for short-shorts? Let our AI find one near you that fits the session.",
+      text: "VO2 route matching is not in the first Ireland beta. LOOPS will add a session type only after its road criteria and human review process are proven.",
       href: "/generate",
-      label: "Find a VO2 max route",
+      label: "Search supported sessions",
     },
     { type: "h2", text: "How to structure the whole ride" },
     {

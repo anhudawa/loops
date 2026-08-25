@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
 import { sql } from "@vercel/postgres";
-import { upsertGoogleUser, getUserByGoogleId, migrateDb } from "@/lib/db";
+import { upsertGoogleUser, getUserByGoogleId } from "@/lib/db";
 
 export async function GET(request: NextRequest) {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
@@ -21,8 +21,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(new URL("/login?error=google_failed", baseUrl));
     }
     await sql`DELETE FROM oauth_states WHERE state = ${state}`;
-    await migrateDb();
-
     const redirectUri = `${baseUrl}/api/auth/google/callback`;
 
     // Exchange code for tokens (10s timeout)

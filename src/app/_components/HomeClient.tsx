@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useMemo, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import DurationStrip from "@/components/DurationStrip";
-import DisciplineTabs from "@/components/DisciplineTabs";
 import RouteCard from "@/components/RouteCard";
 import SkeletonCard from "@/components/SkeletonCard";
 import HeroSection from "@/components/HeroSection";
@@ -70,22 +69,22 @@ interface FilterState {
 
 const DEFAULT_FILTERS: FilterState = {
   duration: null,
-  discipline: "",
-  country: "",
+  discipline: "road",
+  country: "Ireland",
   city: "",
   sort: "",
   search: "",
 };
 
 function filtersFromParams(params: URLSearchParams): FilterState | null {
-  const keys = ["duration", "discipline", "country", "city", "sort", "search"];
+  const keys = ["duration", "city", "sort", "search"];
   const hasAny = keys.some((k) => params.has(k));
   if (!hasAny) return null;
 
   return {
     duration: params.get("duration") || null,
-    discipline: params.get("discipline") || "",
-    country: params.get("country") || "",
+    discipline: "road",
+    country: "Ireland",
     city: params.get("city") || "",
     sort: params.get("sort") || "",
     search: params.get("search") || "",
@@ -98,7 +97,7 @@ function filtersFromStorage(): FilterState | null {
     if (!stored) return null;
     const parsed = JSON.parse(stored) as Partial<FilterState>;
     // Merge over defaults so older stored shapes (pre-search) stay valid.
-    return { ...DEFAULT_FILTERS, ...parsed };
+    return { ...DEFAULT_FILTERS, ...parsed, discipline: "road", country: "Ireland" };
   } catch {
     return null;
   }
@@ -107,8 +106,6 @@ function filtersFromStorage(): FilterState | null {
 function filtersToParams(f: FilterState): URLSearchParams {
   const p = new URLSearchParams();
   if (f.duration) p.set("duration", f.duration);
-  if (f.discipline) p.set("discipline", f.discipline);
-  if (f.country) p.set("country", f.country);
   if (f.city) p.set("city", f.city);
   if (f.sort) p.set("sort", f.sort);
   if (f.search) p.set("search", f.search);
@@ -127,8 +124,8 @@ const selectStyle = {
 
 /**
  * The answer machine (2026-06-11 redesign): logged-in riders get the one
- * question, not a marketing hero. Free text → /generate; Draw → /plan;
- * Browse nearby → the geo-sorted feed below.
+ * question, not a marketing hero. Free text searches the human-ridden
+ * library; Browse nearby uses the geo-sorted feed below.
  */
 function AnswerMachine({ onBrowseNearby }: { onBrowseNearby: () => void }) {
   const router = useRouter();
@@ -159,7 +156,7 @@ function AnswerMachine({ onBrowseNearby }: { onBrowseNearby: () => void }) {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             maxLength={1000}
-            placeholder="e.g. 2 hours, rolling hills, tailwind home"
+            placeholder="e.g. 2 hours from Dublin on quiet road lanes"
             className="flex-1 min-w-0 px-4 rounded-xl text-sm min-h-[48px]"
             style={{
               background: "var(--bg)",
@@ -177,13 +174,6 @@ function AnswerMachine({ onBrowseNearby }: { onBrowseNearby: () => void }) {
           </button>
         </form>
         <div className="flex flex-wrap gap-2 mt-3">
-          <Link
-            href="/plan"
-            className="text-xs font-bold uppercase tracking-wider px-3 min-h-[44px] inline-flex items-center rounded-lg hover:opacity-80"
-            style={{ color: "var(--accent)", border: "1px solid var(--accent)" }}
-          >
-            Draw a route
-          </Link>
           <button
             type="button"
             onClick={onBrowseNearby}
@@ -208,7 +198,6 @@ function HomeContent() {
   });
 
   const [routes, setRoutes] = useState<Route[]>([]);
-  const [countries, setCountries] = useState<string[]>([]);
   const [cities, setCities] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(false);
@@ -243,37 +232,23 @@ function HomeContent() {
 
   const hasActiveFilters =
     filters.duration !== null ||
-    filters.discipline !== "" ||
-    filters.country !== "" ||
     filters.city !== "" ||
     filters.search !== "";
 
   const isSearching = filters.search !== "";
 
-  // Fetch countries on mount
+  // The first beta is fixed to Irish road routes; fetch only Irish regions.
   useEffect(() => {
-    fetch("/api/routes?countries=true")
-      .then((r) => r.json())
-      .then((data) => setCountries(Array.isArray(data) ? data : []))
-      .catch(() => {});
-  }, []);
-
-  // Fetch cities when country changes
-  useEffect(() => {
-    if (!filters.country) {
-      setCities([]);
-      return;
-    }
-    fetch(`/api/routes?regions=true&country=${encodeURIComponent(filters.country)}`)
+    fetch("/api/routes?regions=true&country=Ireland")
       .then((r) => r.json())
       .then((data) => setCities(Array.isArray(data) ? data : []))
       .catch(() => {});
-  }, [filters.country]);
+  }, []);
 
   const fetchRoutes = useCallback(async (pageNum = 1, append = false, fallbackSort?: string) => {
     const params = new URLSearchParams();
-    if (filters.discipline) params.set("discipline", filters.discipline);
-    if (filters.country) params.set("country", filters.country);
+    params.set("discipline", "road");
+    params.set("country", "Ireland");
     if (filters.city) params.set("county", filters.city);
     if (filters.duration) params.set("duration", filters.duration);
     if (filters.search) params.set("search", filters.search);
@@ -513,31 +488,13 @@ function HomeContent() {
 
         {/* Filter Row */}
         <div className="flex flex-wrap items-center gap-2 pb-4">
-          <DisciplineTabs
-            selected={filters.discipline}
-            onSelect={(d: string) => setFilters((f) => ({ ...f, discipline: d }))}
-          />
-
-          <select
-            value={filters.country}
-            onChange={(e) => setFilters((f) => ({ ...f, country: e.target.value, city: "" }))}
-            className="cursor-pointer"
-            style={selectStyle}
-          >
-            <option value="">All Countries</option>
-            {countries.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
-
           <select
             value={filters.city}
             onChange={(e) => setFilters((f) => ({ ...f, city: e.target.value }))}
-            disabled={!filters.country}
-            className="cursor-pointer disabled:opacity-50"
+            className="cursor-pointer"
             style={selectStyle}
           >
-            <option value="">All Cities</option>
+            <option value="">All Irish regions</option>
             {cities.map((c) => (
               <option key={c} value={c}>{c}</option>
             ))}

@@ -15,7 +15,7 @@ export async function GET() {
     const state = uuidv4();
     const redirectUri = `${baseUrl}/api/auth/google/callback`;
 
-    // Store state for CSRF protection (oauth_states table created by migrateDb)
+    // Store state for CSRF protection (oauth_states is created by migration 000).
     await sql`INSERT INTO oauth_states (state) VALUES (${state})`;
     await sql`DELETE FROM oauth_states WHERE created_at < NOW() - INTERVAL '10 minutes'`;
 

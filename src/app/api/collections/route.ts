@@ -25,9 +25,11 @@ export async function POST(request: NextRequest) {
     if (!name || typeof name !== "string" || name.trim().length === 0) {
       return apiError("name is required", "VALIDATION_ERROR", 400);
     }
-    const validDisciplines = ["road", "gravel", "mtb", "mixed"];
-    if (discipline && !validDisciplines.includes(discipline)) {
-      return apiError("Invalid discipline", "VALIDATION_ERROR", 400);
+    if (discipline && discipline !== "road") {
+      return apiError("Ireland beta collections must be road cycling", "UNSUPPORTED_DISCIPLINE", 400);
+    }
+    if (country && country !== "Ireland") {
+      return apiError("Ireland is the only active collection market", "UNSUPPORTED_MARKET", 400);
     }
 
     const collection = await insertCollection({
@@ -36,9 +38,9 @@ export async function POST(request: NextRequest) {
       slug: slugify(name.trim()),
       description: description ? stripHtml(description) : null,
       location: location ? stripHtml(location) : null,
-      country: country ? stripHtml(country) : null,
+      country: "Ireland",
       cover_image_url: cover_image_url || null,
-      discipline: discipline || "mixed",
+      discipline: "road",
       difficulty_range: difficulty_range || null,
       featured: featured ?? false,
       seo_title: seo_title ? stripHtml(seo_title) : null,

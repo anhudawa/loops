@@ -3,10 +3,18 @@ import Link from "next/link";
 import AppHeader from "@/components/AppHeader";
 import JsonLd from "@/components/JsonLd";
 import { generateBreadcrumbJsonLd, generateFaqJsonLd, slugify } from "@/lib/seo";
-import { getDestinationBySlug, type Destination } from "@/content/destinations";
+import { destinations, getDestinationBySlug, type Destination } from "@/content/destinations";
 
 interface Props {
   params: Promise<{ destination: string }>;
+}
+
+const ROADMAP_DESTINATIONS = new Set(["girona", "mallorca"]);
+
+export function generateStaticParams() {
+  return destinations
+    .filter((destination) => destination.country === "Ireland" || ROADMAP_DESTINATIONS.has(destination.slug))
+    .map((destination) => ({ destination: destination.slug }));
 }
 
 function placeJsonLd(dest: Destination) {
@@ -35,6 +43,8 @@ export default async function DestinationPage({ params }: Props) {
   const { destination } = await params;
   const dest = getDestinationBySlug(destination);
   if (!dest) notFound();
+  if (dest.country !== "Ireland" && !ROADMAP_DESTINATIONS.has(dest.slug)) notFound();
+  const active = dest.country === "Ireland";
 
   const breadcrumb = generateBreadcrumbJsonLd([
     { name: "Home", url: "https://www.loops.ie" },
@@ -54,6 +64,12 @@ export default async function DestinationPage({ params }: Props) {
       <main className="max-w-3xl mx-auto px-4 py-10">
         {/* Hero */}
         <div className="mb-10">
+          {!active && (
+            <div className="rounded-xl p-4 mb-6 text-sm" style={{ background: "var(--accent-glow)", border: "1px solid var(--accent)", color: "var(--text-secondary)" }}>
+              <p className="font-bold" style={{ color: "var(--accent)" }}>Planned market · not yet launched</p>
+              <p className="text-xs mt-1">LOOPS is proving its human-ridden road catalogue in Ireland first. {dest.name} opens only after the Ireland gates pass and local contributors and partners are in place.</p>
+            </div>
+          )}
           <div className="flex items-center gap-2 mb-3">
             <span
               className="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded"
@@ -312,7 +328,7 @@ export default async function DestinationPage({ params }: Props) {
         </section>
 
         {/* Route library link */}
-        {dest.routesCountry && dest.routesRegion && (
+        {active && dest.routesCountry && dest.routesRegion && (
           <div
             className="mb-6 rounded-xl p-5 text-center"
             style={{
@@ -321,7 +337,7 @@ export default async function DestinationPage({ params }: Props) {
             }}
           >
             <p className="text-sm mb-3" style={{ color: "var(--text-muted)" }}>
-              Ready-to-ride loops with GPX downloads, elevation profiles and climb details
+              Human-ridden road loops with elevation profiles, climb details and GPX access for approved beta riders
             </p>
             <Link
               href={`/routes/country/${slugify(dest.routesCountry)}/${slugify(dest.routesRegion)}`}
@@ -337,7 +353,7 @@ export default async function DestinationPage({ params }: Props) {
         )}
 
         {/* Collection link */}
-        {dest.collectionSlug && (
+        {active && dest.collectionSlug && (
           <div
             className="mb-6 rounded-xl p-5 text-center"
             style={{
@@ -377,21 +393,22 @@ export default async function DestinationPage({ params }: Props) {
             className="text-xl font-black tracking-tight mb-2"
             style={{ color: "var(--text)" }}
           >
-            Plan a ride in {dest.name}
+            {active ? `Find a reviewed loop in ${dest.name}` : `${dest.name} comes after Ireland`}
           </h2>
           <p
             className="text-sm leading-relaxed mb-4 max-w-md mx-auto"
             style={{ color: "var(--text-muted)" }}
           >
-            Tell our AI where you are, how long you want to ride and the
-            terrain you prefer &mdash; get a route that fits.
+            {active
+              ? "Tell LOOPS where you are, how much time you have and what session you need. We will match you only to reviewed, human-ridden routes."
+              : "Follow the Ireland-first rollout. We will not publish a route here until a named person has ridden and reviewed that exact version."}
           </p>
           <Link
-            href="/generate"
+            href={active ? "/generate" : "/cycling"}
             className="inline-flex items-center justify-center font-bold text-sm px-6 py-3 rounded-lg"
             style={{ background: "var(--accent)", color: "#0a0a0a" }}
           >
-            Generate a route
+            {active ? "Find a human-ridden loop" : "View the rollout"}
           </Link>
         </div>
       </main>

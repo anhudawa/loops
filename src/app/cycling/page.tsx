@@ -1,19 +1,18 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import AppHeader from "@/components/AppHeader";
-import { destinations, LAUNCH_DESTINATION_SLUGS } from "@/content/destinations";
+import { destinations } from "@/content/destinations";
 
 export const metadata: Metadata = {
   title: "Cycling Destinations — Route Guides | LOOPS",
   description:
-    "Complete cycling guides for the world's best riding destinations: Mallorca, Girona, Tenerife, the Algarve and more. Climbs, best months, bike hire and ready-to-ride routes.",
+    "Human-ridden road cycling routes in Ireland, with Girona and Mallorca next in the LOOPS commercial rollout.",
   alternates: { canonical: "https://loops.ie/cycling" },
 };
 
 export default function CyclingIndexPage() {
-  const launchSet = new Set<string>(LAUNCH_DESTINATION_SLUGS);
-  const featured = destinations.filter((d) => launchSet.has(d.slug));
-  const homeTurf = destinations.filter((d) => !launchSet.has(d.slug));
+  const ireland = destinations.filter((d) => d.country === "Ireland");
+  const nextMarkets = destinations.filter((d) => d.slug === "girona" || d.slug === "mallorca");
 
   return (
     <main className="min-h-screen" style={{ background: "var(--bg)" }}>
@@ -24,18 +23,31 @@ export default function CyclingIndexPage() {
           Cycling Destinations
         </h1>
         <p className="text-sm leading-relaxed mb-8 max-w-2xl" style={{ color: "var(--text-secondary)" }}>
-          The training-camp circuit, covered properly: where to ride, when to go,
-          which climbs matter and the loops worth packing a bike box for.
+          Ireland is first. Every published loop must be ridden, permissioned and
+          reviewed. Girona follows when the Irish beta passes its gates, then Mallorca.
         </p>
 
-        <DestGrid items={featured} />
+        <h2 className="text-sm font-bold uppercase tracking-wider mb-4" style={{ color: "var(--text-muted)" }}>
+          Active beta · Ireland
+        </h2>
+        <DestGrid items={ireland} />
 
-        {homeTurf.length > 0 && (
+        {nextMarkets.length > 0 && (
           <>
             <h2 className="text-sm font-bold uppercase tracking-wider mt-10 mb-4" style={{ color: "var(--text-muted)" }}>
-              Home turf
+              Next · after Ireland
             </h2>
-            <DestGrid items={homeTurf} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {nextMarkets.map((d, index) => (
+                <div key={d.slug} className="rounded-2xl p-5 opacity-75" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+                  <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--accent)" }}>
+                    Phase {index + 2}
+                  </p>
+                  <h3 className="text-lg font-extrabold mb-1" style={{ color: "var(--text)" }}>{d.name}</h3>
+                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>{d.country} · Planned, not yet launched</p>
+                </div>
+              ))}
+            </div>
           </>
         )}
       </div>

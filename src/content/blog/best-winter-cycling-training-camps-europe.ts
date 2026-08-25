@@ -41,10 +41,8 @@ export const winterCamps: BlogPost = {
       text: "Calpe is the WorldTour's winter office. Through December and January the town fills with pro teams, and for good reason. The Costa Blanca offers some of the most reliable winter weather in mainland Europe — frequently 16–19°C and dry — combined with a perfect mix of terrain. You get the flat coastal roads around Calpe for endurance, plus the Coll de Rates, a smooth, steady climb that's ideal for tempo and threshold work. Alicante airport is 45 minutes away with cheap flights from across Europe.",
     },
     {
-      type: "cta",
-      text: "Our Calpe collection maps the coastal flats and the Coll de Rates into ready-to-ride loops.",
-      href: "/collections/calpe",
-      label: "See the Calpe collection",
+      type: "p",
+      text: "LOOPS does not yet publish a Calpe catalogue. Any future destination launch will require locally ridden and independently reviewed road routes.",
     },
     { type: "h2", text: "Mallorca, Spain" },
     {
@@ -59,7 +57,7 @@ export const winterCamps: BlogPost = {
     { type: "h2", text: "Girona, Spain" },
     {
       type: "p",
-      text: "Girona is milder in winter than most assume — daytime highs of 12–16°C are common — and its quiet roads, gravel network and café culture make it a comfortable, flexible base. It's the best choice if you want variety and don't mind slightly cooler temperatures or the odd rainy day. Read our full [Girona guide](/blog/cycling-in-girona-complete-guide) for the climbs and logistics.",
+      text: "Girona is milder in winter than most assume — daytime highs of 12–16°C are common — and its quiet roads, varied terrain and café culture make it a comfortable, flexible base. It's the best choice if you want variety and don't mind slightly cooler temperatures or the odd rainy day. Read our full [Girona guide](/blog/cycling-in-girona-complete-guide) for the climbs and logistics.",
     },
     { type: "h2", text: "The Algarve, Portugal" },
     {
@@ -85,9 +83,9 @@ export const winterCamps: BlogPost = {
     },
     {
       type: "cta",
-      text: "Pick your destination, then let our AI build daily routes that match your training plan and the local terrain.",
+      text: "LOOPS is starting with human-ridden Irish road routes. Girona and Mallorca follow only after the Ireland beta meets its quality gates.",
       href: "/generate",
-      label: "Plan your camp routes",
+      label: "Search the Ireland beta",
     },
   ],
   faqs: [

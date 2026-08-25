@@ -4,7 +4,7 @@ export const girona: BlogPost = {
   slug: "cycling-in-girona-complete-guide",
   title: "Cycling in Girona: The Complete Guide",
   description:
-    "Everything you need to ride Girona: the best routes and climbs, when to go, where the pros train, gravel options, café culture and how to plan your trip.",
+    "Everything a road cyclist needs for Girona: the best climbs, when to go, where the pros train, café culture and how to plan a trip.",
   excerpt:
     "Why the small Catalan city of Girona became the unofficial cycling capital of Europe — and exactly how to ride it like a local.",
   date: "2026-05-20",
@@ -17,13 +17,12 @@ export const girona: BlogPost = {
     "Girona climbs",
     "Els Àngels",
     "Rocacorba",
-    "Girona gravel",
     "cycling training camp Girona",
   ],
   body: [
     {
       type: "p",
-      text: "If you follow professional cycling, you already know Girona. A few hundred WorldTour and development riders call this medieval Catalan city home for a reason: within an hour of the cobbled old town you can find quiet rolling lanes, brutal mountain test pieces, world-class gravel and a Mediterranean coastline. Add reliable weather, a compact airport network and a café scene built around bikes, and you have arguably the best all-round cycling base in Europe.",
+      text: "If you follow professional cycling, you already know Girona. A few hundred WorldTour and development riders call this medieval Catalan city home for a reason: within an hour of the cobbled old town you can find quiet rolling lanes, brutal mountain test pieces and a Mediterranean coastline. Add reliable weather, a compact airport network and a café scene built around bikes, and you have arguably the best all-round road cycling base in Europe.",
     },
     { type: "h2", text: "Why Girona became cycling's capital" },
     {
@@ -50,16 +49,11 @@ export const girona: BlogPost = {
       type: "p",
       text: "For a bigger day, this 20 km+ climb to a hilltop monastery at over 1,100 m is the longest sustained ascent in the immediate region. Pair it with the rolling roads of the Garrotxa volcanic zone for one of the best 120 km loops in Catalonia.",
     },
-    { type: "h2", text: "Gravel in Girona" },
-    {
-      type: "p",
-      text: "Girona is as much a gravel destination as a road one. The hills around the city are laced with dry, fast farm tracks and forest doubletrack, and the area hosts some of Europe's most respected gravel events. The riding is typically rolling rather than technical — wide tyres, hardpack and the occasional rocky pitch rather than mountain-bike terrain. A 38–42 mm tyre is the local standard. Many road riders here run a dedicated gravel bike precisely because the off-road network is so good for steady endurance days.",
-    },
     {
       type: "cta",
-      text: "We've curated Girona's best road and gravel loops — climbs, café stops and surfaces all checked.",
-      href: "/collections/girona",
-      label: "See the Girona collection",
+      text: "Girona is the second LOOPS market. Its road catalogue will open only after local riders have supplied and independently reviewed the routes.",
+      href: "/generate",
+      label: "Search the Ireland beta",
     },
     { type: "h2", text: "When to go" },
     {
@@ -86,7 +80,7 @@ export const girona: BlogPost = {
       items: [
         "Day 1 — Easy 2 hr coastal spin to shake off travel and learn the roads.",
         "Day 2 — Els Àngels loop with a tempo effort on the climb.",
-        "Day 3 — Gravel endurance day through the hills north of the city.",
+        "Day 3 — Road endurance day through the rolling country north of the city.",
         "Day 4 — Recovery spin and coffee, or a rest day in the old town.",
         "Day 5 — Rocacorba test, ridden hard, with a flat warm-up and cool-down.",
         "Day 6 — Big mountain day toward Mare de Déu del Mont or the Pyrenean foothills.",
@@ -99,16 +93,16 @@ export const girona: BlogPost = {
     },
     {
       type: "cta",
-      text: "Know your dates and target distance? Let our AI build a Girona loop around your form and the roads you want.",
-      href: "/generate",
-      label: "Plan a Girona route",
+      text: "Girona is planned after the Ireland beta proves the LOOPS trust and route-supply model.",
+      href: "/cycling",
+      label: "View the LOOPS rollout",
     },
   ],
   faqs: [
     {
       question: "Is Girona good for cycling?",
       answer:
-        "Yes — Girona is widely regarded as one of the best cycling bases in Europe. It offers quiet, traffic-light roads, a huge variety of terrain from flat coastal spins to high mountain climbs like Rocacorba, excellent gravel, mild weather and a bike-centric café culture. Hundreds of professional cyclists live and train there for these reasons.",
+        "Yes — Girona is widely regarded as one of the best road cycling bases in Europe. It offers quiet, traffic-light roads, terrain from flat coastal spins to high mountain climbs like Rocacorba, mild weather and a bike-centric café culture. Hundreds of professional cyclists live and train there for these reasons.",
     },
     {
       question: "What are the must-do climbs in Girona?",
@@ -119,11 +113,6 @@ export const girona: BlogPost = {
       question: "When is the best time to cycle in Girona?",
       answer:
         "Spring (March–May) and autumn (September–October) are ideal, with warm but comfortable temperatures and quiet roads. Summer is hot inland, so start early. Winters are mild compared with northern Europe and Girona works as a year-round base.",
-    },
-    {
-      question: "Can you do gravel cycling in Girona?",
-      answer:
-        "Absolutely. Girona is a top-tier gravel destination with a dense network of dry farm tracks and forest doubletrack. The terrain is mostly rolling hardpack rather than technical, so a 38–42 mm tyre is the local standard, and the region hosts several major gravel events.",
     },
     {
       question: "How do you get to Girona for a cycling trip?",

@@ -28,5 +28,14 @@ describe("source candidate isolation", () => {
     expect(sync).toContain("INSERT INTO route_source_candidates");
     expect(sync).not.toMatch(/INSERT INTO routes\b/);
     expect(sync).toContain('target !== "staging"');
+    expect(sync).toContain("expected at least 300 candidates");
+  });
+
+  it("separates source validation from named-rider verification", () => {
+    const migration = source("migrations/010_expand_route_source_destinations.sql");
+    expect(migration).toContain("source_validation_status");
+    expect(migration).toContain("publisher_claims_ridden");
+    expect(migration).toContain("no named-rider evidence or publication rights established");
+    expect(migration).not.toContain("UPDATE routes");
   });
 });

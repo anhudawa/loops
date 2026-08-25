@@ -16,7 +16,7 @@ Last updated: 2026-08-25
 
 The staging database began empty. No production or legacy routes were copied.
 All migrations from `000_runtime_schema.sql` through
-`009_route_source_candidates.sql` are recorded as applied with matching
+`010_expand_route_source_destinations.sql` are recorded as applied with matching
 checksums.
 
 ## Environment safeguards
@@ -114,32 +114,46 @@ three must not be ingested.
 
 ## Website source discovery
 
-A metadata-only source sync now maintains 204 private acquisition leads in the
+A metadata-only source sync now maintains 304 private acquisition leads in the
 staging `route_source_candidates` table:
 
 - 139 Ireland leads from Cycling Ireland and Sport Ireland Outdoors;
 - 20 Girona leads from Eat Sleep Cycle and Epic Road Rides;
 - 45 Mallorca leads from MallorcaVelo, CurroBikes, Mallorca Cycling Center and
-  Epic Road Rides.
+  Epic Road Rides;
+- 41 Tenerife leads from Bike Point Tenerife and Tenerife Tourism;
+- 25 Calpe/Costa Blanca leads from Cycling Calpe;
+- 9 Lanzarote leads from Lanzarote Bike;
+- 8 Tuscany leads from Tuscany Trail 365;
+- 7 Alpe d'Huez/Oisans leads from Epic Road Rides;
+- 5 Gran Canaria leads from Epic Road Rides;
+- 5 Dolomites leads from CyclingHero.
 
 The original `WEBSITE_ROUTE_SOURCE_BACKLOG.csv` remains the 33-route
 human-curated priority list. `npm run sources:sync` rebuilds and validates the
 broader source catalogue; `npm run sources:audit` verifies database separation,
 counts and promotion state. Administrators can inspect the queue under the
-**Sources** tab.
+**Sources** tab. The expanded-destination rationale and source claims are
+recorded in `EXPANDED_DESTINATION_SOURCES.md`.
 
 These are acquisition leads rather than catalogue routes. No third-party GPX
-or geometry has been copied into staging. All 204 are `source_only`; zero have
-been promoted. The format audit records 98 advertised/apparent loops, 10 linear
-routes and 96 unknown-format leads, so the source queue itself must never be
-shown as loop inventory. A lead advances only when the source introduces the
-named rider of the exact version and that person completes the normal
-contributor upload, rights and privacy workflow.
+or geometry has been copied into staging. All 304 are `source_only`; zero have
+been promoted. The format audit records 178 advertised/apparent loops, 18
+linear routes, 3 out-and-back routes and 105 unknown-format leads, so the
+source queue itself must never be shown as loop inventory.
+
+Source checking is recorded separately from LOOPS verification: 175 entries
+have checked public metadata, 104 come from a local/official curator and 25
+carry an explicit publisher claim that the routes were ridden. None of those
+states establishes the named exact-version rider, evidence or rights required
+for LOOPS publication. A lead advances only when the source introduces that
+rider and the person completes the normal contributor upload, rights and
+privacy workflow.
 
 ## Next operating gates
 
 The protected branch preview now has its isolated database, restricted map,
-Google sign-in, first staging administrator and a private 204-lead acquisition
+Google sign-in, first staging administrator and a private 304-lead acquisition
 queue. It remains intentionally empty of routes.
 
 The next workflow rehearsal requires two inputs that must not be fabricated:

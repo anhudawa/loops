@@ -68,8 +68,8 @@ interface RouteRow {
 
 interface SourceCandidateRow {
   id: string;
-  rollout_phase: 1 | 2 | 3;
-  destination: "Ireland" | "Girona" | "Mallorca";
+  rollout_phase: number;
+  destination: string;
   source_name: string;
   source_page_url: string;
   source_track_url: string | null;
@@ -80,6 +80,8 @@ interface SourceCandidateRow {
   route_format: "loop" | "linear" | "out_and_back" | "unknown";
   distance_km: number | null;
   elevation_gain_m: number | null;
+  source_validation_status: "metadata_checked" | "locally_curated" | "publisher_claims_ridden";
+  source_validation_basis: string;
   candidate_status: string;
   rider_status: string;
   rights_status: string;
@@ -897,6 +899,9 @@ export default function AdminPage() {
                             {candidate.source_name}
                           </a>
                           <p className="text-[10px] mt-1" style={{ color: "var(--text-muted)" }}>Public metadata only</p>
+                          <p className="text-[10px] mt-1 capitalize" title={candidate.source_validation_basis} style={{ color: "var(--text-secondary)" }}>
+                            Source: {candidate.source_validation_status.replaceAll("_", " ")}
+                          </p>
                         </td>
                         <td className="p-3 text-xs min-w-36" style={{ color: "var(--text-muted)" }}>
                           <p>{candidate.distance_km ? `${candidate.distance_km} km` : "Distance unconfirmed"}{candidate.elevation_gain_m != null ? ` · ${candidate.elevation_gain_m} m` : ""}</p>

@@ -1,9 +1,9 @@
 # Website route discovery and acquisition
 
 **Created:** 25 August 2026  
-**Scope:** Ireland first; Girona second; Mallorca third  
+**Scope:** Ireland first; Girona second; Mallorca third; seven further destinations held behind those rollout gates<br>
 **Priority backlog:** `WEBSITE_ROUTE_SOURCE_BACKLOG.csv`<br>
-**Private staging source queue:** 204 metadata-only leads
+**Private staging source queue:** 304 metadata-only leads
 
 ## The creative move
 
@@ -32,7 +32,7 @@ supply funnel.
 ## What was found
 
 The manually curated first pass records 33 high-priority road-route leads. A
-repeatable metadata-only sync broadens the acquisition funnel to 204 leads:
+repeatable metadata-only sync broadens the acquisition funnel to 304 leads:
 
 - **Ireland: 139.** Cycling Ireland contributes 73 index entries and Sport
   Ireland Outdoors contributes 66 on-road trail entries. Dublin Coast,
@@ -48,11 +48,21 @@ repeatable metadata-only sync broadens the acquisition funnel to 204 leads:
   CurroBikes, Mallorca Cycling Center and Epic Road Rides provide a balanced
   future funnel: recovery/rolling roads, signature coast rides, climbing loops
   and epic endurance days.
+- **Next-market research: 100.** Tenerife (41), Calpe/Costa Blanca (25),
+  Lanzarote (9), Tuscany (8), Alpe d'Huez/Oisans (7), Gran Canaria (5) and the
+  Dolomites (5). These are phase-four research leads, not a change to the
+  Ireland-first launch sequence.
 
 No geometry or GPX file from these sites has been copied into LOOPS. Every row
 is `source_only` until the named-rider and rights gates are complete. The queue
-currently contains 98 loop-labelled leads, 10 linear routes and 96 unknowns;
-linear and unknown entries are recruitment/context leads, not loop inventory.
+currently contains 178 loop-labelled leads, 18 linear routes, 3 out-and-back
+routes and 105 unknowns; anything not explicitly loop-labelled is a
+recruitment/context lead, not loop inventory.
+
+The queue also distinguishes the strength of the public source statement:
+`metadata_checked`, `locally_curated` and `publisher_claims_ridden`. These
+describe only what the source says. They never replace `rider_confirmed`,
+`evidence_received` or `independently_reviewed` in the LOOPS workflow.
 
 Run `npm run sources:sync` for a read-only live-source count. Pass `-- --apply`
 only with the guarded staging environment. The command refuses to write
@@ -101,6 +111,15 @@ The Epic Road Rides/SunVelo articles already identify the guide behind several
 less obvious Mallorca loops. That is more useful to LOOPS than another generic
 route dump. Defer intake until Ireland passes its beta gates and Girona proves
 the partner model.
+
+### 5. Hold the wider destination funnel behind the launch gates
+
+Tenerife and Calpe have enough source depth to become the first markets after
+the original three. Lanzarote, Gran Canaria, Tuscany, the Dolomites and Oisans
+add terrain diversity and credible local or named-author sources. Do not begin
+publishing these markets merely because the research queue exists. Use the
+catalogue now to identify future partners, compare route archetypes and avoid
+starting market research from zero later.
 
 ## Platform-specific discovery tactics
 

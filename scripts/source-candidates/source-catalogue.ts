@@ -1,12 +1,18 @@
 import { readFile } from "node:fs/promises";
 import {
   parseCurroBikes,
+  parseBikePointTenerife,
+  parseCyclingCalpe,
   parseCyclingIreland,
+  parseLanzaroteBike,
   parseMallorcaCyclingCenter,
   parseMallorcaVelo,
   parseSportIreland,
+  parseTuscanyTrail365,
+  parseWebTenerife,
   type SourceCandidateInput,
 } from "./source-parsers";
+import { expandedCuratedCandidates } from "./expanded-curated-sources";
 
 const LIVE_SOURCES = [
   ["Cycling Ireland", "https://www.cyclingireland.ie/key-documents/find-a-route/", parseCyclingIreland],
@@ -14,6 +20,11 @@ const LIVE_SOURCES = [
   ["MallorcaVelo", "https://mallorcavelo.com/routes/", parseMallorcaVelo],
   ["CurroBikes", "https://currobikes.es/rutas", parseCurroBikes],
   ["Mallorca Cycling Center", "https://www.mallorcacyclingcenter.com/routes/", parseMallorcaCyclingCenter],
+  ["Bike Point Tenerife", "https://bikepointtenerife.com/download-gps-bike-routes-in-tenerife/", parseBikePointTenerife],
+  ["Cycling Calpe", "https://www.cyclingcalpe.eu/", parseCyclingCalpe],
+  ["Lanzarote Bike", "https://en.lanzarotebike.com/routes", parseLanzaroteBike],
+  ["Tuscany Trail 365", "https://cyclingintuscany.tuscanytrail.it/itinerari/", parseTuscanyTrail365],
+  ["Tenerife Tourism", "https://www.webtenerife.co.uk/what-to-do/routes/cycling/", parseWebTenerife],
 ] as const;
 
 type HubRoute = {
@@ -81,6 +92,8 @@ async function hubCandidates(): Promise<SourceCandidateInput[]> {
         elevationGainM: route.elevation_gain_m || null,
         sourceEvidence: "publisher_route_library_with_public_track",
         sourceClaimsRecorded: false,
+        sourceValidationStatus: "locally_curated",
+        sourceValidationBasis: "Destination cycling publisher or local operator route page and public track reference checked.",
         acquisitionTarget: `${source.sourceName} author, guide or named local rider`,
         nextAction: "Identify the person who rode this exact version, then collect their personal timestamped export and publication consent.",
       });
@@ -103,7 +116,7 @@ export async function buildSourceCatalogue(): Promise<SourceCandidateInput[]> {
     if (candidates.length === 0) throw new Error(`${name} returned no parseable route candidates`);
     return candidates;
   }));
-  const combined = [...fetched.flat(), ...await hubCandidates()];
+  const combined = [...fetched.flat(), ...await hubCandidates(), ...expandedCuratedCandidates];
   const byKey = new Map(combined.map((candidate) => [candidate.sourceKey, candidate]));
   return [...byKey.values()].sort((a, b) => a.rolloutPhase - b.rolloutPhase || a.sourceName.localeCompare(b.sourceName) || a.routeName.localeCompare(b.routeName));
 }

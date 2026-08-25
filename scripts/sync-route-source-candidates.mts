@@ -11,11 +11,13 @@ const sourceCounts = Object.fromEntries(
     .map((source) => [source, candidates.filter((candidate) => candidate.sourceName === source).length])
 );
 const destinationCounts = Object.fromEntries(
-  ["Ireland", "Girona", "Mallorca"].map((destination) => [destination, candidates.filter((candidate) => candidate.destination === destination).length])
+  [...new Set(candidates.map((candidate) => candidate.destination))]
+    .sort()
+    .map((destination) => [destination, candidates.filter((candidate) => candidate.destination === destination).length])
 );
 
-if (candidates.length < 200) {
-  throw new Error(`Source catalogue safety floor failed: expected at least 200 candidates, found ${candidates.length}`);
+if (candidates.length < 300) {
+  throw new Error(`Source catalogue safety floor failed: expected at least 300 candidates, found ${candidates.length}`);
 }
 
 if (!apply) {
@@ -65,10 +67,12 @@ try {
           country, region, county, discipline, route_format, distance_km,
           elevation_gain_m, source_evidence, source_claims_recorded,
           source_author_name, source_recorded_at, acquisition_target, next_action,
-          source_checked_at, import_run_id
+          source_validation_status, source_validation_basis,
+          source_validation_checked_at, source_checked_at, import_run_id
         ) VALUES (
           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
-          $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24
+          $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24,
+          $25, $26, $27
         )
         ON CONFLICT (source_key) DO UPDATE SET
           rollout_phase = EXCLUDED.rollout_phase,
@@ -91,6 +95,9 @@ try {
           source_recorded_at = EXCLUDED.source_recorded_at,
           acquisition_target = EXCLUDED.acquisition_target,
           next_action = EXCLUDED.next_action,
+          source_validation_status = EXCLUDED.source_validation_status,
+          source_validation_basis = EXCLUDED.source_validation_basis,
+          source_validation_checked_at = EXCLUDED.source_validation_checked_at,
           source_last_seen_at = NOW(),
           source_checked_at = EXCLUDED.source_checked_at,
           import_run_id = EXCLUDED.import_run_id,
@@ -102,7 +109,10 @@ try {
           candidate.discipline, candidate.routeFormat, candidate.distanceKm || null,
           candidate.elevationGainM ?? null, candidate.sourceEvidence, candidate.sourceClaimsRecorded,
           candidate.sourceAuthorName || null, candidate.sourceRecordedAt || null,
-          candidate.acquisitionTarget || null, candidate.nextAction, checkedAt, importRunId,
+          candidate.acquisitionTarget || null, candidate.nextAction,
+          candidate.sourceValidationStatus || "metadata_checked",
+          candidate.sourceValidationBasis || "Public source page and route metadata checked; no named-rider evidence or publication rights established.",
+          checkedAt, checkedAt, importRunId,
         ]
       );
     }

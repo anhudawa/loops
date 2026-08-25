@@ -1386,8 +1386,8 @@ export interface AdminRouteReview extends Route {
 export interface RouteSourceCandidate {
   id: string;
   source_key: string;
-  rollout_phase: 1 | 2 | 3;
-  destination: "Ireland" | "Girona" | "Mallorca";
+  rollout_phase: number;
+  destination: string;
   source_name: string;
   source_page_url: string;
   source_track_url: string | null;
@@ -1400,6 +1400,8 @@ export interface RouteSourceCandidate {
   distance_km: number | null;
   elevation_gain_m: number | null;
   source_evidence: string;
+  source_validation_status: "metadata_checked" | "locally_curated" | "publisher_claims_ridden";
+  source_validation_basis: string;
   candidate_status: "discovered" | "rider_nominated" | "submission_received" | "rejected" | "archived";
   rider_status: "unconfirmed" | "nominated" | "confirmed";
   rights_status: "not_requested" | "requested" | "granted" | "declined";
@@ -1419,6 +1421,7 @@ export async function getRouteSourceCandidates(
       `SELECT id, source_key, rollout_phase, destination, source_name,
          source_page_url, source_track_url, route_name, country, region, county,
          discipline, route_format, distance_km, elevation_gain_m, source_evidence,
+         source_validation_status, source_validation_basis,
          candidate_status, rider_status, rights_status, verification_status,
          acquisition_target, next_action, source_checked_at
        FROM route_source_candidates

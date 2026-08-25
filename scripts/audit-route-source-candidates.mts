@@ -18,7 +18,7 @@ if (!process.env.LOOPS_EXPECTED_DATABASE_NAME || actualName !== process.env.LOOP
 const client = createClient({ connectionString });
 await client.connect();
 try {
-  const [totals, destinations, sources, formats] = await Promise.all([
+  const [totals, destinations, sources, formats, sourceValidation] = await Promise.all([
     client.query(`SELECT
       COUNT(*)::int AS candidates,
       COUNT(*) FILTER (WHERE verification_status = 'source_only')::int AS source_only,
@@ -29,9 +29,10 @@ try {
     client.query("SELECT destination, COUNT(*)::int AS count FROM route_source_candidates GROUP BY destination ORDER BY destination"),
     client.query("SELECT source_name, COUNT(*)::int AS count FROM route_source_candidates GROUP BY source_name ORDER BY source_name"),
     client.query("SELECT route_format, COUNT(*)::int AS count FROM route_source_candidates GROUP BY route_format ORDER BY route_format"),
+    client.query("SELECT source_validation_status, COUNT(*)::int AS count FROM route_source_candidates GROUP BY source_validation_status ORDER BY source_validation_status"),
   ]);
   const row = totals.rows[0];
-  const passed = Number(row.candidates) >= 200 && Number(row.source_only) === Number(row.candidates) && Number(row.promoted) === 0;
+  const passed = Number(row.candidates) >= 300 && Number(row.source_only) === Number(row.candidates) && Number(row.promoted) === 0;
   console.log(JSON.stringify({
     checked_at: new Date().toISOString(),
     mode: "read_only",
@@ -43,6 +44,7 @@ try {
     by_destination: Object.fromEntries(destinations.rows.map((item) => [item.destination, Number(item.count)])),
     by_source: Object.fromEntries(sources.rows.map((item) => [item.source_name, Number(item.count)])),
     by_format: Object.fromEntries(formats.rows.map((item) => [item.route_format, Number(item.count)])),
+    by_source_validation: Object.fromEntries(sourceValidation.rows.map((item) => [item.source_validation_status, Number(item.count)])),
     geometry_present_in_candidate_schema: false,
   }, null, 2));
   if (!passed) process.exitCode = 1;

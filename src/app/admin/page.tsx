@@ -9,6 +9,7 @@ import { getRideSourceLabel } from "@/config/route-policy";
 interface Stats {
   totalUsers: number;
   totalRoutes: number;
+  totalSourceCandidates: number;
   totalComments: number;
   bannedUsers: number;
   beta: {
@@ -65,6 +66,28 @@ interface RouteRow {
   open_incidents?: number;
 }
 
+interface SourceCandidateRow {
+  id: string;
+  rollout_phase: 1 | 2 | 3;
+  destination: "Ireland" | "Girona" | "Mallorca";
+  source_name: string;
+  source_page_url: string;
+  source_track_url: string | null;
+  route_name: string;
+  region: string | null;
+  county: string | null;
+  discipline: string;
+  route_format: "loop" | "linear" | "out_and_back" | "unknown";
+  distance_km: number | null;
+  elevation_gain_m: number | null;
+  candidate_status: string;
+  rider_status: string;
+  rights_status: string;
+  verification_status: string;
+  acquisition_target: string | null;
+  next_action: string;
+}
+
 interface CommentRow {
   id: string;
   user_name: string | null;
@@ -119,7 +142,7 @@ interface BetaApplicationRow {
   created_at: string;
 }
 
-type Tab = "users" | "beta" | "routes" | "incidents" | "errors" | "comments";
+type Tab = "users" | "beta" | "sources" | "routes" | "incidents" | "errors" | "comments";
 
 const REVIEW_CHECKS = [
   ["evidence_checked", "Ride evidence matches this route version"],
@@ -148,6 +171,7 @@ export default function AdminPage() {
   const [tab, setTab] = useState<Tab>("users");
   const [users, setUsers] = useState<UserRow[]>([]);
   const [routes, setRoutes] = useState<RouteRow[]>([]);
+  const [sourceCandidates, setSourceCandidates] = useState<SourceCandidateRow[]>([]);
   const [incidents, setIncidents] = useState<IncidentRow[]>([]);
   const [operationalErrors, setOperationalErrors] = useState<OperationalErrorRow[]>([]);
   const [betaApplications, setBetaApplications] = useState<BetaApplicationRow[]>([]);
@@ -215,6 +239,17 @@ export default function AdminPage() {
     }
   }, []);
 
+  const fetchSourceCandidates = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/source-candidates");
+      if (!res.ok) throw new Error("Failed to fetch source candidates");
+      const data = await res.json();
+      setSourceCandidates(data.candidates);
+    } catch {
+      setLoadError(true);
+    }
+  }, []);
+
   const fetchComments = useCallback(async () => {
     try {
       const res = await fetch("/api/admin/comments");
@@ -271,6 +306,10 @@ export default function AdminPage() {
       setLoadingTab(true);
       fetchRoutes().finally(() => setLoadingTab(false));
     }
+    if (tab === "sources" && sourceCandidates.length === 0) {
+      setLoadingTab(true);
+      fetchSourceCandidates().finally(() => setLoadingTab(false));
+    }
     if (tab === "comments" && comments.length === 0) {
       setLoadingTab(true);  
       fetchComments().finally(() => setLoadingTab(false));
@@ -287,7 +326,7 @@ export default function AdminPage() {
       setLoadingTab(true);
       fetchBetaApplications().finally(() => setLoadingTab(false));
     }
-  }, [tab, routes.length, comments.length, incidents.length, operationalErrors.length, betaApplications.length, fetchRoutes, fetchComments, fetchIncidents, fetchOperationalErrors, fetchBetaApplications]);
+  }, [tab, routes.length, sourceCandidates.length, comments.length, incidents.length, operationalErrors.length, betaApplications.length, fetchRoutes, fetchSourceCandidates, fetchComments, fetchIncidents, fetchOperationalErrors, fetchBetaApplications]);
 
   const handleBan = async (userId: string) => {
     try {
@@ -553,6 +592,12 @@ export default function AdminPage() {
     (application.club_name || "").toLowerCase().includes(q)
   ) : betaApplications;
   const filteredRoutes = q ? routes.filter((r) => r.name.toLowerCase().includes(q) || (r.region || r.county).toLowerCase().includes(q)) : routes;
+  const filteredSourceCandidates = q ? sourceCandidates.filter((candidate) =>
+    candidate.route_name.toLowerCase().includes(q) ||
+    candidate.source_name.toLowerCase().includes(q) ||
+    candidate.destination.toLowerCase().includes(q) ||
+    (candidate.county || candidate.region || "").toLowerCase().includes(q)
+  ) : sourceCandidates;
   const filteredIncidents = q ? incidents.filter((incident) =>
     incident.route_name.toLowerCase().includes(q) ||
     incident.summary.toLowerCase().includes(q) ||
@@ -594,10 +639,11 @@ export default function AdminPage() {
         {/* Stats */}
         {stats && (
           <>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
               {[
                 { label: "Users", value: stats.totalUsers, color: "var(--accent)" },
                 { label: "All routes", value: stats.totalRoutes, color: "var(--success)" },
+                { label: "Source leads", value: stats.totalSourceCandidates, color: "var(--accent)" },
                 { label: "Comments", value: stats.totalComments, color: "var(--warning)" },
                 { label: "Banned", value: stats.bannedUsers, color: "var(--danger)" },
               ].map((s) => (
@@ -637,7 +683,7 @@ export default function AdminPage() {
 
         {/* Tabs */}
         <div className="flex gap-6 mb-6 border-b overflow-x-auto" style={{ borderColor: "var(--border)" }}>
-          {(["users", "beta", "routes", "incidents", "errors", "comments"] as Tab[]).map((t) => (
+          {(["users", "beta", "sources", "routes", "incidents", "errors", "comments"] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -815,6 +861,66 @@ export default function AdminPage() {
                   )}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {!loadingTab && tab === "sources" && (
+            <div>
+              <div className="p-4" style={{ background: "rgba(255,184,0,0.08)", borderBottom: "1px solid var(--border)" }}>
+                <p className="text-sm font-extrabold" style={{ color: "var(--warning)" }}>Research leads — not verified LOOPS routes</p>
+                <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+                  These records contain source metadata only. They have no imported geometry, rider proof, rights or interval assessment. Promotion still requires the full contributor and independent-review workflow.
+                </p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr style={{ borderBottom: "1px solid var(--border)" }}>
+                      <th className="text-left p-3 text-[10px] uppercase tracking-wider font-bold" style={{ color: "var(--text-muted)" }}>Candidate</th>
+                      <th className="text-left p-3 text-[10px] uppercase tracking-wider font-bold" style={{ color: "var(--text-muted)" }}>Source</th>
+                      <th className="text-left p-3 text-[10px] uppercase tracking-wider font-bold" style={{ color: "var(--text-muted)" }}>Route facts</th>
+                      <th className="text-left p-3 text-[10px] uppercase tracking-wider font-bold" style={{ color: "var(--text-muted)" }}>Verification</th>
+                      <th className="text-left p-3 text-[10px] uppercase tracking-wider font-bold" style={{ color: "var(--text-muted)" }}>Next action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredSourceCandidates.map((candidate) => (
+                      <tr key={candidate.id} style={{ borderBottom: "1px solid var(--border)" }}>
+                        <td className="p-3 min-w-52">
+                          <p className="font-bold" style={{ color: "var(--text)" }}>{candidate.route_name}</p>
+                          <p className="text-[10px] mt-1" style={{ color: "var(--text-muted)" }}>
+                            Phase {candidate.rollout_phase} · {candidate.destination}{candidate.county && candidate.county !== candidate.destination ? ` · ${candidate.county}` : ""}
+                          </p>
+                        </td>
+                        <td className="p-3 min-w-40">
+                          <a href={candidate.source_track_url || candidate.source_page_url} target="_blank" rel="noreferrer" className="font-bold hover:underline" style={{ color: "var(--accent)" }}>
+                            {candidate.source_name}
+                          </a>
+                          <p className="text-[10px] mt-1" style={{ color: "var(--text-muted)" }}>Public metadata only</p>
+                        </td>
+                        <td className="p-3 text-xs min-w-36" style={{ color: "var(--text-muted)" }}>
+                          <p>{candidate.distance_km ? `${candidate.distance_km} km` : "Distance unconfirmed"}{candidate.elevation_gain_m != null ? ` · ${candidate.elevation_gain_m} m` : ""}</p>
+                          <p className="capitalize">{candidate.discipline} · {candidate.route_format.replaceAll("_", " ")}</p>
+                        </td>
+                        <td className="p-3 text-xs min-w-40">
+                          <span className="inline-flex text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded" style={{ color: "var(--warning)", background: "rgba(255,184,0,0.1)" }}>
+                            {candidate.verification_status.replaceAll("_", " ")}
+                          </span>
+                          <p className="mt-1" style={{ color: "var(--text-muted)" }}>Rider: {candidate.rider_status.replaceAll("_", " ")}</p>
+                          <p style={{ color: "var(--text-muted)" }}>Rights: {candidate.rights_status.replaceAll("_", " ")}</p>
+                        </td>
+                        <td className="p-3 text-xs min-w-72" style={{ color: "var(--text-muted)" }}>
+                          <p>{candidate.next_action}</p>
+                          {candidate.acquisition_target && <p className="mt-1 font-bold" style={{ color: "var(--text-secondary)" }}>Target: {candidate.acquisition_target}</p>}
+                        </td>
+                      </tr>
+                    ))}
+                    {filteredSourceCandidates.length === 0 && (
+                      <tr><td colSpan={5} className="p-8 text-center text-sm" style={{ color: "var(--text-muted)" }}>No source candidates match this search.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 

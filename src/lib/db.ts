@@ -1383,6 +1383,57 @@ export interface AdminRouteReview extends Route {
   open_incidents: number;
 }
 
+export interface RouteSourceCandidate {
+  id: string;
+  source_key: string;
+  rollout_phase: 1 | 2 | 3;
+  destination: "Ireland" | "Girona" | "Mallorca";
+  source_name: string;
+  source_page_url: string;
+  source_track_url: string | null;
+  route_name: string;
+  country: string;
+  region: string | null;
+  county: string | null;
+  discipline: "road" | "gravel" | "mtb" | "unknown";
+  route_format: "loop" | "linear" | "out_and_back" | "unknown";
+  distance_km: number | null;
+  elevation_gain_m: number | null;
+  source_evidence: string;
+  candidate_status: "discovered" | "rider_nominated" | "submission_received" | "rejected" | "archived";
+  rider_status: "unconfirmed" | "nominated" | "confirmed";
+  rights_status: "not_requested" | "requested" | "granted" | "declined";
+  verification_status: "source_only" | "rider_confirmed" | "evidence_received" | "independently_reviewed";
+  acquisition_target: string | null;
+  next_action: string;
+  source_checked_at: string;
+}
+
+export async function getRouteSourceCandidates(
+  page = 1,
+  limit = 500
+): Promise<{ candidates: RouteSourceCandidate[]; total: number }> {
+  const offset = (page - 1) * limit;
+  const [data, count] = await Promise.all([
+    sql.query(
+      `SELECT id, source_key, rollout_phase, destination, source_name,
+         source_page_url, source_track_url, route_name, country, region, county,
+         discipline, route_format, distance_km, elevation_gain_m, source_evidence,
+         candidate_status, rider_status, rights_status, verification_status,
+         acquisition_target, next_action, source_checked_at
+       FROM route_source_candidates
+       ORDER BY rollout_phase, destination, source_name, route_name
+       LIMIT $1::int OFFSET $2::int`,
+      [limit, offset]
+    ),
+    sql`SELECT COUNT(*) AS c FROM route_source_candidates`,
+  ]);
+  return {
+    candidates: data.rows as RouteSourceCandidate[],
+    total: Number(count.rows[0].c),
+  };
+}
+
 export interface ContributorRouteSubmission {
   id: string;
   name: string;
@@ -2393,13 +2444,15 @@ export async function getUnreadCount(userId: string): Promise<number> {
 export async function getAdminStats(): Promise<{
   totalUsers: number;
   totalRoutes: number;
+  totalSourceCandidates: number;
   totalComments: number;
   bannedUsers: number;
   beta: IrelandBetaMetrics;
 }> {
-  const [users, routes, comments, banned, beta] = await Promise.all([
+  const [users, routes, sourceCandidates, comments, banned, beta] = await Promise.all([
     sql`SELECT COUNT(*) as c FROM users`,
     sql`SELECT COUNT(*) as c FROM routes`,
+    sql`SELECT COUNT(*) as c FROM route_source_candidates`,
     sql`SELECT COUNT(*) as c FROM comments`,
     sql`SELECT COUNT(*) as c FROM users WHERE role = 'banned'`,
     getIrelandBetaMetrics(),
@@ -2407,6 +2460,7 @@ export async function getAdminStats(): Promise<{
   return {
     totalUsers: Number(users.rows[0].c),
     totalRoutes: Number(routes.rows[0].c),
+    totalSourceCandidates: Number(sourceCandidates.rows[0].c),
     totalComments: Number(comments.rows[0].c),
     bannedUsers: Number(banned.rows[0].c),
     beta,

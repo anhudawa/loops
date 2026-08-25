@@ -2,7 +2,8 @@
 
 **Created:** 25 August 2026  
 **Scope:** Ireland first; Girona second; Mallorca third  
-**Backlog:** `WEBSITE_ROUTE_SOURCE_BACKLOG.csv`
+**Priority backlog:** `WEBSITE_ROUTE_SOURCE_BACKLOG.csv`<br>
+**Private staging source queue:** 204 metadata-only leads
 
 ## The creative move
 
@@ -30,25 +31,32 @@ supply funnel.
 
 ## What was found
 
-The first pass records 33 concrete road-route leads:
+The manually curated first pass records 33 high-priority road-route leads. A
+repeatable metadata-only sync broadens the acquisition funnel to 204 leads:
 
-- **Ireland: 12.** Cycling Ireland and Sport Ireland expose a useful national
-  route index. Dublin Coast, Megalithic Spin, Swords to Oldtown, Blessington
-  Lake and Baltyboys are the most relevant early leads. Event routes are
-  introducer leads only because closed-road or marshalled conditions do not
-  establish everyday suitability.
-- **Girona: 11.** Eat Sleep Cycle publishes an operator route bank on Wikiloc;
+- **Ireland: 139.** Cycling Ireland contributes 73 index entries and Sport
+  Ireland Outdoors contributes 66 on-road trail entries. Dublin Coast,
+  Megalithic Spin, Swords to Oldtown, Blessington Lake and Baltyboys remain the
+  most relevant early leads. Event routes are introducer leads only because
+  closed-road or marshalled conditions do not establish everyday suitability.
+- **Girona: 20.** Eat Sleep Cycle publishes an operator route bank;
   several entries are explicitly labelled recorded loops. Its staff-guide
   model provides the shortest credible path to the actual rider. Epic Road
   Rides adds detailed authored guides and alternate versions of the core
   Girona classics.
-- **Mallorca: 10.** Epic Road Rides and its SunVelo collaboration provide a
-  balanced future catalogue: recovery/rolling roads, signature coast rides,
-  climbing loops and epic endurance days.
+- **Mallorca: 45.** MallorcaVelo's reconstructed signposted network,
+  CurroBikes, Mallorca Cycling Center and Epic Road Rides provide a balanced
+  future funnel: recovery/rolling roads, signature coast rides, climbing loops
+  and epic endurance days.
 
 No geometry or GPX file from these sites has been copied into LOOPS. Every row
-is `discovery_only` or `event_lead_only` until the named-rider and rights gates
-are complete.
+is `source_only` until the named-rider and rights gates are complete. The queue
+currently contains 98 loop-labelled leads, 10 linear routes and 96 unknowns;
+linear and unknown entries are recruitment/context leads, not loop inventory.
+
+Run `npm run sources:sync` for a read-only live-source count. Pass `-- --apply`
+only with the guarded staging environment. The command refuses to write
+outside staging, stores no geometry and never inserts into `routes`.
 
 ## Acquisition order
 

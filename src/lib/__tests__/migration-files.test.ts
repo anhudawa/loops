@@ -14,6 +14,7 @@ describe("ordered migration manifest", () => {
       "006_route_version_integrity.sql",
       "007_beta_membership_audit.sql",
       "008_minimise_recording_filenames.sql",
+      "009_route_source_candidates.sql",
     ]);
     expect(migrations.every((migration) => /^[a-f0-9]{64}$/.test(migration.checksum))).toBe(true);
   });

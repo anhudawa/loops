@@ -112,6 +112,18 @@ Accordingly, zero routes were created. The two technical passes are ready for
 the named rider to submit through the protected staging workflow; the other
 three must not be ingested.
 
+## Website source discovery
+
+A first operator-led discovery backlog now contains 33 concrete road-route
+leads: 12 in Ireland, 11 in Girona and 10 in Mallorca. The backlog and operating
+method are recorded in `WEBSITE_ROUTE_SOURCE_BACKLOG.csv` and
+`WEBSITE_ROUTE_ACQUISITION_PLAYBOOK.md`.
+
+These are acquisition leads rather than catalogue routes. No third-party GPX
+or geometry has been copied into staging. A lead advances only when the source
+introduces the named rider of the exact version and that person completes the
+normal contributor upload, rights and privacy workflow.
+
 ## Next operating gates
 
 The protected branch preview now has its isolated database, restricted map,

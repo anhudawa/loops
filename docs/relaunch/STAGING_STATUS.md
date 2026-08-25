@@ -35,6 +35,31 @@ values. All targets declare:
 
 Disabled Strava and Garmin credentials were not copied into staging.
 
+## Closed-team access and map licence
+
+This environment is private research and development, not a public beta:
+
+- Vercel Deployment Protection redirects signed-out visitors to team SSO.
+- Responses carry `X-Robots-Tag: noindex`.
+- Only the project team may be invited while the MapTiler Free plan is in use.
+- The MapTiler key is named `LOOPS Ireland staging` and is restricted to the
+  stable relaunch branch domain; it is not enabled for production or arbitrary
+  Vercel previews.
+- The branch uses MapTiler Streets raster tiles with the required MapTiler and
+  OpenStreetMap attribution.
+- An allowed-origin request returns `200`; an unrelated origin returns `403`.
+
+MapTiler's Free plan is limited to non-commercial use and research and
+development for commercial products. The current limits are 5,000 sessions and
+100,000 API requests per month. Analytics must be reviewed during internal
+testing. Before any external tester is invited or deployment protection is
+relaxed, upgrade to a commercial plan and record the date and owner here.
+
+References:
+
+- <https://www.maptiler.com/terms/cloud/>
+- <https://www.maptiler.com/cloud/pricing/>
+
 ## Verification completed
 
 - Ordered migration status: all applied; no checksum mismatch
@@ -49,19 +74,17 @@ The failed supply gate is intentional. It must remain failed until real Irish
 routes have a permissioned ride recording, immutable route version, approved
 attestation and independent editorial review.
 
-## Deployment gates still open
+## Deployment gate still open
 
-Do not redeploy the branch as usable staging until both are configured:
+The branch has been redeployed with the isolated database and restricted map
+configuration. The deployment preflight now fails on only one missing item:
 
 1. A staging Google OAuth client whose callback is
    `https://loops-git-relaunch-ireland-human-ridden-anhudawas-projects.vercel.app/api/auth/google/callback`.
-2. A licensed commercial map-tile URL and its required attribution.
 
 Google Cloud currently requires the account owner to re-authenticate before a
 new isolated OAuth client can be created. Do not reuse production credentials.
-The public OpenStreetMap tile service remains development-only and must not be
-misrepresented as the contracted staging provider.
 
-After these two values are present, pull the branch Preview environment, run
+After the OAuth values are present, pull the branch Preview environment, run
 `npm run preflight:deploy`, redeploy the relaunch branch, and complete the
 contributor/reviewer/privacy/quarantine workflow in the deployment runbook.

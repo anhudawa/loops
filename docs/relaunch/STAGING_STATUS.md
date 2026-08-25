@@ -45,8 +45,8 @@ This environment is private research and development, not a public beta:
 - The MapTiler key is named `LOOPS Ireland staging` and is restricted to the
   stable relaunch branch domain; it is not enabled for production or arbitrary
   Vercel previews.
-- The branch uses MapTiler Streets raster tiles with the required MapTiler and
-  OpenStreetMap attribution.
+- The branch uses MapTiler Streets raster tiles with the required linked
+  MapTiler logo and OpenStreetMap attribution.
 - An allowed-origin request returns `200`; an unrelated origin returns `403`.
 
 MapTiler's Free plan is limited to non-commercial use and research and

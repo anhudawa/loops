@@ -480,19 +480,23 @@ export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
       ${where}
       GROUP BY r.id, u.name, u.avatar_url
       ${having}
+    ),
+    ranked_routes AS (
+      SELECT *,
+        CASE
+          WHEN haversine_distance IS NULL THEN 3
+          WHEN haversine_distance < 25 THEN 1
+          WHEN haversine_distance < 75 THEN 2
+          ELSE 3
+        END AS base_zone,
+        CASE
+          WHEN avg_rating >= 4.5 AND rating_count >= 3 THEN -1
+          ELSE 0
+        END AS zone_boost
+      FROM routes_with_distance
     )
-    SELECT *,
-      CASE
-        WHEN haversine_distance IS NULL THEN 3
-        WHEN haversine_distance < 25 THEN 1
-        WHEN haversine_distance < 75 THEN 2
-        ELSE 3
-      END AS base_zone,
-      CASE
-        WHEN avg_rating >= 4.5 AND rating_count >= 3 THEN -1
-        ELSE 0
-      END AS zone_boost
-    FROM routes_with_distance
+    SELECT *
+    FROM ranked_routes
     ORDER BY ${orderBy}
     LIMIT $${limitIdx}::int OFFSET $${offsetIdx}::int
   `;

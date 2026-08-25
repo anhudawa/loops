@@ -30,6 +30,8 @@ describe("shared route submission evidence boundary", () => {
   it("prepares a timestamped, closed recording for immutable storage", async () => {
     const prepared = await prepareRideSubmission(form());
     expect(prepared.evidenceType).toBe("gpx");
+    expect(prepared.routeFileName).toBe("ridden-route.gpx");
+    expect(prepared.routeFileName).not.toContain("recorded-loop");
     expect(prepared.sourcePlatform).toBe("ridewithgps");
     expect(prepared.evidencePointCount).toBe(21);
     expect(prepared.evidenceTimestampedPointCount).toBe(21);

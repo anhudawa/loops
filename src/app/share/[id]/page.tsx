@@ -24,7 +24,6 @@ interface SharedRoute {
   region: string | null;
   start_lat: number;
   start_lng: number;
-  gpx_filename: string | null;
   coordinates: string;
 }
 
@@ -186,18 +185,16 @@ export default function SharePage() {
             Find another reviewed route
           </Link>
 
-          {route.gpx_filename && (
-            <Link
-              href="/beta"
-              className="flex-1 flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-bold text-sm uppercase tracking-wider transition-all hover:brightness-110"
-              style={{ background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
-              </svg>
-              Apply to download GPX
-            </Link>
-          )}
+          <Link
+            href="/beta"
+            className="flex-1 flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-bold text-sm uppercase tracking-wider transition-all hover:brightness-110"
+            style={{ background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
+            </svg>
+            Apply to download GPX
+          </Link>
         </div>
 
         <div className="mt-12 pt-6 text-center" style={{ borderTop: "1px solid var(--border)" }}>

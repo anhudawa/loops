@@ -161,7 +161,9 @@ export async function prepareRideSubmission(
       : "gpx";
 
   return {
-    routeFileName: routeFile.name,
+    // The original filename is not evidence and can contain a rider's name,
+    // device identifier or activity reference. Persist a neutral label only.
+    routeFileName: `ridden-route.${evidenceType}`,
     riddenAt,
     sourcePlatform,
     sourceReference,

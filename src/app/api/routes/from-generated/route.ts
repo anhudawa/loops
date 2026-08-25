@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
+import { toPublicRoute } from "@/lib/public-route";
 import {
   insertRoute,
   getUserBySession,
@@ -175,7 +176,7 @@ export async function POST(request: NextRequest) {
       quality_status: "pending",
     });
 
-    return NextResponse.json({ data: route }, { status: 201 });
+    return NextResponse.json({ data: toPublicRoute(route) }, { status: 201 });
   } catch (err) {
     return handleApiError(err);
   }

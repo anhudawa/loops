@@ -103,6 +103,9 @@ Workout suitability is a separate, segment-level assessment.
 - [x] Add a route-safety incident log and quarantine queue.
 - [x] Add privacy-safe structured application-error capture and an administrator
   error-resolution queue.
+- [x] Remove account emails, saved/downloaded route history and original ride
+  filenames from public profile, comment and route responses; retain private
+  admin visibility only where operationally required.
 - [x] Add signed-in rider/contributor applications, administrator cohort review,
   and access-level enforcement for route search and uploads.
 - [x] Add administrator pause, restore and removal controls with a permanent

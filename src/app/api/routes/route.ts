@@ -10,6 +10,7 @@ import {
 import { v4 as uuidv4 } from "uuid";
 import { hasActiveBetaAccess } from "@/lib/beta-intake";
 import { prepareRideSubmission, RouteSubmissionError } from "@/lib/route-submission";
+import { toPublicRoute, toPublicRoutes } from "@/lib/public-route";
 
 export async function GET(request: NextRequest) {
   try {
@@ -63,7 +64,7 @@ export async function GET(request: NextRequest) {
     const rows = await getRoutes(filters);
     const hasMore = rows.length > pageSize;
     const routes = hasMore ? rows.slice(0, pageSize) : rows;
-    return NextResponse.json({ data: routes, hasMore, page, avgSpeedKmh: userSpeed });
+    return NextResponse.json({ data: toPublicRoutes(routes), hasMore, page, avgSpeedKmh: userSpeed });
   } catch (err) {
     return handleApiError(err);
   }
@@ -183,7 +184,7 @@ export async function POST(request: NextRequest) {
       elevationLossM: prepared.elevationLossM,
     });
 
-    return NextResponse.json(route, { status: 201 });
+    return NextResponse.json(toPublicRoute(route), { status: 201 });
   } catch (err) {
     return handleApiError(err);
   }

@@ -18,6 +18,7 @@ import {
   getUserLoopRating,
 } from "@/lib/db";
 import { apiError, handleApiError } from "@/lib/api-utils";
+import { toPublicRoutes } from "@/lib/public-route";
 
 export async function GET(
   request: NextRequest,
@@ -42,6 +43,10 @@ export async function GET(
       return NextResponse.json({ users: list.map((u) => ({ id: u.id, name: u.name, avatar_url: u.avatar_url })) });
     }
 
+    const sessionToken = request.cookies.get("session")?.value;
+    const viewer = sessionToken ? await getUserBySession(sessionToken) : undefined;
+    const isOwner = viewer?.id === id;
+
     const [stats, routes, totalKm, followers, following, activity, uploadedRoutes, downloadedRoutes, favouritedRoutes, communityScore, loopRating] = await Promise.all([
       getUserStats(id),
       getUserRoutes(id),
@@ -50,44 +55,37 @@ export async function GET(
       getFollowingCount(id),
       getUserActivityFeed(id, 1, 20),
       getUserUploadedRoutes(id),
-      getUserDownloads(id),
-      getUserFavourites(id),
+      isOwner ? getUserDownloads(id) : Promise.resolve([]),
+      isOwner ? getUserFavourites(id) : Promise.resolve([]),
       getCommunityScore(id),
       getUserLoopRating(id),
     ]);
 
     // Check if current viewer is following this user
     let viewerFollowing = false;
-    const sessionToken = request.cookies.get("session")?.value;
-    if (sessionToken) {
-      const viewer = await getUserBySession(sessionToken);
-      if (viewer && viewer.id !== id) {
-        viewerFollowing = await isFollowing(viewer.id, id);
-      }
+    if (viewer && !isOwner) {
+      viewerFollowing = await isFollowing(viewer.id, id);
     }
 
     return NextResponse.json({
       id: user.id,
       name: user.name,
-      email: user.email,
       bio: user.bio,
       location: user.location,
       avatar_url: user.avatar_url,
-      role: user.role,
       created_at: user.created_at,
       stats,
-      routes,
+      routes: toPublicRoutes(routes),
       totalKm,
       followers,
       following,
       activity,
       viewerFollowing,
-      uploadedRoutes,
-      downloadedRoutes,
-      favouritedRoutes,
+      uploadedRoutes: toPublicRoutes(uploadedRoutes),
+      downloadedRoutes: toPublicRoutes(downloadedRoutes),
+      favouritedRoutes: toPublicRoutes(favouritedRoutes),
       communityScore,
       loopRating,
-      avg_speed_kmh: user.avg_speed_kmh ?? 25,
     });
   } catch (err) {
     return handleApiError(err);

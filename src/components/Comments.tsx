@@ -9,7 +9,6 @@ interface Comment {
   id: string;
   user_id: string;
   user_name: string | null;
-  user_email: string;
   user_avatar: string | null;
   body: string;
   created_at: string;
@@ -81,7 +80,6 @@ export default function Comments({ routeId }: { routeId: string }) {
       id: `optimistic-${Date.now()}`,
       user_id: user.id,
       user_name: user.name,
-      user_email: user.email,
       user_avatar: user.avatar_url ?? null,
       body: body.trim(),
       created_at: new Date().toISOString().replace("Z", ""),
@@ -136,12 +134,11 @@ export default function Comments({ routeId }: { routeId: string }) {
   };
 
   const getInitial = (comment: Comment) => {
-    if (comment.user_name) return comment.user_name[0].toUpperCase();
-    return comment.user_email[0].toUpperCase();
+    return comment.user_name?.trim()[0]?.toUpperCase() || "L";
   };
 
   const getDisplayName = (comment: Comment) => {
-    return comment.user_name || comment.user_email.split("@")[0];
+    return comment.user_name?.trim() || "LOOPS rider";
   };
 
   return (

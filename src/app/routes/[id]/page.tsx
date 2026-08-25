@@ -40,7 +40,6 @@ interface Route {
   discipline: string;
   start_lat: number;
   start_lng: number;
-  gpx_filename: string | null;
   coordinates: string;
   created_by: string | null;
   created_at: string;

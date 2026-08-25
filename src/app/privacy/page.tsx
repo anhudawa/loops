@@ -32,7 +32,8 @@ export default function PrivacyPage() {
               We use essential cookies to keep you signed in and protect login flows. Profile and
               community features may store information you choose to add, messages, favourites,
               comments, photos and condition reports. We do not currently use advertising cookies
-              or third-party behavioural analytics.
+              or third-party behavioural analytics. We do not publish your email address, saved
+              routes or download history on your public profile.
             </p>
           </section>
 

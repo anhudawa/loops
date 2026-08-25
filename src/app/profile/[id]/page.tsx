@@ -27,7 +27,6 @@ interface RouteItem {
 interface UserProfile {
   id: string;
   name: string | null;
-  email: string;
   bio: string | null;
   location: string | null;
   avatar_url: string | null;
@@ -246,7 +245,7 @@ export default function ProfilePage() {
     );
   }
 
-  const displayName = profile.name || profile.email.split("@")[0];
+  const displayName = profile.name?.trim() || "LOOPS rider";
   const avatarUrl = profile.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=1a1a1a&color=c8ff00&size=120&bold=true`;
   const joinDate = new Date(profile.created_at).toLocaleDateString("en-IE", { month: "long", year: "numeric" });
   const tierStyle = TIER_STYLES[profile.communityScore?.tier] || TIER_STYLES.Explorer;

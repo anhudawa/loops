@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getRoute, getUserBySession, recordBetaProductEvent } from "@/lib/db";
 import { apiError, handleApiError } from "@/lib/api-utils";
 import { hasActiveBetaAccess } from "@/lib/beta-intake";
+import { toPublicRoute } from "@/lib/public-route";
 
 export async function GET(
   request: NextRequest,
@@ -43,7 +44,7 @@ export async function GET(
       }
     }
 
-    return NextResponse.json(route);
+    return NextResponse.json(toPublicRoute(route));
   } catch (err) {
     return handleApiError(err);
   }

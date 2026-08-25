@@ -64,6 +64,9 @@ mismatch. Publish one test Irish route end to end with separate contributor and
 reviewer accounts. Confirm that a draft is private, an approved route is
 public, GPX requires sign-in, ride planning is tied to its route version, an
 incident quarantines it and an induced staging error reaches the admin queue.
+From a signed-out browser, also confirm that profile, comment and route API
+responses contain no account email, saved/download history, original recording
+filename or legacy activity identifier.
 
 ## Production evidence pack
 

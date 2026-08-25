@@ -89,10 +89,13 @@ export interface Comment {
   route_id: string;
   user_id: string;
   user_name: string | null;
-  user_email: string;
   user_avatar: string | null;
   body: string;
   created_at: string;
+}
+
+export interface AdminComment extends Comment {
+  user_email: string;
 }
 
 export interface Photo {
@@ -1131,7 +1134,7 @@ export async function upsertRating(id: string, routeId: string, userId: string, 
 // ──── Comments ────
 export async function getRouteComments(routeId: string, limit = 10, offset = 0): Promise<Comment[]> {
   const { rows } = await sql`
-    SELECT c.id, c.route_id, c.user_id, u.name as user_name, u.email as user_email, u.avatar_url as user_avatar, c.body, c.created_at
+    SELECT c.id, c.route_id, c.user_id, u.name as user_name, u.avatar_url as user_avatar, c.body, c.created_at
     FROM comments c
     JOIN users u ON c.user_id = u.id
     WHERE c.route_id = ${routeId}
@@ -1340,7 +1343,7 @@ export async function getAllUsers(page = 1, limit = 50): Promise<{ users: User[]
   return { users: data.rows as User[], total: Number(count.rows[0].c) };
 }
 
-export async function getAllComments(page = 1, limit = 50): Promise<{ comments: (Comment & { route_name: string })[]; total: number }> {
+export async function getAllComments(page = 1, limit = 50): Promise<{ comments: (AdminComment & { route_name: string })[]; total: number }> {
   const offset = (page - 1) * limit;
   const [data, count] = await Promise.all([
     sql.query(
@@ -1354,7 +1357,7 @@ export async function getAllComments(page = 1, limit = 50): Promise<{ comments: 
     ),
     sql`SELECT COUNT(*) as c FROM comments`,
   ]);
-  return { comments: data.rows as (Comment & { route_name: string })[], total: Number(count.rows[0].c) };
+  return { comments: data.rows as (AdminComment & { route_name: string })[], total: Number(count.rows[0].c) };
 }
 
 export interface AdminRouteReview extends Route {

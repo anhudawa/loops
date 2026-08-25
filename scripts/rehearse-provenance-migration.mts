@@ -88,6 +88,9 @@ try {
       53.1, -6.2, '[[53.1,-6.2,100],[53.2,-6.3,150],[53.1,-6.2,100]]',
       'rider-1', TRUE, 'approved'
     );
+
+    UPDATE routes SET gpx_filename = 'Aoife-Rider-private-activity-123.gpx'
+    WHERE id = 'legacy-route';
   `);
 
   await db.exec(`
@@ -127,6 +130,11 @@ try {
   assert.equal(legacy.rows[0].human_ridden, false);
   assert.equal(legacy.rows[0].last_ridden_at, null);
   assert.equal(legacy.rows[0].current_version_id, null);
+
+  const minimisedFilename = await db.query<{ gpx_filename: string | null }>(
+    "SELECT gpx_filename FROM routes WHERE id = 'legacy-route'"
+  );
+  assert.equal(minimisedFilename.rows[0].gpx_filename, "ridden-route.gpx");
 
   const clearedTokens = await db.query<{
     strava_id: string | null;

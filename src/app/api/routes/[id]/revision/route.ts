@@ -4,6 +4,7 @@ import { apiError, handleApiError, stripHtml } from "@/lib/api-utils";
 import { hasActiveBetaAccess } from "@/lib/beta-intake";
 import { createRiddenRouteRevision, getRoute, getUserBySession } from "@/lib/db";
 import { prepareRideSubmission, RouteSubmissionError } from "@/lib/route-submission";
+import { toPublicRoute } from "@/lib/public-route";
 
 export async function POST(
   request: NextRequest,
@@ -89,7 +90,7 @@ export async function POST(
         409
       );
     }
-    return NextResponse.json({ route: revised }, { status: 201 });
+    return NextResponse.json({ route: toPublicRoute(revised) }, { status: 201 });
   } catch (error) {
     return handleApiError(error);
   }

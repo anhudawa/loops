@@ -1,8 +1,8 @@
 import Link from "next/link";
 
 export const metadata = {
-  title: "Feedback | LOOPS",
-  description: "Send feedback about LOOPS.",
+  title: "Contact LOOPS",
+  description: "Join the Ireland contributor beta, discuss a future destination partnership, or send product feedback.",
 };
 
 export default function FeedbackPage() {
@@ -22,19 +22,54 @@ export default function FeedbackPage() {
       </header>
 
       <div className="max-w-2xl mx-auto px-4 md:px-6 py-12">
-        <h1 className="text-2xl font-extrabold mb-6" style={{ color: "var(--text)" }}>Feedback</h1>
+        <h1 className="text-2xl md:text-3xl font-extrabold mb-3" style={{ color: "var(--text)" }}>Talk to LOOPS</h1>
+        <p className="text-sm leading-relaxed mb-8" style={{ color: "var(--text-muted)" }}>
+          Choose the path that fits. Ireland is the only active route market; Girona and Mallorca remain gated until local evidence and partners are in place.
+        </p>
 
-        <div className="space-y-4 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-          <p>
-            LOOPS is a work in progress and we genuinely want to hear from you. Whether it&apos;s
-            a bug, a feature idea, or just something that felt off — let us know.
-          </p>
-          <p>
-            Send your feedback to{" "}
-            <a href="mailto:hello@loops.ie" className="font-bold hover:opacity-80" style={{ color: "var(--accent)" }}>
+        <div className="space-y-4 text-sm leading-relaxed">
+          <section className="rounded-xl p-5" style={{ background: "var(--bg-raised)", border: "1px solid var(--border)" }}>
+            <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--accent)" }}>Ireland · active</p>
+            <h2 className="text-lg font-extrabold mb-2" style={{ color: "var(--text)" }}>Become a founding contributor</h2>
+            <p className="mb-4" style={{ color: "var(--text-secondary)" }}>
+              Experienced Irish road riders can apply to contribute loops they personally rode. Approval comes before file upload and every route receives independent review.
+            </p>
+            <Link href="/beta" className="btn-accent inline-flex px-4 py-2.5 rounded-lg text-xs font-bold">
+              Apply to the Ireland beta
+            </Link>
+          </section>
+
+          <section id="market-partners" className="rounded-xl p-5 scroll-mt-6" style={{ background: "var(--bg-raised)", border: "1px solid var(--border)" }}>
+            <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--accent)" }}>Girona and Mallorca · planned</p>
+            <h2 className="text-lg font-extrabold mb-2" style={{ color: "var(--text)" }}>Local rider or operator</h2>
+            <p className="mb-4" style={{ color: "var(--text-secondary)" }}>
+              We want to hear from local ride leaders, coaches, shops, tour operators and accommodation partners interested in a permissioned pilot after the Ireland gates pass.
+            </p>
+            <a
+              href="mailto:hello@loops.ie?subject=Girona%20or%20Mallorca%20LOOPS%20pilot"
+              className="inline-flex px-4 py-2.5 rounded-lg text-xs font-bold"
+              style={{ border: "1px solid var(--border)", color: "var(--text)" }}
+            >
+              Discuss a destination pilot
+            </a>
+          </section>
+
+          <section className="rounded-xl p-5" style={{ background: "var(--bg-raised)", border: "1px solid var(--border)" }}>
+            <h2 className="text-lg font-extrabold mb-2" style={{ color: "var(--text)" }}>Product feedback</h2>
+            <p className="mb-4" style={{ color: "var(--text-secondary)" }}>
+              Found a bug, have a feature idea, or saw something that felt wrong? Tell us what happened and where.
+            </p>
+            <a
+              href="mailto:hello@loops.ie?subject=LOOPS%20product%20feedback"
+              className="font-bold hover:opacity-80"
+              style={{ color: "var(--accent)" }}
+            >
               hello@loops.ie
-            </a>{" "}
-            and we&apos;ll get back to you.
+            </a>
+          </section>
+
+          <p className="text-xs px-1" style={{ color: "var(--text-muted)" }}>
+            Please do not email ride files, precise home start locations or private activity data. Approved contributors upload evidence through the protected submission workflow.
           </p>
         </div>
       </div>

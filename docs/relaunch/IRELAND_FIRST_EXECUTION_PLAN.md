@@ -73,6 +73,10 @@ Workout suitability is a separate, segment-level assessment.
 - [x] Prevent synthetic seeds from becoming approved or verified.
 - [x] Decommission legacy public-GPX import, generated-GPX and synthetic product
   seed scripts so they cannot materialise catalogue routes.
+- [x] Remove ungated destination route/workout recommendations from public
+  pages and retain legacy destination guides as unpublished drafts until their
+  claims can be tied to approved local evidence.
+- [x] Preserve a rider's complete planning question through the sign-in handoff.
 - [x] Add a read-only provenance audit command.
 - [x] Add a disposable PostgreSQL migration rehearsal to CI.
 - [x] Prevent route page views from mutating an immutable route version.

@@ -29,8 +29,12 @@ describe("Ireland road relaunch public positioning", () => {
     expect(endpoint).toContain("UNSUPPORTED_MARKET");
   });
 
-  it("does not publish the obsolete generated-route comparison post", () => {
+  it("does not publish obsolete or unreviewed planned-market route guidance", () => {
     expect(getAllSlugs()).not.toContain("komoot-alternative-for-road-cyclists");
+    expect(getAllSlugs()).not.toContain("cycling-in-girona-complete-guide");
+    expect(getAllSlugs()).not.toContain("cycling-in-mallorca-routes-climbs-when-to-go");
+    expect(getAllSlugs()).not.toContain("best-winter-cycling-training-camps-europe");
+    expect(getAllSlugs()).not.toContain("cycling-in-wicklow-dublins-mountain-playground");
   });
 
   it("keeps route-library claims consistent with closed-beta access", () => {
@@ -47,6 +51,8 @@ describe("Ireland road relaunch public positioning", () => {
     const destinationPage = source("src/app/cycling/[destination]/page.tsx");
     expect(destinationPage).toContain('new Set(["girona", "mallorca"])');
     expect(destinationPage).toContain('destination.country === "Ireland"');
+    expect(destinationPage).toContain("LOOPS is not publishing route or road-condition guidance");
+    expect(destinationPage).toContain("if (!active)");
   });
 
   it("does not use legacy account totals as public social proof", () => {

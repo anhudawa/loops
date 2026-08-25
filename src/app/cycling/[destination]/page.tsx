@@ -2,8 +2,8 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import AppHeader from "@/components/AppHeader";
 import JsonLd from "@/components/JsonLd";
-import { generateBreadcrumbJsonLd, generateFaqJsonLd, slugify } from "@/lib/seo";
-import { destinations, getDestinationBySlug, type Destination } from "@/content/destinations";
+import { generateBreadcrumbJsonLd, slugify } from "@/lib/seo";
+import { destinations, getDestinationBySlug } from "@/content/destinations";
 
 interface Props {
   params: Promise<{ destination: string }>;
@@ -17,26 +17,13 @@ export function generateStaticParams() {
     .map((destination) => ({ destination: destination.slug }));
 }
 
-function placeJsonLd(dest: Destination) {
-  return {
-    "@context": "https://schema.org",
-    "@type": "TouristDestination",
-    name: `Cycling in ${dest.name}`,
-    description: `${dest.tagline}. ${dest.riding[0]?.slice(0, 200)}...`,
-    url: `https://www.loops.ie/cycling/${dest.slug}`,
-    touristType: {
-      "@type": "Audience",
-      audienceType: "Cyclists",
-    },
-    geo: {
-      "@type": "GeoCoordinates",
-      addressCountry: dest.country,
-    },
-    containedInPlace: {
-      "@type": "Country",
-      name: dest.country,
-    },
-  };
+function PageShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="min-h-screen" style={{ background: "var(--bg)" }}>
+      <AppHeader />
+      <main className="max-w-3xl mx-auto px-4 py-12 md:py-20">{children}</main>
+    </div>
+  );
 }
 
 export default async function DestinationPage({ params }: Props) {
@@ -44,374 +31,132 @@ export default async function DestinationPage({ params }: Props) {
   const dest = getDestinationBySlug(destination);
   if (!dest) notFound();
   if (dest.country !== "Ireland" && !ROADMAP_DESTINATIONS.has(dest.slug)) notFound();
-  const active = dest.country === "Ireland";
 
+  const active = dest.country === "Ireland";
   const breadcrumb = generateBreadcrumbJsonLd([
     { name: "Home", url: "https://www.loops.ie" },
     { name: "Destinations", url: "https://www.loops.ie/cycling" },
     { name: dest.name, url: `https://www.loops.ie/cycling/${dest.slug}` },
   ]);
 
-  return (
-    <div className="min-h-screen" style={{ background: "var(--bg)" }}>
-      <JsonLd data={placeJsonLd(dest)} />
-      <JsonLd data={generateFaqJsonLd(dest.faqs)} />
-      <JsonLd data={breadcrumb} />
+  if (!active) {
+    const launchRequirements = [
+      "Ireland keeps a 100% provenance and workout-assessment trust record.",
+      "Ireland passes the route-action, confirmed-ride and four-week-retention gates.",
+      `A named ${dest.name} operator or supply partner signs the contributor and rights terms.`,
+      `Local contributors provide 20–30 permissioned road loops they personally rode.`,
+      "A local review, freshness and incident-response workflow is operational.",
+      "An operator agrees to a paid or explicitly time-boxed pilot.",
+    ];
 
-      {/* Header */}
-      <AppHeader />
-
-      <main className="max-w-3xl mx-auto px-4 py-10">
-        {/* Hero */}
-        <div className="mb-10">
-          {!active && (
-            <div className="rounded-xl p-4 mb-6 text-sm" style={{ background: "var(--accent-glow)", border: "1px solid var(--accent)", color: "var(--text-secondary)" }}>
-              <p className="font-bold" style={{ color: "var(--accent)" }}>Planned market · not yet launched</p>
-              <p className="text-xs mt-1">LOOPS is proving its human-ridden road catalogue in Ireland first. {dest.name} opens only after the Ireland gates pass and local contributors and partners are in place.</p>
-            </div>
-          )}
-          <div className="flex items-center gap-2 mb-3">
-            <span
-              className="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded"
-              style={{
-                color: "var(--text)",
-                background: "var(--bg-raised)",
-                border: "1px solid var(--border)",
-              }}
-            >
-              {dest.country}
-            </span>
-          </div>
-
-          <h1
-            className="text-3xl md:text-4xl font-black tracking-tight mb-3 leading-tight"
-            style={{ color: "var(--text)" }}
-          >
-            Cycling in {dest.name}
-          </h1>
-
-          <p
-            className="text-lg leading-relaxed"
-            style={{ color: "var(--text-muted)" }}
-          >
-            {dest.tagline}
+    return (
+      <>
+        <JsonLd data={breadcrumb} />
+        <PageShell>
+          <p className="text-[11px] font-bold uppercase tracking-wider mb-4" style={{ color: "var(--accent)" }}>
+            Planned market · not yet launched
           </p>
+          <h1 className="text-3xl md:text-5xl font-black tracking-tight mb-4" style={{ color: "var(--text)" }}>
+            {dest.name} comes after Ireland
+          </h1>
+          <p className="text-base md:text-lg leading-relaxed max-w-2xl" style={{ color: "var(--text-secondary)" }}>
+            LOOPS is not publishing route or road-condition guidance for {dest.name} yet.
+            The market opens only when local riders have supplied completed-ride evidence,
+            independent reviewers have approved the exact route versions, and the operating
+            and commercial gates below are met.
+          </p>
+
+          <section className="mt-10 rounded-2xl p-5 md:p-7" style={{ background: "var(--bg-raised)", border: "1px solid var(--border)" }}>
+            <h2 className="text-lg font-extrabold mb-4" style={{ color: "var(--text)" }}>What must happen first</h2>
+            <ol className="space-y-3 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+              {launchRequirements.map((item, index) => (
+                <li key={item} className="flex gap-3">
+                  <span className="font-black" style={{ color: "var(--accent)" }}>{index + 1}</span>
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ol>
+          </section>
+
+          <div className="flex flex-wrap gap-3 mt-8">
+            <Link href="/cycling" className="btn-accent px-5 py-3 rounded-xl text-sm font-bold">
+              View the rollout
+            </Link>
+            <Link href="/feedback#market-partners" className="px-5 py-3 rounded-xl text-sm font-bold" style={{ border: "1px solid var(--border)", color: "var(--text-secondary)" }}>
+              I&apos;m a local rider or operator
+            </Link>
+          </div>
+        </PageShell>
+      </>
+    );
+  }
+
+  const routeLibraryHref = dest.routesCountry && dest.routesRegion
+    ? `/routes/country/${slugify(dest.routesCountry)}/${slugify(dest.routesRegion)}`
+    : "/";
+  const evidenceItems = [
+    "A named contributor rode the exact published geometry.",
+    "A separate curator approved the recording, rights and route version.",
+    "The last-ridden date and current evidence are visible.",
+    "Workout claims appear only for separately assessed stretches.",
+  ];
+
+  const destinationJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    name: `Reviewed road cycling routes near ${dest.name}`,
+    description: `Human-ridden, independently reviewed Ireland road loops near ${dest.name}.`,
+    url: `https://www.loops.ie/cycling/${dest.slug}`,
+  };
+
+  return (
+    <>
+      <JsonLd data={destinationJsonLd} />
+      <JsonLd data={breadcrumb} />
+      <PageShell>
+        <p className="text-[11px] font-bold uppercase tracking-wider mb-4" style={{ color: "var(--accent)" }}>
+          Active market · Ireland road beta
+        </p>
+        <h1 className="text-3xl md:text-5xl font-black tracking-tight mb-4" style={{ color: "var(--text)" }}>
+          Find a reviewed loop near {dest.name}
+        </h1>
+        <p className="text-base md:text-lg leading-relaxed max-w-2xl" style={{ color: "var(--text-secondary)" }}>
+          Tell LOOPS where you want to start, how much time you have and what kind
+          of ride or supported session you need. Route recommendations come only
+          from the reviewed library—this page does not invent or generalise local loops.
+        </p>
+
+        <div className="flex flex-wrap gap-3 mt-7">
+          <Link href="/generate" className="btn-accent px-5 py-3 rounded-xl text-sm font-bold">
+            Find a human-ridden loop
+          </Link>
+          <Link href={routeLibraryHref} className="px-5 py-3 rounded-xl text-sm font-bold" style={{ border: "1px solid var(--border)", color: "var(--text-secondary)" }}>
+            Browse reviewed routes
+          </Link>
         </div>
 
-        {/* Best time to ride */}
-        <section className="mb-10">
-          <h2
-            className="text-xl md:text-2xl font-black tracking-tight mb-4"
-            style={{ color: "var(--text)" }}
-          >
-            Best time to ride
-          </h2>
-          <div
-            className="rounded-xl p-5 grid grid-cols-1 sm:grid-cols-3 gap-4"
-            style={{
-              background: "var(--bg-raised)",
-              border: "1px solid var(--border)",
-            }}
-          >
-            <div>
-              <p
-                className="text-xs font-bold uppercase tracking-wider mb-1"
-                style={{ color: "var(--text-muted)" }}
-              >
-                Best months
-              </p>
-              <p
-                className="text-sm font-semibold"
-                style={{ color: "var(--text)" }}
-              >
-                {dest.bestMonths}
-              </p>
-            </div>
-            <div>
-              <p
-                className="text-xs font-bold uppercase tracking-wider mb-1"
-                style={{ color: "var(--text-muted)" }}
-              >
-                Temperature
-              </p>
-              <p
-                className="text-sm font-semibold"
-                style={{ color: "var(--text)" }}
-              >
-                {dest.avgTemp}
-              </p>
-            </div>
-            <div>
-              <p
-                className="text-xs font-bold uppercase tracking-wider mb-1"
-                style={{ color: "var(--text-muted)" }}
-              >
-                Rainfall
-              </p>
-              <p
-                className="text-sm font-semibold"
-                style={{ color: "var(--text)" }}
-              >
-                {dest.rainfall}
-              </p>
-            </div>
-          </div>
-        </section>
-
-        {/* The riding */}
-        <section className="mb-10">
-          <h2
-            className="text-xl md:text-2xl font-black tracking-tight mb-4"
-            style={{ color: "var(--text)" }}
-          >
-            The riding
-          </h2>
-          <div className="space-y-4">
-            {dest.riding.map((paragraph, i) => (
-              <p
-                key={i}
-                className="text-base leading-relaxed"
-                style={{ color: "var(--text-secondary)" }}
-              >
-                {paragraph}
-              </p>
+        <section className="mt-12 rounded-2xl p-5 md:p-7" style={{ background: "var(--bg-raised)", border: "1px solid var(--border)" }}>
+          <h2 className="text-lg font-extrabold mb-4" style={{ color: "var(--text)" }}>What every result must prove</h2>
+          <ul className="space-y-3 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+            {evidenceItems.map((item) => (
+              <li key={item} className="flex gap-3">
+                <span aria-hidden="true" className="font-black" style={{ color: "var(--accent)" }}>✓</span>
+                <span>{item}</span>
+              </li>
             ))}
-          </div>
-        </section>
-
-        {/* Key climbs & routes */}
-        <section className="mb-10">
-          <h2
-            className="text-xl md:text-2xl font-black tracking-tight mb-4"
-            style={{ color: "var(--text)" }}
-          >
-            Key climbs &amp; routes
-          </h2>
-          <ul className="space-y-3">
-            {dest.climbs.map((climb, i) => {
-              const dashIdx = climb.indexOf(" — ");
-              const name = dashIdx !== -1 ? climb.slice(0, dashIdx) : climb;
-              const desc =
-                dashIdx !== -1 ? climb.slice(dashIdx + 3) : undefined;
-
-              return (
-                <li
-                  key={i}
-                  className="rounded-lg px-4 py-3"
-                  style={{
-                    background: "var(--bg-raised)",
-                    border: "1px solid var(--border)",
-                  }}
-                >
-                  <span
-                    className="text-sm font-bold"
-                    style={{ color: "var(--text)" }}
-                  >
-                    {name}
-                  </span>
-                  {desc && (
-                    <span
-                      className="text-sm ml-1"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      {" "}
-                      &mdash; {desc}
-                    </span>
-                  )}
-                </li>
-              );
-            })}
           </ul>
         </section>
 
-        {/* Practical info */}
-        <section className="mb-10">
-          <h2
-            className="text-xl md:text-2xl font-black tracking-tight mb-4"
-            style={{ color: "var(--text)" }}
-          >
-            Practical info
-          </h2>
-          <div className="space-y-4">
-            <div
-              className="rounded-lg px-4 py-3"
-              style={{
-                background: "var(--bg-raised)",
-                border: "1px solid var(--border)",
-              }}
-            >
-              <p
-                className="text-xs font-bold uppercase tracking-wider mb-1"
-                style={{ color: "var(--text-muted)" }}
-              >
-                Getting there
-              </p>
-              <p
-                className="text-sm leading-relaxed"
-                style={{ color: "var(--text-secondary)" }}
-              >
-                {dest.practical.airport}
-              </p>
-            </div>
-            <div
-              className="rounded-lg px-4 py-3"
-              style={{
-                background: "var(--bg-raised)",
-                border: "1px solid var(--border)",
-              }}
-            >
-              <p
-                className="text-xs font-bold uppercase tracking-wider mb-1"
-                style={{ color: "var(--text-muted)" }}
-              >
-                Bike hire
-              </p>
-              <p
-                className="text-sm leading-relaxed"
-                style={{ color: "var(--text-secondary)" }}
-              >
-                {dest.practical.bikeHire}
-              </p>
-            </div>
-            <div
-              className="rounded-lg px-4 py-3"
-              style={{
-                background: "var(--bg-raised)",
-                border: "1px solid var(--border)",
-              }}
-            >
-              <p
-                className="text-xs font-bold uppercase tracking-wider mb-1"
-                style={{ color: "var(--text-muted)" }}
-              >
-                Where to stay
-              </p>
-              <p
-                className="text-sm leading-relaxed"
-                style={{ color: "var(--text-secondary)" }}
-              >
-                {dest.practical.accommodation}
-              </p>
-            </div>
-          </div>
-        </section>
-
-        {/* FAQ */}
-        <section
-          className="mb-10 pt-8 border-t"
-          style={{ borderColor: "var(--border)" }}
-        >
-          <h2
-            className="text-xl md:text-2xl font-black tracking-tight mb-6"
-            style={{ color: "var(--text)" }}
-          >
-            Frequently asked questions
-          </h2>
-          <div className="space-y-6">
-            {dest.faqs.map((faq, i) => (
-              <div key={i}>
-                <h3
-                  className="text-base font-bold mb-1"
-                  style={{ color: "var(--text)" }}
-                >
-                  {faq.question}
-                </h3>
-                <p
-                  className="text-sm leading-relaxed"
-                  style={{ color: "var(--text-secondary)" }}
-                >
-                  {faq.answer}
-                </p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* Route library link */}
-        {active && dest.routesCountry && dest.routesRegion && (
-          <div
-            className="mb-6 rounded-xl p-5 text-center"
-            style={{
-              background: "var(--bg-raised)",
-              border: "1px solid var(--border)",
-            }}
-          >
-            <p className="text-sm mb-3" style={{ color: "var(--text-muted)" }}>
-              Human-ridden road loops with elevation profiles, climb details and GPX access for approved beta riders
-            </p>
-            <Link
-              href={`/routes/country/${slugify(dest.routesCountry)}/${slugify(dest.routesRegion)}`}
-              className="inline-flex items-center justify-center font-bold text-sm px-5 py-2.5 rounded-lg"
-              style={{
-                background: "var(--accent)",
-                color: "var(--bg)",
-              }}
-            >
-              Browse {dest.name} routes
-            </Link>
-          </div>
-        )}
-
-        {/* Collection link */}
-        {active && dest.collectionSlug && (
-          <div
-            className="mb-6 rounded-xl p-5 text-center"
-            style={{
-              background: "var(--bg-raised)",
-              border: "1px solid var(--border)",
-            }}
-          >
-            <p
-              className="text-sm mb-3"
-              style={{ color: "var(--text-muted)" }}
-            >
-              Browse our curated routes in {dest.name}
-            </p>
-            <Link
-              href={`/collections/${dest.collectionSlug}`}
-              className="inline-flex items-center justify-center font-bold text-sm px-5 py-2.5 rounded-lg"
-              style={{
-                border: "1px solid var(--border)",
-                color: "var(--text)",
-                background: "var(--bg-card)",
-              }}
-            >
-              View {dest.name} routes
-            </Link>
-          </div>
-        )}
-
-        {/* CTA */}
-        <div
-          className="rounded-xl p-6 text-center"
-          style={{
-            background: "var(--bg-raised)",
-            border: "1px solid var(--border)",
-          }}
-        >
-          <h2
-            className="text-xl font-black tracking-tight mb-2"
-            style={{ color: "var(--text)" }}
-          >
-            {active ? `Find a reviewed loop in ${dest.name}` : `${dest.name} comes after Ireland`}
-          </h2>
-          <p
-            className="text-sm leading-relaxed mb-4 max-w-md mx-auto"
-            style={{ color: "var(--text-muted)" }}
-          >
-            {active
-              ? "Tell LOOPS where you are, how much time you have and what session you need. We will match you only to reviewed, human-ridden routes."
-              : "Follow the Ireland-first rollout. We will not publish a route here until a named person has ridden and reviewed that exact version."}
+        <section className="mt-8 rounded-2xl p-5 md:p-7" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+          <h2 className="text-lg font-extrabold mb-2" style={{ color: "var(--text)" }}>Know a useful Irish road loop?</h2>
+          <p className="text-sm leading-relaxed mb-4" style={{ color: "var(--text-secondary)" }}>
+            Founding contributors apply first, then upload their own timestamped completed-ride file through the protected workflow. Public links and planned routes are not accepted as proof.
           </p>
-          <Link
-            href={active ? "/generate" : "/cycling"}
-            className="inline-flex items-center justify-center font-bold text-sm px-6 py-3 rounded-lg"
-            style={{ background: "var(--accent)", color: "#0a0a0a" }}
-          >
-            {active ? "Find a human-ridden loop" : "View the rollout"}
+          <Link href="/beta" className="font-bold text-sm underline underline-offset-4" style={{ color: "var(--accent)" }}>
+            Apply as a contributor
           </Link>
-        </div>
-      </main>
-    </div>
+        </section>
+      </PageShell>
+    </>
   );
 }

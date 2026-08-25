@@ -4,13 +4,12 @@ import JsonLd from "@/components/JsonLd";
 import { getAllPosts, getPostsGroupedByCategory, type BlogPost } from "@/lib/blog";
 
 export const metadata: Metadata = {
-  title: "Cycling Guides & Training Blog — LOOPS",
+  title: "Road Cycling Training Guides — LOOPS",
   description:
-    "Road cycling destination guides and training advice from LOOPS, including Ireland, Girona, Mallorca, endurance and interval sessions.",
+    "Practical endurance and interval training guidance for road cyclists, with clear limits on which sessions LOOPS currently matches.",
   alternates: { canonical: "/blog" },
   keywords: [
     "cycling blog",
-    "cycling destinations",
     "cycling training",
     "Zone 2 cycling",
     "threshold intervals",
@@ -18,16 +17,16 @@ export const metadata: Metadata = {
     "cycling guides",
   ],
   openGraph: {
-    title: "Cycling Guides & Training Blog — LOOPS",
+    title: "Road Cycling Training Guides — LOOPS",
     description:
-      "Road cycling destination guides and practical outdoor training advice from LOOPS.",
+      "Practical outdoor endurance and interval training guidance from LOOPS.",
     url: "https://www.loops.ie/blog",
     type: "website",
   },
 };
 
 const CATEGORY_BLURB: Record<string, string> = {
-  Destinations: "Where to ride: Ireland first, with Girona and Mallorca next.",
+  Destinations: "Published only when the destination guidance is backed by approved local route evidence.",
   Training: "How to ride. Evidence-based interval and endurance training, applied outdoors.",
   Product: "How LOOPS helps you find and plan routes that fit your training and your trip.",
 };
@@ -112,11 +111,10 @@ export default function BlogIndexPage() {
       <main className="max-w-5xl mx-auto px-4 py-10">
         <div className="mb-10">
           <h1 className="text-3xl md:text-4xl font-black tracking-tight mb-2" style={{ color: "var(--text)" }}>
-            Cycling guides &amp; training
+            Road cycling training guides
           </h1>
           <p className="text-base max-w-2xl leading-relaxed" style={{ color: "var(--text-muted)" }}>
-            Irish road riding and evidence-based training advice you can take outdoors, with Girona and
-            Mallorca next. Find a suitable ride in our{" "}
+            Practical training advice you can take outdoors. Match a supported session only against our{" "}
             <Link href="/generate" className="font-semibold underline underline-offset-2" style={{ color: "var(--accent)" }}>
               human-ridden route library
             </Link>

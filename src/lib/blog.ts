@@ -72,6 +72,20 @@ const POSTS: BlogPost[] = [
   wicklow,
 ];
 
+/**
+ * Retained as editorial drafts, but deliberately absent from every public
+ * lookup. Planned-market route and workout recommendations require the same
+ * local rider evidence and review discipline as the catalogue they describe.
+ */
+export const UNPUBLISHED_BLOG_SLUGS = new Set([
+  "cycling-in-girona-complete-guide",
+  "cycling-in-mallorca-routes-climbs-when-to-go",
+  "best-winter-cycling-training-camps-europe",
+  "cycling-in-wicklow-dublins-mountain-playground",
+]);
+
+const PUBLISHED_POSTS = POSTS.filter((post) => !UNPUBLISHED_BLOG_SLUGS.has(post.slug));
+
 export const BLOG_CATEGORIES: BlogCategory[] = ["Destinations", "Training", "Product"];
 
 function byDateDesc(a: BlogPost, b: BlogPost): number {
@@ -79,15 +93,15 @@ function byDateDesc(a: BlogPost, b: BlogPost): number {
 }
 
 export function getAllPosts(): BlogPost[] {
-  return [...POSTS].sort(byDateDesc);
+  return [...PUBLISHED_POSTS].sort(byDateDesc);
 }
 
 export function getAllSlugs(): string[] {
-  return POSTS.map((p) => p.slug);
+  return PUBLISHED_POSTS.map((p) => p.slug);
 }
 
 export function getPostBySlug(slug: string): BlogPost | undefined {
-  return POSTS.find((p) => p.slug === slug);
+  return PUBLISHED_POSTS.find((p) => p.slug === slug);
 }
 
 export function getPostsByCategory(category: BlogCategory): BlogPost[] {

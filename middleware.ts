@@ -100,7 +100,7 @@ export function middleware(request: NextRequest) {
   if (!session) {
     // Preserve intent: come back to where the user was heading
     const login = new URL("/login", request.url);
-    login.searchParams.set("redirect", pathname);
+    login.searchParams.set("redirect", `${pathname}${request.nextUrl.search}`);
     return NextResponse.redirect(login);
   }
 

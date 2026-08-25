@@ -40,6 +40,12 @@ Contributor qualification call:
 Do not accept route packs, club archives or links on the call. Each route must
 be uploaded and attested by the person who rode it.
 
+Public acquisition paths are intentionally separated: `/feedback` directs
+Irish riders to the signed-in contributor application, sends Girona/Mallorca
+partner interest to a distinct email subject, and keeps product feedback
+separate. Ride files, precise home starts and private activity data must never
+be requested by email.
+
 ## Contributor invitation
 
 > LOOPS is rebuilding as a trusted library of Irish road loops. We never

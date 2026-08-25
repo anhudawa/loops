@@ -715,7 +715,7 @@ export default function AdminPage() {
                         </span>
                       </td>
                       <td className="p-3 text-xs" style={{ color: "var(--text-muted)" }}>
-                        {new Date(u.created_at + "Z").toLocaleDateString("en-IE")}
+                        {new Date(u.created_at).toLocaleDateString("en-IE")}
                       </td>
                       <td className="p-3 text-right">
                         {u.id !== user.id && u.role !== "admin" && (
@@ -1075,7 +1075,7 @@ export default function AdminPage() {
                       <td className="p-3" style={{ color: "var(--text-muted)" }}>{c.route_name}</td>
                       <td className="p-3 max-w-xs truncate" style={{ color: "var(--text-muted)" }}>{c.body}</td>
                       <td className="p-3 text-xs" style={{ color: "var(--text-muted)" }}>
-                        {new Date(c.created_at + "Z").toLocaleDateString("en-IE")}
+                        {new Date(c.created_at).toLocaleDateString("en-IE")}
                       </td>
                       <td className="p-3 text-right">
                         <button

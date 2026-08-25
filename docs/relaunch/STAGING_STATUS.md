@@ -35,6 +35,19 @@ values. All targets declare:
 
 Disabled Strava and Garmin credentials were not copied into staging.
 
+Google sign-in is configured only for the relaunch branch Preview environment:
+
+- Google Cloud project: `loops-ireland-staging`
+- OAuth app status: External / Testing (not published)
+- OAuth client: `LOOPS Ireland Staging Preview`
+- Authorized origin: the stable relaunch branch preview
+- Authorized callback: the stable relaunch branch preview's
+  `/api/auth/google/callback` endpoint
+- Vercel variables `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are stored as
+  secrets and scoped only to `relaunch/ireland-human-ridden`; Production does
+  not receive them.
+- The owner account is the sole approved OAuth test user.
+
 ## Closed-team access and map licence
 
 This environment is private research and development, not a public beta:
@@ -66,6 +79,12 @@ References:
 - Provenance audit: zero routes, zero legacy records and zero synthetic users
 - Ireland beta readiness audit: executes successfully against the real staging
   schema and reports the expected `0%` supply result for an empty catalogue
+- Google OAuth: completed end to end against the stable protected preview; the
+  callback created the first user in the staging database and issued a working
+  application session
+- Staging operations: the owner account was promoted to `admin` in the isolated
+  staging database and the admin dashboard correctly reports one user and zero
+  routes
 - The live audit exposed and verified a fix for PostgreSQL proximity ranking:
   calculated `base_zone` and `zone_boost` fields are now materialised in a CTE
   before they are combined in `ORDER BY`.
@@ -74,17 +93,20 @@ The failed supply gate is intentional. It must remain failed until real Irish
 routes have a permissioned ride recording, immutable route version, approved
 attestation and independent editorial review.
 
-## Deployment gate still open
+## Next operating gates
 
-The branch has been redeployed with the isolated database and restricted map
-configuration. The deployment preflight now fails on only one missing item:
+The protected branch preview now has its isolated database, restricted map,
+Google sign-in and first staging administrator. It remains intentionally empty
+of routes.
 
-1. A staging Google OAuth client whose callback is
-   `https://loops-git-relaunch-ireland-human-ridden-anhudawas-projects.vercel.app/api/auth/google/callback`.
+The next workflow rehearsal requires two inputs that must not be fabricated:
 
-Google Cloud currently requires the account owner to re-authenticate before a
-new isolated OAuth client can be created. Do not reuse production credentials.
+1. A recent Irish road-loop GPX or FIT recording supplied by the person who
+   actually rode it and can grant LOOPS permission to use it.
+2. A second real team Google account, added as an OAuth test user, so the
+   contributor and reviewer are different people.
 
-After the OAuth values are present, pull the branch Preview environment, run
-`npm run preflight:deploy`, redeploy the relaunch branch, and complete the
-contributor/reviewer/privacy/quarantine workflow in the deployment runbook.
+With those inputs, run the complete contributor submission, privacy check,
+immutable versioning, interval assessment, independent review, rejection and
+approval/quarantine paths. The Ireland supply gate remains closed until at
+least 25 independently reviewed human-ridden routes are published.

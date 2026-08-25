@@ -81,6 +81,8 @@ Workout suitability is a separate, segment-level assessment.
 - [x] Add a disposable PostgreSQL migration rehearsal to CI.
 - [x] Prevent route page views from mutating an immutable route version.
 - [ ] Apply the provenance migration to a copied/staging database.
+- [x] Identify the current Vercel production projects and confirm that existing
+  preview database credentials are not isolated from production.
 - [ ] Run the audit against production and save the signed-off report.
 - [ ] Back up production before any cleanup.
 - [ ] Identify and remove synthetic users, ratings and comments from public

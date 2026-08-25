@@ -1,7 +1,13 @@
 # Relaunch deployment runbook
 
-Status: tooling ready; staging credentials and provider configuration absent  
+Status: tooling ready; production identified, staging isolation absent
 Applies to: Ireland provenance release
+
+The read-only infrastructure findings and safe isolation sequence are recorded
+in [`VERCEL_INFRASTRUCTURE_AUDIT.md`](./VERCEL_INFRASTRUCTURE_AUDIT.md). The
+current `gravel-ireland` preview environment must be treated as production-data
+capable until its shared database credentials are replaced with a verified
+database branch/copy.
 
 ## Safety rules
 

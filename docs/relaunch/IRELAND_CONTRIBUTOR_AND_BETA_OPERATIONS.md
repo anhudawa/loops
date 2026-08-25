@@ -17,6 +17,11 @@ The target is coverage, not raw route count. Thirty-five near-identical Wicklow
 loops would be a failed catalogue. The accompanying supply tracker allocates
 routes across start areas, distances, terrain and workout needs.
 
+The researched organisation queue and outreach ledger are
+`IRELAND_CONTRIBUTOR_TARGETS.md` and `IRELAND_CONTRIBUTOR_OUTREACH.csv`. They
+identify possible introducers only. A row in either file is not contributor
+consent, route permission or evidence that a particular road is safe.
+
 ## Founding contributor cohort
 
 Recruit 12–16 people capable of supplying two to four genuinely useful loops:
@@ -61,6 +66,12 @@ No payment or benefit should be promised until the founder chooses and budgets
 the contributor model. Options to test are recognition only, complimentary
 founding membership, a fixed honorarium per approved loop, or a partner
 revenue share. Compensation never weakens the evidence or review standard.
+
+Outreach must use an organisation's general public channel where available.
+Never copy a club's published list of coaches, captains or members into the
+repository, and never contact personal numbers merely because they are visible
+on a website. Ask the organisation to make the introduction and let the named
+adult apply directly.
 
 ## Intake and review service level
 

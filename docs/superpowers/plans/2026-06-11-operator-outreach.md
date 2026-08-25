@@ -1,5 +1,12 @@
 # Operator Outreach — B2B Target List (2026-06-11)
 
+> **Superseded — do not execute.** This document describes the former AI-route
+> generator product and a route-sourcing approach that no longer meets LOOPS'
+> evidence, rights or human-review standard. It is retained only as historical
+> project context. The active Ireland acquisition queue is
+> `docs/relaunch/IRELAND_CONTRIBUTOR_TARGETS.md`; Girona and Mallorca outreach
+> remains gated until the Ireland trust, usage and commercial criteria pass.
+
 ## Purpose
 This is the B2B lever from the pricing proposal: cycling-tourism operators (rental
 shops, cycling hotels, camps, tour companies) pay €100–300/month for a branded

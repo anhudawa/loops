@@ -1,9 +1,15 @@
 # Route Sourcing & Validation Runbook
 
+> **Historical document — superseded 25 August 2026.** Publicly downloadable
+> tracks and operator pages are discovery leads only; they are not permission
+> to create a LOOPS route. Do not run the importer described below. Follow
+> `docs/relaunch/PLATFORM_DATA_SOURCE_POLICY.md` and the named-rider submission
+> and independent-review workflow instead.
+
 **Date:** 2026-06-09
-**Status:** Active — replaces the "validator partner sign-off" model in the
-launch build spec, per Anthony's decision (no local partners exist; source
-routes from what local experts already publish).
+**Status:** Historical — superseded by the 25 August 2026 named-rider policy.
+This document previously replaced the "validator partner sign-off" model in
+the launch build spec.
 
 ---
 

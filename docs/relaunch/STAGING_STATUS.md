@@ -93,6 +93,25 @@ The failed supply gate is intentional. It must remain failed until real Irish
 routes have a permissioned ride recording, immutable route version, approved
 attestation and independent editorial review.
 
+## Local ride-file triage
+
+The five legacy Irish GPX files in `scripts/seed-data/gpx/` were audited without
+writing to the staging database. Results are recorded in
+`IRELAND_LOCAL_RIDE_CANDIDATES.csv` and can be reproduced with
+`npm run audit:local-candidates`.
+
+- `skerries-loop.gpx` (64.6 km) and `skerries-via-the-lanes.gpx` (84.0 km)
+  pass the timestamped completed-loop gate.
+- `canals.gpx` and `wicklow-200.gpx` do not finish close enough to their starts.
+- `dublin-canal-ride.gpx` has no timestamped track points.
+- None of the five files currently identifies and records consent from the
+  actual rider. The old seed manifest assigned them to synthetic users, so it
+  is not evidence of authorship or permission.
+
+Accordingly, zero routes were created. The two technical passes are ready for
+the named rider to submit through the protected staging workflow; the other
+three must not be ingested.
+
 ## Next operating gates
 
 The protected branch preview now has its isolated database, restricted map,
@@ -101,8 +120,10 @@ of routes.
 
 The next workflow rehearsal requires two inputs that must not be fabricated:
 
-1. A recent Irish road-loop GPX or FIT recording supplied by the person who
-   actually rode it and can grant LOOPS permission to use it.
+1. A named rider must either attest and submit one of the two technically valid
+   Skerries recordings, if it is genuinely theirs, or supply another recent
+   Irish road-loop GPX or FIT recording they personally rode and can grant
+   LOOPS permission to use.
 2. A second real team Google account, added as an OAuth test user, so the
    contributor and reviewer are different people.
 

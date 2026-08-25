@@ -1,5 +1,12 @@
 # Dublin Route Seeding Implementation Plan
 
+> **Historical document — superseded 25 August 2026.** Do not execute this
+> plan or use its fake users, generated comments, ratings, public route files
+> or manual traces to populate LOOPS. The binding relaunch workflow is in
+> `docs/relaunch/IRELAND_FIRST_EXECUTION_PLAN.md`: a named rider submits their
+> own timestamped completed activity, grants rights, and a different person
+> reviews the exact immutable route version.
+
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Seed LOOPS with 10 real Dublin road cycling routes (from real GPX files) attributed to 10 realistic fake users, with ratings and comments, replacing the existing fake seed data.

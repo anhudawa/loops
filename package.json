@@ -9,6 +9,7 @@
     "lint": "eslint",
     "seed": "npx tsx scripts/seed.ts",
     "audit:provenance": "node --import tsx scripts/audit-route-provenance.mts",
+    "audit:local-candidates": "node --import tsx scripts/audit-local-ride-candidates.mts",
     "audit:beta-readiness": "node --import tsx scripts/audit-ireland-beta-readiness.mts",
     "preflight:deploy": "node --import tsx scripts/deployment-preflight.mts",
     "migrate:status": "node --import tsx scripts/migrate.mts --status",

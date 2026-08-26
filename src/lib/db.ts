@@ -6,6 +6,11 @@ import { INTERVAL_FRESHNESS_DAYS, type PublicationStatus } from "@/config/route-
 import type { WorkoutSessionType } from "@/lib/workout";
 import { openToken, sealToken } from "@/lib/token-crypto";
 import { buildIrelandBetaMetricsQuery, ratePercent } from "@/lib/beta-metrics";
+import type {
+  EvidencePlanDemand,
+  EvidenceRoadEdge,
+  RoadAssessment,
+} from "@/lib/road-intelligence/evidence-planner";
 
 // ──── Types ────
 export interface Route {
@@ -1527,6 +1532,188 @@ export async function getRoadIntelligenceCoverage(): Promise<{ areas: RoadIntell
     ORDER BY CASE a.status WHEN 'active' THEN 0 WHEN 'paused' THEN 1 ELSE 2 END, a.name
   `);
   return { areas: rows as RoadIntelligenceCoverage[] };
+}
+
+interface RoadPlanningAreaRow {
+  id: string;
+  name: string;
+  center_lat: number;
+  center_lng: number;
+}
+
+interface RoadPlanningBenchmarkRow {
+  id: string;
+  label: string;
+  duration_minutes: number;
+  structured_request: EvidencePlanDemand["structuredRequest"];
+}
+
+interface RoadPlanningEdgeRow {
+  id: string;
+  supporting_observation_id: string;
+  observed_at: string;
+  from_osm_node_id: string | null;
+  to_osm_node_id: string | null;
+  begin_lat: number;
+  begin_lng: number;
+  end_lat: number;
+  end_lng: number;
+  geometry: unknown;
+  length_m: number;
+  lower_stress_score: number | null;
+  flow_score: number | null;
+  scenic_score: number | null;
+  cafe_count: number | null;
+  distance_to_coast_m: number | null;
+  weighted_grade: number | null;
+  unpaved: boolean | null;
+  roundabout: boolean | null;
+  traffic_signal: boolean | null;
+  surface_rating: RoadAssessment["surfaceRating"] | null;
+  traffic_rating: RoadAssessment["trafficRating"] | null;
+  sightlines_rating: RoadAssessment["sightlinesRating"] | null;
+  assessment_flow_rating: RoadAssessment["flowRating"] | null;
+  assessment_scenic_rating: number | null;
+}
+
+export interface RoadPlanningInputs {
+  area: { id: string; name: string };
+  benchmarks: EvidencePlanDemand[];
+  edges: EvidenceRoadEdge[];
+}
+
+function roadGeometry(value: unknown): Array<[number, number]> {
+  const parsed = typeof value === "string" ? JSON.parse(value) as unknown : value;
+  if (!Array.isArray(parsed) || parsed.length < 2) throw new Error("Road edge has invalid geometry");
+  return parsed.map((point) => {
+    if (!Array.isArray(point) || point.length < 2 || !Number.isFinite(Number(point[0])) || !Number.isFinite(Number(point[1]))) {
+      throw new Error("Road edge geometry contains an invalid coordinate");
+    }
+    return [Number(point[0]), Number(point[1])];
+  });
+}
+
+function planningNodeKey(osmNodeId: string | null, lat: number, lng: number): string {
+  return osmNodeId ? `osm:${osmNodeId}` : `coordinate:${Number(lat).toFixed(5)}:${Number(lng).toFixed(5)}`;
+}
+
+/** Load only approved human evidence; planning remains a separate read-only step. */
+export async function getRoadPlanningInputs(areaId: string): Promise<RoadPlanningInputs> {
+  const [areaResult, benchmarkResult, edgeResult] = await Promise.all([
+    sql.query(
+      `SELECT id, name, center_lat, center_lng
+       FROM road_intelligence_areas
+       WHERE id = $1 AND status = 'active'`,
+      [areaId]
+    ),
+    sql.query(
+      `SELECT id, label, duration_minutes, structured_request
+       FROM road_intelligence_benchmarks
+       WHERE area_id = $1 AND active
+       ORDER BY duration_minutes, id`,
+      [areaId]
+    ),
+    sql.query(
+      `WITH latest_approved_observation AS (
+         SELECT DISTINCT ON (reo.road_edge_id)
+           reo.road_edge_id, reo.id AS supporting_observation_id, reo.observed_at
+         FROM ride_edge_observations reo
+         JOIN ride_attestations ra
+           ON ra.id = reo.ride_attestation_id
+          AND ra.route_id = reo.route_id
+          AND ra.route_version_id = reo.route_version_id
+          AND ra.review_status = 'approved'
+         WHERE reo.area_id = $1
+         ORDER BY reo.road_edge_id, reo.observed_at DESC, reo.id
+       ), latest_approved_assessment AS (
+         SELECT DISTINCT ON (reha.road_edge_id)
+           reha.road_edge_id, reha.surface_rating, reha.traffic_rating,
+           reha.sightlines_rating, reha.flow_rating AS assessment_flow_rating,
+           reha.scenic_rating AS assessment_scenic_rating
+         FROM road_edge_human_assessments reha
+         JOIN ride_attestations ra
+           ON ra.id = reha.ride_attestation_id
+          AND ra.route_id = reha.route_id
+          AND ra.route_version_id = reha.route_version_id
+          AND ra.review_status = 'approved'
+         JOIN ride_edge_observations reo
+           ON reo.ride_attestation_id = reha.ride_attestation_id
+          AND reo.route_id = reha.route_id
+          AND reo.route_version_id = reha.route_version_id
+          AND reo.road_edge_id = reha.road_edge_id
+          AND reo.area_id = $1
+         WHERE reha.review_status = 'approved' AND reha.valid_until >= CURRENT_DATE
+         ORDER BY reha.road_edge_id, reha.assessed_at DESC, reha.id
+       )
+       SELECT re.id, lao.supporting_observation_id,
+         TO_CHAR(lao.observed_at, 'YYYY-MM-DD') AS observed_at,
+         re.from_osm_node_id, re.to_osm_node_id,
+         re.begin_lat, re.begin_lng, re.end_lat, re.end_lng,
+         re.geometry, re.length_m, rec.lower_stress_score, rec.flow_score,
+         rec.scenic_score, rec.cafe_count, rec.distance_to_coast_m,
+         re.weighted_grade, re.unpaved,
+         re.roundabout, re.traffic_signal, laa.surface_rating,
+         laa.traffic_rating, laa.sightlines_rating,
+         laa.assessment_flow_rating, laa.assessment_scenic_rating
+       FROM latest_approved_observation lao
+       JOIN road_edges re ON re.id = lao.road_edge_id
+       LEFT JOIN road_edge_characteristics rec ON rec.road_edge_id = re.id
+       LEFT JOIN latest_approved_assessment laa ON laa.road_edge_id = re.id
+       ORDER BY re.id`,
+      [areaId]
+    ),
+  ]);
+  const area = areaResult.rows[0] as RoadPlanningAreaRow | undefined;
+  if (!area) throw new Error(`Active road intelligence area not found: ${areaId}`);
+
+  const benchmarks = (benchmarkResult.rows as RoadPlanningBenchmarkRow[]).map((benchmark) => {
+    const configuredSpeed = Number(benchmark.structured_request.average_speed_kmh);
+    return {
+      id: benchmark.id,
+      label: benchmark.label,
+      origin: [Number(area.center_lat), Number(area.center_lng)] as [number, number],
+      durationMinutes: Number(benchmark.duration_minutes),
+      durationToleranceMinutes: 15,
+      averageSpeedKmh: Number.isFinite(configuredSpeed) && configuredSpeed >= 15 && configuredSpeed <= 50
+        ? configuredSpeed
+        : 26,
+      structuredRequest: benchmark.structured_request,
+    };
+  });
+  const edges = (edgeResult.rows as RoadPlanningEdgeRow[]).map((edge) => {
+    const assessment = edge.surface_rating && edge.traffic_rating && edge.sightlines_rating &&
+      edge.assessment_flow_rating && edge.assessment_scenic_rating != null
+      ? {
+          surfaceRating: edge.surface_rating,
+          trafficRating: edge.traffic_rating,
+          sightlinesRating: edge.sightlines_rating,
+          flowRating: edge.assessment_flow_rating,
+          scenicRating: Number(edge.assessment_scenic_rating),
+        }
+      : null;
+    return {
+      id: edge.id,
+      supportingObservationId: edge.supporting_observation_id,
+      fromNode: planningNodeKey(edge.from_osm_node_id, edge.begin_lat, edge.begin_lng),
+      toNode: planningNodeKey(edge.to_osm_node_id, edge.end_lat, edge.end_lng),
+      geometry: roadGeometry(edge.geometry),
+      lengthM: Number(edge.length_m),
+      observedAt: edge.observed_at,
+      lowerStressScore: edge.lower_stress_score == null ? null : Number(edge.lower_stress_score),
+      flowScore: edge.flow_score == null ? null : Number(edge.flow_score),
+      scenicScore: edge.scenic_score == null
+        ? assessment ? assessment.scenicRating * 20 : null
+        : Number(edge.scenic_score),
+      cafeCount: Number(edge.cafe_count ?? 0),
+      distanceToCoastM: edge.distance_to_coast_m == null ? null : Number(edge.distance_to_coast_m),
+      weightedGrade: edge.weighted_grade == null ? null : Number(edge.weighted_grade),
+      unpaved: edge.unpaved,
+      roundabout: edge.roundabout,
+      trafficSignal: edge.traffic_signal,
+      assessment,
+    } satisfies EvidenceRoadEdge;
+  });
+  return { area: { id: area.id, name: area.name }, benchmarks, edges };
 }
 
 export interface ContributorRouteSubmission {

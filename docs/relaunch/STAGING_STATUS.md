@@ -175,6 +175,13 @@ approved Clontarf rides, zero road edges, zero observations, zero assessments,
 zero plan proposals and zero routes. `VALHALLA_URL` is not configured, and the
 dry run contacted no map-matching provider.
 
+The read-only evidence planner now evaluates every fixed demand against the
+approved graph. Its first real staging run on 26 August 2026 returned
+`no_evidence` for all 12 benchmarks, including all five four-hour requests.
+The initial four-hour benchmark target is 104 km at 26 km/h. The evaluator
+wrote zero routes and zero proposals; Admin → Roads displays each demand's
+current result and blocking reason.
+
 The next road-intelligence input must be a real approved completed ride from a
 named contributor beginning within the Clontarf lab area. Edge ingestion also
 requires a contracted or self-hosted Valhalla endpoint and the explicit

@@ -110,6 +110,40 @@ interface RoadIntelligenceAreaRow {
   proposal_count: number;
 }
 
+interface RoadBenchmarkReadinessRow {
+  demand_id: string;
+  label: string;
+  algorithm_version: string;
+  duration_minutes: number;
+  status: string;
+  reason: string;
+  graph: {
+    currentDirectedEdges: number;
+    currentDirectedKm: number;
+    assessedDirectedEdges: number;
+    excludedKnownSafetyFailureEdges: number;
+    nearestEvidenceKm: number | null;
+  };
+  target: {
+    distanceKm: number;
+    minDistanceKm: number;
+    maxDistanceKm: number;
+  };
+  candidate: {
+    distance_km: number;
+    predicted_duration_minutes: number;
+    score: number;
+    edge_count: number;
+    assessed_distance_pct: number;
+    scenic_evidence_pct: number;
+    elevation_evidence_pct: number;
+    coastal_distance_pct: number;
+    cafe_count: number;
+    workout_block_count: number;
+    warnings: string[];
+  } | null;
+}
+
 interface CommentRow {
   id: string;
   user_name: string | null;
@@ -195,6 +229,7 @@ export default function AdminPage() {
   const [routes, setRoutes] = useState<RouteRow[]>([]);
   const [sourceCandidates, setSourceCandidates] = useState<SourceCandidateRow[]>([]);
   const [roadIntelligenceAreas, setRoadIntelligenceAreas] = useState<RoadIntelligenceAreaRow[]>([]);
+  const [roadBenchmarkReadiness, setRoadBenchmarkReadiness] = useState<RoadBenchmarkReadinessRow[]>([]);
   const [incidents, setIncidents] = useState<IncidentRow[]>([]);
   const [operationalErrors, setOperationalErrors] = useState<OperationalErrorRow[]>([]);
   const [betaApplications, setBetaApplications] = useState<BetaApplicationRow[]>([]);
@@ -279,6 +314,7 @@ export default function AdminPage() {
       if (!res.ok) throw new Error("Failed to fetch road intelligence coverage");
       const data = await res.json();
       setRoadIntelligenceAreas(data.areas);
+      setRoadBenchmarkReadiness(data.benchmark_readiness);
     } catch {
       setLoadError(true);
     }
@@ -1008,6 +1044,46 @@ export default function AdminPage() {
                 ))}
                 {roadIntelligenceAreas.length === 0 && (
                   <p className="p-8 text-center text-sm" style={{ color: "var(--text-muted)" }}>No road intelligence areas configured.</p>
+                )}
+                {roadBenchmarkReadiness.length > 0 && (
+                  <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border)" }}>
+                    <div className="p-4" style={{ background: "var(--bg-raised)", borderBottom: "1px solid var(--border)" }}>
+                      <p className="font-extrabold" style={{ color: "var(--text)" }}>Fixed demand benchmark</p>
+                      <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+                        Read-only results from the current approved directed-road graph using {roadBenchmarkReadiness[0].algorithm_version}. A no-match is the correct result until human evidence supports the request.
+                      </p>
+                    </div>
+                    <div className="divide-y" style={{ borderColor: "var(--border)" }}>
+                      {roadBenchmarkReadiness.map((benchmark) => (
+                        <div key={benchmark.demand_id} className="p-4 flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="font-bold" style={{ color: "var(--text)" }}>{benchmark.label}</p>
+                              <span
+                                className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded"
+                                style={{
+                                  color: benchmark.status === "candidate" ? "var(--success)" : benchmark.status === "known_safety_failure" ? "var(--danger)" : "var(--warning)",
+                                  background: "var(--bg)",
+                                }}
+                              >
+                                {benchmark.status.replaceAll("_", " ")}
+                              </span>
+                            </div>
+                            <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>{benchmark.reason}</p>
+                            {benchmark.candidate && (
+                              <p className="text-xs mt-2" style={{ color: "var(--text-secondary)" }}>
+                                Private candidate: {benchmark.candidate.distance_km} km · {benchmark.candidate.predicted_duration_minutes} min · {benchmark.candidate.edge_count} evidenced edges · {benchmark.candidate.assessed_distance_pct}% assessed
+                              </p>
+                            )}
+                          </div>
+                          <div className="text-xs md:text-right shrink-0" style={{ color: "var(--text-muted)" }}>
+                            <p>{benchmark.duration_minutes} min · target {benchmark.target.distanceKm} km</p>
+                            <p>{benchmark.graph.currentDirectedEdges} current edges · {benchmark.graph.currentDirectedKm} km evidence</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
             </div>

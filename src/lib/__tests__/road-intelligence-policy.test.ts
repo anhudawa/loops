@@ -40,6 +40,17 @@ describe("Clontarf road intelligence trust boundary", () => {
     expect(endpoint).not.toContain("export async function PATCH");
   });
 
+  it("evaluates Clontarf benchmarks without a route or proposal write path", () => {
+    const evaluator = source("scripts/evaluate-clontarf-benchmarks.mts");
+    const planner = source("src/lib/road-intelligence/evidence-planner.ts");
+    expect(evaluator).toContain("mode: \"read_only\"");
+    expect(evaluator).toContain("planEvidenceBackedLoop");
+    expect(evaluator).not.toMatch(/INSERT INTO routes\b/);
+    expect(evaluator).not.toMatch(/INSERT INTO route_plan_proposals\b/);
+    expect(planner).not.toMatch(/@vercel\/postgres/);
+    expect(planner).not.toMatch(/INSERT INTO\b/);
+  });
+
   it("seeds demand benchmarks rather than synthetic route answers", () => {
     const migration = source("migrations/011_clontarf_road_intelligence.sql");
     expect(migration.match(/'clontarf-\d{3}-/g)).toHaveLength(12);

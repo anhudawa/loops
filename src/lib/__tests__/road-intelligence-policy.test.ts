@@ -38,6 +38,9 @@ describe("Clontarf road intelligence trust boundary", () => {
     expect(endpoint).toContain("export async function GET");
     expect(endpoint).not.toContain("export async function POST");
     expect(endpoint).not.toContain("export async function PATCH");
+    expect(endpoint).toContain("requireAdmin");
+    expect(endpoint).not.toContain("supportingObservationId:");
+    expect(endpoint).not.toMatch(/rider_(user_id|name)/);
   });
 
   it("evaluates Clontarf benchmarks without a route or proposal write path", () => {

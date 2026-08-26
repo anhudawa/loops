@@ -2,9 +2,16 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { useAuth } from "@/components/AuthProvider";
 import Link from "next/link";
 import { getRideSourceLabel } from "@/config/route-policy";
+import type { AdminRoadCoverageEdge } from "@/components/RoadCoverageMap";
+
+const RoadCoverageMap = dynamic(() => import("@/components/RoadCoverageMap"), {
+  ssr: false,
+  loading: () => <div className="h-[420px] animate-pulse" style={{ background: "var(--bg-card)" }} />,
+});
 
 interface Stats {
   totalUsers: number;
@@ -230,6 +237,9 @@ export default function AdminPage() {
   const [sourceCandidates, setSourceCandidates] = useState<SourceCandidateRow[]>([]);
   const [roadIntelligenceAreas, setRoadIntelligenceAreas] = useState<RoadIntelligenceAreaRow[]>([]);
   const [roadBenchmarkReadiness, setRoadBenchmarkReadiness] = useState<RoadBenchmarkReadinessRow[]>([]);
+  const [roadCoverageEdges, setRoadCoverageEdges] = useState<AdminRoadCoverageEdge[]>([]);
+  const [roadCoverageEdgeTotal, setRoadCoverageEdgeTotal] = useState(0);
+  const [roadCoverageTruncated, setRoadCoverageTruncated] = useState(false);
   const [incidents, setIncidents] = useState<IncidentRow[]>([]);
   const [operationalErrors, setOperationalErrors] = useState<OperationalErrorRow[]>([]);
   const [betaApplications, setBetaApplications] = useState<BetaApplicationRow[]>([]);
@@ -315,6 +325,9 @@ export default function AdminPage() {
       const data = await res.json();
       setRoadIntelligenceAreas(data.areas);
       setRoadBenchmarkReadiness(data.benchmark_readiness);
+      setRoadCoverageEdges(data.coverage_edges);
+      setRoadCoverageEdgeTotal(data.coverage_edge_total);
+      setRoadCoverageTruncated(data.coverage_edges_truncated);
     } catch {
       setLoadError(true);
     }
@@ -1040,6 +1053,39 @@ export default function AdminPage() {
                     <p className="text-xs mt-4" style={{ color: "var(--text-muted)" }}>
                       {area.proposal_count} team-only plan proposals · {area.observed_edge_count} all-time observed directed edges · {area.observed_directed_km} km all-time coverage
                     </p>
+                    <div className="rounded-xl overflow-hidden mt-4" style={{ border: "1px solid var(--border)" }}>
+                      <div className="p-3 flex flex-wrap items-center justify-between gap-2" style={{ background: "var(--bg-card)", borderBottom: "1px solid var(--border)" }}>
+                        <div>
+                          <p className="text-xs font-bold" style={{ color: "var(--text)" }}>Directed evidence coverage</p>
+                          <p className="text-[10px] mt-1" style={{ color: "var(--text-muted)" }}>
+                            Public lab origin and {area.coverage_radius_km} km research radius. A dot marks each directed edge endpoint.
+                          </p>
+                        </div>
+                        <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                          {roadCoverageEdges.length === 0
+                            ? "No approved edge geometry yet"
+                            : `${roadCoverageEdges.length} of ${roadCoverageEdgeTotal} approved directed edges${roadCoverageTruncated ? " · display capped" : ""}`}
+                        </p>
+                      </div>
+                      <RoadCoverageMap
+                        center={[area.center_lat, area.center_lng]}
+                        radiusKm={area.coverage_radius_km}
+                        edges={roadCoverageEdges}
+                      />
+                      <div className="p-3 flex flex-wrap gap-x-4 gap-y-2" style={{ background: "var(--bg-card)", borderTop: "1px solid var(--border)" }}>
+                        {[
+                          { state: "current_assessed", label: "Current + assessed", color: "#c8ff00" },
+                          { state: "current_unassessed", label: "Needs assessment", color: "#38bdf8" },
+                          { state: "known_safety_warning", label: "Safety warning", color: "#ff4d4f" },
+                          { state: "stale", label: "Stale", color: "#8b8b96" },
+                        ].map((item) => (
+                          <span key={item.state} className="inline-flex items-center gap-1.5 text-[10px]" style={{ color: "var(--text-muted)" }}>
+                            <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: item.color }} />
+                            {item.label} ({roadCoverageEdges.filter((edge) => edge.state === item.state).length})
+                          </span>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 ))}
                 {roadIntelligenceAreas.length === 0 && (

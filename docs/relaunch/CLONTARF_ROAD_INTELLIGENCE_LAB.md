@@ -153,7 +153,17 @@ The benchmark evaluator is read-only. On 26 August 2026, staging loaded zero
 approved graph edges and correctly returned `no_evidence` for all 12 requests,
 with zero route or proposal writes.
 
-Administrators can inspect Clontarf coverage under **Admin → Roads**.
+Administrators can inspect Clontarf coverage under **Admin → Roads**. The
+private map always shows the public Clontarf origin and 45 km lab boundary. As
+approved evidence arrives, directed edges are coloured as current and
+assessed, current but unassessed, stale or carrying a known safety warning. A
+small endpoint dot makes the recorded travel direction visible.
+
+The map payload is deliberately minimised: edge geometry, recency,
+characteristic scores and assessment categories are returned to admins, but
+rider identity and supporting attestation identifiers are not. Rendering is
+capped at 5,000 prioritised directed edges and reports when the display is
+truncated; the planner still evaluates the complete approved graph.
 
 ## What remains human-dependent
 
@@ -176,7 +186,7 @@ After approved rides exist:
 
 1. ingest and map-match them into the edge graph;
 2. compute characteristic version `clontarf-v1`;
-3. display the directed coverage on a private map;
+3. inspect the automatically populated directed coverage map;
 4. rerun the twelve fixed demands and inspect any evidence-backed candidates;
 5. let local riders review and ride accepted private proposals;
 6. compare planned versus completed geometry and duration;

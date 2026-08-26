@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   planEvidenceBackedLoop,
+  roadCoverageState,
   type EvidencePlanDemand,
   type EvidenceRoadEdge,
   type RoadAssessment,
@@ -64,6 +65,20 @@ function loopEdges(
 }
 
 describe("evidence-gated road loop planner", () => {
+  it("classifies admin coverage without exposing rider identity", () => {
+    const edge = loopEdges(4)[0];
+    expect(roadCoverageState(edge, AS_OF)).toBe("current_unassessed");
+    edge.assessment = safeAssessment;
+    expect(roadCoverageState(edge, AS_OF)).toBe("current_assessed");
+    edge.assessment = { ...safeAssessment, sightlinesRating: "poor" };
+    expect(roadCoverageState(edge, AS_OF)).toBe("known_safety_warning");
+    edge.assessment = null;
+    edge.observedAt = "2024-01-01";
+    expect(roadCoverageState(edge, AS_OF)).toBe("stale");
+    edge.supportingObservationId = "";
+    expect(roadCoverageState(edge, AS_OF)).toBe("invalid");
+  });
+
   it("returns an honest no-evidence state for the empty Clontarf graph", () => {
     const result = planEvidenceBackedLoop(demand(), [], { asOf: AS_OF });
     expect(result.status).toBe("no_evidence");

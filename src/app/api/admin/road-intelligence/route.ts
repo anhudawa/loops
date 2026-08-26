@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin";
 import { getRoadIntelligenceCoverage, getRoadPlanningInputs } from "@/lib/db";
 import { handleApiError } from "@/lib/api-utils";
-import { planEvidenceBackedLoop } from "@/lib/road-intelligence/evidence-planner";
+import { planEvidenceBackedLoop, roadCoverageState } from "@/lib/road-intelligence/evidence-planner";
+
+const ADMIN_COVERAGE_EDGE_LIMIT = 5_000;
 
 export async function GET(request: NextRequest) {
   try {
@@ -38,10 +40,34 @@ export async function GET(request: NextRequest) {
         } : null,
       };
     });
+    const coverageEdgeRecords = planningInputs.edges.map((edge) => ({
+      id: edge.id,
+      coordinates: edge.geometry,
+      length_km: Math.round(edge.lengthM / 100) / 10,
+      state: roadCoverageState(edge),
+      observed_at: edge.observedAt,
+      lower_stress_score: edge.lowerStressScore,
+      flow_score: edge.flowScore,
+      scenic_score: edge.scenicScore,
+      assessment: edge.assessment ? {
+        surface: edge.assessment.surfaceRating,
+        traffic: edge.assessment.trafficRating,
+        sightlines: edge.assessment.sightlinesRating,
+        flow: edge.assessment.flowRating,
+      } : null,
+    }));
+    coverageEdgeRecords.sort((a, b) => {
+      const priority = { known_safety_warning: 0, current_assessed: 1, current_unassessed: 2, stale: 3, invalid: 4 };
+      return priority[a.state] - priority[b.state] || b.observed_at.localeCompare(a.observed_at) || a.id.localeCompare(b.id);
+    });
+    const coverageEdges = coverageEdgeRecords.slice(0, ADMIN_COVERAGE_EDGE_LIMIT);
     return NextResponse.json({
       ...coverage,
       planning_area: planningInputs.area,
       evaluated_at: new Date().toISOString(),
+      coverage_edges: coverageEdges,
+      coverage_edge_total: coverageEdgeRecords.length,
+      coverage_edges_truncated: coverageEdgeRecords.length > coverageEdges.length,
       benchmark_readiness: benchmarkReadiness,
     });
   } catch (error) {

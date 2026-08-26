@@ -182,6 +182,12 @@ The initial four-hour benchmark target is 104 km at 26 km/h. The evaluator
 wrote zero routes and zero proposals; Admin → Roads displays each demand's
 current result and blocking reason.
 
+Admin → Roads also includes a private directed-coverage map. With zero approved
+edges it honestly renders only the public Clontarf origin and 45 km lab radius.
+It will populate automatically after approved rides are map-matched, with
+separate colours for current assessed, current unassessed, stale and known
+safety-warning edges. Its API omits rider and attestation identifiers.
+
 The next road-intelligence input must be a real approved completed ride from a
 named contributor beginning within the Clontarf lab area. Edge ingestion also
 requires a contracted or self-hosted Valhalla endpoint and the explicit

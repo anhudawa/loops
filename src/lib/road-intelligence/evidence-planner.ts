@@ -8,6 +8,12 @@
 
 export type RoadCoordinate = [number, number];
 export const EVIDENCE_PLANNER_VERSION = "clontarf-evidence-v1";
+export type RoadCoverageState =
+  | "current_assessed"
+  | "current_unassessed"
+  | "known_safety_warning"
+  | "stale"
+  | "invalid";
 
 export interface RoadAssessment {
   surfaceRating: "good" | "mixed" | "poor";
@@ -164,6 +170,17 @@ function edgeHasKnownSafetyFailure(edge: EvidenceRoadEdge): boolean {
   return assessment?.trafficRating === "high" ||
     assessment?.sightlinesRating === "poor" ||
     assessment?.surfaceRating === "poor";
+}
+
+export function roadCoverageState(
+  edge: EvidenceRoadEdge,
+  asOf: Date = new Date(),
+  freshnessDays = DEFAULT_EVIDENCE_FRESHNESS_DAYS
+): RoadCoverageState {
+  if (!edge.supportingObservationId || edge.lengthM <= 0 || edge.geometry.length < 2) return "invalid";
+  if (edgeHasKnownSafetyFailure(edge)) return "known_safety_warning";
+  if (!observationIsCurrent(edge.observedAt, asOf, freshnessDays)) return "stale";
+  return edge.assessment ? "current_assessed" : "current_unassessed";
 }
 
 function edgeQuality(edge: EvidenceRoadEdge, demand: EvidencePlanDemand): number {
@@ -364,13 +381,11 @@ export function planEvidenceBackedLoop(
     minDistanceKm: round(Math.max(1, targetDistanceKm - toleranceDistanceKm)),
     maxDistanceKm: round(targetDistanceKm + toleranceDistanceKm),
   };
-  const evidencedEdges = edges.filter((edge) =>
-    edge.supportingObservationId &&
-    edge.lengthM > 0 &&
-    edge.geometry.length >= 2 &&
-    observationIsCurrent(edge.observedAt, asOf, freshnessDays)
-  );
-  const currentEdges = evidencedEdges.filter((edge) => !edgeHasKnownSafetyFailure(edge));
+  const evidencedEdges = edges.filter((edge) => {
+    const state = roadCoverageState(edge, asOf, freshnessDays);
+    return state === "current_assessed" || state === "current_unassessed" || state === "known_safety_warning";
+  });
+  const currentEdges = evidencedEdges.filter((edge) => roadCoverageState(edge, asOf, freshnessDays) !== "known_safety_warning");
   const graph: EvidencePlanningResult["graph"] = {
     currentDirectedEdges: evidencedEdges.length,
     currentDirectedKm: round(evidencedEdges.reduce((sum, edge) => sum + edge.lengthM, 0) / 1000),

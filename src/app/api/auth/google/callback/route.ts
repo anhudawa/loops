@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
 import { sql } from "@vercel/postgres";
-import { upsertGoogleUser, getUserByGoogleId, migrateDb } from "@/lib/db";
+import { upsertGoogleUser, getUserByGoogleId, migrateDb, recordEvent, ANALYTICS_EVENTS } from "@/lib/db";
 
 export async function GET(request: NextRequest) {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
@@ -73,7 +73,13 @@ export async function GET(request: NextRequest) {
     }
 
     const sessionToken = uuidv4();
-    await upsertGoogleUser(uuidv4(), googleId, email, name, avatarUrl, sessionToken);
+    const authedUser = await upsertGoogleUser(uuidv4(), googleId, email, name, avatarUrl, sessionToken);
+
+    // Funnel: login/signup success (fire-and-forget, no PII — no email).
+    void recordEvent(ANALYTICS_EVENTS.AUTH_SUCCEEDED, {
+      userId: authedUser.id,
+      properties: { method: "google", new_user: !existingUser },
+    });
 
     // Check for post-login redirect (set by login page)
     const loginRedirect = request.cookies.get("login_redirect")?.value;

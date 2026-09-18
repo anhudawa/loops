@@ -1,6 +1,13 @@
 import { sql } from "@vercel/postgres";
 import { v4 as uuidv4 } from "uuid";
 import { DURATION_TIERS, DEFAULT_SPEED_KMH } from "@/config/constants";
+import {
+  computeUsageMetrics,
+  type RawEventRow,
+  type UsageMetrics,
+} from "@/lib/metrics";
+
+export { ANALYTICS_EVENTS } from "@/lib/metrics";
 
 // ──── Init ────
 export async function initDb() {
@@ -264,6 +271,99 @@ export async function migrateDb() {
       connected_at TIMESTAMPTZ DEFAULT NOW()
     )
   `;
+
+  // First-party product-usage events (evidence layer for the board).
+  await ensureEventsTable();
+}
+
+// ──── Analytics events ────
+//
+// First-party usage instrumentation. NO PII ever lands in `properties`:
+// route ids, distances, destination slugs and boolean flags only — never
+// emails, IPs or user-agents. Writes are fire-and-safe: recordEvent never
+// throws and never blocks the user path.
+
+/**
+ * Lazily create the events table + indexes, once per process. Cached so
+ * hot-path recordEvent calls don't re-run DDL on every insert. Reset on
+ * failure so a transient outage can retry on the next event.
+ */
+let eventsTableReady: Promise<void> | null = null;
+function ensureEventsTable(): Promise<void> {
+  if (!eventsTableReady) {
+    eventsTableReady = (async () => {
+      await sql`
+        CREATE TABLE IF NOT EXISTS events (
+          id TEXT PRIMARY KEY,
+          user_id TEXT REFERENCES users(id),
+          event TEXT NOT NULL,
+          properties JSONB,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+      `;
+      await sql`CREATE INDEX IF NOT EXISTS idx_events_created_at ON events(created_at)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_events_event ON events(event)`;
+    })().catch((err) => {
+      eventsTableReady = null;
+      throw err;
+    });
+  }
+  return eventsTableReady;
+}
+
+/**
+ * Record a first-party usage event. FIRE-AND-SAFE: wrapped in try/catch,
+ * never throws, never blocks the user path. Callers on hot paths should
+ * NOT await it (fire-and-forget) so the response is never delayed.
+ *
+ * `properties` must contain first-party, non-PII values only (route ids,
+ * distances, slugs, boolean flags).
+ */
+export async function recordEvent(
+  event: string,
+  opts: { userId?: string | null; properties?: Record<string, unknown> } = {}
+): Promise<void> {
+  try {
+    await ensureEventsTable();
+    await sql`
+      INSERT INTO events (id, user_id, event, properties)
+      VALUES (
+        ${uuidv4()},
+        ${opts.userId ?? null},
+        ${event},
+        ${JSON.stringify(opts.properties ?? {})}::jsonb
+      )
+    `;
+  } catch {
+    // Analytics must never break the user path — swallow and move on.
+  }
+}
+
+/**
+ * Aggregate usage metrics for the admin dashboard: this-week vs last-week
+ * rolling 7-day windows, plus the timestamp recording started. Fail-soft:
+ * returns null if the DB is unreachable or the table doesn't exist yet, so
+ * the dashboard can render "metrics unavailable" instead of crashing.
+ */
+export async function getUsageMetrics(
+  now: Date = new Date()
+): Promise<{ metrics: UsageMetrics; since: string | null } | null> {
+  try {
+    // Pull the 14-day window and aggregate in pure, unit-tested logic.
+    const { rows } = await sql.query(
+      `SELECT event, user_id, created_at, properties->>'new_user' AS new_user
+       FROM events
+       WHERE created_at >= NOW() - INTERVAL '14 days'`
+    );
+    const { rows: sinceRows } = await sql.query(
+      `SELECT MIN(created_at) AS since FROM events`
+    );
+    const metrics = computeUsageMetrics(rows as RawEventRow[], now);
+    const since = sinceRows[0]?.since ? String(sinceRows[0].since) : null;
+    return { metrics, since };
+  } catch {
+    return null;
+  }
 }
 
 // ──── Types ────

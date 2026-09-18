@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateRouteCandidates } from "@/lib/route-generator";
-import { getUserBySession } from "@/lib/db";
+import { getUserBySession, recordEvent, ANALYTICS_EVENTS } from "@/lib/db";
 import { DEFAULT_SPEED_KMH } from "@/config/constants";
 import { checkRateLimit } from "@/lib/rate-limit";
 
@@ -118,6 +118,12 @@ export async function POST(request: NextRequest) {
     )
   );
 
+  // Funnel: a generation was requested (fire-and-forget, no PII).
+  void recordEvent(ANALYTICS_EVENTS.GENERATION_REQUESTED, {
+    userId: user?.id ?? null,
+    properties: { prompt_len: trimmedPrompt.length, has_origin: !!origin },
+  });
+
   const startedAt = Date.now();
   try {
     // Personalise the duration → distance conversion with the rider's
@@ -160,10 +166,28 @@ export async function POST(request: NextRequest) {
       })
     );
 
+    // Funnel: generation succeeded (fire-and-forget, no PII).
+    void recordEvent(ANALYTICS_EVENTS.GENERATION_SUCCEEDED, {
+      userId: user?.id ?? null,
+      properties: {
+        result_count: result.candidates.length,
+        library_count: librarySources,
+        generated_count: generatedSources,
+        is_workout: result.interpreted.is_workout,
+      },
+    });
+
     return NextResponse.json({ data: result });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     const code = classifyErrorCode(message);
+
+    // Funnel: generation declined/failed — code distinguishes an honest
+    // decline (no routes / no workout match) from an infra error.
+    void recordEvent(ANALYTICS_EVENTS.GENERATION_DECLINED, {
+      userId: user?.id ?? null,
+      properties: { code },
+    });
     console.log(
       JSON.stringify({
         evt: "generate_route",

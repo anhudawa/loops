@@ -3,6 +3,8 @@ import { v4 as uuidv4 } from "uuid";
 import {
   insertRoute,
   getUserBySession,
+  recordEvent,
+  ANALYTICS_EVENTS,
 } from "@/lib/db";
 import { apiError, handleApiError, stripHtml } from "@/lib/api-utils";
 import {
@@ -164,6 +166,12 @@ export async function POST(request: NextRequest) {
       created_by: user.id,
       strava_activity_id: null,
       quality_status: "pending",
+    });
+
+    // Funnel: a generated/drawn route was saved (fire-and-forget, no PII).
+    void recordEvent(ANALYTICS_EVENTS.ROUTE_SAVED, {
+      userId: user.id,
+      properties: { route_id: route.id, discipline: route.discipline, distance_km: route.distance_km },
     });
 
     return NextResponse.json({ data: route }, { status: 201 });

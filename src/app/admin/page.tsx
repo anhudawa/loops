@@ -12,6 +12,29 @@ interface Stats {
   bannedUsers: number;
 }
 
+interface MetricPair {
+  thisWeek: number;
+  lastWeek: number;
+  deltaPct: number | null;
+}
+
+interface UsageMetrics {
+  activeRiders: MetricPair;
+  generationsRequested: MetricPair;
+  generationsSucceeded: MetricPair;
+  generationsDeclined: MetricPair;
+  routesViewed: MetricPair;
+  gpxDownloads: MetricPair;
+  imports: MetricPair;
+  signups: MetricPair;
+}
+
+interface MetricsState {
+  available: boolean;
+  metrics: UsageMetrics | null;
+  since: string | null;
+}
+
 interface UserRow {
   id: string;
   email: string;
@@ -46,6 +69,7 @@ export default function AdminPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const [stats, setStats] = useState<Stats | null>(null);
+  const [metrics, setMetrics] = useState<MetricsState | null>(null);
   const [tab, setTab] = useState<Tab>("users");
   const [users, setUsers] = useState<UserRow[]>([]);
   const [routes, setRoutes] = useState<RouteRow[]>([]);
@@ -68,6 +92,21 @@ export default function AdminPage() {
       if (res.ok) setStats(await res.json());
     } catch {
       // Stats are non-critical, silently ignore
+    }
+  }, []);
+
+  const fetchMetrics = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/metrics");
+      if (res.ok) {
+        const body = await res.json();
+        setMetrics(body.data as MetricsState);
+      } else {
+        setMetrics({ available: false, metrics: null, since: null });
+      }
+    } catch {
+      // Metrics are non-critical — render "unavailable", never block admin.
+      setMetrics({ available: false, metrics: null, since: null });
     }
   }, []);
 
@@ -107,9 +146,10 @@ export default function AdminPage() {
   useEffect(() => {
     if (user?.role === "admin") {
       fetchStats(); // eslint-disable-line react-hooks/set-state-in-effect
-      fetchUsers();  
+      fetchMetrics();
+      fetchUsers();
     }
-  }, [user, fetchStats, fetchUsers]);
+  }, [user, fetchStats, fetchMetrics, fetchUsers]);
 
   useEffect(() => {
     if (tab === "routes" && routes.length === 0) {
@@ -247,6 +287,57 @@ export default function AdminPage() {
                 <p className="text-[10px] uppercase tracking-wider font-bold mt-1" style={{ color: "var(--text-muted)" }}>{s.label}</p>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Usage — this week vs last week */}
+        {metrics && (
+          <div className="rounded-xl p-4 md:p-5 mb-6" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+            <div className="flex items-baseline justify-between gap-3 mb-1 flex-wrap">
+              <h2 className="text-sm font-extrabold uppercase tracking-wider" style={{ color: "var(--text)" }}>
+                Usage — this week vs last week
+              </h2>
+              <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                {metrics.available && metrics.since
+                  ? `First-party events. Recording started ${new Date(metrics.since).toLocaleDateString("en-IE")}. No extrapolation.`
+                  : metrics.available
+                    ? "First-party events. No events recorded yet."
+                    : "Metrics unavailable"}
+              </span>
+            </div>
+
+            {!metrics.available || !metrics.metrics ? (
+              <p className="text-sm py-4" style={{ color: "var(--text-muted)" }}>
+                Metrics unavailable — the events store could not be reached.
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+                {([
+                  { label: "Active riders", help: "distinct signed-in riders", m: metrics.metrics.activeRiders },
+                  { label: "Generations requested", help: "route generations started", m: metrics.metrics.generationsRequested },
+                  { label: "Generations succeeded", help: "returned ≥1 route", m: metrics.metrics.generationsSucceeded },
+                  { label: "Generations declined", help: "declined or errored", m: metrics.metrics.generationsDeclined },
+                  { label: "Routes viewed", help: "route detail loads", m: metrics.metrics.routesViewed },
+                  { label: "GPX downloads", help: "GPX file downloads", m: metrics.metrics.gpxDownloads },
+                  { label: "Imports", help: "routes uploaded/imported", m: metrics.metrics.imports },
+                  { label: "Signups", help: "new accounts", m: metrics.metrics.signups },
+                ] as { label: string; help: string; m: MetricPair }[]).map((row) => (
+                  <div key={row.label} className="rounded-lg p-3" style={{ background: "var(--bg)", border: "1px solid var(--border)" }}>
+                    <p className="text-2xl font-extrabold" style={{ color: "var(--accent)" }}>{row.m.thisWeek}</p>
+                    <p className="text-[11px] font-bold" style={{ color: "var(--text)" }}>{row.label}</p>
+                    <p className="text-[10px] mb-1" style={{ color: "var(--text-muted)" }}>{row.help}</p>
+                    <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+                      <span>{row.m.lastWeek} last week</span>
+                      {row.m.deltaPct !== null && (
+                        <span className="ml-1 font-bold" style={{ color: row.m.deltaPct >= 0 ? "var(--success)" : "var(--danger)" }}>
+                          {row.m.deltaPct >= 0 ? "+" : ""}{row.m.deltaPct}%
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

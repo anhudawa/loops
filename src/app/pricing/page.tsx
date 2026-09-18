@@ -1,0 +1,223 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import AppHeader from "@/components/AppHeader";
+import Footer from "@/components/Footer";
+
+export const metadata: Metadata = {
+  title: "Pricing — Free Forever, Plus Pro | LOOPS",
+  description:
+    "GPX import/export, bulk import, device sync and your saved routes are free forever on LOOPS. LOOPS Pro adds training intelligence for €39/yr. Founding Rider: €49 for Pro for life.",
+  keywords: [
+    "LOOPS pricing",
+    "free cycling route planner",
+    "cycling route planner price",
+    "Komoot alternative pricing",
+    "LOOPS Pro",
+    "Founding Rider",
+  ],
+  alternates: { canonical: "/pricing" },
+  openGraph: {
+    title: "Pricing — Free Forever, Plus Pro | LOOPS",
+    description:
+      "Everything Komoot paywalled is free forever on LOOPS. Pro adds AI generation, session-aware workouts and wind planning for €39/yr.",
+    url: "https://www.loops.ie/pricing",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Pricing — Free Forever, Plus Pro | LOOPS",
+    description:
+      "Import/export, bulk import, device sync and your saved routes free forever. Pro adds training intelligence for €39/yr.",
+  },
+};
+
+const FREE_FEATURES = [
+  "GPX import & export",
+  "Bulk import (up to 30 files at once)",
+  "Device sync to Garmin, Wahoo & Hammerhead",
+  "All your saved routes",
+  "Draw-on-map route planner",
+  "Browse all destinations",
+  "3 AI route generations per week",
+];
+
+const PRO_FEATURES = [
+  "Unlimited AI route generation",
+  "Session-aware workout loops (2×20 on roads that hold it)",
+  "Wind-planned rides (“tailwind home”, best start time)",
+  "Climb alerts pushed to your head unit",
+  "Everything in Free, forever",
+];
+
+const CONTACT_EMAIL = "anthony@roadmancycling.com";
+const FOUNDING_SUBJECT = "Founding Rider — I'm in";
+const FOUNDING_BODY =
+  "Hi Anthony,\n\nI'd like to claim a Founding Rider spot (€49, Pro for life). Let me know how to pay.\n\nThanks!";
+const foundingMailto = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(
+  FOUNDING_SUBJECT
+)}&body=${encodeURIComponent(FOUNDING_BODY)}`;
+
+function Check() {
+  return (
+    <svg
+      className="w-4 h-4 shrink-0 mt-0.5"
+      style={{ color: "var(--accent)" }}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2.5}
+      aria-hidden="true"
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+    </svg>
+  );
+}
+
+export default function PricingPage() {
+  return (
+    <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)" }}>
+      <AppHeader />
+
+      <main className="flex-1">
+        {/* Hero + promise */}
+        <section className="px-4 md:px-6 pt-12 pb-8">
+          <div className="max-w-3xl mx-auto text-center">
+            <h1 className="text-3xl md:text-5xl font-black tracking-tight leading-[1.05] mb-4" style={{ color: "var(--text)" }}>
+              Your routes are free. Forever.
+            </h1>
+            <p className="text-base md:text-lg leading-relaxed max-w-2xl mx-auto" style={{ color: "var(--text-secondary)" }}>
+              Everything Komoot put behind a paywall — GPX import and export, bulk import, device
+              sync, your saved routes — is free on LOOPS and always will be. We charge for training
+              intelligence, never for access to your own routes.
+            </p>
+          </div>
+        </section>
+
+        {/* Two-column plan table */}
+        <section className="px-4 md:px-6 pb-6">
+          <div className="max-w-3xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Free forever */}
+            <div className="rounded-2xl p-6 flex flex-col" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+              <div className="mb-4">
+                <h2 className="text-lg font-black uppercase tracking-wide" style={{ color: "var(--text)" }}>
+                  Free forever
+                </h2>
+                <div className="flex items-baseline gap-1.5 mt-2">
+                  <span className="text-3xl font-black" style={{ color: "var(--text)" }}>€0</span>
+                  <span className="text-sm" style={{ color: "var(--text-muted)" }}>always</span>
+                </div>
+                <p className="text-sm mt-2 leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                  Genuinely good on its own — better than Komoot&apos;s free tier is now.
+                </p>
+              </div>
+              <ul className="space-y-2.5 flex-1">
+                {FREE_FEATURES.map((f) => (
+                  <li key={f} className="flex items-start gap-2.5 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                    <Check />
+                    <span>{f}</span>
+                  </li>
+                ))}
+              </ul>
+              <Link
+                href="/login"
+                className="inline-flex items-center justify-center font-bold text-sm uppercase tracking-wider px-6 py-3 rounded-xl mt-6"
+                style={{ border: "1px solid var(--border)", color: "var(--text)" }}
+              >
+                Create a free account
+              </Link>
+            </div>
+
+            {/* Pro */}
+            <div className="rounded-2xl p-6 flex flex-col relative" style={{ background: "var(--bg-card)", border: "1.5px solid var(--accent)" }}>
+              <span
+                className="absolute -top-2.5 right-5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full"
+                style={{ background: "var(--accent)", color: "var(--bg)" }}
+              >
+                At launch
+              </span>
+              <div className="mb-4">
+                <h2 className="text-lg font-black uppercase tracking-wide" style={{ color: "var(--text)" }}>
+                  LOOPS Pro
+                </h2>
+                <div className="flex items-baseline gap-1.5 mt-2">
+                  <span className="text-3xl font-black" style={{ color: "var(--text)" }}>€39</span>
+                  <span className="text-sm" style={{ color: "var(--text-muted)" }}>/ year</span>
+                </div>
+                <p className="text-sm mt-2 leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                  Or €4.99/mo. Deliberately under Komoot&apos;s €59.99 — the training intelligence
+                  nobody else sells at any price.
+                </p>
+              </div>
+              <ul className="space-y-2.5 flex-1">
+                {PRO_FEATURES.map((f) => (
+                  <li key={f} className="flex items-start gap-2.5 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                    <Check />
+                    <span>{f}</span>
+                  </li>
+                ))}
+              </ul>
+              <div
+                className="inline-flex items-center justify-center font-bold text-sm uppercase tracking-wider px-6 py-3 rounded-xl mt-6"
+                style={{ background: "var(--surface)", color: "var(--text-muted)", border: "1px solid var(--border)", cursor: "default" }}
+                aria-disabled="true"
+              >
+                Available at launch
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Founding Rider callout */}
+        <section className="px-4 md:px-6 py-8">
+          <div
+            className="max-w-3xl mx-auto rounded-2xl p-6 md:p-8"
+            style={{ background: "var(--accent-glow)", border: "1px solid var(--accent)" }}
+          >
+            <div className="flex flex-col md:flex-row md:items-center gap-5 md:justify-between">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full" style={{ background: "var(--accent)", color: "var(--bg)" }}>
+                    Available now · capped at ~200
+                  </span>
+                </div>
+                <h2 className="text-xl md:text-2xl font-black tracking-tight mb-2" style={{ color: "var(--text)" }}>
+                  Founding Rider — €49 one-off
+                </h2>
+                <p className="text-sm md:text-base leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                  Pay once, get LOOPS Pro for life at the founding price, a founding badge, and a
+                  direct line to shape the product. No subscription, ever. We&apos;re taking the first
+                  riders by email while we finish checkout — send a note and we&apos;ll set you up.
+                </p>
+              </div>
+              <a
+                href={foundingMailto}
+                className="btn-accent shrink-0 inline-flex items-center justify-center font-bold text-sm uppercase tracking-wider px-6 py-3.5 rounded-xl text-center"
+              >
+                Claim a Founding spot
+              </a>
+            </div>
+            <p className="text-xs mt-4" style={{ color: "var(--text-muted)" }}>
+              Founding Rider is informational for now — the button opens an email to Anthony. No
+              payment is taken on this page.
+            </p>
+          </div>
+        </section>
+
+        {/* Reassurance / switch link */}
+        <section className="px-4 md:px-6 pb-14">
+          <div className="max-w-3xl mx-auto text-center">
+            <p className="text-sm md:text-base leading-relaxed max-w-xl mx-auto" style={{ color: "var(--text-secondary)" }}>
+              Coming from Komoot? Your routes move over free and stay yours.{" "}
+              <Link href="/switch" className="font-semibold underline underline-offset-2" style={{ color: "var(--accent)" }}>
+                See how switching works
+              </Link>
+              .
+            </p>
+          </div>
+        </section>
+      </main>
+
+      <Footer />
+    </div>
+  );
+}

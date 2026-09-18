@@ -22,6 +22,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   const staticPages: MetadataRoute.Sitemap = [
     { url: "https://loops.ie", changeFrequency: "weekly", priority: 1.0 },
+    { url: "https://loops.ie/switch", changeFrequency: "monthly", priority: 0.9 },
+    { url: "https://loops.ie/pricing", changeFrequency: "monthly", priority: 0.8 },
     { url: "https://loops.ie/collections", changeFrequency: "weekly", priority: 0.9 },
     { url: "https://loops.ie/blog", changeFrequency: "weekly", priority: 0.8 },
     { url: "https://loops.ie/login", changeFrequency: "monthly", priority: 0.3 },

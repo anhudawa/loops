@@ -49,6 +49,10 @@ export const komootAlternative: BlogPost = {
       text: "GPX downloads on LOOPS are free with a free account. No region unlocks, no premium tier for your own routes. We think the head-unit handoff is the moment of truth in this product category, and charging for it is how you lose a sport's trust.",
     },
     {
+      type: "p",
+      text: "Already decided? Our [step-by-step switching guide](/switch) shows you how to export your routes from Komoot, bulk-import them to LOOPS, and sync free to your Garmin — the whole move takes a few minutes.",
+    },
+    {
       type: "cta",
       text: "Try it: describe your ideal ride in one sentence and see what comes back.",
       href: "/generate",

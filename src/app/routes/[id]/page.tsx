@@ -96,12 +96,20 @@ export default function RouteDetail() {
     setLoading(true);
     try {
       const res = await fetch(`/api/routes/${params.id}`);
+      // A 5xx returns { error, code } — treat it as a transient failure
+      // ("Try again"), NOT as "this route doesn't exist". Only a real 404
+      // (or a payload with no coordinates) is a genuine missing route.
+      if (res.status >= 500) {
+        setFetchError(true);
+        return;
+      }
       const data = await res.json();
       setRoute(data);
     } catch {
       setFetchError(true);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {

@@ -72,7 +72,7 @@ export function middleware(request: NextRequest) {
   }
 
   // Public pages — homepage, info pages, login, route pages, photos
-  const publicExactPaths = ["/", "/about", "/privacy", "/terms", "/feedback"];
+  const publicExactPaths = ["/", "/about", "/privacy", "/terms", "/feedback", "/switch", "/pricing"];
   if (
     publicExactPaths.includes(pathname) ||
     pathname.startsWith("/login") ||

@@ -5,6 +5,8 @@ export default function Footer() {
 
   const links = [
     { label: "Collections", href: "/collections" },
+    { label: "Switch from Komoot", href: "/switch" },
+    { label: "Pricing", href: "/pricing" },
     { label: "About", href: "/about" },
     { label: "Privacy", href: "/privacy" },
     { label: "Terms", href: "/terms" },

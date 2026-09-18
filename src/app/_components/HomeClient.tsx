@@ -10,7 +10,7 @@ import HeroSection from "@/components/HeroSection";
 import AppHeader from "@/components/AppHeader";
 import { useAuth } from "@/components/AuthProvider";
 import Link from "next/link";
-import { DEFAULT_SPEED_KMH } from "@/config/constants";
+import { DEFAULT_SPEED_KMH, DEFAULT_COUNTRY } from "@/config/constants";
 import FeaturedCollections from "./FeaturedCollections";
 import RouteSearchBox from "@/components/RouteSearchBox";
 
@@ -285,6 +285,11 @@ function HomeContent() {
     if (userLocation) {
       params.set("lat", String(userLocation.lat));
       params.set("lng", String(userLocation.lng));
+    } else if (!filters.country && !filters.search && !effectiveSort) {
+      // No location and no explicit filter: lead the default feed with home
+      // routes instead of the globally top-rated (destination-heavy) list, so
+      // a Dublin rider isn't shown Girona/Mallorca on sign-in.
+      params.set("homeBias", DEFAULT_COUNTRY);
     }
     params.set("page", String(pageNum));
 
@@ -349,7 +354,7 @@ function HomeContent() {
     if (filters.sort === "rating") return "Top rated";
     if (filters.sort === "nearby") return "Nearest to you";
     if (userLocation) return "Near you";
-    return "Top rated";
+    return `Routes in ${DEFAULT_COUNTRY}`;
   }, [filters.sort, filters.search, isSearching, userLocation]);
 
   // Honest sub-label: explain why this ordering when there's no location.
@@ -357,8 +362,8 @@ function HomeContent() {
     if (isSearching) return null;
     if (filters.sort) return null;
     if (userLocation) return "Closest rideable loops first";
-    if (locationDenied) return "Location off — showing the best-rated loops";
-    return null;
+    if (locationDenied) return `Location off — showing ${DEFAULT_COUNTRY} first. Turn on location for loops near you.`;
+    return `${DEFAULT_COUNTRY} first — turn on location for loops near you`;
   }, [filters.sort, isSearching, userLocation, locationDenied]);
 
   const sortSelect = (

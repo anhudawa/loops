@@ -52,6 +52,7 @@ export async function GET(request: NextRequest) {
       lat: searchParams.get("lat") ? Number(searchParams.get("lat")) : undefined,
       lng: searchParams.get("lng") ? Number(searchParams.get("lng")) : undefined,
       duration: searchParams.get("duration") || undefined,
+      homeCountryBias: searchParams.get("homeBias") || undefined,
       avgSpeedKmh: userSpeed,
       limit: pageSize,
       offset: (page - 1) * pageSize,

@@ -156,7 +156,7 @@ export default function GeneratePage() {
 }
 
 function GenerateContent() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, authError, refresh: refreshAuth } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -178,13 +178,15 @@ function GenerateContent() {
   const geo = useGeolocation();
 
   useEffect(() => {
-    if (!authLoading && !user) {
+    // Only redirect a CONFIRMED logged-out rider. If auth couldn't be checked
+    // (server/network error), don't eject — the retry UI below handles it.
+    if (!authLoading && !user && !authError) {
       // Keep the rider's question through the login round-trip.
       const q = searchParams.get("q");
       const target = q ? `/generate?q=${encodeURIComponent(q)}` : "/generate";
       router.push(`/login?redirect=${encodeURIComponent(target)}`);
     }
-  }, [user, authLoading, router, searchParams]);
+  }, [user, authLoading, authError, router, searchParams]);
 
   // Homepage answer machine hands off via /generate?q=… — prefill the
   // prompt and, when it's substantial enough, run generation immediately.
@@ -294,6 +296,28 @@ function GenerateContent() {
       clearTimeout(timeout);
       setLoading(false);
     }
+  }
+
+  // Couldn't reach the auth service — don't eject the rider to /login, offer a
+  // retry. This keeps an authenticated rider on the planner through a blip.
+  if (!authLoading && !user && authError) {
+    return (
+      <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)" }}>
+        <AppHeader />
+        <div className="flex-1 flex flex-col items-center justify-center gap-4 px-4 text-center">
+          <p style={{ color: "var(--text)" }}>
+            We couldn&apos;t reach the server for a second. Your session is fine — let&apos;s try again.
+          </p>
+          <button
+            onClick={() => refreshAuth()}
+            className="rounded-full px-5 py-3 font-bold"
+            style={{ background: "var(--accent)", color: "#fff", minHeight: 44 }}
+          >
+            Try again
+          </button>
+        </div>
+      </div>
+    );
   }
 
   if (authLoading || !user) {

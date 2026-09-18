@@ -408,6 +408,10 @@ export interface RouteFilters {
   offset?: number;
   duration?: string;   // "1h" | "2h" | "3h" | "4h+"
   avgSpeedKmh?: number;
+  /** When there's no geolocation, sort routes in this country first (soft
+   *  bias, not a filter) so a rider's default feed leads with home, not the
+   *  globally top-rated (destination-heavy) list. */
+  homeCountryBias?: string;
 }
 
 export interface User {
@@ -576,8 +580,14 @@ export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
   } else if (hasLocation) {
     // Default with location: proximity zone with rating boost
     orderBy = "(base_zone + zone_boost) ASC, avg_rating DESC NULLS LAST";
+  } else if (filters.homeCountryBias) {
+    // Default without location: home country first, then rating. Keeps
+    // destinations discoverable below instead of leading with them.
+    const hbIdx = idx++;
+    params.push(filters.homeCountryBias);
+    orderBy = `(CASE WHEN LOWER(country) = LOWER($${hbIdx}) THEN 0 ELSE 1 END) ASC, avg_rating DESC NULLS LAST, rating_count DESC`;
   } else {
-    // Default without location: highest rated first
+    // Default without location and no home hint: highest rated first
     orderBy = "avg_rating DESC NULLS LAST, rating_count DESC";
   }
 
@@ -1128,12 +1138,31 @@ export async function getAllRoutesForSitemap(): Promise<{ id: string; created_at
   return rows as { id: string; created_at: string }[];
 }
 
+/**
+ * SQL expression that reproduces slugify() (src/lib/seo.ts) for a column, so a
+ * URL slug (accent-stripped, apostrophe-deleted, whitespace-hyphenated) matches
+ * the accented name stored in the DB. Without this, `/routes/country/spain/
+ * cataluna` never matches the stored region "Cataluña" and every accented
+ * region (Girona, Málaga, Nice…) 404s. Uses only core SQL — no extensions.
+ */
+function slugSql(col: string): string {
+  // LOWER first (handles accented uppercase), TRANSLATE strips diacritics,
+  // then: delete anything not [a-z0-9 space -], whitespace→'-', collapse '-',
+  // trim leading/trailing '-'. Mirrors slugify()'s regex chain exactly.
+  return (
+    "TRIM(BOTH '-' FROM REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(" +
+    `TRANSLATE(LOWER(${col}), ` +
+    "'àáâãäåèéêëìíîïòóôõöùúûüýÿñç', 'aaaaaaeeeeiiiiooooouuuuyync')" +
+    ", '[^a-z0-9[:space:]-]', '', 'g'), '[[:space:]]+', '-', 'g'), '-+', '-', 'g'))"
+  );
+}
+
 export async function getRoutesByCountrySlug(slug: string): Promise<Route[]> {
   const { rows } = await sql.query(
     `SELECT r.*, COALESCE(AVG(rt.score), 0) as avg_score, COUNT(rt.id) as rating_count
      FROM routes r
      LEFT JOIN ratings rt ON rt.route_id = r.id
-     WHERE LOWER(REPLACE(r.country, ' ', '-')) = $1
+     WHERE ${slugSql("r.country")} = $1
      GROUP BY r.id
      ORDER BY COALESCE(AVG(rt.score), 0) DESC, r.created_at DESC`,
     [slug]
@@ -1146,8 +1175,8 @@ export async function getRoutesByRegionSlug(countrySlug: string, regionSlug: str
     `SELECT r.*, COALESCE(AVG(rt.score), 0) as avg_score, COUNT(rt.id) as rating_count
      FROM routes r
      LEFT JOIN ratings rt ON rt.route_id = r.id
-     WHERE LOWER(REPLACE(r.country, ' ', '-')) = $1
-       AND LOWER(REPLACE(r.region, ' ', '-')) = $2
+     WHERE ${slugSql("r.country")} = $1
+       AND ${slugSql("r.region")} = $2
      GROUP BY r.id
      ORDER BY COALESCE(AVG(rt.score), 0) DESC, r.created_at DESC`,
     [countrySlug, regionSlug]
@@ -1167,24 +1196,24 @@ export async function getCountryStats(countrySlug: string): Promise<{
     `SELECT
        COUNT(*) as route_count,
        COALESCE(SUM(distance_km), 0) as total_distance,
-       COALESCE((SELECT AVG(rt.score) FROM ratings rt JOIN routes r2 ON rt.route_id = r2.id WHERE LOWER(REPLACE(r2.country, ' ', '-')) = $1), 0) as avg_rating,
+       COALESCE((SELECT AVG(rt.score) FROM ratings rt JOIN routes r2 ON rt.route_id = r2.id WHERE ${slugSql("r2.country")} = $1), 0) as avg_rating,
        MIN(country) as display_name
      FROM routes
-     WHERE LOWER(REPLACE(country, ' ', '-')) = $1`,
+     WHERE ${slugSql("country")} = $1`,
     [countrySlug]
   );
 
   if (!rows[0] || Number(rows[0].route_count) === 0) return null;
 
   const { rows: disciplineRows } = await sql.query(
-    `SELECT DISTINCT discipline FROM routes WHERE LOWER(REPLACE(country, ' ', '-')) = $1 ORDER BY discipline`,
+    `SELECT DISTINCT discipline FROM routes WHERE ${slugSql("country")} = $1 ORDER BY discipline`,
     [countrySlug]
   );
 
   const { rows: regionRows } = await sql.query(
     `SELECT region as name, COUNT(*) as route_count
      FROM routes
-     WHERE LOWER(REPLACE(country, ' ', '-')) = $1 AND region IS NOT NULL
+     WHERE ${slugSql("country")} = $1 AND region IS NOT NULL
      GROUP BY region
      ORDER BY region`,
     [countrySlug]
@@ -1212,19 +1241,19 @@ export async function getRegionStats(countrySlug: string, regionSlug: string): P
     `SELECT
        COUNT(*) as route_count,
        COALESCE(SUM(distance_km), 0) as total_distance,
-       COALESCE((SELECT AVG(rt.score) FROM ratings rt JOIN routes r2 ON rt.route_id = r2.id WHERE LOWER(REPLACE(r2.country, ' ', '-')) = $1 AND LOWER(REPLACE(r2.region, ' ', '-')) = $2), 0) as avg_rating,
+       COALESCE((SELECT AVG(rt.score) FROM ratings rt JOIN routes r2 ON rt.route_id = r2.id WHERE ${slugSql("r2.country")} = $1 AND ${slugSql("r2.region")} = $2), 0) as avg_rating,
        MIN(region) as display_name,
        MIN(country) as country_display_name
      FROM routes
-     WHERE LOWER(REPLACE(country, ' ', '-')) = $1
-       AND LOWER(REPLACE(region, ' ', '-')) = $2`,
+     WHERE ${slugSql("country")} = $1
+       AND ${slugSql("region")} = $2`,
     [countrySlug, regionSlug]
   );
 
   if (!rows[0] || Number(rows[0].route_count) === 0) return null;
 
   const { rows: disciplineRows } = await sql.query(
-    `SELECT DISTINCT discipline FROM routes WHERE LOWER(REPLACE(country, ' ', '-')) = $1 AND LOWER(REPLACE(region, ' ', '-')) = $2 ORDER BY discipline`,
+    `SELECT DISTINCT discipline FROM routes WHERE ${slugSql("country")} = $1 AND ${slugSql("region")} = $2 ORDER BY discipline`,
     [countrySlug, regionSlug]
   );
 

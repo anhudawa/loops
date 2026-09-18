@@ -41,7 +41,13 @@ export async function POST(request: NextRequest) {
   // since /generate is auth-gated, but keeps the endpoint sane if it's
   // ever called directly).
   const sessionToken = request.cookies.get("session")?.value;
-  const user = sessionToken ? await getUserBySession(sessionToken) : null;
+  // Fail soft: a DB hiccup on the session lookup must NOT 500 the whole
+  // generation (which returned an empty-body 500 → cryptic "Unexpected end of
+  // JSON input" for the rider). Treat it as anonymous and carry on, exactly
+  // like /api/reroute does.
+  const user = sessionToken
+    ? await getUserBySession(sessionToken).catch(() => null)
+    : null;
   const rateLimitKey = user
     ? `generate-route:user:${user.id}`
     : `generate-route:ip:${getClientIp(request)}`;

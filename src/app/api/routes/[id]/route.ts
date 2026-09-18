@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getRoute, updateRouteElevation } from "@/lib/db";
+import { getRoute, updateRouteElevation, recordEvent, ANALYTICS_EVENTS } from "@/lib/db";
 import { apiError, handleApiError } from "@/lib/api-utils";
 import { fetchElevations } from "@/lib/elevation";
 
@@ -66,6 +66,11 @@ export async function GET(
     }
 
     route = await repairElevationIfFlat(route);
+
+    // Funnel: route detail viewed (fire-and-forget, no PII).
+    void recordEvent(ANALYTICS_EVENTS.ROUTE_VIEWED, {
+      properties: { route_id: route.id, distance_km: route.distance_km, discipline: route.discipline, country: route.country },
+    });
 
     return NextResponse.json(route);
   } catch (err) {

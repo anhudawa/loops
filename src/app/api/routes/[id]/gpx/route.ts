@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getRoute, getUserBySession, trackDownload, migrateDb } from "@/lib/db";
+import { getRoute, getUserBySession, trackDownload, migrateDb, recordEvent, ANALYTICS_EVENTS } from "@/lib/db";
 import { apiError, handleApiError } from "@/lib/api-utils";
 import { v4 as uuidv4 } from "uuid";
 
@@ -32,6 +32,12 @@ export async function GET(
     } catch {
       // Don't block the download if tracking fails
     }
+
+    // Funnel: GPX downloaded (fire-and-forget, no PII).
+    void recordEvent(ANALYTICS_EVENTS.GPX_DOWNLOADED, {
+      userId: user.id,
+      properties: { route_id: id, distance_km: route.distance_km, discipline: route.discipline },
+    });
 
     // Generate GPX from stored coordinates (may be [lat,lng] or [lat,lng,ele])
     const coordinates: number[][] = JSON.parse(route.coordinates);

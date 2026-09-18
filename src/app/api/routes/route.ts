@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getRoutes, insertRoute, getCounties, getRegions, getCountries, getUserBySession } from "@/lib/db";
+import { getRoutes, insertRoute, getCounties, getRegions, getCountries, getUserBySession, recordEvent, ANALYTICS_EVENTS } from "@/lib/db";
 import { parseRouteFile } from "@/lib/route-parser";
 import { fetchRideWithGPS } from "@/lib/ridewithgps";
 import { apiError, handleApiError } from "@/lib/api-utils";
@@ -158,6 +158,11 @@ export async function POST(request: NextRequest) {
           created_by: currentUser.id,
           strava_activity_id: activityId,
         });
+        // Funnel: route imported (fire-and-forget, no PII).
+        void recordEvent(ANALYTICS_EVENTS.ROUTE_IMPORTED, {
+          userId: currentUser.id,
+          properties: { source: "strava", route_id: route.id, discipline: route.discipline, distance_km: route.distance_km },
+        });
         return NextResponse.json(route, { status: 201 });
       } catch (err) {
         const message = err instanceof Error ? err.message : "";
@@ -246,6 +251,12 @@ export async function POST(request: NextRequest) {
       coordinates: JSON.stringify(coordsWithElevation),
       created_by: currentUser.id,
       strava_activity_id: null,
+    });
+
+    // Funnel: route imported (fire-and-forget, no PII).
+    void recordEvent(ANALYTICS_EVENTS.ROUTE_IMPORTED, {
+      userId: currentUser.id,
+      properties: { source: importUrl ? "url" : "file", route_id: route.id, discipline: route.discipline, distance_km: route.distance_km },
     });
 
     return NextResponse.json(route, { status: 201 });

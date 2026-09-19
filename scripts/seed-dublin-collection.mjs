@@ -24,7 +24,7 @@ const DUBLIN_COLLECTION = {
   location: "Dublin & Wicklow, Ireland",
   country: "Ireland",
   discipline: "road",
-  featured: true,
+  featured: false,
   difficulty_range: "Easy–Epic",
   seo_title: "Cycling in Dublin & Wicklow | The Loops Collection",
   seo_description:
@@ -80,7 +80,7 @@ async function seed() {
   const { rows: dublinRoutes } = await pool.query(
     `SELECT id, name, distance_km
      FROM routes
-     WHERE country = 'Ireland'
+     WHERE country = 'Ireland' AND county = 'Dublin'
      ORDER BY distance_km`
   );
 

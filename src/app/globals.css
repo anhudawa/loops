@@ -87,6 +87,15 @@ button {
   background: var(--bg-card);
 }
 
+/* Zoom controls: meet the 40px+ tap target on touch (default Leaflet is 30px) */
+.leaflet-touch .leaflet-bar a,
+.leaflet-control-zoom a {
+  width: 40px;
+  height: 40px;
+  line-height: 40px;
+  font-size: 20px;
+}
+
 /* Hero scroll indicator bounce */
 @keyframes hero-bounce {
   0%, 100% { transform: translateY(0); }

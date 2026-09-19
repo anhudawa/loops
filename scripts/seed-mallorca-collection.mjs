@@ -24,7 +24,7 @@ const MALLORCA_COLLECTION = {
   location: "Mallorca, Balearic Islands",
   country: "Spain",
   discipline: "road",
-  featured: true,
+  featured: false,
   difficulty_range: "Moderate–Expert",
   seo_title: "Cycling in Mallorca | The Loops Collection",
   seo_description:
@@ -80,7 +80,7 @@ async function seed() {
   const { rows: mallorcaRoutes } = await pool.query(
     `SELECT id, name, distance_km
      FROM routes
-     WHERE country = 'Spain' AND (county = 'Mallorca' OR county = 'Balearic Islands')
+     WHERE country = 'Spain' AND county IN ('Mallorca', 'Majorca', 'Balearic Islands')
      ORDER BY distance_km`
   );
 

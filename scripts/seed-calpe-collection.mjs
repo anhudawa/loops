@@ -24,7 +24,7 @@ const CALPE_COLLECTION = {
   location: "Calpe, Alicante",
   country: "Spain",
   discipline: "road",
-  featured: true,
+  featured: false,
   difficulty_range: "Moderate–Expert",
   seo_title: "Cycling in Calpe & Costa Blanca | The Loops Collection",
   seo_description:

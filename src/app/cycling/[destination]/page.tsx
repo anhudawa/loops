@@ -4,10 +4,16 @@ import AppHeader from "@/components/AppHeader";
 import JsonLd from "@/components/JsonLd";
 import { generateBreadcrumbJsonLd, generateFaqJsonLd, slugify } from "@/lib/seo";
 import { getDestinationBySlug, type Destination } from "@/content/destinations";
+import { getCollectionBySlug } from "@/lib/db";
 
 interface Props {
   params: Promise<{ destination: string }>;
 }
+
+// ISR: keep these SEO pages cached/fast, but revalidate hourly so the
+// collection-exists check reflects real data (and picks up new collections)
+// instead of being frozen at build time.
+export const revalidate = 3600;
 
 function placeJsonLd(dest: Destination) {
   return {
@@ -35,6 +41,18 @@ export default async function DestinationPage({ params }: Props) {
   const { destination } = await params;
   const dest = getDestinationBySlug(destination);
   if (!dest) notFound();
+
+  // Only offer the collection link when the collection actually exists —
+  // otherwise the button is a dead link (a missing/unseeded collection 404s).
+  // Fail soft: a DB hiccup just hides the button, never breaks the page.
+  let hasCollection = false;
+  if (dest.collectionSlug) {
+    try {
+      hasCollection = (await getCollectionBySlug(dest.collectionSlug)) != null;
+    } catch {
+      hasCollection = false;
+    }
+  }
 
   const breadcrumb = generateBreadcrumbJsonLd([
     { name: "Home", url: "https://www.loops.ie" },
@@ -336,8 +354,8 @@ export default async function DestinationPage({ params }: Props) {
           </div>
         )}
 
-        {/* Collection link */}
-        {dest.collectionSlug && (
+        {/* Collection link — only when the collection exists (no dead links) */}
+        {dest.collectionSlug && hasCollection && (
           <div
             className="mb-6 rounded-xl p-5 text-center"
             style={{

@@ -17,6 +17,7 @@ import { useVoiceInput } from "@/lib/useVoiceInput";
 import { useGeolocation } from "@/lib/useGeolocation";
 import { track } from "@/lib/track";
 import { ANALYTICS_EVENTS } from "@/lib/metrics";
+import { deliveryNote } from "@/lib/delivery-note";
 
 // ── Types mirror the /api/generate-route unified response ───────────────────
 
@@ -1057,6 +1058,18 @@ function CandidateCard({
               🌬 {candidate.wind_note}
             </p>
           )}
+
+          {(() => {
+            // Honesty: say so when the loop came out materially different from
+            // what was asked (shorter/longer, or hillier than a flat request),
+            // rather than quietly serving it as a match.
+            const note = deliveryNote(interpreted, candidate);
+            return note ? (
+              <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>
+                ⚖️ {note}
+              </p>
+            ) : null;
+          })()}
 
           {workoutFit?.fits && <WorkoutAssignment fit={workoutFit} coordinates={candidate.coordinates} />}
 

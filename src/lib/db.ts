@@ -119,6 +119,8 @@ export async function migrateDb() {
   await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_raw_source TEXT`;
   await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_medium TEXT`;
   await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_campaign TEXT`;
+  // Newsletter (Saturday Spin) opt-in captured at signup.
+  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS newsletter_opt_in BOOLEAN NOT NULL DEFAULT FALSE`;
 
   // Downloads tracking
   await sql`
@@ -766,6 +768,11 @@ export async function upsertGoogleUser(
             ${attribution?.medium ?? null}, ${attribution?.campaign ?? null})
   `;
   return (await getUserByGoogleId(googleId))!;
+}
+
+/** Record a rider's newsletter opt-in (set at signup). Idempotent. */
+export async function markNewsletterOptIn(userId: string): Promise<void> {
+  await sql`UPDATE users SET newsletter_opt_in = TRUE WHERE id = ${userId}`;
 }
 
 export async function updateUserProfile(

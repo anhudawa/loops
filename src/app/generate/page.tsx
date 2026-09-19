@@ -661,7 +661,7 @@ function ErrorPanel({
       case "NO_ROUTES_FOUND":
         return "Try a different distance, location, or discipline.";
       case "GEOCODE_FAILED":
-        return "Name a town or landmark — e.g. 'from Blessington' or 'near Dalkey'.";
+        return "Try naming a specific town or landmark — and add the country if it's abroad (e.g. 'from Calpe, Spain').";
       case "TIMEOUT":
         return "Busy roads can take a while to plot. Give it another go, or try a shorter distance or a more specific location.";
       case "NETWORK":

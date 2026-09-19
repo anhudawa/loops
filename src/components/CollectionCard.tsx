@@ -15,6 +15,7 @@ interface CollectionCardProps {
     location: string | null;
     country: string | null;
     cover_image_url: string | null;
+    cover_route_id?: string | null;
     discipline: string;
     total_routes_count: number;
   };
@@ -32,9 +33,9 @@ export default function CollectionCard({ collection }: CollectionCardProps) {
       >
         {/* Cover image */}
         <div className="aspect-[16/9] relative overflow-hidden" style={{ background: "var(--bg-raised)" }}>
-          {collection.cover_image_url ? (
+          {collection.cover_image_url || collection.cover_route_id ? (
             <img
-              src={collection.cover_image_url}
+              src={collection.cover_image_url || `/api/thumb/${collection.cover_route_id}`}
               alt=""
               className="w-full h-full object-cover"
               loading="lazy"

@@ -65,10 +65,17 @@ describe("parseBasicIntent — duration + distance together / neither", () => {
     expect(r!.duration_minutes).toBe(120);
   });
 
-  it("returns null when neither duration nor distance is present", () => {
+  it("returns null only when there's no distance, duration OR place", () => {
     expect(parseBasicIntent("a nice scenic ride please")).toBeNull();
-    expect(parseBasicIntent("gravel loop from Skerries")).toBeNull();
     expect(parseBasicIntent("")).toBeNull();
+  });
+
+  it("defaults distance to 50 km when a place is named but no distance/duration", () => {
+    const r = parseBasicIntent("gravel loop from Skerries");
+    expect(r).not.toBeNull();
+    expect(r!.distance_km).toBe(50);
+    expect(r!.discipline).toBe("gravel");
+    expect(r!.region?.toLowerCase()).toContain("skerries");
   });
 });
 

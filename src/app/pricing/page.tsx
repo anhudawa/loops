@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import AppHeader from "@/components/AppHeader";
-import Footer from "@/components/Footer";
 
 export const metadata: Metadata = {
   title: "Pricing — Free Forever, Plus Pro | LOOPS",
@@ -232,7 +231,6 @@ export default function PricingPage() {
         </section>
       </main>
 
-      <Footer />
     </div>
   );
 }

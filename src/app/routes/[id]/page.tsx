@@ -118,6 +118,10 @@ export default function RouteDetail() {
 
 
   const [relatedRoutes, setRelatedRoutes] = useState<Route[]>([]);
+  // Whether the related rail is actually showing same-region routes (true) or
+  // fell back to country-wide (false) — so we never label Dublin routes as
+  // "More routes in Wicklow".
+  const [relatedIsRegion, setRelatedIsRegion] = useState(false);
 
   useEffect(() => {
     if (!route) return;
@@ -128,10 +132,13 @@ export default function RouteDetail() {
         const sameRegion = route.region
           ? all.filter((r: Route) => r.id !== route.id && r.region === route.region)
           : [];
-        const filtered = sameRegion.length > 0
-          ? sameRegion.slice(0, 4)
-          : all.filter((r: Route) => r.id !== route.id).slice(0, 4);
-        setRelatedRoutes(filtered);
+        if (sameRegion.length > 0) {
+          setRelatedRoutes(sameRegion.slice(0, 4));
+          setRelatedIsRegion(true);
+        } else {
+          setRelatedRoutes(all.filter((r: Route) => r.id !== route.id).slice(0, 4));
+          setRelatedIsRegion(false);
+        }
       })
       .catch(() => {});
   }, [route?.id, route?.country, route?.region]);
@@ -515,8 +522,10 @@ export default function RouteDetail() {
           </div>
         )}
 
-        {/* Uploaded by */}
-        {route.created_by && route.creator_name && (
+        {/* Uploaded by — social + attribution: hidden for launch. Routes are
+            facts (no public attribution); the persona/rating/follow only shows
+            when social features are switched on. */}
+        {SOCIAL_FEATURES_ENABLED && route.created_by && route.creator_name && (
           <div
             className="flex items-center gap-3 rounded-xl px-4 py-3 mb-4"
             style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
@@ -578,10 +587,12 @@ export default function RouteDetail() {
           </div>
         )}
 
-        {/* Photos */}
-        <div className="rounded-2xl p-4 md:p-6 mb-3 md:mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-          <PhotoGallery routeId={route.id} />
-        </div>
+        {/* Photos — social feature, hidden for launch */}
+        {SOCIAL_FEATURES_ENABLED && (
+          <div className="rounded-2xl p-4 md:p-6 mb-3 md:mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+            <PhotoGallery routeId={route.id} />
+          </div>
+        )}
 
         {/* Share Ride — prominent CTA */}
         <div className="mb-4">
@@ -652,9 +663,9 @@ export default function RouteDetail() {
         <div className="rounded-2xl p-4 md:p-6 mb-3 md:mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
           <RelatedRoutes
             routes={relatedRoutes}
-            regionOrCountry={route.region || route.country}
+            regionOrCountry={relatedIsRegion && route.region ? route.region : route.country}
             country={route.country}
-            isRegion={!!route.region}
+            isRegion={relatedIsRegion && !!route.region}
           />
         </div>
 

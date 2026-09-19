@@ -990,7 +990,11 @@ function CandidateCard({
             </div>
             <SourceBadge
               source={candidate.source}
-              score={candidate.match_score}
+              // Show the QUALITY score next to the quality tier so the badge and
+              // the "Quality" stat agree (was showing match_score → two
+              // different numbers for the same route). Library routes have no
+              // quality score, so they fall back to match.
+              score={!isLibrary && candidate.quality_score !== undefined ? candidate.quality_score : candidate.match_score}
               qualityTier={!isLibrary ? candidate.quality_tier : undefined}
             />
           </div>
@@ -1201,7 +1205,7 @@ function SourceBadge({
         color: accent ? "var(--accent)" : "var(--text-muted)",
         border: `1px solid ${accent ? "var(--accent)" : "var(--border)"}`,
       }}
-      title={`Match score ${score}/100`}
+      title={`${source === "library" ? "Match" : "Quality"} score ${score}/100`}
     >
       {label} · {score}
     </div>

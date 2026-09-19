@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
+import { SOCIAL_FEATURES_ENABLED } from "@/config/constants";
 
 interface ActivityItem {
   type: "rating" | "comment" | "condition" | "photo";
@@ -323,8 +324,8 @@ export default function ProfilePage() {
             <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-1">
               <h1 className="text-2xl font-extrabold tracking-tight" style={{ color: "var(--text)" }}>{displayName}</h1>
 
-              {/* Community Score Badge */}
-              {profile.communityScore && (
+              {/* Community Score Badge — social, hidden for launch */}
+              {SOCIAL_FEATURES_ENABLED && profile.communityScore && (
                 <span
                   className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold"
                   style={{ color: tierStyle.color, background: tierStyle.bg }}
@@ -351,7 +352,7 @@ export default function ProfilePage() {
 
             {/* Action buttons */}
             <div className="flex items-center gap-2 mt-3 justify-center sm:justify-start">
-              {!isOwnProfile && currentUser && (
+              {SOCIAL_FEATURES_ENABLED && !isOwnProfile && currentUser && (
                 <>
                   <button
                     onClick={handleFollow}
@@ -439,7 +440,8 @@ export default function ProfilePage() {
             </div>
           )}
 
-          {/* Followers / Following */}
+          {/* Followers / Following — social, hidden for launch */}
+          {SOCIAL_FEATURES_ENABLED && (
           <div className="flex gap-2">
             {[
               { label: "Followers", value: profile.followers, action: () => openSocialList("followers") },
@@ -456,6 +458,7 @@ export default function ProfilePage() {
               </div>
             ))}
           </div>
+          )}
         </div>
 
         {/* Tabs */}
@@ -598,8 +601,8 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* Followers/Following Modal */}
-      {socialModal && (
+      {/* Followers/Following Modal — social, hidden for launch */}
+      {SOCIAL_FEATURES_ENABLED && socialModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setSocialModal(null)} aria-hidden="true" />
           <div

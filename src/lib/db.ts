@@ -1620,6 +1620,9 @@ export interface Collection {
   location: string | null;
   country: string | null;
   cover_image_url: string | null;
+  /** First route in the collection — used for a route-shape card thumbnail
+   *  when there's no cover_image_url. Populated by getCollections. */
+  cover_route_id?: string | null;
   discipline: "road" | "gravel" | "mtb" | "mixed";
   difficulty_range: string | null;
   total_routes_count: number;
@@ -1634,17 +1637,26 @@ export interface CollectionWithRoutes extends Collection {
   routes: Route[];
 }
 
+// Live route count (the stored total_routes_count drifts — seeds link routes
+// without updating it) + a representative route for the card thumbnail.
+const COLLECTION_SELECT = `
+  SELECT c.*,
+    (SELECT COUNT(*) FROM collection_routes cr WHERE cr.collection_id = c.id) AS total_routes_count,
+    (SELECT cr.route_id FROM collection_routes cr WHERE cr.collection_id = c.id
+       ORDER BY cr.display_order ASC LIMIT 1) AS cover_route_id
+  FROM collections c`;
+
 export async function getCollections(): Promise<Collection[]> {
-  const { rows } = await sql`
-    SELECT * FROM collections ORDER BY featured DESC, created_at DESC
-  `;
+  const { rows } = await sql.query(
+    `${COLLECTION_SELECT} ORDER BY c.featured DESC, c.created_at DESC`
+  );
   return rows as Collection[];
 }
 
 export async function getFeaturedCollections(): Promise<Collection[]> {
-  const { rows } = await sql`
-    SELECT * FROM collections WHERE featured = TRUE ORDER BY created_at DESC LIMIT 6
-  `;
+  const { rows } = await sql.query(
+    `${COLLECTION_SELECT} WHERE c.featured = TRUE ORDER BY c.created_at DESC LIMIT 6`
+  );
   return rows as Collection[];
 }
 

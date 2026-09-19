@@ -59,6 +59,8 @@ interface RouteQualityData {
   total: number;
   breakdown: Record<string, number>;
   surface_breakdown?: SurfaceBreakdown;
+  confidence?: number;
+  confidence_level?: "high" | "medium" | "low";
 }
 
 export default function RouteDetail() {
@@ -168,8 +170,19 @@ export default function RouteDetail() {
     })
       .then((r) => (r.ok ? r.json() : null))
       .then((body) => {
-        if (!cancelled && body?.data && typeof body.data.total === "number") {
-          setQuality(body.data as RouteQualityData);
+        // Only surface a score we could actually STAND OVER. A total of 0 with
+        // zero confidence means "couldn't verify" (Overpass down/rate-limited
+        // or the route failed a hard rule) — showing that as a damning "0/100"
+        // on every route is worse than showing nothing. Require a real,
+        // confidently-verified score before rendering the module.
+        const d = body?.data as RouteQualityData | undefined;
+        const verified =
+          d &&
+          typeof d.total === "number" &&
+          d.total > 0 &&
+          (d.confidence === undefined || d.confidence > 0.3);
+        if (!cancelled && verified) {
+          setQuality(d);
         }
       })
       .catch(() => {});

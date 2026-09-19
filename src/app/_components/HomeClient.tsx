@@ -199,7 +199,7 @@ function AnswerMachine({ onBrowseNearby }: { onBrowseNearby: () => void }) {
 }
 
 function HomeContent() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -476,9 +476,10 @@ function HomeContent() {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)" }}>
-      {user ? (
-        // Logged in: the answer machine. Header on top, the question next,
-        // no marketing hero (CEO north star, 2026-06-11).
+      {user || authLoading ? (
+        // Logged in (or auth still resolving): the answer machine. We default
+        // to this during the auth-loading window so an authenticated rider is
+        // never flashed the logged-out marketing hero on their own home page.
         <>
           <AppHeader />
           <AnswerMachine onBrowseNearby={scrollToContent} />

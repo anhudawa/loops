@@ -46,3 +46,5 @@ next-env.d.ts
 /android
 .worktrees/
 tmp-qa/
+
+qa2/

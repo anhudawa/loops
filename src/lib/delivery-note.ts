@@ -1,0 +1,57 @@
+// ============================================================
+// delivery-note.ts — honest "what you asked vs what we served"
+// ============================================================
+//
+// Honesty principle: when a generated loop comes out materially different from
+// the request — noticeably shorter/longer, or hillier than a "flat"/"rolling"
+// ask — say so plainly instead of presenting it as a clean match. Pure and
+// unit-tested; the UI just renders the string.
+
+export interface DeliveryRequest {
+  distance_km: number;
+  elevation_preference: string; // "flat" | "rolling" | "hilly" | "mountainous" | "any"
+}
+
+export interface DeliveryActual {
+  distance_km: number;
+  elevation_gain_m: number;
+}
+
+// Per-km elevation ceiling for each preference (mirrors route-intent.ts).
+const FLAT_CEILING_PER_KM: Record<string, number> = { flat: 5, rolling: 12 };
+
+export function deliveryNote(
+  req: DeliveryRequest | null | undefined,
+  actual: DeliveryActual
+): string | null {
+  if (!req) return null;
+  const notes: string[] = [];
+
+  // Distance: flag a deviation over 12% AND at least 3 km (avoid nagging on
+  // tiny differences that are within routing tolerance).
+  const reqKm = req.distance_km;
+  if (reqKm > 0) {
+    const diff = actual.distance_km - reqKm;
+    if (Math.abs(diff) / reqKm > 0.12 && Math.abs(diff) >= 3) {
+      notes.push(
+        diff < 0
+          ? `Came out ${Math.round(-diff)} km shorter than the ${Math.round(reqKm)} km you asked for — the best loop we could route from here.`
+          : `Came out ${Math.round(diff)} km longer than the ${Math.round(reqKm)} km you asked for.`
+      );
+    }
+  }
+
+  // Terrain: flag when a flat/rolling request came back meaningfully hillier
+  // (15% over the preference's ceiling).
+  const perKm = FLAT_CEILING_PER_KM[req.elevation_preference];
+  if (perKm !== undefined && actual.distance_km > 0) {
+    const ceiling = actual.distance_km * perKm;
+    if (actual.elevation_gain_m > ceiling * 1.15) {
+      notes.push(
+        `Hillier than "${req.elevation_preference}" — ${Math.round(actual.elevation_gain_m)} m of climbing on the flattest quiet loop we could find here.`
+      );
+    }
+  }
+
+  return notes.length ? notes.join(" ") : null;
+}

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
 import { sql } from "@vercel/postgres";
-import { upsertGoogleUser, getUserByGoogleId, migrateDb, recordEvent, ANALYTICS_EVENTS } from "@/lib/db";
+import { upsertGoogleUser, getUserByGoogleId, migrateDb, recordEvent, markNewsletterOptIn, ANALYTICS_EVENTS } from "@/lib/db";
 import { ATTRIBUTION_COOKIE, decodeAttribution } from "@/lib/attribution";
+import { subscribeToNewsletter } from "@/lib/beehiiv";
 
 export async function GET(request: NextRequest) {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
@@ -83,6 +84,15 @@ export async function GET(request: NextRequest) {
       isNewUser ? attribution : null
     );
 
+    // Newsletter (Saturday Spin) opt-in — captured at signup for new riders.
+    const wantsNewsletter =
+      isNewUser && request.cookies.get("newsletter_optin")?.value === "1";
+    if (wantsNewsletter) {
+      await markNewsletterOptIn(authedUser.id).catch(() => {});
+      // Beehiiv sync is dormant until keys are set; safe no-op otherwise.
+      void subscribeToNewsletter(email, { source: attribution?.source ?? null });
+    }
+
     // Funnel: login/signup success (fire-and-forget, no PII — no email).
     void recordEvent(ANALYTICS_EVENTS.AUTH_SUCCEEDED, {
       userId: authedUser.id,
@@ -94,6 +104,7 @@ export async function GET(request: NextRequest) {
         raw_source: isNewUser ? attribution?.raw_source ?? null : null,
         medium: isNewUser ? attribution?.medium ?? null : null,
         campaign: isNewUser ? attribution?.campaign ?? null : null,
+        newsletter_opt_in: isNewUser ? Boolean(wantsNewsletter) : null,
       },
     });
 
@@ -122,6 +133,8 @@ export async function GET(request: NextRequest) {
     response.cookies.set("login_redirect", "", { path: "/", maxAge: 0 });
     // Clear the attribution cookie — it's been recorded at signup.
     response.cookies.set(ATTRIBUTION_COOKIE, "", { path: "/", maxAge: 0 });
+    // Clear the newsletter opt-in cookie.
+    response.cookies.set("newsletter_optin", "", { path: "/", maxAge: 0 });
 
     return response;
   } catch {

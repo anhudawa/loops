@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense, useCallback } from "react";
+import { useState, useEffect, Suspense, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import AnimatedNumber from "@/components/AnimatedNumber";
 import FadeIn from "@/components/FadeIn";
@@ -28,6 +28,10 @@ function LoginPage() {
   } | null>(null);
   const [navSolid, setNavSolid] = useState(false);
   const [demoIndex, setDemoIndex] = useState(0);
+  // Newsletter opt-in — unticked by default. A ref mirrors it so every
+  // "Sign in with Google" CTA (there are several) reads the current choice.
+  const [newsletterOptIn, setNewsletterOptIn] = useState(false);
+  const newsletterOptInRef = useRef(false);
 
   // Derive URL-sourced errors directly — no effect needed
   const paramErr = searchParams.get("error");
@@ -68,6 +72,11 @@ function LoginPage() {
       const redirect = redirectOverride ?? searchParams.get("redirect");
       if (redirect) {
         document.cookie = `login_redirect=${encodeURIComponent(redirect)}; path=/; max-age=600; SameSite=Lax`;
+      }
+      // Carry the (optional, unticked-by-default) newsletter opt-in through
+      // OAuth via a short-lived cookie the callback reads on a new signup.
+      if (newsletterOptInRef.current) {
+        document.cookie = `newsletter_optin=1; path=/; max-age=600; SameSite=Lax`;
       }
       const res = await fetch("/api/auth/google");
       const data = await res.json();
@@ -131,6 +140,18 @@ function LoginPage() {
               <div className="alert-error mb-3 text-sm" role="alert">{error}</div>
             )}
             <GoogleButton onClick={() => handleGoogleLogin()} />
+            <label className="flex items-start gap-2 mt-3 text-left cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={newsletterOptIn}
+                onChange={(e) => { setNewsletterOptIn(e.target.checked); newsletterOptInRef.current = e.target.checked; }}
+                className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--accent)]"
+                style={{ minWidth: 16, minHeight: 16 }}
+              />
+              <span className="text-[12px] leading-snug" style={{ color: "var(--text-secondary)" }}>
+                Get <span style={{ color: "var(--text)" }}>the Saturday Spin</span> — the free weekly cycling newsletter.
+              </span>
+            </label>
             <p className="text-[11px] text-center mt-2.5" style={{ color: "var(--text-muted)" }}>
               Free forever. No credit card. No subscription.
             </p>

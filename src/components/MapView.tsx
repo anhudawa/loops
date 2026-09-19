@@ -72,9 +72,19 @@ export default function MapView({
       scrollWheelZoom: false,
     });
 
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-      attribution: '&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
-      maxZoom: 18,
+    // Keyless OpenStreetMap basemap (same source the planner/viewer maps use).
+    // CARTO's public basemap now watermarks "API KEY REQUIRED" for anonymous
+    // use, so we don't use it without a key. A paid tile provider can be
+    // dropped in later via env vars — no code change needed.
+    const tileUrl =
+      process.env.NEXT_PUBLIC_MAP_TILE_URL ||
+      "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+    const tileAttribution =
+      process.env.NEXT_PUBLIC_MAP_TILE_ATTRIBUTION ||
+      '&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+    L.tileLayer(tileUrl, {
+      attribution: tileAttribution,
+      maxZoom: 19,
     }).addTo(mapRef.current);
 
     layersRef.current = L.layerGroup().addTo(mapRef.current);

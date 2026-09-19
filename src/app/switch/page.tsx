@@ -7,7 +7,7 @@ import JsonLd from "@/components/JsonLd";
 export const metadata: Metadata = {
   title: "Switching from Komoot? Your Routes Come With You | LOOPS",
   description:
-    "Leaving Komoot after the Bending Spoons takeover and the device-sync paywall? LOOPS keeps GPX import, export and device sync free forever. Bulk-import your routes in minutes.",
+    "Leaving Komoot after the Bending Spoons takeover and the device-sync paywall? LOOPS keeps GPX import and export — and free GPX to your Garmin, Wahoo or Hammerhead — free forever. Bulk-import your routes in minutes.",
   keywords: [
     "Komoot alternative",
     "switch from Komoot",
@@ -21,7 +21,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Switching from Komoot? Your Routes Come With You",
     description:
-      "GPX import & export free forever. Device sync free forever. No region locks. Your routes stay yours. Here's how to move from Komoot to LOOPS.",
+      "GPX import & export free forever. Free GPX to your Garmin, Wahoo or Hammerhead. No region locks. Your routes stay yours. Here's how to move from Komoot to LOOPS.",
     url: "https://www.loops.ie/switch",
     type: "website",
   },
@@ -29,7 +29,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Switching from Komoot? Your Routes Come With You",
     description:
-      "GPX import & export free forever. Device sync free forever. No region locks. Move your routes to LOOPS in minutes.",
+      "GPX import & export free forever. Free GPX to your Garmin, Wahoo or Hammerhead. No region locks. Move your routes to LOOPS in minutes.",
   },
 };
 
@@ -39,8 +39,8 @@ const PROMISES = [
     body: "Bring every route in, take every route out. Standard GPX, no premium tier for your own files.",
   },
   {
-    title: "Device sync — free forever",
-    body: "Export to your Garmin, Wahoo or Hammerhead without paying a yearly fee for the privilege.",
+    title: "Free GPX to your device — forever",
+    body: "Download any route as a standard GPX and load it onto your Garmin, Wahoo or Hammerhead — no yearly fee for the privilege. (One-tap sync straight to the device is coming.)",
   },
   {
     title: "No region locks",
@@ -66,8 +66,8 @@ const STEPS = [
   },
   {
     n: "3",
-    title: "Sync free to your Garmin",
-    body: "Open any route on LOOPS and export the GPX to your head unit — Garmin Connect, Wahoo, Hammerhead or any app that takes GPX. No subscription between you and the handoff to your bike computer.",
+    title: "Load it onto your Garmin — free",
+    body: "Open any route on LOOPS and download the GPX to your head unit — Garmin Connect, Wahoo, Hammerhead or any app that takes GPX. No subscription between you and the handoff to your bike computer. (One-tap sync straight to the device is coming.)",
   },
 ];
 
@@ -77,7 +77,7 @@ function howToJsonLd() {
     "@type": "HowTo",
     name: "How to switch from Komoot to LOOPS",
     description:
-      "Move your cycling routes from Komoot to LOOPS: export your GPX files, bulk-import them, and sync free to your Garmin.",
+      "Move your cycling routes from Komoot to LOOPS: export your GPX files, bulk-import them, and load them free onto your Garmin.",
     step: STEPS.map((s, i) => ({
       "@type": "HowToStep",
       position: i + 1,
@@ -111,8 +111,9 @@ export default function SwitchPage() {
               Switching from Komoot? Your routes come with you.
             </h1>
             <p className="text-base md:text-lg leading-relaxed mb-6" style={{ color: "var(--text-secondary)" }}>
-              GPX import and export, free forever. Device sync, free forever. No region locks.
-              Your routes stay yours. Moving over takes a few minutes — here&apos;s exactly how.
+              GPX import and export, free forever. Free GPX to your Garmin, Wahoo or Hammerhead.
+              No region locks. Your routes stay yours. Moving over takes a few minutes — here&apos;s
+              exactly how.
             </p>
             <div className="flex flex-col sm:flex-row gap-3">
               <Link

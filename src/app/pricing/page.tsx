@@ -6,7 +6,7 @@ import Footer from "@/components/Footer";
 export const metadata: Metadata = {
   title: "Pricing — Free Forever, Plus Pro | LOOPS",
   description:
-    "GPX import/export, bulk import, device sync and your saved routes are free forever on LOOPS. LOOPS Pro adds training intelligence for €39/yr. Founding Rider: €49 for Pro for life.",
+    "GPX import/export, bulk import, free GPX to your Garmin/Wahoo/Hammerhead and your saved routes are free forever on LOOPS. LOOPS Pro adds training intelligence for €39/yr. Founding Rider: €49 for Pro for life.",
   keywords: [
     "LOOPS pricing",
     "free cycling route planner",
@@ -27,18 +27,25 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Pricing — Free Forever, Plus Pro | LOOPS",
     description:
-      "Import/export, bulk import, device sync and your saved routes free forever. Pro adds training intelligence for €39/yr.",
+      "GPX import/export, bulk import, free GPX to your Garmin/Wahoo/Hammerhead, and your saved routes — free forever. Pro adds training intelligence for €39/yr.",
   },
 };
 
 const FREE_FEATURES = [
   "GPX import & export",
   "Bulk import (up to 30 files at once)",
-  "Device sync to Garmin, Wahoo & Hammerhead",
+  "Free GPX to Garmin, Wahoo & Hammerhead",
   "All your saved routes",
   "Draw-on-map route planner",
   "Browse all destinations",
   "3 AI route generations per week",
+];
+
+// Free, but not shipped yet — shown honestly as "coming", never as a live
+// feature. One-tap sync pushes a route straight to the device from LOOPS
+// (today you download the GPX and load it yourself, which is free and works).
+const FREE_COMING = [
+  "One-tap sync to Garmin, Wahoo & Hammerhead",
 ];
 
 const PRO_FEATURES = [
@@ -86,9 +93,9 @@ export default function PricingPage() {
               Your routes are free. Forever.
             </h1>
             <p className="text-base md:text-lg leading-relaxed max-w-2xl mx-auto" style={{ color: "var(--text-secondary)" }}>
-              Everything Komoot put behind a paywall — GPX import and export, bulk import, device
-              sync, your saved routes — is free on LOOPS and always will be. We charge for training
-              intelligence, never for access to your own routes.
+              Everything Komoot put behind a paywall — GPX import and export, bulk import, free GPX
+              to your device, your saved routes — is free on LOOPS and always will be. We charge for
+              training intelligence, never for access to your own routes.
             </p>
           </div>
         </section>
@@ -114,6 +121,14 @@ export default function PricingPage() {
                 {FREE_FEATURES.map((f) => (
                   <li key={f} className="flex items-start gap-2.5 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
                     <Check />
+                    <span>{f}</span>
+                  </li>
+                ))}
+                {FREE_COMING.map((f) => (
+                  <li key={f} className="flex items-start gap-2.5 text-sm leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                    <span className="shrink-0 mt-0.5 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded" style={{ border: "1px solid var(--border)", color: "var(--text-muted)" }}>
+                      Soon
+                    </span>
                     <span>{f}</span>
                   </li>
                 ))}

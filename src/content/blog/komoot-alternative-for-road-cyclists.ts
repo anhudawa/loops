@@ -50,7 +50,7 @@ export const komootAlternative: BlogPost = {
     },
     {
       type: "p",
-      text: "Already decided? Our [step-by-step switching guide](/switch) shows you how to export your routes from Komoot, bulk-import them to LOOPS, and sync free to your Garmin — the whole move takes a few minutes.",
+      text: "Already decided? Our [step-by-step switching guide](/switch) shows you how to export your routes from Komoot, bulk-import them to LOOPS, and load them free onto your Garmin — the whole move takes a few minutes.",
     },
     {
       type: "cta",

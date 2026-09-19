@@ -33,6 +33,7 @@ interface MetricsState {
   available: boolean;
   metrics: UsageMetrics | null;
   since: string | null;
+  signupSources?: { source: string; count: number }[];
 }
 
 interface UserRow {
@@ -336,6 +337,21 @@ export default function AdminPage() {
                     </p>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {metrics.available && metrics.signupSources && metrics.signupSources.length > 0 && (
+              <div className="mt-4 pt-3" style={{ borderTop: "1px solid var(--border)" }}>
+                <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--text)" }}>
+                  New signups by source — last 7 days
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {metrics.signupSources.map((s) => (
+                    <span key={s.source} className="text-[11px] rounded-full px-2.5 py-1" style={{ background: "var(--bg)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}>
+                      <span className="font-bold" style={{ color: "var(--text)" }}>{s.count}</span> {s.source}
+                    </span>
+                  ))}
+                </div>
               </div>
             )}
           </div>

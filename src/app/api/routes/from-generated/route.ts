@@ -169,9 +169,12 @@ export async function POST(request: NextRequest) {
     });
 
     // Funnel: a generated/drawn route was saved (fire-and-forget, no PII).
+    // Separate the draw milestone from a generated save via the description
+    // the planner sends ("Drawn on the LOOPS map planner").
+    const savedSource = /map planner/i.test(description ?? "") ? "draw" : "generated";
     void recordEvent(ANALYTICS_EVENTS.ROUTE_SAVED, {
       userId: user.id,
-      properties: { route_id: route.id, discipline: route.discipline, distance_km: route.distance_km },
+      properties: { route_id: route.id, discipline: route.discipline, distance_km: route.distance_km, source: savedSource },
     });
 
     return NextResponse.json({ data: route }, { status: 201 });

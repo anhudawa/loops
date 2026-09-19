@@ -21,11 +21,19 @@ export const ANALYTICS_EVENTS = {
   GPX_DOWNLOADED: "gpx_downloaded",
   ROUTE_IMPORTED: "route_imported",
   ROUTE_SAVED: "route_saved",
+  PLAN_DRAWN: "plan_route_drawn",
   AUTH_SUCCEEDED: "auth_succeeded",
 } as const;
 
 export type AnalyticsEventName =
   (typeof ANALYTICS_EVENTS)[keyof typeof ANALYTICS_EVENTS];
+
+/** Events a browser is allowed to report via the /api/events beacon. Keep
+ *  this tight — the server owns everything else. */
+export const CLIENT_BEACON_EVENTS: ReadonlySet<string> = new Set([
+  ANALYTICS_EVENTS.GPX_DOWNLOADED,
+  ANALYTICS_EVENTS.PLAN_DRAWN,
+]);
 
 /** A single event row as read from the DB (or a test fixture). */
 export interface RawEventRow {

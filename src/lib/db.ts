@@ -114,6 +114,11 @@ export async function initDb() {
 export async function migrateDb() {
   await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS strava_id TEXT UNIQUE`;
   await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id TEXT UNIQUE`;
+  // Signup attribution (first-touch): which channel a rider came from.
+  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_source TEXT`;
+  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_raw_source TEXT`;
+  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_medium TEXT`;
+  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_campaign TEXT`;
 
   // Downloads tracking
   await sql`
@@ -347,7 +352,7 @@ export async function recordEvent(
  */
 export async function getUsageMetrics(
   now: Date = new Date()
-): Promise<{ metrics: UsageMetrics; since: string | null } | null> {
+): Promise<{ metrics: UsageMetrics; since: string | null; signupSources: { source: string; count: number }[] } | null> {
   try {
     // Pull the 14-day window and aggregate in pure, unit-tested logic.
     const { rows } = await sql.query(
@@ -360,7 +365,21 @@ export async function getUsageMetrics(
     );
     const metrics = computeUsageMetrics(rows as RawEventRow[], now);
     const since = sinceRows[0]?.since ? String(sinceRows[0].since) : null;
-    return { metrics, since };
+
+    // Where this week's NEW signups came from (funnel attribution).
+    const { rows: srcRows } = await sql.query(
+      `SELECT COALESCE(NULLIF(properties->>'source',''), 'direct') AS source, COUNT(*)::int AS count
+       FROM events
+       WHERE event = 'auth_succeeded' AND properties->>'new_user' = 'true'
+         AND created_at >= NOW() - INTERVAL '7 days'
+       GROUP BY 1 ORDER BY 2 DESC`
+    );
+    const signupSources = srcRows.map((r) => ({
+      source: String(r.source),
+      count: Number(r.count),
+    }));
+
+    return { metrics, since, signupSources };
   } catch {
     return null;
   }
@@ -710,7 +729,8 @@ export async function upsertGoogleUser(
   email: string,
   name: string,
   avatarUrl: string | null,
-  sessionToken: string
+  sessionToken: string,
+  attribution?: { source: string; raw_source: string | null; medium: string | null; campaign: string | null } | null
 ): Promise<User> {
   const existing = await getUserByGoogleId(googleId);
   if (existing) {
@@ -737,9 +757,13 @@ export async function upsertGoogleUser(
     `;
     return (await getUserByGoogleId(googleId))!;
   }
+  // New user: record first-touch attribution at signup (nullable).
   await sql`
-    INSERT INTO users (id, email, name, avatar_url, google_id, session_token)
-    VALUES (${id}, ${email}, ${name}, ${avatarUrl}, ${googleId}, ${sessionToken})
+    INSERT INTO users (id, email, name, avatar_url, google_id, session_token,
+                       signup_source, signup_raw_source, signup_medium, signup_campaign)
+    VALUES (${id}, ${email}, ${name}, ${avatarUrl}, ${googleId}, ${sessionToken},
+            ${attribution?.source ?? null}, ${attribution?.raw_source ?? null},
+            ${attribution?.medium ?? null}, ${attribution?.campaign ?? null})
   `;
   return (await getUserByGoogleId(googleId))!;
 }

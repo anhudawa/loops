@@ -339,7 +339,7 @@ export default async function DestinationPage({ params }: Props) {
             }}
           >
             <p className="text-sm mb-3" style={{ color: "var(--text-muted)" }}>
-              Ready-to-ride loops with GPX downloads, elevation profiles and climb details
+              Every {dest.name} route in the library — GPX downloads, elevation profiles and climb details.
             </p>
             <Link
               href={`/routes/country/${slugify(dest.routesCountry)}/${slugify(dest.routesRegion)}`}
@@ -349,7 +349,7 @@ export default async function DestinationPage({ params }: Props) {
                 color: "var(--bg)",
               }}
             >
-              Browse {dest.name} routes
+              Browse all {dest.name} routes
             </Link>
           </div>
         )}
@@ -367,7 +367,7 @@ export default async function DestinationPage({ params }: Props) {
               className="text-sm mb-3"
               style={{ color: "var(--text-muted)" }}
             >
-              Browse our curated routes in {dest.name}
+              Short on time? Our hand-picked pick of the {dest.name} classics.
             </p>
             <Link
               href={`/collections/${dest.collectionSlug}`}
@@ -378,7 +378,7 @@ export default async function DestinationPage({ params }: Props) {
                 background: "var(--bg-card)",
               }}
             >
-              View {dest.name} routes
+              See the {dest.name} Collection
             </Link>
           </div>
         )}

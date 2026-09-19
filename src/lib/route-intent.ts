@@ -368,7 +368,20 @@ export function parseBasicIntent(prompt: string): ParsedIntent | null {
   if (kmMatch) distance = Math.round(parseFloat(kmMatch[1]));
   else if (miMatch) distance = Math.round(parseFloat(miMatch[1]) * 1.609);
 
-  if (duration === null && distance === null) return null; // too vague
+  // "from <place>" — parsed early because a named place makes a distance-less
+  // prompt specific enough to default (spec: neither distance nor duration →
+  // default 50 km). Stops at punctuation or terrain/wind keywords.
+  let region: string | null = null;
+  const fromMatch = prompt.match(/\bfrom\s+([A-Za-zÀ-ÿ''. -]{3,40}?)(?:[,.;]|\s+(?:with|on|in|and|tailwind|headwind)\b|\s+\d|$)/i);
+  if (fromMatch) region = fromMatch[1].trim();
+
+  if (duration === null && distance === null) {
+    // Truly vague ("give me a ride") — no distance, no time, no place.
+    if (!region) return null;
+    // A place is named ("gravel loop from Dublin") — default the distance
+    // rather than declining a perfectly reasonable ask.
+    distance = 50;
+  }
 
   const discipline: Discipline =
     /\bgravel\b/.test(p) ? "gravel" : /\bmtb|mountain bike\b/.test(p) ? "mtb" : "road";
@@ -391,11 +404,6 @@ export function parseBasicIntent(prompt: string): ParsedIntent | null {
   }
 
   const cafe_stop = /\bcaf[eé]\b|coffee\s+stop|stop\s+for\s+coffee/.test(p);
-
-  // "from <place>" — stop at punctuation or terrain/wind keywords
-  let region: string | null = null;
-  const fromMatch = prompt.match(/\bfrom\s+([A-Za-zÀ-ÿ''. -]{3,40}?)(?:[,.;]|\s+(?:with|on|in|and|tailwind|headwind)\b|\s+\d|$)/i);
-  if (fromMatch) region = fromMatch[1].trim();
 
   return {
     distance_km: distance,

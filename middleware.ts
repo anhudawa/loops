@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { RATE_LIMIT_AUTH, RATE_LIMIT_UPLOAD, RATE_LIMIT_WRITE, RATE_LIMIT_READ } from "@/config/constants";
+import { ATTRIBUTION_COOKIE, attributionFromParams, encodeAttribution } from "@/lib/attribution";
 
 function getRateLimitConfig(pathname: string, method: string) {
   if (pathname.startsWith("/api/auth")) {
@@ -71,6 +72,32 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // First-touch signup attribution: the first time a visitor lands with a
+  // source hint (utm_*/?source/?ref or an external referrer), remember it in a
+  // cookie so the signup handler can bucket where they came from (podcast,
+  // newsletter, Clubhouse, search…). First-touch wins; never overwritten.
+  const applyAttribution = (res: NextResponse): NextResponse => {
+    if (request.cookies.get(ATTRIBUTION_COOKIE)) return res;
+    let referrerHost: string | null = null;
+    const ref = request.headers.get("referer");
+    if (ref) {
+      try {
+        const u = new URL(ref);
+        referrerHost = u.host === request.nextUrl.host ? null : u.host;
+      } catch { /* ignore malformed referer */ }
+    }
+    const attr = attributionFromParams(request.nextUrl.searchParams, referrerHost);
+    if (attr) {
+      res.cookies.set(ATTRIBUTION_COOKIE, encodeAttribution(attr), {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        maxAge: 60 * 60 * 24 * 90, // 90 days
+      });
+    }
+    return res;
+  };
+
   // Public pages — homepage, info pages, login, route pages, photos
   const publicExactPaths = ["/", "/about", "/privacy", "/terms", "/feedback", "/switch", "/pricing"];
   if (
@@ -88,7 +115,7 @@ export function middleware(request: NextRequest) {
     pathname === "/share" ||
     pathname.startsWith("/share/")
   ) {
-    return NextResponse.next();
+    return applyAttribution(NextResponse.next());
   }
 
   // Redirect /explore to homepage (anchor id is scroll-anchor)
@@ -101,10 +128,10 @@ export function middleware(request: NextRequest) {
     // Preserve intent: come back to where the user was heading
     const login = new URL("/login", request.url);
     login.searchParams.set("redirect", pathname);
-    return NextResponse.redirect(login);
+    return applyAttribution(NextResponse.redirect(login));
   }
 
-  return NextResponse.next();
+  return applyAttribution(NextResponse.next());
 }
 
 export const config = {

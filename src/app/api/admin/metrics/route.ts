@@ -17,10 +17,10 @@ export async function GET(request: NextRequest) {
 
     const result = await getUsageMetrics();
     if (!result) {
-      return NextResponse.json({ data: { available: false, metrics: null, since: null } });
+      return NextResponse.json({ data: { available: false, metrics: null, since: null, signupSources: [] } });
     }
     return NextResponse.json({
-      data: { available: true, metrics: result.metrics, since: result.since },
+      data: { available: true, metrics: result.metrics, since: result.since, signupSources: result.signupSources },
     });
   } catch (err) {
     return handleApiError(err);

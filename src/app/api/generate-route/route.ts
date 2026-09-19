@@ -172,14 +172,26 @@ export async function POST(request: NextRequest) {
       })
     );
 
-    // Funnel: generation succeeded (fire-and-forget, no PII).
+    // Funnel + product analytics: generation succeeded. We store the
+    // route-REQUEST shape (area, distance, terrain, workout structure) so we
+    // can see what riders actually ask for and build/write to it. No PII.
+    const spec = result.interpreted;
     void recordEvent(ANALYTICS_EVENTS.GENERATION_SUCCEEDED, {
       userId: user?.id ?? null,
       properties: {
         result_count: result.candidates.length,
         library_count: librarySources,
         generated_count: generatedSources,
-        is_workout: result.interpreted.is_workout,
+        // What was requested:
+        area: spec.region ?? null,
+        country: spec.country ?? null,
+        distance_km: spec.distance_km ?? null,
+        discipline: spec.discipline ?? null,
+        elevation_preference: spec.elevation_preference ?? null,
+        wind_strategy: spec.wind_strategy ?? null,
+        is_workout: spec.is_workout,
+        workout_summary: spec.workout_summary ?? null,
+        cafe_stop: spec.cafe_stop ?? null,
       },
     });
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
 import { sql } from "@vercel/postgres";
 import { upsertGoogleUser, getUserByGoogleId, migrateDb, recordEvent, ANALYTICS_EVENTS } from "@/lib/db";
+import { ATTRIBUTION_COOKIE, decodeAttribution } from "@/lib/attribution";
 
 export async function GET(request: NextRequest) {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
@@ -72,13 +73,28 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(new URL("/login?error=account_suspended", baseUrl));
     }
 
+    // First-touch signup attribution (set by middleware on landing).
+    const attribution = decodeAttribution(request.cookies.get(ATTRIBUTION_COOKIE)?.value);
+    const isNewUser = !existingUser;
+
     const sessionToken = uuidv4();
-    const authedUser = await upsertGoogleUser(uuidv4(), googleId, email, name, avatarUrl, sessionToken);
+    const authedUser = await upsertGoogleUser(
+      uuidv4(), googleId, email, name, avatarUrl, sessionToken,
+      isNewUser ? attribution : null
+    );
 
     // Funnel: login/signup success (fire-and-forget, no PII — no email).
     void recordEvent(ANALYTICS_EVENTS.AUTH_SUCCEEDED, {
       userId: authedUser.id,
-      properties: { method: "google", new_user: !existingUser },
+      properties: {
+        method: "google",
+        new_user: isNewUser,
+        // Attribution only meaningful on a new signup; null for returning.
+        source: isNewUser ? attribution?.source ?? "direct" : null,
+        raw_source: isNewUser ? attribution?.raw_source ?? null : null,
+        medium: isNewUser ? attribution?.medium ?? null : null,
+        campaign: isNewUser ? attribution?.campaign ?? null : null,
+      },
     });
 
     // Check for post-login redirect (set by login page)
@@ -104,6 +120,8 @@ export async function GET(request: NextRequest) {
 
     // Clear the redirect cookie
     response.cookies.set("login_redirect", "", { path: "/", maxAge: 0 });
+    // Clear the attribution cookie — it's been recorded at signup.
+    response.cookies.set(ATTRIBUTION_COOKIE, "", { path: "/", maxAge: 0 });
 
     return response;
   } catch {

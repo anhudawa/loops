@@ -49,6 +49,8 @@ import {
   type LatLng,
   type PlanLeg,
 } from "@/lib/plan-legs";
+import { track } from "@/lib/track";
+import { ANALYTICS_EVENTS } from "@/lib/metrics";
 
 interface RerouteResult {
   coordinates: [number, number][];
@@ -471,6 +473,9 @@ export default function MapPlanner() {
     a.download = `loops-planned-${totals.distance_km}km.gpx`;
     a.click();
     URL.revokeObjectURL(url);
+    // Funnel: a drawn route was exported (client-side GPX + draw milestone).
+    track(ANALYTICS_EVENTS.GPX_DOWNLOADED, { source: "draw" });
+    track(ANALYTICS_EVENTS.PLAN_DRAWN, { via: "download", distance_km: totals.distance_km });
   }
 
   /** Save the drawn route to the rider's library, then open its detail page.
@@ -511,6 +516,9 @@ export default function MapPlanner() {
         return;
       }
       const id = body?.data?.id;
+      // Funnel: drawn route saved (server records ROUTE_SAVED; this marks the
+      // draw milestone specifically). Pass source so ROUTE_SAVED is separable.
+      track(ANALYTICS_EVENTS.PLAN_DRAWN, { via: "save", distance_km: totals.distance_km });
       if (id) router.push(`/routes/${id}`);
       else setSaveError("Saved, but couldn't open the route page.");
     } catch {

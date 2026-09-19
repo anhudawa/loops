@@ -15,6 +15,8 @@ import QualityFactors, { SurfaceSummary } from "@/components/QualityFactors";
 import ShareButton from "@/components/ShareButton";
 import { useVoiceInput } from "@/lib/useVoiceInput";
 import { useGeolocation } from "@/lib/useGeolocation";
+import { track } from "@/lib/track";
+import { ANALYTICS_EVENTS } from "@/lib/metrics";
 
 // ── Types mirror the /api/generate-route unified response ───────────────────
 
@@ -111,6 +113,8 @@ function downloadGpx(gpx: string, filename: string) {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+  // Funnel: client-side GPX download (never hits a server route otherwise).
+  track(ANALYTICS_EVENTS.GPX_DOWNLOADED, { source: "generated" });
 }
 
 async function saveGeneratedRoute(

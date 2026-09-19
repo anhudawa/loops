@@ -124,7 +124,7 @@ export default function WeatherCard({ routeId, windOverlayEnabled, onWindToggle,
         <div className="flex items-center gap-2">
           <button
             onClick={() => onTravelToggle(!travelOverlayEnabled)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all"
+            className="flex items-center gap-1.5 px-3 py-2 min-h-[40px] rounded-full text-xs font-bold transition-all"
             style={{
               color: travelOverlayEnabled ? "#c8ff00" : "var(--text-muted)",
               background: travelOverlayEnabled ? "rgba(200, 255, 0, 0.15)" : "var(--bg)",
@@ -138,7 +138,7 @@ export default function WeatherCard({ routeId, windOverlayEnabled, onWindToggle,
           </button>
           <button
             onClick={() => onWindToggle(!windOverlayEnabled)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all"
+            className="flex items-center gap-1.5 px-3 py-2 min-h-[40px] rounded-full text-xs font-bold transition-all"
             style={{
               color: windOverlayEnabled ? "var(--danger)" : "var(--text-muted)",
               background: windOverlayEnabled ? "rgba(255, 51, 85, 0.15)" : "var(--bg)",

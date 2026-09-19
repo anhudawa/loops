@@ -511,11 +511,15 @@ const UNPAVED_SURFACE_SET = new Set([
   "unpaved", "gravel", "fine_gravel", "compacted", "dirt", "earth", "grass",
   "ground", "mud", "sand", "woodchips", "pebblestone", "rock", "cobblestone",
 ]);
-/** Highway classes assumed paved when no surface tag exists. */
+/** Highway classes assumed paved when no surface tag exists. In developed
+ *  road networks these classes are paved the overwhelming majority of the
+ *  time, so treating an untagged one as "unknown" understates our confidence
+ *  and inflated the "unknown %" (unclassified is one of the commonest rural
+ *  road classes — leaving it out made quiet lanes read as unknown surface). */
 const PAVED_CLASS_SET = new Set([
   "motorway", "motorway_link", "trunk", "trunk_link", "primary", "primary_link",
   "secondary", "secondary_link", "tertiary", "tertiary_link", "residential",
-  "service", "living_street", "cycleway",
+  "unclassified", "service", "living_street", "cycleway", "road",
 ]);
 const UNPAVED_CLASS_SET = new Set(["track", "path", "bridleway"]);
 

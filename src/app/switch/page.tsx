@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import AppHeader from "@/components/AppHeader";
-import Footer from "@/components/Footer";
 import JsonLd from "@/components/JsonLd";
 
 export const metadata: Metadata = {
@@ -283,7 +282,6 @@ export default function SwitchPage() {
         </section>
       </main>
 
-      <Footer />
     </div>
   );
 }

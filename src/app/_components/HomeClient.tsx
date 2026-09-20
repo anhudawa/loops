@@ -199,7 +199,7 @@ function AnswerMachine({ onBrowseNearby }: { onBrowseNearby: () => void }) {
 }
 
 function HomeContent() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, authError } = useAuth();
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -476,10 +476,11 @@ function HomeContent() {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)" }}>
-      {user || authLoading ? (
-        // Logged in (or auth still resolving): the answer machine. We default
-        // to this during the auth-loading window so an authenticated rider is
-        // never flashed the logged-out marketing hero on their own home page.
+      {user || authLoading || authError ? (
+        // Logged in, auth still resolving, OR a transient auth failure: show
+        // the answer machine. We only fall back to the marketing hero on a
+        // CONFIRMED logged-out state, never on a loading window or a blip —
+        // otherwise a signed-in rider gets flashed the paywall.
         <>
           <AppHeader />
           <AnswerMachine onBrowseNearby={scrollToContent} />

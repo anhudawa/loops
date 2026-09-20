@@ -120,9 +120,9 @@ export default function AppHeader({ sticky = true }: { sticky?: boolean }) {
                     user.avatar_url ||
                     `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || user.email)}&background=1a1a1a&color=c8ff00&size=32&bold=true`
                   }
-                  alt={user.name || user.email}
+                  alt=""
                   className="w-7 h-7 rounded-full object-cover"
-                  style={{ border: "1.5px solid var(--border)" }}
+                  style={{ border: "1.5px solid var(--border)", background: "var(--bg-raised)" }}
                 />
               </Link>
             )}

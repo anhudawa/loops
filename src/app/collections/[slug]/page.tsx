@@ -157,7 +157,7 @@ export default async function CollectionPage({ params }: Props) {
         {collection.routes.length === 0 ? (
           <p className="text-sm" style={{ color: "var(--text-muted)" }}>No routes in this collection yet.</p>
         ) : (
-          <div className="space-y-3">
+          <div className="grid gap-3 md:grid-cols-2">
             {collection.routes.map((route, index) => (
               <div key={route.id} className="flex items-start gap-3">
                 <span

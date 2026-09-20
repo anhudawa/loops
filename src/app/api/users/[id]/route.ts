@@ -16,7 +16,6 @@ import {
   getUserFavourites,
   getCommunityScore,
   getUserLoopRating,
-  migrateDb,
 } from "@/lib/db";
 import { apiError, handleApiError } from "@/lib/api-utils";
 
@@ -32,7 +31,9 @@ export async function GET(
       return apiError("User not found", "NOT_FOUND", 404);
     }
 
-    await migrateDb();
+    // (No migrateDb here — this is a hot read path and the schema already
+    //  exists; running migrations per request added ~5-6s to every profile
+    //  load. Migrations still run, memoised, on write paths.)
 
     // Optional: return followers/following lists
     const include = request.nextUrl.searchParams.get("include");

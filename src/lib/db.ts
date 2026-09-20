@@ -111,7 +111,23 @@ export async function initDb() {
 }
 
 // ──── Migrations ────
-export async function migrateDb() {
+// Memoise migrations so the ~25 idempotent ALTER/CREATE statements run ONCE
+// per server process, not on every request. Previously every API route that
+// called migrateDb() (18 of them) paid ~5-6s of DDL per request — that was the
+// profile page's multi-second load.
+let migrationsPromise: Promise<void> | null = null;
+export function migrateDb(): Promise<void> {
+  if (!migrationsPromise) {
+    migrationsPromise = runMigrations().catch((err) => {
+      // Let a later request retry rather than caching a failed migration.
+      migrationsPromise = null;
+      throw err;
+    });
+  }
+  return migrationsPromise;
+}
+
+async function runMigrations() {
   await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS strava_id TEXT UNIQUE`;
   await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id TEXT UNIQUE`;
   // Persisted quality score so the flagship "quality-scored" panel is instant

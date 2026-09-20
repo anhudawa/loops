@@ -5,6 +5,7 @@ import { getCountries, getRegions, getRegionStats, getRoutesByRegionSlug } from 
 import { slugify, generateItemListJsonLd, generateBreadcrumbJsonLd, generateFaqJsonLd } from "@/lib/seo";
 import JsonLd from "@/components/JsonLd";
 import Breadcrumbs from "@/components/Breadcrumbs";
+import RouteCard from "@/components/RouteCard";
 
 export const revalidate = 3600;
 
@@ -164,21 +165,9 @@ export default async function RegionPage({
         <h2 className="text-sm font-bold uppercase tracking-wider mb-4" style={{ color: "var(--text-muted)" }}>
           All Routes
         </h2>
-        <div className="grid gap-3 mb-10">
+        <div className="grid gap-3 md:grid-cols-2 mb-10">
           {routes.map((route) => (
-            <Link
-              key={route.id}
-              href={`/routes/${route.id}`}
-              className="flex items-center justify-between px-4 py-3 rounded-lg transition-colors hover:opacity-80"
-              style={{ background: "var(--bg-raised)" }}
-            >
-              <div>
-                <div className="text-sm font-semibold" style={{ color: "var(--text)" }}>{route.name}</div>
-                <div className="text-xs" style={{ color: "var(--text-muted)" }}>
-                  {route.distance_km}km · {route.elevation_gain_m}m climbing
-                </div>
-              </div>
-            </Link>
+            <RouteCard key={route.id} route={route} />
           ))}
         </div>
 

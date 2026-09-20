@@ -395,7 +395,7 @@ export default function ProfilePage() {
               )}
               <button
                 onClick={handleShare}
-                className="p-1.5 rounded-full hover:opacity-80 transition-opacity"
+                className="p-1.5 min-w-[40px] min-h-[40px] flex items-center justify-center rounded-full hover:opacity-80 transition-opacity"
                 style={{ border: "1px solid var(--border)", color: "var(--text-muted)" }}
                 aria-label="Share profile"
               >
@@ -467,7 +467,7 @@ export default function ProfilePage() {
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className="flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all"
+              className="flex-1 py-2 min-h-[40px] rounded-lg text-xs font-bold uppercase tracking-wider transition-all"
               style={{
                 background: activeTab === tab.key ? "var(--accent-glow)" : "transparent",
                 color: activeTab === tab.key ? "var(--accent)" : "var(--text-muted)",
@@ -490,7 +490,7 @@ export default function ProfilePage() {
                   <button
                     key={f.key}
                     onClick={() => setLoopFilter(f.key)}
-                    className="px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all"
+                    className="px-3 py-1 min-h-[36px] inline-flex items-center rounded-full text-[11px] font-bold uppercase tracking-wider transition-all"
                     style={{
                       background: loopFilter === f.key ? "var(--accent-glow)" : "transparent",
                       color: loopFilter === f.key ? "var(--accent)" : "var(--text-muted)",

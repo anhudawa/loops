@@ -114,6 +114,12 @@ export async function initDb() {
 export async function migrateDb() {
   await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS strava_id TEXT UNIQUE`;
   await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id TEXT UNIQUE`;
+  // Persisted quality score so the flagship "quality-scored" panel is instant
+  // and resilient — it no longer depends on a live Overpass call per page view.
+  await sql`ALTER TABLE routes ADD COLUMN IF NOT EXISTS quality_score INT`;
+  await sql`ALTER TABLE routes ADD COLUMN IF NOT EXISTS quality_breakdown JSONB`;
+  await sql`ALTER TABLE routes ADD COLUMN IF NOT EXISTS quality_surface JSONB`;
+  await sql`ALTER TABLE routes ADD COLUMN IF NOT EXISTS quality_scored_at TIMESTAMPTZ`;
   // Signup attribution (first-touch): which channel a rider came from.
   await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_source TEXT`;
   await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_raw_source TEXT`;
@@ -410,6 +416,11 @@ export interface Route {
   quality_status: "approved" | "failed" | "pending" | null;
   operator_name: string | null;
   operator_url: string | null;
+  /** Persisted quality score + factor breakdown (populated on first verified
+   *  scoring; lets the detail page render instantly without live Overpass). */
+  quality_score?: number | null;
+  quality_breakdown?: Record<string, number> | null;
+  quality_surface?: { paved_pct: number; unpaved_pct: number; unknown_pct: number } | null;
 }
 
 export interface RouteFilters {
@@ -681,6 +692,26 @@ export async function getRoute(id: string): Promise<(Route & { is_verified?: num
     WHERE r.id = ${id}
   `;
   return rows[0] as (Route & { is_verified?: number; creator_name?: string | null; creator_avatar?: string | null; creator_rating?: number; creator_rating_count?: number }) | undefined;
+}
+
+/** Persist a verified quality score on a route so the detail page can show it
+ *  instantly next time without re-hitting Overpass. Fire-and-safe. */
+export async function storeRouteQuality(
+  routeId: string,
+  quality: { total: number; breakdown: Record<string, number>; surface_breakdown?: unknown }
+): Promise<void> {
+  try {
+    await sql`
+      UPDATE routes
+      SET quality_score = ${Math.round(quality.total)},
+          quality_breakdown = ${JSON.stringify(quality.breakdown)}::jsonb,
+          quality_surface = ${quality.surface_breakdown ? JSON.stringify(quality.surface_breakdown) : null}::jsonb,
+          quality_scored_at = NOW()
+      WHERE id = ${routeId}
+    `;
+  } catch {
+    // Caching the score is best-effort; never break the request.
+  }
 }
 
 export async function insertRoute(

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { scoreRoute, scoreRouteGpsOnly, type Discipline } from "@/lib/route-quality";
-import { getRoute } from "@/lib/db";
+import { getRoute, storeRouteQuality } from "@/lib/db";
 import { apiError, handleApiError } from "@/lib/api-utils";
 import { DISCIPLINES } from "@/config/constants";
 
@@ -76,6 +76,17 @@ export async function POST(request: NextRequest) {
     const result = await scoreRoute(coordinates, discipline, {
       sampleIntervalMeters: body.sampleIntervalMeters,
     });
+
+    // Self-heal: persist a genuinely-verified score on the stored route so the
+    // next view is instant and doesn't depend on Overpass. Never persist a
+    // "couldn't verify" 0 (that's what the detail page now hides).
+    if (body.routeId && result.total > 0 && (result.confidence ?? 0) > 0.3) {
+      void storeRouteQuality(body.routeId, {
+        total: result.total,
+        breakdown: result.breakdown as unknown as Record<string, number>,
+        surface_breakdown: result.surface_breakdown,
+      });
+    }
 
     return NextResponse.json({ data: result });
   } catch (err) {

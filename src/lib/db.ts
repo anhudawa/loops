@@ -1689,7 +1689,10 @@ export interface CollectionWithRoutes extends Collection {
 const COLLECTION_SELECT = `
   SELECT c.*,
     (SELECT COUNT(*) FROM collection_routes cr WHERE cr.collection_id = c.id) AS total_routes_count,
-    (SELECT cr.route_id FROM collection_routes cr WHERE cr.collection_id = c.id
+    (SELECT cr.route_id FROM collection_routes cr
+       JOIN routes r2 ON r2.id = cr.route_id
+       WHERE cr.collection_id = c.id
+         AND r2.coordinates IS NOT NULL AND r2.coordinates <> '' AND r2.coordinates <> '[]'
        ORDER BY cr.display_order ASC LIMIT 1) AS cover_route_id
   FROM collections c`;
 
@@ -1722,7 +1725,14 @@ export async function getCollectionBySlug(slug: string): Promise<CollectionWithR
     ORDER BY cr.display_order ASC, r.created_at ASC
   `;
 
-  return { ...collection, routes: routeRows as Route[] };
+  // Use the live linked-route count, not the stored total_routes_count (which
+  // the seed scripts don't keep in sync) — otherwise the detail header reads
+  // "routes" with no number.
+  return {
+    ...collection,
+    total_routes_count: routeRows.length,
+    routes: routeRows as Route[],
+  };
 }
 
 export async function insertCollection(data: {

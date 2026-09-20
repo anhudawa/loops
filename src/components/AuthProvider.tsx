@@ -53,20 +53,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     try {
       const res = await fetch("/api/auth");
-      // A 5xx is a SERVER failure, not proof the rider is logged out. Flag it
-      // as an auth error and DON'T clear the user, so an authenticated rider
-      // isn't ejected to /login on a transient DB/API blip.
-      if (res.status >= 500) {
+      // A 5xx or a 429 (rate-limited) is a TRANSIENT failure, not proof the
+      // rider is logged out. Flag it and DON'T clear the user, so a signed-in
+      // rider is never dumped to the logged-out/paywall app on a blip.
+      if (res.status >= 500 || res.status === 429) {
         setAuthError(true);
         return;
       }
-      if (!res.ok) {
-        // A clean 4xx (e.g. 401) means genuinely logged out.
+      if (res.status === 401) {
+        // Genuinely unauthorized.
         setAuthError(false);
         setUser(null);
         return;
       }
+      if (!res.ok) {
+        // Any other unexpected non-OK — don't confidently log out.
+        setAuthError(true);
+        return;
+      }
       const data = await res.json();
+      // A clean 200 with { user: null } is the real logged-out state.
       setAuthError(false);
       setUser(data.user || null);
     } catch {

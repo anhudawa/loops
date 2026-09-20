@@ -5,6 +5,11 @@ import { ATTRIBUTION_COOKIE, attributionFromParams, encodeAttribution } from "@/
 
 function getRateLimitConfig(pathname: string, method: string) {
   if (pathname.startsWith("/api/auth")) {
+    // The session-check GET /api/auth fires on every page load — it must use
+    // the generous READ limit, not the strict login limiter (that's for POST
+    // login attempts). Capping it at 5 made normal navigation 429, which the
+    // client read as "logged out" and dumped signed-in riders to the paywall.
+    if (method === "GET") return { max: RATE_LIMIT_READ, prefix: "read" };
     return { max: RATE_LIMIT_AUTH, prefix: "auth" };
   }
   if (

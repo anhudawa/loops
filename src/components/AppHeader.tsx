@@ -41,7 +41,7 @@ function NavLinks({ pathname }: { pathname: string }) {
 }
 
 export default function AppHeader({ sticky = true }: { sticky?: boolean }) {
-  const { user, loading: authLoading, logout, unreadCount } = useAuth();
+  const { user, loading: authLoading, authError, logout, unreadCount } = useAuth();
   const pathname = usePathname();
 
   return (
@@ -134,9 +134,9 @@ export default function AppHeader({ sticky = true }: { sticky?: boolean }) {
               >
                 Sign out
               </button>
-            ) : authLoading ? (
-              // Auth not resolved yet — show nothing rather than flashing
-              // "Log in / Sign up" at an already-authenticated rider.
+            ) : authLoading || authError ? (
+              // Auth not resolved yet, or a transient failure — show nothing
+              // rather than flashing "Log in / Sign up" at a signed-in rider.
               <span className="min-h-[44px] inline-flex items-center" aria-hidden="true" />
             ) : (
               <>

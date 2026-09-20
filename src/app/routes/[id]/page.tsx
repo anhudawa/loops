@@ -53,6 +53,9 @@ interface Route {
   creator_rating_count?: number;
   operator_name?: string | null;
   operator_url?: string | null;
+  quality_score?: number | null;
+  quality_breakdown?: Record<string, number> | null;
+  quality_surface?: SurfaceBreakdown | null;
 }
 
 interface RouteQualityData {
@@ -107,6 +110,16 @@ export default function RouteDetail() {
       }
       const data = await res.json();
       setRoute(data);
+      // Instant quality: if the route already has a persisted score, show it
+      // immediately (no waiting on live Overpass). The live effect below still
+      // runs and refreshes/persists a fresher score when it can.
+      if (data && typeof data.quality_score === "number" && data.quality_score > 0) {
+        setQuality({
+          total: data.quality_score,
+          breakdown: data.quality_breakdown ?? {},
+          surface_breakdown: data.quality_surface ?? undefined,
+        });
+      }
     } catch {
       setFetchError(true);
     } finally {

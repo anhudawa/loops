@@ -87,6 +87,15 @@ button {
   background: var(--bg-card);
 }
 
+/* Hide the browser's native search clear (×) — we render our own clear button,
+   and both showing at once looks broken. */
+input[type="search"]::-webkit-search-cancel-button,
+input[type="search"]::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
+}
+
 /* Zoom controls: meet the 40px+ tap target on touch (default Leaflet is 30px) */
 .leaflet-touch .leaflet-bar a,
 .leaflet-control-zoom a {

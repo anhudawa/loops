@@ -402,17 +402,158 @@ async function withEngineSlot<T>(run: () => Promise<T>): Promise<T> {
   }
 }
 
+// ── Loop-aware routing ───────────────────────────────────────────────────────
+
+/** A loop that would lose more than this to spur repair gets re-routed. */
+const LOOP_RETRACE_FIX_KM = 1.5;
+/** Still losing more than this after the no-go return → try moving the far point. */
+const LOOP_MOVE_FAR_KM = 3.0;
+/** No-go weight for the outbound roads when routing the return leg. Tested on
+ *  the local engine: weight 50 cut a 9.7 km retrace to 4.3 km; a hard no-go
+ *  (no weight) blew the return leg up to 96 km. */
+const LOOP_NOGO_WEIGHT = 50;
+
+function bearingDegFrom(a: [number, number], b: [number, number]): number {
+  const p1 = (a[0] * Math.PI) / 180, p2 = (b[0] * Math.PI) / 180;
+  const dLon = ((b[1] - a[1]) * Math.PI) / 180;
+  const y = Math.sin(dLon) * Math.cos(p2);
+  const x = Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dLon);
+  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+}
+
+function destination(a: [number, number], bearing: number, distKm: number): [number, number] {
+  const R = 6371, d = distKm / R, b = (bearing * Math.PI) / 180;
+  const lat1 = (a[0] * Math.PI) / 180, lon1 = (a[1] * Math.PI) / 180;
+  const lat2 = Math.asin(Math.sin(lat1) * Math.cos(d) + Math.cos(lat1) * Math.sin(d) * Math.cos(b));
+  const lon2 = lon1 + Math.atan2(Math.sin(b) * Math.sin(d) * Math.cos(lat1), Math.cos(d) - Math.sin(lat1) * Math.sin(lat2));
+  return [(lat2 * 180) / Math.PI, (lon2 * 180) / Math.PI];
+}
+
+/**
+ * Weighted no-go polyline from an outbound path: the roads it used, minus
+ * the first `skipStartKm` (the return must converge on the start) and the
+ * last `skipEndKm` (the return must be able to leave the far point).
+ */
+function nogoPolyline(coords: [number, number][], skipStartKm: number, skipEndKm: number): string {
+  const pts: [number, number][] = [];
+  const cum: number[] = [0];
+  for (let i = 1; i < coords.length; i++) cum.push(cum[i - 1] + haversineKm(coords[i - 1][0], coords[i - 1][1], coords[i][0], coords[i][1]));
+  const total = cum[cum.length - 1];
+  let last = -1;
+  for (let i = 0; i < coords.length; i++) {
+    if (cum[i] <= skipStartKm || cum[i] >= total - skipEndKm) continue;
+    if (last >= 0 && cum[i] - cum[last] < 0.25) continue; // ~250 m spacing keeps the URL short
+    pts.push(coords[i]);
+    last = i;
+  }
+  if (pts.length < 2) return "";
+  return `&polylines=${pts.map(([lat, lng]) => `${lng.toFixed(5)},${lat.toFixed(5)}`).join(",")},${LOOP_NOGO_WEIGHT}`;
+}
+
+function joinPaths(a: RoutedPath, b: RoutedPath): RoutedPath {
+  const dup =
+    b.coords.length > 0 && a.coords.length > 0 &&
+    Math.abs(a.coords[a.coords.length - 1][0] - b.coords[0][0]) < 1e-6 &&
+    Math.abs(a.coords[a.coords.length - 1][1] - b.coords[0][1]) < 1e-6;
+  const from = dup ? 1 : 0;
+  const coords = a.coords.concat(b.coords.slice(from));
+  const elevations = a.elevations.concat(b.elevations.slice(from));
+  const aTags: EdgeTags = a.edgeTags ?? new Array(Math.max(0, a.coords.length - 1)).fill(null);
+  const bTags: EdgeTags = b.edgeTags ?? new Array(Math.max(0, b.coords.length - 1)).fill(null);
+  // Without a shared point there is an extra bridging edge between the legs.
+  const bridge: EdgeTags = dup ? [] : [null];
+  const edgeTags = aTags.concat(bridge, bTags);
+  return {
+    coords,
+    elevations,
+    distance_km: a.distance_km + b.distance_km,
+    elevation_gain_m: null, // recomputed from the joined series by the caller
+    edgeTags: edgeTags.some((t) => t) ? edgeTags : null,
+    profile: a.profile,
+  };
+}
+
+/**
+ * Route a loop candidate so it does not retrace itself. Via-point routing
+ * treats each leg independently, and on a real road network the approach
+ * to and departure from the far point often funnel onto the same road — a
+ * long U-turn finger that spur repair then cuts out (the loop comes back
+ * 10–20 km short). When the one-shot route would lose more than
+ * LOOP_RETRACE_FIX_KM to repair, try: (A) two legs, the return penalised for
+ * reusing the outbound roads; (B/C) the same with the far point rotated
+ * ±25° around the start. Keep whichever loses the least, closest to the
+ * requested distance on a tie. Every attempt is a real engine route, so
+ * nothing here can invent a road.
+ */
+async function routeLoopCandidate(
+  waypoints: [number, number][],
+  profile: string,
+  targetKm: number
+): Promise<RoutedPath | null> {
+  const first = await routeWithFallback(waypoints, profile);
+  if (!first) return null;
+  const lossOf = (p: RoutedPath) => repairSpurs(p.coords).removedKm;
+  let best = first;
+  let bestLoss = lossOf(first);
+  if (bestLoss <= LOOP_RETRACE_FIX_KM || waypoints.length < 4) return first;
+
+  const start = waypoints[0];
+  const inner = waypoints.slice(1, waypoints.length - 1);
+  let farIdx = 1;
+  let farDist = -1;
+  inner.forEach((w, i) => {
+    const d = haversineKm(start[0], start[1], w[0], w[1]);
+    if (d > farDist) { farDist = d; farIdx = i + 1; }
+  });
+  const far = waypoints[farIdx];
+  const farBearing = bearingDegFrom(start, far);
+
+  // Attempt order: keep the far point (no-go return only); then, if the
+  // loop still loses a lot, move the far point — rotated either way, then
+  // pulled in — because a far point on a peninsula, in a cul-de-sac or (with
+  // no anchor data) in the sea can only be reached and left by one road.
+  const attempts: Array<{ label: string; wps: [number, number][]; onlyIfLossAbove: number }> = [
+    { label: "no-go return", wps: waypoints, onlyIfLossAbove: LOOP_RETRACE_FIX_KM },
+    { label: "far point +25° + no-go return", wps: waypoints.map((w, i) => (i === farIdx ? destination(start, farBearing + 25, farDist) : w)), onlyIfLossAbove: LOOP_MOVE_FAR_KM },
+    { label: "far point -25° + no-go return", wps: waypoints.map((w, i) => (i === farIdx ? destination(start, farBearing - 25, farDist) : w)), onlyIfLossAbove: LOOP_MOVE_FAR_KM },
+    { label: "far point pulled in 30% + no-go return", wps: waypoints.map((w, i) => (i === farIdx ? destination(start, farBearing, farDist * 0.7) : w)), onlyIfLossAbove: LOOP_MOVE_FAR_KM },
+  ];
+  const usedProfile = first.profile;
+  const consider = (p: RoutedPath, label: string) => {
+    const loss = lossOf(p);
+    const better =
+      loss < bestLoss - 0.2 ||
+      (Math.abs(loss - bestLoss) <= 0.2 &&
+        Math.abs(p.distance_km - loss - targetKm) < Math.abs(best.distance_km - bestLoss - targetKm));
+    genDebug(`loop-aware ${label}: ${p.distance_km.toFixed(1)} km, would lose ${loss.toFixed(1)} km (best so far ${bestLoss.toFixed(1)})`);
+    if (better) { best = p; bestLoss = loss; }
+  };
+
+  for (const { label, wps, onlyIfLossAbove } of attempts) {
+    if (bestLoss <= onlyIfLossAbove) continue;
+    const outPath = await routeViaBRouter(wps.slice(0, farIdx + 1), usedProfile);
+    if (!outPath || outPath.coords.length < 2) continue;
+    const nogo = nogoPolyline(outPath.coords, 2.0, 0.3);
+    const backPath = await routeViaBRouter(wps.slice(farIdx), usedProfile, false, nogo);
+    if (!backPath || backPath.coords.length < 2) continue;
+    consider(joinPaths(outPath, backPath), label);
+  }
+  return best;
+}
+
+
 async function routeViaBRouter(
   waypoints: [number, number][],       // [lat, lng]
   profile: string,
-  retried = false
+  retried = false,
+  extraQuery = ""                      // e.g. "&polylines=…" (weighted no-go)
 ): Promise<RoutedPath | null> {
   // BRouter expects lonlats as "lng,lat|lng,lat|..."
   const lonlats = waypoints.map(([lat, lng]) => `${lng},${lat}`).join("|");
   const url =
     `${BROUTER_URL}?lonlats=${lonlats}` +
     `&profile=${encodeURIComponent(profile)}` +
-    `&alternativeidx=0&format=geojson`;
+    `&alternativeidx=0&format=geojson${extraQuery}`;
 
   let res: Response;
   try {
@@ -434,7 +575,7 @@ async function routeViaBRouter(
       if (match) {
         const badIdx = Math.min(parseInt(match[1], 10) + 1, waypoints.length - 2);
         const pruned = waypoints.filter((_, i) => i !== badIdx);
-        return routeViaBRouter(pruned, profile, true);
+        return routeViaBRouter(pruned, profile, true, extraQuery);
       }
     }
     return null;
@@ -1371,7 +1512,7 @@ async function generateFreshRoutes(
   const lap = (label: string) => genDebug(`⏱ ${label} at +${((Date.now() - t0) / 1000).toFixed(1)}s`);
   await Promise.all(
     waypointSets.map(async (waypoints) => {
-      const path = await routeWithFallback(waypoints, profile);
+      const path = await routeLoopCandidate(waypoints, profile, spec.distance_km);
       if (!path || path.coords.length < 2) {
         genDebug("candidate dropped: BRouter returned no path");
         drop(`NO_PATH[${getLastBRouterFailure()}]`);

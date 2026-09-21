@@ -69,22 +69,45 @@ function closureLoop(): P[] {
   return pts;
 }
 
+/** A loop whose start is at the end of a 1.6 km causeway: the ride MUST go
+ *  out the causeway and back along it at the finish (Bull Island / Clontarf). */
+function causewayLoop(): P[] {
+  const home: P = [53.36, -6.17];
+  const causeway = walk(home, 1, 0, 1.6);
+  const junction = causeway[causeway.length - 1];
+  let pts: P[] = [home, ...causeway];
+  let cur = junction;
+  for (const [dlat, dlng] of [[1, 0], [0, 1], [-1, 0], [0, -1]] as const) {
+    const seg = walk(cur, dlat, dlng, 5);
+    pts = pts.concat(seg);
+    cur = seg[seg.length - 1];
+  }
+  return pts.concat([...causeway].reverse().slice(1), [home]);
+}
+
 describe("findLongestSpur", () => {
   it("finds no meaningful spur on a clean loop", () => {
     const s = findLongestSpur(cleanLoop());
-    expect(s === null || s.km < 0.4).toBe(true);
+    expect(s === null || s.spurKm < 0.4).toBe(true);
   });
 
-  it("measures a 1.5 km U-turn spur", () => {
+  it("measures a 1.5 km MID-ROUTE U-turn spur", () => {
     const s = findLongestSpur(spurLoop());
     expect(s).not.toBeNull();
-    expect(s!.km).toBeGreaterThan(1.2);
-    expect(s!.km).toBeLessThan(1.8);
+    expect(s!.spurKm).toBeGreaterThan(1.2);
+    expect(s!.spurKm).toBeLessThan(1.8);
   });
 
-  it("tolerates a short shared start/finish access road (loop closure)", () => {
+  it("classifies a short shared start/finish road as access, not a spur", () => {
     const s = findLongestSpur(closureLoop());
-    expect(s === null || s.km <= 0.4).toBe(true);
+    expect(s === null || s.spurKm <= 0.4).toBe(true);
+  });
+
+  it("classifies a 1.6 km causeway/peninsula start as ACCESS, not a spur (the Bull Island case)", () => {
+    const s = findLongestSpur(causewayLoop());
+    expect(s).not.toBeNull();
+    expect(s!.spurKm).toBeLessThanOrEqual(0.4);   // no mid-route spur
+    expect(s!.accessKm).toBeGreaterThan(1.3);     // the causeway, reported
   });
 });
 
@@ -98,6 +121,15 @@ describe("SPUR_UTURN rule", () => {
     expect(spur!.severity).toBe("fatal");
     expect(spur!.message).toMatch(/\d+ m out-and-back spur/);
     expect(r.passed).toBe(false);
+  });
+
+  it("SERVES a causeway-start loop, with the access retrace reported as a warning (trust rule)", () => {
+    const r = validateRouteRules(causewayLoop(), "road", null, { elevationGain: 0, distanceKm: 23, rejectSpurs: true });
+    expect(r.violations.find((v) => v.rule === "SPUR_UTURN")).toBeUndefined();
+    const access = r.violations.find((v) => v.rule === "ACCESS_RETRACE");
+    expect(access).toBeDefined();
+    expect(access!.severity).toBe("warning");
+    expect(access!.message).toMatch(/\d+ m out-and-back on the access road/);
   });
 
   it("passes a clean generated loop", () => {

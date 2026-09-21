@@ -482,47 +482,73 @@ function checkDeadEnd(coords: [number, number][]): RuleViolation | null {
 const SPUR_SAMPLE_M = 40;      // path sampling
 const SPUR_NEAR_KM = 0.035;    // "same road" = within 35 m of an earlier point
 const SPUR_GAP_PTS = 5;        // ignore the last ~200 m of path (gentle curves)
-const SPUR_CLOSURE_PTS = 15;   // tolerate ~600 m shared start/finish access road
-const SPUR_MAX_KM = 0.4;       // longest retraced stretch allowed
+const SPUR_MAX_KM = 0.4;       // longest MID-ROUTE retraced stretch allowed
+const ACCESS_ZONE_KM = 3.0;    // start/finish access road (causeway, peninsula, cul-de-sac)
 
-export function findLongestSpur(
-  coords: [number, number][]
-): { km: number; at: [number, number] } | null {
+export interface SpurReport {
+  /** Longest retrace that is NOT the start/finish access road — a true spur. */
+  spurKm: number;
+  spurAt: [number, number] | null;
+  /** Longest retrace that IS the start/finish access road (out at the start,
+   *  back at the end along the same road). Unavoidable when the ride starts on
+   *  a causeway or peninsula; allowed, but reported honestly. */
+  accessKm: number;
+}
+
+export function findLongestSpur(coords: [number, number][]): SpurReport | null {
   if (coords.length < 10) return null;
   const s = sampleCoords(coords, SPUR_SAMPLE_M);
   const n = s.length;
   if (n < SPUR_GAP_PTS * 4) return null;
+  const accessPts = Math.round((ACCESS_ZONE_KM * 1000) / SPUR_SAMPLE_M);
 
-  const retraced = new Array<boolean>(n).fill(false);
+  // For each sampled point, the earlier point it retraces (if any).
+  const match = new Array<number>(n).fill(-1);
   for (let i = SPUR_GAP_PTS; i < n; i++) {
     for (let j = 0; j <= i - SPUR_GAP_PTS; j++) {
-      // Loop closure: the finish approaching the start is not a spur.
-      if (j < SPUR_CLOSURE_PTS && i > n - 1 - SPUR_CLOSURE_PTS) continue;
-      if (haversineKm(s[i], s[j]) < SPUR_NEAR_KM) { retraced[i] = true; break; }
+      if (haversineKm(s[i], s[j]) < SPUR_NEAR_KM) { match[i] = j; break; }
     }
   }
 
-  let best = 0, bestAt: [number, number] | null = null, run = 0, runStart = 0;
-  for (let i = 1; i < n; i++) {
-    if (retraced[i]) {
-      if (run === 0) runStart = i;
-      run += haversineKm(s[i - 1], s[i]);
-      if (run > best) { best = run; bestAt = s[runStart]; }
-    } else {
-      run = 0;
+  // Walk contiguous retraced runs and classify each: an ACCESS retrace has all
+  // its points near the finish matching points near the start; anything else
+  // is a mid-route spur.
+  let spurKm = 0, accessKm = 0, spurAt: [number, number] | null = null;
+  let i = 1;
+  while (i < n) {
+    if (match[i] < 0) { i++; continue; }
+    const runStart = i; let runKm = 0; let isAccess = true;
+    while (i < n && match[i] >= 0) {
+      runKm += haversineKm(s[i - 1], s[i]);
+      if (!(match[i] < accessPts && i > n - 1 - accessPts)) isAccess = false;
+      i++;
     }
+    if (isAccess) accessKm = Math.max(accessKm, runKm);
+    else if (runKm > spurKm) { spurKm = runKm; spurAt = s[runStart]; }
   }
-  return best > 0 && bestAt ? { km: best, at: bestAt } : null;
+  return spurKm > 0 || accessKm > 0 ? { spurKm, spurAt, accessKm } : null;
 }
 
-function checkSpur(coords: [number, number][]): RuleViolation | null {
-  const spur = findLongestSpur(coords);
-  if (!spur || spur.km <= SPUR_MAX_KM) return null;
-  return {
-    rule: "SPUR_UTURN",
-    message: `${Math.round(spur.km * 1000)} m out-and-back spur — the loop U-turns and retraces the same road near ${spur.at[0].toFixed(4)}, ${spur.at[1].toFixed(4)}`,
-    severity: "fatal",
-  };
+function checkSpur(coords: [number, number][]): RuleViolation[] {
+  const r = findLongestSpur(coords);
+  if (!r) return [];
+  const out: RuleViolation[] = [];
+  if (r.spurKm > SPUR_MAX_KM && r.spurAt) {
+    out.push({
+      rule: "SPUR_UTURN",
+      message: `${Math.round(r.spurKm * 1000)} m out-and-back spur — the loop U-turns and retraces the same road near ${r.spurAt[0].toFixed(4)}, ${r.spurAt[1].toFixed(4)}`,
+      severity: "fatal",
+    });
+  }
+  // Trust rule: an unavoidable access out-and-back is fine, but never silent.
+  if (r.accessKm > SPUR_MAX_KM) {
+    out.push({
+      rule: "ACCESS_RETRACE",
+      message: `${Math.round(r.accessKm * 1000)} m out-and-back on the access road at the start/finish (e.g. a causeway or peninsula start)`,
+      severity: "warning",
+    });
+  }
+  return out;
 }
 
 /**
@@ -854,8 +880,7 @@ export function validateRouteRules(
 
   // Generated loops only: a U-turn spur is a bad route, full stop.
   if (options?.rejectSpurs) {
-    const spurViolation = checkSpur(coordinates);
-    if (spurViolation) violations.push(spurViolation);
+    violations.push(...checkSpur(coordinates));
   }
 
   // ── Elevation sanity (pure GPS — needs elevation in options) ─────────────

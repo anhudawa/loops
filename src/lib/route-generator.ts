@@ -143,6 +143,22 @@ const BROUTER_URL =
   process.env.BROUTER_URL?.replace(/\/$/, "") ?? "https://brouter.de/brouter";
 const BROUTER_TIMEOUT_MS = 15000;
 
+/**
+ * Thrown when every candidate loop was rejected. Carries WHY, so the decline
+ * can be honest to the rider (trust rule: never a silent "no") and diagnosable
+ * in production without log access.
+ */
+export class NoValidRoutesError extends Error {
+  constructor(
+    public readonly candidateCount: number,
+    public readonly dropped: Record<string, number>,
+    public readonly spec: { distance_km: number; discipline: string; elevation_preference: string; region?: string | null }
+  ) {
+    super("No valid routes could be generated. Try adjusting distance, location, or route preferences.");
+    this.name = "NoValidRoutesError";
+  }
+}
+
 /** Stage-by-stage rejection logging for generation triage (GENERATE_DEBUG=1). */
 function genDebug(msg: string): void {
   if (process.env.GENERATE_DEBUG) console.error(`[generate] ${msg}`);
@@ -1198,11 +1214,15 @@ async function generateFreshRoutes(
 
   const waypointSets = await generateWaypointSets(spec);
 
+  // Why candidates were dropped (surfaced on a full decline).
+  const dropped: Record<string, number> = {};
+  const drop = (reason: string) => { dropped[reason] = (dropped[reason] ?? 0) + 1; };
   const candidateResults = await Promise.allSettled(
     waypointSets.map(async (waypoints) => {
       const path = await routeViaBRouter(waypoints, profile);
       if (!path || path.coords.length < 2) {
         genDebug("candidate dropped: BRouter returned no path");
+        drop("NO_PATH");
         return null;
       }
 
@@ -1248,6 +1268,7 @@ async function generateFreshRoutes(
       });
       if (!rulesResult.passed) {
         genDebug(`candidate dropped: rules — ${rulesResult.violations?.map((v) => v.rule).join("; ") ?? "failed"} (${Math.round(distKm)}km)`);
+        for (const v of rulesResult.violations ?? []) if (v.severity === "fatal") drop(v.rule);
         return null;
       }
 
@@ -1256,6 +1277,7 @@ async function generateFreshRoutes(
         quality = await scoreRoute(path.coords, spec.discipline);
       } catch (err) {
         genDebug(`candidate dropped: quality scoring threw — ${err instanceof Error ? err.message : err}`);
+        drop("QUALITY_ERROR");
         throw err;
       }
 
@@ -1289,6 +1311,7 @@ async function generateFreshRoutes(
       // laps. Serving one is the "one bad experience" we can't afford.
       if (quality.total < QUALITY_FLOOR) {
         genDebug(`candidate dropped: quality ${quality.total} < floor ${QUALITY_FLOOR} (${Math.round(distKm)}km; flags: ${quality.flags.slice(0, 3).join("; ")})`);
+        drop("QUALITY_BELOW_FLOOR");
         return null;
       }
 
@@ -1321,9 +1344,12 @@ async function generateFreshRoutes(
   }
 
   if (candidates.length === 0) {
-    throw new Error(
-      "No valid routes could be generated. Try adjusting distance, location, or route preferences."
-    );
+    throw new NoValidRoutesError(waypointSets.length, dropped, {
+      distance_km: spec.distance_km,
+      discipline: spec.discipline,
+      elevation_preference: spec.elevation_preference,
+      region: spec.region ?? null,
+    });
   }
 
   // Prefer world-class candidates; rank by quality then match accuracy

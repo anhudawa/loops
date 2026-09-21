@@ -23,6 +23,7 @@ Vercel env var: `BROUTER_URL=http://2.28.33.245:17777/brouter` → redeploy.
 Rollback: remove the env var (app falls back to the public brouter.de).
 
 ## Verified LIVE 2026-09-21 (owner's browser): GeoJSON returned, `loops-road` profile present.
+## Verified END-TO-END 2026-09-21: production loops.ie generation via this engine — Clontarf '2 hour rolly loop' → 53 km, quality 84, 0% main roads, no spur (40.8 s). Note: BROUTER_URL must live on the Vercel project `gravel-ireland` (the one serving www.loops.ie).
 
 ## Verify from any browser
 `http://2.28.33.245:17777/brouter?lonlats=-6.11,53.57|-6.05,53.60&profile=loops-road&alternativeidx=0&format=geojson`

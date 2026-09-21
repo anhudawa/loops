@@ -1,6 +1,13 @@
-# HANDOFF — routing engine wiring (for tomorrow)
+# HANDOFF — routing engine wiring — ✅ RESOLVED 2026-09-21
 
-## State
+## Resolution
+Root cause: BROUTER_URL was set on a different Vercel project. Once added to
+`gravel-ireland` (the project serving www.loops.ie) and redeployed:
+`/api/engine/status` → own_engine:true; the Clontarf live test served a 53 km,
+quality-84 loop, 0% main roads, 98% paved, no spur, in 40.8 s. ENGINE VERIFIED.
+Owner token revoked; local copy shredded.
+
+## State (at time of writing)
 - Our routing server **loops-routing-2** (Hetzner, 2.28.33.245:17777) is LIVE and
   verified from the owner's browser, with the `loops-road` road-standard profile.
 - The spur rule, the honest decline, and precise diagnostics are all deployed.

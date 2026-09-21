@@ -1,11 +1,12 @@
 #cloud-config
 # ============================================================
-# LOOPS self-hosted BRouter — Phase 1 routing engine
+# LOOPS self-hosted BRouter — Phase 1 routing engine (Hetzner)
 # ============================================================
-# Passed as Hetzner "user data" at server creation. The server configures
-# ITSELF on first boot (no SSH needed): installs Docker, downloads the BRouter
-# segment tiles covering Ireland + our 10 destination regions, and serves
-# BRouter on :17777. Then we point BROUTER_URL at http://<server-ip>:17777/brouter.
+# Passed as Hetzner "user_data" at server creation. The server configures
+# ITSELF on first boot (no SSH needed): hardens the OS, installs Docker,
+# downloads the BRouter segment tiles covering Ireland + our 10 destination
+# regions, and serves BRouter on :17777. We then point BROUTER_URL at
+# http://<server-ip>:17777/brouter (one Vercel env var; instant rollback).
 #
 # Tiles are 5°x5° BRouter segments (~50-150MB each; ~1-2GB total, not the
 # planet). Region coverage:
@@ -18,11 +19,37 @@
 #   Canary Islands ... W20_N25 W15_N25
 
 package_update: true
+package_upgrade: true
 packages:
   - docker.io
   - ufw
+  - fail2ban
+  - unattended-upgrades
 
+# OS hardening: key-only SSH, no root password login, auto security updates.
+ssh_pwauth: false
+disable_root: false
 write_files:
+  - path: /etc/ssh/sshd_config.d/99-loops-hardening.conf
+    permissions: "0644"
+    content: |
+      PasswordAuthentication no
+      PermitRootLogin prohibit-password
+      KbdInteractiveAuthentication no
+      X11Forwarding no
+      MaxAuthTries 3
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: "0644"
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+  - path: /etc/fail2ban/jail.local
+    permissions: "0644"
+    content: |
+      [sshd]
+      enabled = true
+      maxretry = 4
+      bantime = 1h
   - path: /opt/brouter/download-segments.sh
     permissions: "0755"
     content: |
@@ -41,16 +68,21 @@ write_files:
       echo "segments ready:"; ls -lh "$SEG"
 
 runcmd:
-  # Firewall: SSH + the BRouter port only.
+  # Host firewall (belt) — the Hetzner Cloud Firewall is the braces.
+  - ufw default deny incoming
+  - ufw default allow outgoing
   - ufw allow 22/tcp
   - ufw allow 17777/tcp
   - ufw --force enable
+  - systemctl restart ssh
+  - systemctl enable --now fail2ban
   - systemctl enable --now docker
   # Fetch the regional routing data.
   - /opt/brouter/download-segments.sh
   # Run BRouter (community image) serving the HTTP routing API on :17777.
   - docker run -d --restart unless-stopped --name brouter -p 17777:17777 -v /opt/brouter/segments4:/segments4 ghcr.io/nrenner/brouter:latest
-  # Health note for logs.
-  - sleep 8 && curl -s "http://localhost:17777/brouter?lonlats=-6.11,53.57|-6.05,53.60&profile=fastbike&alternativeidx=0&format=geojson" | head -c 200 || true
+  # Smoke test into the cloud-init log.
+  - sleep 10 && curl -s "http://localhost:17777/brouter?lonlats=-6.11,53.57|-6.05,53.60&profile=fastbike&alternativeidx=0&format=geojson" | head -c 200 || true
+  - touch /var/lib/loops-brouter-ready
 
 final_message: "LOOPS BRouter ready on :17777 after $UPTIME seconds"

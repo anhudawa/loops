@@ -926,6 +926,7 @@ async function buildLoopAroundCorridor(
   const rulesResult = validateRouteRules(coords, spec.discipline, null, {
     elevationGain: Math.round(gain),
     distanceKm: distKm,
+    rejectSpurs: true,
   });
   if (!rulesResult.passed) {
     genDebug(`anchor-first: assembled loop failed rules — ${rulesResult.violations?.map((v) => v.rule).join("; ")}`);
@@ -1086,6 +1087,7 @@ async function buildFreshRouteFromPath(
     labeledMinClimbing:
       spec.elevation_preference === "flat" &&
       (spec.max_elevation_gain_m ?? Infinity) < distKm * 6,
+    rejectSpurs: true,
   });
   if (!rulesResult.passed) return null;
 
@@ -1239,6 +1241,7 @@ async function generateFreshRoutes(
         labeledMinClimbing:
           spec.elevation_preference === "flat" &&
           (spec.max_elevation_gain_m ?? Infinity) < distKm * 6,
+        rejectSpurs: true,
       });
       if (!rulesResult.passed) {
         genDebug(`candidate dropped: rules — ${rulesResult.violations?.map((v) => v.rule).join("; ") ?? "failed"} (${Math.round(distKm)}km)`);

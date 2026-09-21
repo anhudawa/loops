@@ -23,7 +23,7 @@ import {
   generateWaypointSets,
   DIRECTIONS_WIDE,
 } from "./route-waypoint-generator";
-import { validateRouteRules } from "./route-rules";
+import { validateRouteRules, repairSpurs } from "./route-rules";
 import { scoreRoute } from "./route-quality";
 import {
   sampleRouteElevation,
@@ -157,6 +157,12 @@ export class NoValidRoutesError extends Error {
     super("No valid routes could be generated. Try adjusting distance, location, or route preferences.");
     this.name = "NoValidRoutesError";
   }
+}
+
+function pathDistanceKm(coords: [number, number][]): number {
+  let d = 0;
+  for (let i = 1; i < coords.length; i++) d += haversineKm(coords[i - 1][0], coords[i - 1][1], coords[i][0], coords[i][1]);
+  return d;
 }
 
 /** Stage-by-stage rejection logging for generation triage (GENERATE_DEBUG=1). */
@@ -1263,6 +1269,17 @@ async function generateFreshRoutes(
         elevLoss = Math.round(loss);
       }
 
+      // Repair via-point spurs (U-turn fingers) instead of discarding the
+      // candidate: splice the excursion out of coords AND elevations, then
+      // recompute distance/climb. SPUR_UTURN below remains the backstop.
+      const repair = repairSpurs(path.coords);
+      if (repair.removedKm > 0.15) {
+        path.coords = repair.coords;
+        elevations = repair.keep.map((k) => elevations[k]);
+        path.distance_km = Math.round(pathDistanceKm(path.coords) * 10) / 10;
+        elevGain = elevationGainFromSeries(elevations);
+        genDebug(`candidate repaired: removed ${Math.round(repair.removedKm * 1000)} m of via-point spur`);
+      }
       const distKm = path.distance_km;
       const gain = elevGain ?? 0;
 

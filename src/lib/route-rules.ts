@@ -409,13 +409,17 @@ function checkCyclingInfra(
  * Fatal if any gap >500m between consecutive coordinate points.
  */
 function checkConnectivity(coords: [number, number][]): RuleViolation | null {
-  const GAP_THRESHOLD_KM = 0.5;
+  // The engine emits OSM nodes only, so a straight rural road can legitimately
+  // have consecutive points 0.5-1 km apart (Spanish straights tripped 500 m on
+  // 3-4 of 5 candidates). A genuinely broken route jumps kilometres, so the
+  // threshold is a real disconnect, not node spacing.
+  const GAP_THRESHOLD_KM = 1.5;
   for (let i = 1; i < coords.length; i++) {
     const d = haversineKm(coords[i - 1], coords[i]);
     if (d > GAP_THRESHOLD_KM) {
       return {
         rule: "CONNECTIVITY",
-        message: `Gap of ${(d * 1000).toFixed(0)}m between points ${i - 1} and ${i} (max: 500m)`,
+        message: `Gap of ${(d * 1000).toFixed(0)}m between points ${i - 1} and ${i} (max: 1500m)`,
         severity: "fatal",
       };
     }
@@ -527,6 +531,58 @@ export function findLongestSpur(coords: [number, number][]): SpurReport | null {
     else if (runKm > spurKm) { spurKm = runKm; spurAt = s[runStart]; }
   }
   return spurKm > 0 || accessKm > 0 ? { spurKm, spurAt, accessKm } : null;
+}
+
+/**
+ * Repair via-point spurs instead of discarding the candidate. The generator
+ * places waypoints slightly off the natural path and the engine routes out
+ * to each and straight back — a U-turn finger. Because such an excursion
+ * returns to (within 35 m of) where it left, splicing it out leaves a
+ * continuous loop. Only MID-ROUTE excursions are removed; the start/finish
+ * access retrace (causeway/peninsula) is kept and reported. Returns the
+ * repaired coords and the total metres removed.
+ */
+export function repairSpurs(coords: [number, number][]): { coords: [number, number][]; keep: number[]; removedKm: number } {
+  if (coords.length < 20) return { coords, keep: coords.map((_, i) => i), removedKm: 0 };
+  const n = coords.length;
+  const NEAR = SPUR_NEAR_KM;
+  const MIN_EXCURSION_KM = 0.15;   // ignore tiny wiggles
+  const accessPts = Math.round((ACCESS_ZONE_KM * 1000) / SPUR_SAMPLE_M);
+  // cumulative distance for zone tests
+  const cum: number[] = [0];
+  for (let i = 1; i < n; i++) cum.push(cum[i - 1] + haversineKm(coords[i - 1], coords[i]));
+  const total = cum[n - 1];
+  const out: [number, number][] = [];
+  const keep: number[] = [];
+  let removedKm = 0;
+  let i = 0;
+  while (i < n) {
+    out.push(coords[i]);
+    keep.push(i);
+    // look ahead for the FURTHEST later point that returns to within NEAR of coords[i]
+    // with a meaningful excursion in between — that's an out-and-back finger.
+    let j = -1;
+    for (let k = n - 1; k > i + 1; k--) {
+      if (cum[k] - cum[i] < MIN_EXCURSION_KM) break;
+      if (haversineKm(coords[i], coords[k]) < NEAR) { j = k; break; }
+    }
+    if (j > 0) {
+      // Skip if this is the start/finish access retrace (keep + report elsewhere).
+      const isAccess = cum[i] < ACCESS_ZONE_KM && (total - cum[j]) < ACCESS_ZONE_KM;
+      // Only treat as a spur if the excursion really retraces itself: its
+      // midpoint must be far from both ends (a genuine finger), and it must
+      // not be most of the loop (a loop closing on itself is not a spur).
+      const excursion = cum[j] - cum[i];
+      if (!isAccess && excursion < total * 0.5) {
+        removedKm += excursion;
+        i = j + 1;
+        continue;
+      }
+    }
+    i++;
+  }
+  void accessPts;
+  return { coords: out, keep, removedKm };
 }
 
 function checkSpur(coords: [number, number][]): RuleViolation[] {

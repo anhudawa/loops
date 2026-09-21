@@ -7,6 +7,7 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
+import { lookupKnownPlace } from "./places-known";
 import type { IntensityZone } from "./intensity";
 import { ZONES } from "./intensity";
 import type { WindStrategy } from "./wind";
@@ -47,6 +48,10 @@ export interface RouteSpec {
   workout?: WorkoutSpec;             // present when prompt described a workout
   wind_strategy: WindStrategy;       // "tailwind home" etc.; "none" by default
   cafe_stop?: boolean;               // rider asked for a café stop
+  /** Which parser produced this spec (diagnostic; surfaced in the API). */
+  parser?: "llm" | "basic";
+  /** How the start point was found (diagnostic; surfaced in the API). */
+  start_source?: "known_place" | "geocoded" | "origin";
 }
 
 /**
@@ -127,7 +132,7 @@ Riders ask either by distance ("60km loop") OR by time ("2 hour ride", "90 minut
 
 ## Region & country:
 - Extract the region/town/city mentioned if any ("Wicklow", "Dublin", "from Blessington"). Set region to that.
-- Always set country to "Ireland" unless another country is explicitly named. This is Ireland-first.
+- Set country to the country the named place is in, even when the prompt does not say it ("Girona" → "Spain", "Lucca" → "Italy", "Nice" → "France", "Algarve" → "Portugal"). Only when NO place is named default to "Ireland".
 - If no region is mentioned, set region to null and the caller will use a sensible default.
 
 ## Vibes:
@@ -282,16 +287,23 @@ function sanitizeWorkout(w: WorkoutSpec | null | undefined): WorkoutSpec | undef
   };
 }
 
-async function geocodePlace(
-  place: string,
-  country: string
-): Promise<[number, number] | null> {
+export interface GeocodeHit {
+  point: [number, number];
+  /** Country of the hit as the geocoder reports it (may be undefined). */
+  country?: string;
+}
+
+/** Geocoder signature — injectable so start-point resolution is testable. */
+export type Geocoder = (place: string, countryCode?: string) => Promise<GeocodeHit | null>;
+
+async function geocodePlace(place: string, countryCode?: string): Promise<GeocodeHit | null> {
   const params = new URLSearchParams({
     q: place,
     format: "json",
     limit: "1",
-    countrycodes: countryToCode(country),
+    addressdetails: "1",
   });
+  if (countryCode) params.set("countrycodes", countryCode);
   const url = `https://nominatim.openstreetmap.org/search?${params.toString()}`;
   try {
     const res = await fetch(url, {
@@ -301,12 +313,49 @@ async function geocodePlace(
     if (!res.ok) return null;
     const data = await res.json();
     if (!data || data.length === 0) return null;
-    return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+    const hit = data[0];
+    return {
+      point: [parseFloat(hit.lat), parseFloat(hit.lon)],
+      country: typeof hit.address?.country === "string" ? hit.address.country : undefined,
+    };
   } catch {
-    // Timeout or network failure — degrade to the caller's fallbacks
-    // (browser origin → country centre) instead of killing the request.
     return null;
   }
+}
+
+/**
+ * Where does the ride start? Trust rule: a place the rider NAMED must
+ * resolve to that place or the request is declined — it is never quietly
+ * replaced by the rider's location or a country centre. (That fallback once
+ * planned "Girona" loops from the middle of Tipperary, and the rider was
+ * told nothing.)
+ *
+ *   1. Known places (launch destinations, home-turf towns): local, exact.
+ *   2. Geocoder, restricted to the parsed country, then unrestricted — the
+ *      parsed country is a guess when the prompt did not name one.
+ *   3. No place named → the rider's current location.
+ */
+export async function resolveStartPoint(
+  region: string | undefined,
+  country: string,
+  origin: [number, number] | undefined,
+  geocode: Geocoder = geocodePlace
+): Promise<{ point: [number, number]; country: string; source: RouteSpec["start_source"] }> {
+  if (region) {
+    const known = lookupKnownPlace(region);
+    if (known) return { point: known.point, country: known.country, source: "known_place" };
+    const restricted = await geocode(region, countryToCode(country));
+    if (restricted) return { point: restricted.point, country: restricted.country ?? country, source: "geocoded" };
+    const anywhere = await geocode(region);
+    if (anywhere) return { point: anywhere.point, country: anywhere.country ?? country, source: "geocoded" };
+    throw new Error(
+      `Couldn't find the location "${region}". Check the spelling or add the country (e.g. "from ${region}, Spain").`
+    );
+  }
+  if (origin) return { point: origin, country, source: "origin" };
+  throw new Error(
+    "Could not work out where to start. Allow location access, or name a starting point (e.g. \"from Dublin\" or \"near Blessington\")."
+  );
 }
 
 function countryToCode(country: string): string {
@@ -433,6 +482,7 @@ export async function parseRouteIntent(
   const origin = options.origin;
 
   let parsed: ParsedIntent;
+  let parser: RouteSpec["parser"] = "llm";
   try {
     // Constructed inside the try: with no API key the SDK throws at
     // construction, and that must hit the basic-parser fallback too.
@@ -475,6 +525,7 @@ export async function parseRouteIntent(
     }
     console.error("[route-intent] LLM unavailable — using basic parser");
     parsed = basic;
+    parser = "basic";
   }
 
   // ── Resolve distance from duration if needed ────────────────────────────────
@@ -508,33 +559,12 @@ export async function parseRouteIntent(
     parsed.distance_tolerance_km ?? Math.max(5, Math.round(distanceKm * 0.1));
 
   // ── Resolve country + region → start point ──────────────────────────────────
-  const country = parsed.country || DEFAULT_COUNTRY;
-  const region = parsed.region ?? undefined;
-
-  let startPoint: [number, number] | null = null;
-
   // A place named in the prompt always wins ("ride in Girona" while sitting
-  // in Dublin should plan Girona).
-  if (region) {
-    startPoint = await geocodePlace(region, country);
-  }
-
-  // No place named (or it failed to geocode) → use the rider's current
-  // location. This is the core "I'm here now, give me a ride" path.
-  if (!startPoint && origin) {
-    startPoint = origin;
-  }
-
-  // Last resort: country centre. Better than failing, but a poor start.
-  if (!startPoint) {
-    startPoint = await geocodePlace(country, country);
-  }
-
-  if (!startPoint) {
-    throw new Error(
-      `Could not work out where to start. Allow location access, or name a starting point (e.g. "from Dublin" or "near Blessington").`
-    );
-  }
+  // in Dublin plans Girona) — and must resolve, or we decline honestly.
+  const region = parsed.region ?? undefined;
+  const resolved = await resolveStartPoint(region, parsed.country || DEFAULT_COUNTRY, origin);
+  const startPoint = resolved.point;
+  const country = resolved.country;
 
   return {
     distance_km: distanceKm,
@@ -554,5 +584,7 @@ export async function parseRouteIntent(
     workout,
     wind_strategy: sanitizeWindStrategy(parsed.wind_strategy),
     cafe_stop: parsed.cafe_stop === true,
+    parser,
+    start_source: resolved.source,
   };
 }

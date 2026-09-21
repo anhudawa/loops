@@ -6,6 +6,7 @@
  */
 
 import type { RouteSpec } from "./route-intent";
+import { nearbyPlaces } from "./places";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -206,6 +207,30 @@ out body;
   }
 
   return res.json();
+}
+
+// ── Place anchors (bundled) ──────────────────────────────────────────────────
+
+/**
+ * Villages and towns within the loop radius as anchors. Villages score
+ * highest (quiet roads meet there), towns a little lower, cities lowest —
+ * a far point in a city means traffic on the way in and out. Distance
+ * shaping matches the OSM anchors: best around half the radius.
+ */
+function placeAnchors(centerLat: number, centerLon: number, radiusKm: number, spec: RouteSpec): AnchorPoint[] {
+  const places = nearbyPlaces(centerLat, centerLon, radiusKm * 1.2);
+  const anchors: AnchorPoint[] = [];
+  for (const pl of places) {
+    let score = pl.weight === 0 ? 0.9 : pl.weight === 1 ? 0.7 : 0.35;
+    if (spec.vibes.includes("village") && pl.weight === 0) score += 0.1;
+    const dist = haversineKm(centerLat, centerLon, pl.lat, pl.lng);
+    if (dist < radiusKm * 0.15) continue; // too close to the start to shape a loop
+    const idealDist = radiusKm * 0.5;
+    const distScore = 1 - Math.abs(dist - idealDist) / radiusKm;
+    score *= Math.max(0.1, distScore);
+    anchors.push({ lat: pl.lat, lon: pl.lng, score, tags: { place: pl.weight === 0 ? "village" : pl.weight === 1 ? "town" : "city" } });
+  }
+  return anchors;
 }
 
 // ── Anchor point extraction ──────────────────────────────────────────────────
@@ -417,22 +442,24 @@ export async function generateWaypointSets(
   const [startLat, startLon] = spec.start_point;
   const radiusKm = spec.distance_km / LOOP_PERIMETER_FACTOR;
 
-  // Query Overpass for the surrounding road network. Fail soft: with no
-  // road data we fall back to plain compass waypoints — the island-retry
-  // and rules layers still guard the output, and a degraded attempt
-  // beats a guaranteed failure.
-  let anchors: AnchorPoint[] = [];
-  try {
-    const osmData = await queryOverpass(
-      startLat,
-      startLon,
-      radiusKm * 1.2 // slightly larger to capture edges
-    );
-    anchors = extractAnchorPoints(osmData.elements, startLat, startLon, radiusKm, spec);
-  } catch (err) {
-    console.error(
-      `[waypoints] Overpass unavailable — using geometric waypoints (${err instanceof Error ? err.message : err})`
-    );
+  // Anchors = bundled populated places (villages, towns) around the start.
+  // Local, instant, deterministic: no external lookup in the critical path.
+  // A loop aimed at a village is a loop aimed at a road; a geometric point
+  // can land in the sea or on a mountainside and cost the candidate.
+  let anchors: AnchorPoint[] = placeAnchors(startLat, startLon, radiusKm, spec);
+
+  // Optional enrichment: OSM points of interest (viewpoints, cafés, peaks),
+  // only when explicitly enabled — the public API is slow and rate-limited.
+  if (process.env.WAYPOINT_POI_LOOKUP === "1") {
+    try {
+      const osmData = await queryOverpass(startLat, startLon, radiusKm * 1.2);
+      anchors = anchors.concat(extractAnchorPoints(osmData.elements, startLat, startLon, radiusKm, spec));
+    } catch (err) {
+      console.error(`[waypoints] POI lookup unavailable (${err instanceof Error ? err.message : err})`);
+    }
+  }
+  if (anchors.length === 0) {
+    console.error("[waypoints] no places around the start — using geometric waypoints");
   }
 
   // Choose bearings by anchor support instead of a fixed compass: count

@@ -158,6 +158,32 @@ export function maxspeedKmh(raw: string | undefined): number | null {
   return /mph/i.test(raw) ? n * 1.60934 : n;
 }
 
+/**
+ * Fast-road test (Road Standard rule 2, as applied). "No 80 km/h+ roads
+ * unless there is a segregated track" — applied to the roads that are
+ * actually fast: regional roads and above (secondary+), or any road the
+ * engine estimates as busy (estimated_traffic_class ≥ 4), or anything
+ * signed 100 km/h+. A tertiary/unclassified lane carrying the nominal
+ * rural default (80 in Ireland, 90 in Spain/France) with no traffic is a
+ * quiet lane, not a fast road — applied literally, the rule left Girona
+ * with no routable loop at all.
+ */
+export function isFastRoad(t: WayTags): boolean {
+  const kmh = maxspeedKmh(t.maxspeed);
+  if (kmh === null || kmh < 80 || hasSegregatedTrack(t)) return false;
+  if (kmh >= 100) return true;
+  const hw = t.highway ?? "";
+  if (MAIN_ROADS.has(hw)) return true;
+  const etc = parseInt(t.estimated_traffic_class ?? "", 10);
+  if (hw === "secondary" || hw === "secondary_link") {
+    // A regional road at 80/90 is fast unless the engine's traffic estimate
+    // says it is genuinely quiet (class 1–2: the GI-5xx lanes pros train on
+    // around Girona). Unknown traffic on a regional road counts as fast.
+    return Number.isNaN(etc) || etc >= 3;
+  }
+  return !Number.isNaN(etc) && etc >= 4;
+}
+
 /** A physically separated cycle track alongside the road (a painted lane is not). */
 export function hasSegregatedTrack(t: WayTags): boolean {
   if (t.highway === "cycleway") return true;
@@ -218,8 +244,7 @@ export interface RoadReport {
 export function classifyEdge(t: WayTags, discipline: Discipline): CompromiseKind | null {
   const hw = t.highway ?? "";
   if (MAIN_ROADS.has(hw)) return "main_road";
-  const kmh = maxspeedKmh(t.maxspeed);
-  if (kmh !== null && kmh >= 80 && !hasSegregatedTrack(t)) return "fast_road";
+  if (isFastRoad(t)) return "fast_road";
   const cb = parseInt(t["class:bicycle"] ?? "", 10);
   if ((!Number.isNaN(cb) && cb <= -2) || BAD_SMOOTHNESS.has(t.smoothness ?? "") || isRestrictedForBikes(t) || t.ford === "yes") {
     return "unsuitable";
@@ -474,10 +499,7 @@ export function scoreEdges(
     // Safety
     if (hw === "motorway" || hw === "motorway_link" || hw === "trunk" || hw === "trunk_link") dangerM += L;
     else if (hw === "primary" || hw === "primary_link") primaryM += L;
-    else {
-      const kmh = maxspeedKmh(t.maxspeed);
-      if (kmh !== null && kmh >= 80 && !hasSegregatedTrack(t)) fastM += L;
-    }
+    else if (isFastRoad(t)) fastM += L;
     if (SAFE_CLASSES.has(hw)) safeM += L;
 
     // Traffic: class proxy, nudged by the engine's estimated traffic class
@@ -577,8 +599,7 @@ export function validateRoadEdges(
     known += L;
     const hw = t.highway;
     if (MAIN_ROADS.has(hw)) mainM += L;
-    const kmh = maxspeedKmh(t.maxspeed);
-    if (kmh !== null && kmh > 80) fastM += L;
+    if (isFastRoad(t)) fastM += L;
     const p = isPaved(t);
     if (p !== null) { classified += L; if (p) pavedM += L; else unpavedM += L; }
     if (hw === "cycleway" || hw === "path" || t.cycleway || t["cycleway:both"] || t["cycleway:left"] || t["cycleway:right"]) cycleM += L;
@@ -607,7 +628,7 @@ export function validateRoadEdges(
   if (fastPct > 0.1) {
     out.push({
       rule: "SPEED_LIMIT",
-      message: `${(fastPct * 100).toFixed(1)}% of route is on roads with speed limit >80 km/h (limit: 10%)`,
+      message: `${(fastPct * 100).toFixed(1)}% of route is on fast roads (80 km/h+ regional/busy roads, or 100 km/h+; limit: 10%)`,
       severity: "fatal",
     });
   }

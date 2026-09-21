@@ -98,6 +98,7 @@ write_files:
       # testing: "no track found").
       #
       #
+      #
       # A fastbike could be a racing bike or a speed pedelec.
       # But also at night or in rainy weather you might want
       # to fallback to this one.
@@ -345,8 +346,18 @@ write_files:
         switch or highway=motorway highway=motorway_link    10000
         switch or highway=trunk highway=trunk_link          15.0
         switch or highway=primary highway=primary_link      8.0
-        # Rule 2: no 80 km/h+ roads unless there is a segregated cycle track.
-        switch and maxspeed=80|90|100|110|120|130
+        # Rule 2: no 80 km/h+ roads unless there is a segregated cycle track —
+        # applied to roads that are actually fast: 100 km/h+ on any class, or
+        # 80/90 on regional roads (secondary+) or on lanes the engine estimates
+        # as busy. A quiet tertiary/unclassified lane with the nominal rural
+        # default limit (80 IE, 90 ES/FR) is a quiet lane. (Literal application
+        # left Girona with no routable loop.) Mirrors isFastRoad() in the app.
+        switch and maxspeed=100|110|120|130
+                   not or highway=cycleway or cycleway=track or cycleway:left=track or cycleway:right=track cycleway:both=track
+               6.0
+        switch and maxspeed=80|90
+               and ( or and highway=secondary|secondary_link not estimated_traffic_class=1|2
+                        estimated_traffic_class=4|5|6|7 )
                    not or highway=cycleway or cycleway=track or cycleway:left=track or cycleway:right=track cycleway:both=track
                6.0
         # Rule 4: paved only. Explicitly unpaved is forbidden; untagged minor roads
@@ -704,8 +715,18 @@ write_files:
         switch or highway=motorway highway=motorway_link    10000
         switch or highway=trunk highway=trunk_link          10000
         switch or highway=primary highway=primary_link      10000
-        # Rule 2: no 80 km/h+ roads unless there is a segregated cycle track.
-        switch and maxspeed=80|90|100|110|120|130
+        # Rule 2: no 80 km/h+ roads unless there is a segregated cycle track —
+        # applied to roads that are actually fast: 100 km/h+ on any class, or
+        # 80/90 on regional roads (secondary+) or on lanes the engine estimates
+        # as busy. A quiet tertiary/unclassified lane with the nominal rural
+        # default limit (80 IE, 90 ES/FR) is a quiet lane. (Literal application
+        # left Girona with no routable loop.) Mirrors isFastRoad() in the app.
+        switch and maxspeed=100|110|120|130
+                   not or highway=cycleway or cycleway=track or cycleway:left=track or cycleway:right=track cycleway:both=track
+               10000
+        switch and maxspeed=80|90
+               and ( or and highway=secondary|secondary_link not estimated_traffic_class=1|2
+                        estimated_traffic_class=4|5|6|7 )
                    not or highway=cycleway or cycleway=track or cycleway:left=track or cycleway:right=track cycleway:both=track
                10000
         # Rule 4: paved only. Explicitly unpaved is forbidden; untagged minor roads

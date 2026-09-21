@@ -487,7 +487,12 @@ const SPUR_SAMPLE_M = 40;      // path sampling
 const SPUR_NEAR_KM = 0.035;    // "same road" = within 35 m of an earlier point
 const SPUR_GAP_PTS = 5;        // ignore the last ~200 m of path (gentle curves)
 const SPUR_MAX_KM = 0.4;       // longest MID-ROUTE retraced stretch allowed
-const ACCESS_ZONE_KM = 3.0;    // start/finish access road (causeway, peninsula, cul-de-sac)
+// Start/finish access: a retrace whose outbound half lies in the first
+// ACCESS_ZONE_KM and whose return half lies in the last ACCESS_ZONE_KM. Covers
+// a causeway or peninsula start AND the one quiet road out of a city (Girona's
+// north exit is shared out/back for ~2 km, 4 km from the start). Reported
+// honestly as ACCESS_RETRACE, never silently.
+const ACCESS_ZONE_KM = 6.0;
 
 export interface SpurReport {
   /** Longest retrace that is NOT the start/finish access road — a true spur. */

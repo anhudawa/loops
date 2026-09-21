@@ -593,8 +593,11 @@ function InterpretedPanel({ interpreted }: { interpreted: Interpreted }) {
       ? null
       : interpreted.elevation_preference;
 
+  // Always say WHERE we planned — a named place is shown with the country it
+  // resolved to, so "Girona" planned in the wrong country can never pass
+  // unnoticed.
   const locationLabel = interpreted.region
-    ? `from ${interpreted.region}`
+    ? `from ${interpreted.region}${interpreted.country ? `, ${interpreted.country}` : ""}`
     : `in ${interpreted.country}`;
 
   const windLabel = interpreted.wind_strategy
@@ -638,6 +641,9 @@ function InterpretedPanel({ interpreted }: { interpreted: Interpreted }) {
       )}
       <p className="text-xs mt-1.5" style={{ color: "var(--text-muted)" }}>
         Not quite right? Edit your request above and search again.
+      </p>
+      <p className="text-[10px] mt-2" style={{ color: "var(--text-muted)", opacity: 0.8 }}>
+        Road data © OpenStreetMap contributors · Place data © GeoNames (CC BY 4.0)
       </p>
     </div>
   );

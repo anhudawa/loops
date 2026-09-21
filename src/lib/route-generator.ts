@@ -128,6 +128,10 @@ export interface InterpretedIntent {
   /** Present when the rider asked for wind-aware routing ("tailwind home"). */
   wind_strategy?: WindStrategy;
   cafe_stop?: boolean;
+  /** Diagnostics (trust): which parser ran and how the start was found. */
+  parser?: "llm" | "basic";
+  start_source?: "known_place" | "geocoded" | "origin";
+  start_point?: [number, number];
 }
 
 export interface GenerateResult {
@@ -357,21 +361,26 @@ export function getLastBRouterFailure(): string { return lastBRouterFailure; }
  */
 const RELAXED_PROFILE: Record<string, string> = { "loops-road": "loops-road-relaxed" };
 
+/** Strict-profile route with one retry when the engine's watchdog killed
+ *  the request (server saturation is load, not "no route"). */
+async function routeStrict(waypoints: [number, number][], profile: string): Promise<RoutedPath | null> {
+  const path = await routeViaBRouter(waypoints, profile);
+  if (path || !/watchdog/i.test(lastBRouterFailure)) return path;
+  await new Promise((r) => setTimeout(r, 500 + Math.random() * 500));
+  return routeViaBRouter(waypoints, profile);
+}
+
+const NO_ROUTE_RE = /no track found|target island|not found/i;
+
 async function routeWithFallback(
   waypoints: [number, number][],
   profile: string
 ): Promise<RoutedPath | null> {
-  let strict = await routeViaBRouter(waypoints, profile);
-  // The engine's thread watchdog kills a request when the server is
-  // saturated — that is load, not "no route". Retry the strict profile once.
-  if (!strict && /watchdog/i.test(lastBRouterFailure)) {
-    await new Promise((r) => setTimeout(r, 500 + Math.random() * 500));
-    strict = await routeViaBRouter(waypoints, profile);
-  }
+  const strict = await routeStrict(waypoints, profile);
   if (strict) return strict;
   const relaxed = RELAXED_PROFILE[profile];
   // Only a genuine "no route under the standard" earns the relaxed profile.
-  if (!relaxed || !/no track found|target island|not found/i.test(lastBRouterFailure)) return null;
+  if (!relaxed || !NO_ROUTE_RE.test(lastBRouterFailure)) return null;
   const strictFailure = lastBRouterFailure;
   const path = await routeViaBRouter(waypoints, relaxed);
   if (!path) { lastBRouterFailure = strictFailure; return null; }
@@ -488,15 +497,9 @@ function joinPaths(a: RoutedPath, b: RoutedPath): RoutedPath {
 async function routeLoopCandidate(
   waypoints: [number, number][],
   profile: string,
-  targetKm: number
+  targetKm: number,
+  discipline: Discipline
 ): Promise<RoutedPath | null> {
-  const first = await routeWithFallback(waypoints, profile);
-  if (!first) return null;
-  const lossOf = (p: RoutedPath) => repairSpurs(p.coords).removedKm;
-  let best = first;
-  let bestLoss = lossOf(first);
-  if (bestLoss <= LOOP_RETRACE_FIX_KM || waypoints.length < 4) return first;
-
   const start = waypoints[0];
   const inner = waypoints.slice(1, waypoints.length - 1);
   let farIdx = 1;
@@ -507,6 +510,52 @@ async function routeLoopCandidate(
   });
   const far = waypoints[farIdx];
   const farBearing = bearingDegFrom(start, far);
+  const moveFar = (bearing: number, dist: number) =>
+    waypoints.map((w, i) => (i === farIdx ? destination(start, bearing, dist) : w));
+
+  // Strict first. A far point that is an "island" under the standard (a
+  // village whose only paved access is a main road, or a track), or one the
+  // engine can only reach by falling back on a forbidden road (its cost
+  // ceiling makes those a last resort, not impossible), is not a reason to
+  // compromise — move the far point and stay on the standard. The relaxed
+  // profile is the last resort, not the second attempt.
+  const compromiseM = (p: RoutedPath): number => {
+    if (!p.edgeTags) return 0;
+    const r = buildRoadReport(p.coords, p.edgeTags, discipline);
+    return compromiseAcceptable(r, p.distance_km) ? 0 : r.compromises.reduce((a, c) => a + c.meters, 0);
+  };
+  let first = await routeStrict(waypoints, profile);
+  let firstCompromise = first ? compromiseM(first) : Infinity;
+  if (waypoints.length >= 4 && (first ? firstCompromise > 0 : NO_ROUTE_RE.test(lastBRouterFailure))) {
+    const strictFailure = first ? `${Math.round(firstCompromise)} m of compromise` : lastBRouterFailure;
+    const moved: Array<{ label: string; wps: [number, number][] }> = [
+      { label: "far point +25°", wps: moveFar(farBearing + 25, farDist) },
+      { label: "far point -25°", wps: moveFar(farBearing - 25, farDist) },
+      { label: "far point pulled in 30%", wps: moveFar(farBearing, farDist * 0.7) },
+      { label: "far point +45°", wps: moveFar(farBearing + 45, farDist * 0.85) },
+      { label: "far point -45°", wps: moveFar(farBearing - 45, farDist * 0.85) },
+    ];
+    for (const m of moved) {
+      const p = await routeStrict(m.wps, profile);
+      if (!p) continue;
+      const c = compromiseM(p);
+      if (c < firstCompromise) {
+        genDebug(`strict route improved with ${m.label}: ${c === 0 ? "meets the standard" : `${Math.round(c)} m of compromise`} (before: ${strictFailure})`);
+        first = p;
+        firstCompromise = c;
+        waypoints = m.wps;
+      }
+      if (c === 0) break;
+    }
+    if (!first) lastBRouterFailure = strictFailure;
+  }
+  if (!first) first = await routeWithFallback(waypoints, profile);
+  if (!first) return null;
+
+  const lossOf = (p: RoutedPath) => repairSpurs(p.coords).removedKm;
+  let best = first;
+  let bestLoss = lossOf(first);
+  if (bestLoss <= LOOP_RETRACE_FIX_KM || waypoints.length < 4) return first;
 
   // Attempt order: keep the far point (no-go return only); then, if the
   // loop still loses a lot, move the far point — rotated either way, then
@@ -514,17 +563,25 @@ async function routeLoopCandidate(
   // no anchor data) in the sea can only be reached and left by one road.
   const attempts: Array<{ label: string; wps: [number, number][]; onlyIfLossAbove: number }> = [
     { label: "no-go return", wps: waypoints, onlyIfLossAbove: LOOP_RETRACE_FIX_KM },
-    { label: "far point +25° + no-go return", wps: waypoints.map((w, i) => (i === farIdx ? destination(start, farBearing + 25, farDist) : w)), onlyIfLossAbove: LOOP_MOVE_FAR_KM },
-    { label: "far point -25° + no-go return", wps: waypoints.map((w, i) => (i === farIdx ? destination(start, farBearing - 25, farDist) : w)), onlyIfLossAbove: LOOP_MOVE_FAR_KM },
-    { label: "far point pulled in 30% + no-go return", wps: waypoints.map((w, i) => (i === farIdx ? destination(start, farBearing, farDist * 0.7) : w)), onlyIfLossAbove: LOOP_MOVE_FAR_KM },
+    { label: "far point +25° + no-go return", wps: moveFar(farBearing + 25, farDist), onlyIfLossAbove: LOOP_MOVE_FAR_KM },
+    { label: "far point -25° + no-go return", wps: moveFar(farBearing - 25, farDist), onlyIfLossAbove: LOOP_MOVE_FAR_KM },
+    { label: "far point pulled in 30% + no-go return", wps: moveFar(farBearing, farDist * 0.7), onlyIfLossAbove: LOOP_MOVE_FAR_KM },
   ];
   const usedProfile = first.profile;
   const consider = (p: RoutedPath, label: string) => {
     const loss = lossOf(p);
+    // A loop that ends up more than 50% off the requested distance is not
+    // a fix, whatever it saves in retrace — and neither is a route so
+    // retraced that repair would have to cut half of it (a 160 km route
+    // "repaired" to 80 km is garbage geometry, not an 80 km loop).
+    const fits =
+      Math.abs(p.distance_km - loss - targetKm) <= targetKm * 0.5 &&
+      p.distance_km <= targetKm * 1.6;
     const better =
-      loss < bestLoss - 0.2 ||
-      (Math.abs(loss - bestLoss) <= 0.2 &&
-        Math.abs(p.distance_km - loss - targetKm) < Math.abs(best.distance_km - bestLoss - targetKm));
+      fits && (
+        loss < bestLoss - 0.2 ||
+        (Math.abs(loss - bestLoss) <= 0.2 &&
+          Math.abs(p.distance_km - loss - targetKm) < Math.abs(best.distance_km - bestLoss - targetKm)));
     genDebug(`loop-aware ${label}: ${p.distance_km.toFixed(1)} km, would lose ${loss.toFixed(1)} km (best so far ${bestLoss.toFixed(1)})`);
     if (better) { best = p; bestLoss = loss; }
   };
@@ -565,12 +622,12 @@ async function routeViaBRouter(
   }
   if (!res.ok) {
     lastBRouterFailure = `http:${res.status}`;
+    const body = res.status === 400 ? await res.text().catch(() => "") : "";
+    if (body) lastBRouterFailure = `http:${res.status}:${body.slice(0, 80).replace(/\s+/g, " ")}`;
     // "target island detected for section N" = waypoint N+1 is unreachable
     // (offshore island, private estate, sea). Drop it and retry once —
     // a triangle loop beats a dead candidate.
     if (res.status === 400 && !retried && waypoints.length > 3) {
-      const body = await res.text().catch(() => "");
-      lastBRouterFailure = `http:${res.status}:${body.slice(0, 80).replace(/\s+/g, " ")}`;
       const match = body.match(/island detected for section (\d+)/);
       if (match) {
         const badIdx = Math.min(parseInt(match[1], 10) + 1, waypoints.length - 2);
@@ -858,6 +915,9 @@ async function summariseIntent(spec: RouteSpec): Promise<InterpretedIntent> {
     workout_summary,
     wind_strategy: spec.wind_strategy !== "none" ? spec.wind_strategy : undefined,
     cafe_stop: spec.cafe_stop || undefined,
+    parser: spec.parser,
+    start_source: spec.start_source,
+    start_point: spec.start_point,
   };
 }
 
@@ -1512,7 +1572,7 @@ async function generateFreshRoutes(
   const lap = (label: string) => genDebug(`⏱ ${label} at +${((Date.now() - t0) / 1000).toFixed(1)}s`);
   await Promise.all(
     waypointSets.map(async (waypoints) => {
-      const path = await routeLoopCandidate(waypoints, profile, spec.distance_km);
+      const path = await routeLoopCandidate(waypoints, profile, spec.distance_km, spec.discipline);
       if (!path || path.coords.length < 2) {
         genDebug("candidate dropped: BRouter returned no path");
         drop(`NO_PATH[${getLastBRouterFailure()}]`);
@@ -1546,7 +1606,7 @@ async function generateFreshRoutes(
       if (rawCoords) {
         await dump(`candidate-${waypointSets.indexOf(waypoints)}`, {
           waypoints, profile: path.profile, raw_km: path.distance_km, raw: rawCoords,
-          repaired: repair.coords, removed_km: repair.removedKm,
+          repaired: repair.coords, removed_km: repair.removedKm, edge_tags: path.edgeTags,
         });
       }
       if (repair.removedKm > 0.15) {

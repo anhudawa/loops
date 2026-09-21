@@ -82,7 +82,16 @@ describe("classifyEdge (Road Standard)", () => {
     expect(classifyEdge(GRAVEL, "gravel")).toBeNull();
     expect(classifyEdge({ highway: "tertiary", "class:bicycle": "-3" }, "road")).toBe("unsuitable");
     expect(classifyEdge({ highway: "tertiary", smoothness: "very_bad" }, "road")).toBe("unsuitable");
-    expect(classifyEdge({ highway: "tertiary", maxspeed: "50 mph" }, "road")).toBe("fast_road");
+    expect(classifyEdge({ highway: "tertiary", maxspeed: "70 mph" }, "road")).toBe("fast_road");   // 112 km/h: fast on any class
+    // Nominal rural limits on quiet lanes are NOT fast roads (Spain/France 90, Ireland 80)…
+    expect(classifyEdge({ highway: "tertiary", maxspeed: "90", estimated_traffic_class: "2" }, "road")).toBeNull();
+    expect(classifyEdge({ highway: "unclassified", maxspeed: "80" }, "road")).toBeNull();
+    // …unless the engine estimates real traffic on them.
+    expect(classifyEdge({ highway: "tertiary", maxspeed: "90", estimated_traffic_class: "5" }, "road")).toBe("fast_road");
+    // Regional roads at 80/90: fast unless the engine says genuinely quiet; unknown traffic = fast.
+    expect(classifyEdge({ highway: "secondary", maxspeed: "90", estimated_traffic_class: "2" }, "road")).toBeNull();
+    expect(classifyEdge({ highway: "secondary", maxspeed: "90", estimated_traffic_class: "3" }, "road")).toBe("fast_road");
+    expect(classifyEdge({ highway: "secondary", maxspeed: "80" }, "road")).toBe("fast_road");
   });
 });
 

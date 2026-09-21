@@ -304,6 +304,10 @@ interface RoutedPath {
   elevation_gain_m: number | null;  // null when BRouter omitted it
 }
 
+/** Why the most recent BRouter call returned null — surfaced in decline diagnostics. */
+let lastBRouterFailure = "unknown";
+export function getLastBRouterFailure(): string { return lastBRouterFailure; }
+
 async function routeViaBRouter(
   waypoints: [number, number][],       // [lat, lng]
   profile: string,
@@ -319,15 +323,19 @@ async function routeViaBRouter(
   let res: Response;
   try {
     res = await fetch(url, { signal: AbortSignal.timeout(BROUTER_TIMEOUT_MS) });
-  } catch {
+  } catch (e) {
+    const name = e instanceof Error ? e.name : "";
+    lastBRouterFailure = name === "TimeoutError" || name === "AbortError" ? `timeout>${BROUTER_TIMEOUT_MS}ms` : `network:${(e instanceof Error ? e.message : String(e)).slice(0, 80)}`;
     return null;
   }
   if (!res.ok) {
+    lastBRouterFailure = `http:${res.status}`;
     // "target island detected for section N" = waypoint N+1 is unreachable
     // (offshore island, private estate, sea). Drop it and retry once —
     // a triangle loop beats a dead candidate.
     if (res.status === 400 && !retried && waypoints.length > 3) {
       const body = await res.text().catch(() => "");
+      lastBRouterFailure = `http:${res.status}:${body.slice(0, 80).replace(/\s+/g, " ")}`;
       const match = body.match(/island detected for section (\d+)/);
       if (match) {
         const badIdx = Math.min(parseInt(match[1], 10) + 1, waypoints.length - 2);
@@ -1222,7 +1230,7 @@ async function generateFreshRoutes(
       const path = await routeViaBRouter(waypoints, profile);
       if (!path || path.coords.length < 2) {
         genDebug("candidate dropped: BRouter returned no path");
-        drop("NO_PATH");
+        drop(`NO_PATH[${getLastBRouterFailure()}]`);
         return null;
       }
 
@@ -1344,6 +1352,7 @@ async function generateFreshRoutes(
   }
 
   if (candidates.length === 0) {
+    dropped["_engine"] = (() => { try { return new URL(BROUTER_URL).host; } catch { return "?"; } })() as unknown as number;
     throw new NoValidRoutesError(waypointSets.length, dropped, {
       distance_km: spec.distance_km,
       discipline: spec.discipline,

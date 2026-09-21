@@ -161,6 +161,8 @@ export async function POST(request: NextRequest) {
         generated_count: generatedSources,
         is_workout: result.interpreted.is_workout,
         wind_strategy: result.interpreted.wind_strategy ?? null,
+        // Cumulative seconds at the end of each pipeline phase.
+        timings: result.timings ?? null,
         // Score corpus (launch spec §4): how the served candidates rated.
         scores: result.candidates.map((r) => ({
           source: r.source,

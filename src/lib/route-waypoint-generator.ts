@@ -82,23 +82,6 @@ const INTERESTING_NODE_TAGS: Record<string, string[]> = {
   historic: ["castle", "ruins", "monument"],
 };
 
-// Highway preferences → anchor scoring
-const HIGHWAY_PREFERENCE_SCORES: Record<string, number> = {
-  cycleway: 1.0,
-  path: 0.9,
-  track: 0.85,
-  unclassified: 0.8,
-  tertiary: 0.75,
-  tertiary_link: 0.7,
-  residential: 0.6,
-  secondary: 0.4,
-  secondary_link: 0.35,
-  primary: 0.1,
-  primary_link: 0.1,
-  trunk: 0.0,
-  motorway: 0.0,
-};
-
 // ── Geometry helpers ─────────────────────────────────────────────────────────
 
 function haversineKm(
@@ -180,27 +163,19 @@ function bearingTo(
 async function queryOverpass(
   centerLat: number,
   centerLon: number,
-  radiusKm: number,
-  roadPreferences: string[]
+  radiusKm: number
 ): Promise<OverpassResponse> {
   const radiusM = Math.round(radiusKm * 1000);
 
-  // Build road type filter — always include preferred types, plus unclassified/tertiary fallback
-  const highwayTypes = new Set([
-    ...roadPreferences,
-    "tertiary",
-    "unclassified",
-    "track",
-    "residential",
-  ]);
-  const hwFilter = [...highwayTypes]
-    .map((hw) => `["highway"="${hw}"]`)
-    .join("");
-
+  // Anchor NODES only — villages, viewpoints, cafés, peaks, historic sites.
+  // This used to download every minor road (ways + all their nodes) within
+  // the radius to synthesise junction anchors: tens of MB and ~20 s per
+  // request, the single slowest step in generation. Our routing engine
+  // snaps waypoints to the road network itself, so the roads are not needed
+  // here; a nodes-only query answers in about a second.
   const query = `
-[out:json][timeout:25];
+[out:json][timeout:10];
 (
-  way(around:${radiusM},${centerLat},${centerLon})["highway"~"^(${[...highwayTypes].join("|")})$"];
   node(around:${radiusM},${centerLat},${centerLon})["place"~"^(village|hamlet|town)$"];
   node(around:${radiusM},${centerLat},${centerLon})["tourism"~"^(viewpoint|attraction)$"];
   node(around:${radiusM},${centerLat},${centerLon})["amenity"~"^(cafe|restaurant)$"];
@@ -208,27 +183,22 @@ async function queryOverpass(
   node(around:${radiusM},${centerLat},${centerLon})["historic"];
 );
 out body;
->;
-out skel qt;
 `.trim();
 
-  const doFetch = () =>
-    fetch(OVERPASS_URL, {
+  // ONE attempt, short budget. Anchors improve candidate placement but are
+  // not essential (the caller falls back to compass waypoints), and a retry
+  // loop here once cost 33 s of a 48 s request while the public API was
+  // rate-limiting. Better a fast geometric attempt than a slow perfect one.
+  let res: Response | null = null;
+  try {
+    res = await fetch(OVERPASS_URL, {
       method: "POST",
       headers: { "User-Agent": "loops.ie route generator (https://www.loops.ie)", "Content-Type": "application/x-www-form-urlencoded" },
       body: `data=${encodeURIComponent(query)}`,
-      signal: AbortSignal.timeout(30000),
+      signal: AbortSignal.timeout(8000),
     });
-
-  let res: Response | null = null;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      res = await doFetch();
-    } catch {
-      res = null; // network/timeout — treat like a 5xx and retry once
-    }
-    if (res && res.status !== 429 && res.status < 500) break;
-    await new Promise((r) => setTimeout(r, 2500 + Math.random() * 2500));
+  } catch {
+    res = null;
   }
 
   if (!res || !res.ok) {
@@ -296,43 +266,9 @@ function extractAnchorPoints(
     anchors.push({ lat: el.lat, lon: el.lon, score, tags: el.tags });
   }
 
-  // Also add synthetic anchor points on preferred roads (intersection heuristic)
-  // Find nodes that appear in multiple ways (intersections) on preferred roads
-  const nodeCounts = new Map<number, number>();
-  const nodeHighways = new Map<number, string>();
-
-  for (const el of elements) {
-    if (el.type !== "way" || !el.tags?.highway) continue;
-    const hw = el.tags.highway;
-    const hwScore = HIGHWAY_PREFERENCE_SCORES[hw] ?? 0;
-    if (hwScore < 0.6) continue; // Only preferred roads
-
-    for (const nodeId of el.nodes) {
-      nodeCounts.set(nodeId, (nodeCounts.get(nodeId) ?? 0) + 1);
-      nodeHighways.set(nodeId, hw);
-    }
-  }
-
-  // Nodes at intersections of preferred roads
-  for (const [nodeId, count] of nodeCounts) {
-    if (count < 2) continue; // Not an intersection
-    const node = nodeMap.get(nodeId);
-    if (!node) continue;
-
-    const dist = haversineKm(centerLat, centerLon, node.lat, node.lon);
-    if (dist < radiusKm * 0.2 || dist > radiusKm * 0.95) continue;
-
-    const hw = nodeHighways.get(nodeId) ?? "";
-    const hwScore = HIGHWAY_PREFERENCE_SCORES[hw] ?? 0.3;
-
-    anchors.push({
-      lat: node.lat,
-      lon: node.lon,
-      score: hwScore * 0.4 * (count > 3 ? 1.2 : 1),
-      tags: { highway: hw },
-    });
-  }
-
+  // Junction anchors synthesised from a full road download used to be added
+  // here. The routing engine snaps every waypoint to the road network
+  // itself, so real places are all the anchors we need.
   return anchors;
 }
 
@@ -490,8 +426,7 @@ export async function generateWaypointSets(
     const osmData = await queryOverpass(
       startLat,
       startLon,
-      radiusKm * 1.2, // slightly larger to capture edges
-      spec.road_preferences
+      radiusKm * 1.2 // slightly larger to capture edges
     );
     anchors = extractAnchorPoints(osmData.elements, startLat, startLon, radiusKm, spec);
   } catch (err) {

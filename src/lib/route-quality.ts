@@ -18,6 +18,7 @@
  */
 
 import { validateRouteRules, RouteValidationOptions } from "./route-rules";
+import { scoreEdges, validateRoadEdges, type EdgeTags } from "./road-segments";
 
 export type Discipline = "road" | "gravel" | "mtb";
 
@@ -362,6 +363,80 @@ out skel qt;
 
   osmCache.set(key, { elements, expires: Date.now() + CACHE_TTL_MS });
   return elements;
+}
+
+/**
+ * Scenery-only query: water, coast, forest, peaks and POIs — NO roads. Used
+ * when the routing engine has already told us every road on the track
+ * (see road-segments.ts). Roads were >90% of the old download; without
+ * them a 40 km bbox answers in seconds instead of timing out.
+ */
+async function queryOverpassScenic(rawBbox: BoundingBox): Promise<OsmElement[]> {
+  const bbox = quantizeBbox(rawBbox);
+  const key = `scenic:${getCacheKey(bbox)}`;
+  const cached = osmCache.get(key);
+  if (cached && cached.expires > Date.now()) return cached.elements;
+
+  const { minLat, minLng, maxLat, maxLng } = bbox;
+  const b = `${minLat},${minLng},${maxLat},${maxLng}`;
+  const query = `
+[out:json][timeout:15];
+(
+  way["natural"~"^(water|wood|coastline|heath|beach|scrub)$"](${b});
+  way["waterway"~"^(river|canal)$"](${b});
+  way["landuse"~"^(forest|vineyard|nature_reserve)$"](${b});
+  way["leisure"="nature_reserve"](${b});
+  node["natural"="peak"](${b});
+  node["tourism"="viewpoint"](${b});
+  node["amenity"~"^(cafe|restaurant|pub|drinking_water)$"](${b});
+  node["historic"](${b});
+);
+out body;
+>;
+out skel qt;
+`.trim();
+
+  const resp = await overpassGate(async () =>
+    fetch(OVERPASS_URL, {
+      method: "POST",
+      headers: { "User-Agent": "loops.ie route generator (https://www.loops.ie)", "Content-Type": "application/x-www-form-urlencoded" },
+      body: `data=${encodeURIComponent(query)}`,
+      signal: AbortSignal.timeout(18_000),
+    })
+  );
+  if (!resp.ok) throw new Error(`Overpass API error: ${resp.status} ${resp.statusText}`);
+  const json = await resp.json() as { elements: OsmElement[] };
+  const elements = json.elements ?? [];
+  osmCache.set(key, { elements, expires: Date.now() + CACHE_TTL_MS });
+  return elements;
+}
+
+/**
+ * Fetch scenery data once for a whole batch of candidates (their union
+ * bbox). Never throws: null means "scenery could not be assessed", which
+ * scoreRoute reports honestly instead of guessing.
+ */
+export async function prefetchScenic(bbox: BoundingBox): Promise<OsmElement[] | null> {
+  try {
+    return await queryOverpassScenic(bbox);
+  } catch (err) {
+    console.error("[route-quality] scenic prefetch failed:", err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
+/** Bounding box of a coordinate list (exported for batch scenic prefetch). */
+export function bboxOf(coords: Coord[], paddingDeg = 0.01): BoundingBox {
+  return routeBbox(coords, paddingDeg);
+}
+
+export function unionBbox(boxes: BoundingBox[]): BoundingBox {
+  return {
+    minLat: Math.min(...boxes.map((b) => b.minLat)),
+    minLng: Math.min(...boxes.map((b) => b.minLng)),
+    maxLat: Math.max(...boxes.map((b) => b.maxLat)),
+    maxLng: Math.max(...boxes.map((b) => b.maxLng)),
+  };
 }
 
 function buildNodeMap(elements: OsmElement[]): OsmNodeMap {
@@ -1177,7 +1252,22 @@ export interface ScoreRouteOptions {
   sampleIntervalMeters?: number;
   /** Whether the route is labelled as "minimum climbing" (for elevation sanity rule). */
   labeledMinClimbing?: boolean;
+  /**
+   * Per-edge road tags from the routing engine (road-segments.ts). When
+   * present, every road-dependent dimension and rule is computed from them —
+   * no road download — and only scenery is looked up.
+   */
+  edgeTags?: EdgeTags | null;
+  /**
+   * Scenery elements already fetched for a batch (prefetchScenic). `null`
+   * means the fetch failed: scenery is then reported as not assessed.
+   * Omit to fetch for this route alone. Only used with `edgeTags`.
+   */
+  scenic?: OsmElement[] | null;
 }
+
+/** Raw points of the three scenery dimensions (scenic 20 + diversity 10 + POI 10). */
+const SCENERY_RAW_MAX = 40;
 
 export async function scoreRoute(
   coordinates: Coord[],
@@ -1234,6 +1324,15 @@ export async function scoreRoute(
   // 1. GPS quality (pure local — no API)
   const { score: gps_quality_score, flags: gpsFlags } = scoreGpsQuality(coordinates);
   allFlags.push(...gpsFlags);
+
+  // 1b. Engine-native path: the router told us every road on the track.
+  if (options.edgeTags && options.edgeTags.length > 0) {
+    return scoreWithEdgeTags(coordinates, discipline, options.edgeTags, options.scenic, {
+      gps_quality_score,
+      flags: allFlags,
+      sampleIntervalMeters,
+    });
+  }
 
   // 2. Sample coordinates for OSM checks
   const sampled = sampleCoords(coordinates, sampleIntervalMeters);
@@ -1327,7 +1426,6 @@ export async function scoreRoute(
   let traffic_volume_score: number;
   let scenic_diversity_score: number;
   let waypoint_interest_score: number;
-  let gradient_comfort_score: number;
   let road_continuity_score: number;
   let bicycle_access_score: number;
 
@@ -1380,7 +1478,7 @@ export async function scoreRoute(
 
   // Gradient comfort is always computed from local elevation data (no Overpass needed)
   const gradient = scoreGradientComfort(coordinates);
-  gradient_comfort_score = gradient.score;
+  const gradient_comfort_score = gradient.score;
   allFlags.push(...gradient.flags);
 
   // 6. Normalize total to 0–100
@@ -1420,6 +1518,121 @@ export async function scoreRoute(
     surface_breakdown: surfaceBreakdown,
     road_class_breakdown: roadClassBreakdown,
     confidence,
+    confidence_level,
+    low_coverage_warning,
+    osm_cached,
+  };
+}
+
+/**
+ * Score a route whose roads are known from the routing engine. Road
+ * dimensions come from the engine's per-edge tags (distance-weighted);
+ * scenery comes from a roads-free OSM lookup, or is reported as "not
+ * assessed" (and left out of the denominator) when that lookup failed —
+ * we never guess a scenic score, and we never zero a verified route
+ * because a scenery lookup was slow.
+ */
+async function scoreWithEdgeTags(
+  coordinates: Coord[],
+  discipline: Discipline,
+  edgeTags: EdgeTags,
+  scenic: OsmElement[] | null | undefined,
+  base: { gps_quality_score: number; flags: string[]; sampleIntervalMeters: number }
+): Promise<QualityScore> {
+  const allFlags = [...base.flags];
+  const latLng = coordinates.map((c) => [c[0], c[1]] as [number, number]);
+
+  // Hard road rules on the roads actually ridden.
+  const roadViolations = validateRoadEdges(latLng, edgeTags, discipline);
+  const fatal = roadViolations.filter((v) => v.severity === "fatal");
+  const zero = (): QualityBreakdown => ({
+    surface_score: 0, safety_score: 0, scenic_score: 0, gps_quality_score: base.gps_quality_score,
+    traffic_volume_score: 0, scenic_diversity_score: 0, waypoint_interest_score: 0,
+    gradient_comfort_score: 0, road_continuity_score: 0, bicycle_access_score: 0,
+  });
+  if (fatal.length > 0) {
+    return {
+      total: 0,
+      breakdown: zero(),
+      flags: [...allFlags, ...fatal.map((v) => `[${v.rule}] ${v.message}`)],
+      confidence: 1,
+      confidence_level: "high",
+      low_coverage_warning: false,
+      osm_cached: false,
+    };
+  }
+  for (const v of roadViolations) allFlags.push(`[${v.rule}] ${v.message}`);
+
+  const roads = scoreEdges(latLng, edgeTags, discipline);
+  allFlags.push(...roads.flags);
+
+  // Scenery: batch-prefetched, or fetched here (roads-free query), or absent.
+  let elements: OsmElement[] | null = scenic ?? null;
+  let osm_cached = false;
+  if (scenic === undefined) {
+    try {
+      const bbox = routeBbox(coordinates);
+      const key = `scenic:${getCacheKey(quantizeBbox(bbox))}`;
+      const hit = osmCache.get(key);
+      if (hit && hit.expires > Date.now()) osm_cached = true;
+      elements = await queryOverpassScenic(bbox);
+    } catch (err) {
+      elements = null;
+      console.error("[route-quality] scenic query failed:", err instanceof Error ? err.message : err);
+    }
+  }
+
+  let scenic_score = 0, scenic_diversity_score = 0, waypoint_interest_score = 0;
+  let sceneryAssessed = false;
+  if (elements) {
+    sceneryAssessed = true;
+    const sampled = sampleCoords(coordinates, base.sampleIntervalMeters);
+    const nodeMap = buildNodeMap(elements);
+    const bbox = routeBbox(coordinates);
+    const sc = scoreScenic(bbox, elements, nodeMap, sampled);
+    const dv = scoreScenicDiversity(elements, nodeMap, sampled);
+    const wp = scoreWaypointInterest(elements, sampled);
+    scenic_score = sc.score;
+    scenic_diversity_score = dv.score;
+    waypoint_interest_score = wp.score;
+    allFlags.push(...sc.flags, ...dv.flags, ...wp.flags);
+  } else {
+    allFlags.push("Scenery not assessed — map data unavailable (roads verified by the routing engine)");
+  }
+
+  const gradient = scoreGradientComfort(coordinates);
+  allFlags.push(...gradient.flags);
+
+  const rawSum =
+    roads.surface_score + roads.safety_score + roads.traffic_volume_score +
+    roads.road_continuity_score + roads.bicycle_access_score +
+    base.gps_quality_score + gradient.score +
+    scenic_score + scenic_diversity_score + waypoint_interest_score;
+  const denominator = sceneryAssessed ? MAX_RAW_SCORE : MAX_RAW_SCORE - SCENERY_RAW_MAX;
+  const total = Math.max(0, Math.min(100, Math.round((rawSum / denominator) * 100)));
+
+  const { level: confidence_level, lowCoverageWarning: low_coverage_warning } =
+    computeConfidenceLevel(roads.confidence);
+  if (low_coverage_warning) allFlags.push("Low road-data coverage — scores may be less accurate");
+
+  return {
+    total,
+    breakdown: {
+      surface_score: roads.surface_score,
+      safety_score: roads.safety_score,
+      scenic_score,
+      gps_quality_score: base.gps_quality_score,
+      traffic_volume_score: roads.traffic_volume_score,
+      scenic_diversity_score,
+      waypoint_interest_score,
+      gradient_comfort_score: gradient.score,
+      road_continuity_score: roads.road_continuity_score,
+      bicycle_access_score: roads.bicycle_access_score,
+    },
+    flags: [...new Set(allFlags)],
+    surface_breakdown: roads.surface,
+    road_class_breakdown: roads.road_classes,
+    confidence: roads.confidence,
     confidence_level,
     low_coverage_warning,
     osm_cached,

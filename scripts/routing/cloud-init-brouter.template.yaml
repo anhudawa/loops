@@ -1,0 +1,100 @@
+#cloud-config
+# ============================================================
+# LOOPS routing engine — official BRouter 1.7.10 as a systemd service (v3)
+# GENERATED from cloud-init-brouter.template.yaml + profiles/*.brf by
+#   node scripts/routing/build-cloud-init.mjs
+# Edit the template or the profiles, never this file.
+# ============================================================
+# Self-configures on first boot via Hetzner user_data (no SSH needed).
+# v1 failed because it referenced a Docker image that doesn't exist. v2 runs
+# the maintainers' own release jar directly — the exact invocation verified
+# locally against a real Ireland tile with fastbike/gravel/mtb/loops-road.
+#
+# Tiles (5°x5° BRouter segments, ~1.5GB total): Ireland/UK W15_N50 W10_N50 W5_N50 ·
+# Catalonia E0_N40 · SE France E5_N40 · Tuscany E10_N40 · Mallorca/Alicante
+# E0_N35 W5_N35 · Algarve W10_N35 · Canaries W20_N25 W15_N25
+
+package_update: true
+package_upgrade: true
+packages:
+  - openjdk-21-jre-headless
+  - unzip
+  - curl
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+
+ssh_pwauth: false
+write_files:
+  - path: /etc/ssh/sshd_config.d/99-loops-hardening.conf
+    permissions: "0644"
+    content: |
+      PasswordAuthentication no
+      PermitRootLogin prohibit-password
+      KbdInteractiveAuthentication no
+      X11Forwarding no
+      MaxAuthTries 3
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: "0644"
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+  - path: /etc/fail2ban/jail.local
+    permissions: "0644"
+    content: |
+      [sshd]
+      enabled = true
+      maxretry = 4
+      bantime = 1h
+  - path: /opt/brouter/install.sh
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      cd /opt/brouter
+      # Official release (verified: github.com/abrensch/brouter v1.7.10)
+      if [ ! -f brouter-1.7.10/brouter-1.7.10-all.jar ]; then
+        curl -fSL --retry 4 --retry-delay 5 -o brouter-1.7.10.zip \
+          https://github.com/abrensch/brouter/releases/download/v1.7.10/brouter-1.7.10.zip
+        unzip -q -o brouter-1.7.10.zip
+      fi
+      # LOOPS profiles must live in profiles2 (named profiles resolve there).
+      # loops-road = the Road Standard; loops-road-relaxed = fallback that
+      # the app only uses when the strict profile finds no route at all.
+      cp /opt/brouter/profiles/*.brf brouter-1.7.10/profiles2/
+      mkdir -p segments4 custom
+      BASE=https://brouter.de/brouter/segments4
+      for t in W15_N50 W10_N50 W5_N50 E0_N40 E5_N40 E10_N40 E0_N35 W5_N35 W10_N35 W20_N25 W15_N25; do
+        [ -s "segments4/$t.rd5" ] || curl -fSL --retry 4 --retry-delay 5 -o "segments4/$t.rd5" "$BASE/$t.rd5" || echo "WARN: $t unavailable upstream"
+      done
+      ls -lh segments4
+  - path: /etc/systemd/system/brouter.service
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=LOOPS routing engine (BRouter 1.7.10)
+      After=network-online.target
+      Wants=network-online.target
+      [Service]
+      WorkingDirectory=/opt/brouter/brouter-1.7.10
+      ExecStart=/usr/bin/java -Xmx2g -cp brouter-1.7.10-all.jar btools.server.RouteServer /opt/brouter/segments4 /opt/brouter/brouter-1.7.10/profiles2 /opt/brouter/custom 17777 4
+      Restart=always
+      RestartSec=5
+      [Install]
+      WantedBy=multi-user.target
+#__PROFILES__
+runcmd:
+  - ufw default deny incoming
+  - ufw default allow outgoing
+  - ufw allow 22/tcp
+  - ufw allow 17777/tcp
+  - ufw --force enable
+  - systemctl restart ssh
+  - systemctl enable --now fail2ban
+  - /opt/brouter/install.sh
+  - systemctl daemon-reload
+  - systemctl enable --now brouter
+  - sleep 15 && curl -s "http://localhost:17777/brouter?lonlats=-6.11,53.57|-6.09,53.52&profile=loops-road&alternativeidx=0&format=geojson" | head -c 160 || true
+  - touch /var/lib/loops-brouter-ready
+
+final_message: "LOOPS routing engine ready on :17777 after $UPTIME seconds"

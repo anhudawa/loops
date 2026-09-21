@@ -24,7 +24,17 @@ import {
   DIRECTIONS_WIDE,
 } from "./route-waypoint-generator";
 import { validateRouteRules, repairSpurs } from "./route-rules";
-import { scoreRoute } from "./route-quality";
+import { scoreRoute, prefetchScenic, bboxOf, unionBbox } from "./route-quality";
+import {
+  parseBRouterMessages,
+  remapEdgeTags,
+  buildRoadReport,
+  compromiseAcceptable,
+  nameCompromises,
+  describeCompromise,
+  type EdgeTags,
+  type RoadReport,
+} from "./road-segments";
 import {
   sampleRouteElevation,
   elevationGainFromSeries,
@@ -84,6 +94,12 @@ export interface GeneratedRoute {
   wind_alignment_score?: number;
   /** The forecast used, for wind-painting the preview. */
   wind_forecast?: { direction_deg: number; speed_kmh: number };
+  /**
+   * Road Standard report from the routing engine's own road data: which
+   * roads the loop uses and, when it had to compromise, exactly where and
+   * for how long ("600 m on the R755"). Trust rule: never a silent bad road.
+   */
+  road_report?: RoadReport;
 }
 
 /**
@@ -117,6 +133,19 @@ export interface InterpretedIntent {
 export interface GenerateResult {
   interpreted: InterpretedIntent;
   candidates: RouteCandidate[];
+  /** Wall-clock seconds per pipeline phase (diagnostics; logged, not shown). */
+  timings?: Record<string, number>;
+}
+
+// Per-request phase timings. Generation requests are rate-limited per rider
+// and a serverless instance rarely runs two at once, so a module-level
+// collector is an acceptable diagnostic (worst case: two requests' timings
+// interleave — never wrong routes).
+let currentTimings: Record<string, number> | null = null;
+let currentTimingsStart = 0;
+function markPhase(label: string): void {
+  if (!currentTimings) return;
+  currentTimings[label] = Math.round((Date.now() - currentTimingsStart) / 100) / 10;
 }
 
 interface BRouterFeatureCollection {
@@ -308,11 +337,70 @@ interface RoutedPath {
   elevations: number[];         // metres per coord, NaN if missing
   distance_km: number;
   elevation_gain_m: number | null;  // null when BRouter omitted it
+  /** Per-edge OSM way tags from the engine (null when it sent none). */
+  edgeTags: EdgeTags | null;
+  /** Profile that produced this path (the relaxed fallback marks a compromise). */
+  profile: string;
 }
 
 /** Why the most recent BRouter call returned null — surfaced in decline diagnostics. */
 let lastBRouterFailure = "unknown";
 export function getLastBRouterFailure(): string { return lastBRouterFailure; }
+
+/**
+ * Strict profile → relaxed fallback. The strict road profile FORBIDS main
+ * roads, 80 km/h+ roads and unpaved surfaces, so when the only way through
+ * is one of those it returns no route at all. The relaxed profile makes
+ * them very expensive instead of impossible; the resulting stretch is then
+ * measured and named by the compromise report (or the candidate is dropped
+ * if the compromise is too long). Trust rule: say so, never serve silently.
+ */
+const RELAXED_PROFILE: Record<string, string> = { "loops-road": "loops-road-relaxed" };
+
+async function routeWithFallback(
+  waypoints: [number, number][],
+  profile: string
+): Promise<RoutedPath | null> {
+  let strict = await routeViaBRouter(waypoints, profile);
+  // The engine's thread watchdog kills a request when the server is
+  // saturated — that is load, not "no route". Retry the strict profile once.
+  if (!strict && /watchdog/i.test(lastBRouterFailure)) {
+    await new Promise((r) => setTimeout(r, 500 + Math.random() * 500));
+    strict = await routeViaBRouter(waypoints, profile);
+  }
+  if (strict) return strict;
+  const relaxed = RELAXED_PROFILE[profile];
+  // Only a genuine "no route under the standard" earns the relaxed profile.
+  if (!relaxed || !/no track found|target island|not found/i.test(lastBRouterFailure)) return null;
+  const strictFailure = lastBRouterFailure;
+  const path = await routeViaBRouter(waypoints, relaxed);
+  if (!path) { lastBRouterFailure = strictFailure; return null; }
+  genDebug(`candidate routed on the relaxed profile (strict: ${strictFailure})`);
+  return path;
+}
+
+/**
+ * Engine concurrency gate. Our BRouter runs N worker threads; a request
+ * beyond that is killed by its watchdog ("operation killed by
+ * thread-priority-watchdog"). Keep in-flight calls below the thread count
+ * so 5 candidates never cost us one. BROUTER_THREADS defaults to the 4 we
+ * provision (scripts/routing/cloud-init-brouter.yaml).
+ */
+const BROUTER_MAX_INFLIGHT = Math.max(1, (parseInt(process.env.BROUTER_THREADS ?? "4", 10) || 4) - 1);
+let brouterInflight = 0;
+const brouterQueue: Array<() => void> = [];
+async function withEngineSlot<T>(run: () => Promise<T>): Promise<T> {
+  while (brouterInflight >= BROUTER_MAX_INFLIGHT) {
+    await new Promise<void>((resolve) => brouterQueue.push(resolve));
+  }
+  brouterInflight++;
+  try {
+    return await run();
+  } finally {
+    brouterInflight--;
+    brouterQueue.shift()?.();
+  }
+}
 
 async function routeViaBRouter(
   waypoints: [number, number][],       // [lat, lng]
@@ -328,7 +416,7 @@ async function routeViaBRouter(
 
   let res: Response;
   try {
-    res = await fetch(url, { signal: AbortSignal.timeout(BROUTER_TIMEOUT_MS) });
+    res = await withEngineSlot(() => fetch(url, { signal: AbortSignal.timeout(BROUTER_TIMEOUT_MS) }));
   } catch (e) {
     const name = e instanceof Error ? e.name : "";
     lastBRouterFailure = name === "TimeoutError" || name === "AbortError" ? `timeout>${BROUTER_TIMEOUT_MS}ms` : `network:${(e instanceof Error ? e.message : String(e)).slice(0, 80)}`;
@@ -377,6 +465,8 @@ async function routeViaBRouter(
     elevations,
     distance_km: trackLen ? Number(trackLen) / 1000 : totalDistanceKm(coords),
     elevation_gain_m: ascend !== undefined ? Number(ascend) : null,
+    edgeTags: parseBRouterMessages(feature.properties.messages, coords),
+    profile,
   };
 }
 
@@ -554,13 +644,20 @@ export async function generateRouteCandidates(
   prompt: string,
   options: GenerateRouteOptions = {}
 ): Promise<GenerateResult> {
+  currentTimings = {};
+  currentTimingsStart = Date.now();
   const spec = await parseRouteIntent(prompt, {
     userSpeedKmh: options.userSpeedKmh,
     origin: options.origin,
   });
+  markPhase("intent");
   const interpreted = await summariseIntent(spec);
+  markPhase("summarise");
   const candidates = await candidatesFromSpec(spec);
-  return { interpreted, candidates };
+  markPhase("total");
+  const timings = currentTimings;
+  currentTimings = null;
+  return { interpreted, candidates, timings: timings ?? undefined };
 }
 
 async function reverseGeocode(lat: number, lng: number): Promise<string | null> {
@@ -649,6 +746,7 @@ export async function candidatesFromSpec(spec: RouteSpec): Promise<RouteCandidat
           spec.wind_strategy
         )
       : null;
+  markPhase("wind");
 
   const candidates = await candidatesFromSpecInner(spec, forecast);
 
@@ -707,12 +805,14 @@ async function candidatesFromSpecInner(
   // ── Library-first ──────────────────────────────────────────────────────────
   // Fail soft: a DB outage must never block fresh generation.
   const libraryMatches = await matchLibraryRoutes(spec, 3).catch(() => []);
+  markPhase("library");
   if (libraryMatches.length > 0) {
     return libraryMatches.map((m) => ({ source: "library" as const, ...m }));
   }
 
   // ── Fresh generation ───────────────────────────────────────────────────────
   const generated = await generateFreshRoutes(spec, windForecast);
+  markPhase("fresh");
 
   // If none of the fresh builds hit "excellent", try to mix in library
   // routes as fallback. A verified operator route at "good" match is
@@ -1168,7 +1268,7 @@ async function generateFreshWorkoutRoutes(
 
   const results = await Promise.allSettled(
     waypointSets.map(async (waypoints): Promise<GeneratedRoute | null> => {
-      const path = await routeViaBRouter(waypoints, profile);
+      const path = await routeWithFallback(waypoints, profile);
       const route = await buildFreshRouteFromPath(path, waypoints, spec);
       if (!route) return null;
 
@@ -1180,9 +1280,14 @@ async function generateFreshWorkoutRoutes(
 
       // Workout candidates face the same quality bar as plain generation:
       // hosting the efforts doesn't excuse an industrial-estate loop.
-      const quality = await scoreRoute(route.coordinates, spec.discipline);
+      const quality = await scoreRoute(route.coordinates, spec.discipline, { edgeTags: path?.edgeTags ?? null });
       if (quality.total < QUALITY_FLOOR) {
         genDebug(`workout candidate dropped: quality ${quality.total} < floor ${QUALITY_FLOOR}`);
+        return null;
+      }
+      const roadReport = path?.edgeTags ? buildRoadReport(route.coordinates, path.edgeTags, spec.discipline) : undefined;
+      if (roadReport && !compromiseAcceptable(roadReport, route.distance_km)) {
+        genDebug(`workout candidate dropped: road standard — ${roadReport.summary}`);
         return null;
       }
 
@@ -1207,6 +1312,7 @@ async function generateFreshWorkoutRoutes(
         match_score: computeMatchScore(route.distance_km, route.elevation_gain_m, spec, quality.total),
         workout_fit: fit,
         gpx_data: gpxWithEfforts,
+        ...(roadReport ? { road_report: roadReport } : {}),
       };
     })
   );
@@ -1227,17 +1333,49 @@ async function generateFreshRoutes(
   const profile = DISCIPLINE_PROFILE[spec.discipline];
 
   const waypointSets = await generateWaypointSets(spec);
+  markPhase("waypoints");
+
+  // Kick off the scenery lookup NOW, for the whole search area, so it runs
+  // while the engine routes the candidates. The engine reports the roads;
+  // scenery (coast, water, forest, peaks, cafés) is the one external lookup
+  // left, and it is the slowest step, so it must not wait for routing.
+  const searchBbox = unionBbox(waypointSets.map((w) => bboxOf(w, 0.08)));
+  const scenicPromise = prefetchScenic(searchBbox);
 
   // Why candidates were dropped (surfaced on a full decline).
   const dropped: Record<string, number> = {};
   const drop = (reason: string) => { dropped[reason] = (dropped[reason] ?? 0) + 1; };
-  const candidateResults = await Promise.allSettled(
+
+  // Optional geometry dump for spur/route triage (GENERATE_DUMP_DIR=/path).
+  const dumpDir = process.env.GENERATE_DUMP_DIR;
+  const dump = async (name: string, data: unknown) => {
+    if (!dumpDir) return;
+    try {
+      const fs = await import("node:fs/promises");
+      await fs.mkdir(dumpDir, { recursive: true });
+      await fs.writeFile(`${dumpDir}/${name}.json`, JSON.stringify(data));
+    } catch { /* diagnostics only */ }
+  };
+
+  // ── Phase 1: route every candidate on our engine (parallel) ─────────────
+  interface Routed {
+    waypoints: [number, number][];
+    path: RoutedPath;
+    elevations: number[];
+    elevGain: number;
+    elevLoss: number;
+    edgeTags: EdgeTags | null;
+  }
+  const routed: Routed[] = [];
+  const t0 = Date.now();
+  const lap = (label: string) => genDebug(`⏱ ${label} at +${((Date.now() - t0) / 1000).toFixed(1)}s`);
+  await Promise.all(
     waypointSets.map(async (waypoints) => {
-      const path = await routeViaBRouter(waypoints, profile);
+      const path = await routeWithFallback(waypoints, profile);
       if (!path || path.coords.length < 2) {
         genDebug("candidate dropped: BRouter returned no path");
         drop(`NO_PATH[${getLastBRouterFailure()}]`);
-        return null;
+        return;
       }
 
       // Backfill elevation from Open-Meteo if BRouter didn't return any (rare
@@ -1251,7 +1389,6 @@ async function generateFreshRoutes(
       const hasElevation = elevations.some((e) => !Number.isNaN(e));
       if (!hasElevation) {
         const sampled = await sampleRouteElevation(path.coords, 200);
-        // Downsampled series → expand to full resolution (1:1 with coords).
         elevations = interpolateToFullPath(path.coords, sampled.sampled_coords, sampled.elevations);
         elevGain = sampled.gain_m;
         elevLoss = sampled.loss_m;
@@ -1259,8 +1396,28 @@ async function generateFreshRoutes(
         elevGain = elevationGainFromSeries(elevations);
       }
 
+      // Repair via-point spurs (U-turn fingers) instead of discarding the
+      // candidate: splice the excursion out of coords, elevations AND road
+      // tags, then recompute distance/climb. SPUR_UTURN stays as backstop.
+      let edgeTags = path.edgeTags;
+      const rawCoords = dumpDir ? path.coords.slice() : null;
+      const repair = repairSpurs(path.coords);
+      if (rawCoords) {
+        await dump(`candidate-${waypointSets.indexOf(waypoints)}`, {
+          waypoints, profile: path.profile, raw_km: path.distance_km, raw: rawCoords,
+          repaired: repair.coords, removed_km: repair.removedKm,
+        });
+      }
+      if (repair.removedKm > 0.15) {
+        path.coords = repair.coords;
+        elevations = repair.keep.map((k) => elevations[k]);
+        edgeTags = remapEdgeTags(edgeTags, repair.keep);
+        path.distance_km = Math.round(pathDistanceKm(path.coords) * 10) / 10;
+        elevGain = elevationGainFromSeries(elevations);
+        genDebug(`candidate repaired: removed ${Math.round(repair.removedKm * 1000)} m of via-point spur`);
+      }
+
       if (elevLoss === null) {
-        // Compute loss from the elevation series
         let loss = 0;
         for (let i = 1; i < elevations.length; i++) {
           const d = elevations[i] - elevations[i - 1];
@@ -1269,19 +1426,32 @@ async function generateFreshRoutes(
         elevLoss = Math.round(loss);
       }
 
-      // Repair via-point spurs (U-turn fingers) instead of discarding the
-      // candidate: splice the excursion out of coords AND elevations, then
-      // recompute distance/climb. SPUR_UTURN below remains the backstop.
-      const repair = repairSpurs(path.coords);
-      if (repair.removedKm > 0.15) {
-        path.coords = repair.coords;
-        elevations = repair.keep.map((k) => elevations[k]);
-        path.distance_km = Math.round(pathDistanceKm(path.coords) * 10) / 10;
-        elevGain = elevationGainFromSeries(elevations);
-        genDebug(`candidate repaired: removed ${Math.round(repair.removedKm * 1000)} m of via-point spur`);
-      }
+      routed.push({ waypoints, path, elevations, elevGain: elevGain ?? 0, elevLoss, edgeTags });
+    })
+  );
+
+  lap(`phase 1 routed ${routed.length}/${waypointSets.length} candidates`);
+  markPhase("routing");
+
+  // ── Phase 2: one scenery lookup for the whole batch ─────────────────────
+  // Roads come from the engine, so the only external data left is scenery
+  // (coast, water, forest, peaks, cafés). One roads-free query for the union
+  // of all candidates replaces N per-candidate road downloads — the single
+  // biggest latency and timeout source in generation. Fail-soft: null means
+  // "scenery not assessed", reported honestly and left out of the score.
+  const withTags = routed.filter((r) => r.edgeTags && r.edgeTags.length > 0);
+  const scenic = withTags.length > 0 ? await scenicPromise : undefined;
+  if (withTags.length > 0) {
+    genDebug(`scenery ${scenic ? `loaded (${scenic.length} elements)` : "unavailable"} for ${withTags.length} engine-tagged candidate(s)`);
+  }
+  lap("phase 2 scenery");
+  markPhase("scenery");
+
+  // ── Phase 3: guardrails → road standard → quality (CPU-bound, parallel) ──
+  const candidateResults = await Promise.allSettled(
+    routed.map(async ({ waypoints, path, elevations, elevGain, elevLoss, edgeTags }): Promise<GeneratedRoute | null> => {
       const distKm = path.distance_km;
-      const gain = elevGain ?? 0;
+      const gain = elevGain;
 
       const rulesResult = validateRouteRules(path.coords, spec.discipline, null, {
         elevationGain: gain,
@@ -1297,9 +1467,32 @@ async function generateFreshRoutes(
         return null;
       }
 
+      // Road Standard (engine-native). A compromise stretch is measured and,
+      // if short and unavoidable, served WITH the warning; anything longer
+      // is not a route we'd take a friend on.
+      let roadReport: RoadReport | undefined;
+      if (edgeTags && edgeTags.length > 0) {
+        roadReport = buildRoadReport(path.coords, edgeTags, spec.discipline);
+        if (!compromiseAcceptable(roadReport, distKm)) {
+          genDebug(`candidate dropped: road standard — ${roadReport.summary}`);
+          drop("ROAD_STANDARD");
+          return null;
+        }
+        if (!roadReport.standard_met) {
+          // Name the stretch ("R755") so the rider knows exactly where it is.
+          await nameCompromises(path.coords, roadReport.compromises);
+          roadReport.summary = summariseCompromises(roadReport.compromises);
+        }
+      } else if (process.env.BROUTER_URL) {
+        genDebug("candidate has no engine road tags — falling back to OSM road download for scoring");
+      }
+
       let quality;
       try {
-        quality = await scoreRoute(path.coords, spec.discipline);
+        quality = await scoreRoute(path.coords, spec.discipline, {
+          edgeTags,
+          scenic: edgeTags ? scenic : undefined,
+        });
       } catch (err) {
         genDebug(`candidate dropped: quality scoring threw — ${err instanceof Error ? err.message : err}`);
         drop("QUALITY_ERROR");
@@ -1355,6 +1548,7 @@ async function generateFreshRoutes(
         gpx_data: gpx,
         waypoints_used: waypoints,
         match_score: matchScore,
+        ...(roadReport ? { road_report: roadReport } : {}),
       };
 
       return result;
@@ -1368,6 +1562,9 @@ async function generateFreshRoutes(
     }
   }
 
+  lap(`phase 3 scored → ${candidates.length} candidate(s) served`);
+  markPhase("scoring");
+
   if (candidates.length === 0) {
     dropped["_engine"] = (() => { try { return new URL(BROUTER_URL).host; } catch { return "?"; } })() as unknown as number;
     throw new NoValidRoutesError(waypointSets.length, dropped, {
@@ -1378,9 +1575,12 @@ async function generateFreshRoutes(
     });
   }
 
-  // Prefer world-class candidates; rank by quality then match accuracy
+  // Rank: routes that fully meet the road standard first, then world-class
+  // tier, then match accuracy, quality, distance fit.
   candidates.sort((a, b) => {
-    // Tier matters first — an "excellent" route always wins over "good"
+    const aStd = a.road_report ? (a.road_report.standard_met ? 1 : 0) : 0;
+    const bStd = b.road_report ? (b.road_report.standard_met ? 1 : 0) : 0;
+    if (bStd !== aStd) return bStd - aStd;
     const aTier = a.quality_tier === "excellent" ? 1 : 0;
     const bTier = b.quality_tier === "excellent" ? 1 : 0;
     if (bTier !== aTier) return bTier - aTier;
@@ -1392,4 +1592,10 @@ async function generateFreshRoutes(
   });
 
   return candidates.slice(0, 3);
+}
+
+function summariseCompromises(compromises: RoadReport["compromises"]): string {
+  const top = compromises.slice(0, 2).map(describeCompromise);
+  const more = compromises.length > 2 ? ` (+${compromises.length - 2} more)` : "";
+  return `Compromise: ${top.join("; ")}${more}.`;
 }

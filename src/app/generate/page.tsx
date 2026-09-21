@@ -76,6 +76,14 @@ interface GeneratedCandidate {
   wind_note?: string;
   wind_forecast?: { direction_deg: number; speed_kmh: number };
   waypoints_used?: [number, number][];
+  /** Road Standard report from the routing engine (see road-segments.ts). */
+  road_report?: {
+    standard_met: boolean;
+    summary: string;
+    compromises: Array<{ kind: string; meters: number; highway: string; name?: string }>;
+    surface: { paved_pct: number; unpaved_pct: number; unknown_pct: number };
+    main_road_pct: number;
+  };
 }
 
 type Candidate = LibraryCandidate | GeneratedCandidate;
@@ -1038,6 +1046,17 @@ function CandidateCard({
                 </span>
               ))}
             </div>
+          )}
+
+          {!isLibrary && candidate.road_report && (
+            <p
+              className="text-xs mt-2 flex items-start gap-1.5"
+              style={{ color: candidate.road_report.standard_met ? "var(--text-muted)" : "#f5a524" }}
+              data-testid="road-standard"
+            >
+              <span aria-hidden="true">{candidate.road_report.standard_met ? "✓" : "⚠"}</span>
+              <span>{candidate.road_report.summary}</span>
+            </p>
           )}
 
           {!isLibrary && candidate.surface_breakdown && (

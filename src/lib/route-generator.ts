@@ -155,7 +155,10 @@ function genDebug(msg: string): void {
  * which happily routes a road bike onto dirt tracks.
  */
 const DISCIPLINE_PROFILE: Record<Discipline, string> = {
-  road: "fastbike-lowtraffic",
+  // loops-road = the CEO Road Standard as a routing profile (no main roads,
+  // no 80 km/h+ without a segregated track, paved only, quiet lanes win even
+  // when longer). Ships on our own routing server; see scripts/routing/profiles.
+  road: process.env.BROUTER_URL ? "loops-road" : "fastbike-lowtraffic",
   gravel: "gravel",
   mtb: "mtb",
 };

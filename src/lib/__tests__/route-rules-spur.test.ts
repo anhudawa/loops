@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { findLongestSpur, validateRouteRules } from "@/lib/route-rules";
+import { findLongestSpur, validateRouteRules, repairSpurs } from "@/lib/route-rules";
 
 // ── Synthetic geometry helpers (≈ 53.5°N: 1 km ≈ 0.009° lat, ≈ 0.0151° lng) ──
 const KM_LAT = 0.009;
@@ -140,5 +140,28 @@ describe("SPUR_UTURN rule", () => {
   it("does NOT apply to rider-drawn routes (flag off) — an out-and-back may be intended", () => {
     const r = validateRouteRules(spurLoop(), "road", null, { elevationGain: 0, distanceKm: 20 });
     expect(r.violations.find((v) => v.rule === "SPUR_UTURN")).toBeUndefined();
+  });
+});
+
+describe("repairSpurs", () => {
+  it("splices a 1.5 km mid-route finger out and leaves a continuous, spur-free loop", () => {
+    const before = spurLoop();
+    const r = repairSpurs(before);
+    expect(r.removedKm).toBeGreaterThan(2.5);           // out + back ≈ 3 km
+    expect(r.keep.length).toBe(r.coords.length);
+    const after = findLongestSpur(r.coords);
+    expect(after === null || after.spurKm <= 0.4).toBe(true);
+    const v = validateRouteRules(r.coords, "road", null, { elevationGain: 0, distanceKm: 20, rejectSpurs: true });
+    expect(v.violations.find((x) => x.rule === "SPUR_UTURN")).toBeUndefined();
+  });
+
+  it("leaves a clean loop untouched", () => {
+    const r = repairSpurs(cleanLoop());
+    expect(r.removedKm).toBe(0);
+  });
+
+  it("keeps the causeway access retrace (not a mid-route spur)", () => {
+    const r = repairSpurs(causewayLoop());
+    expect(r.removedKm).toBeLessThan(0.2);
   });
 });

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateRouteCandidates } from "@/lib/route-generator";
+import { generateRouteCandidates, NoValidRoutesError } from "@/lib/route-generator";
 import { getUserBySession, recordEvent, ANALYTICS_EVENTS } from "@/lib/db";
 import { DEFAULT_SPEED_KMH } from "@/config/constants";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -198,7 +198,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ data: result });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
-    const code = classifyErrorCode(message);
+    const code = err instanceof NoValidRoutesError ? "NO_ROUTES_FOUND" : classifyErrorCode(message);
 
     // Funnel: generation declined/failed — code distinguishes an honest
     // decline (no routes / no workout match) from an infra error.
@@ -225,6 +225,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Honest decline with the reasons (trust rule) — also our production
+    // diagnostics: what was parsed and why every candidate was dropped.
+    if (err instanceof NoValidRoutesError) {
+      return NextResponse.json(
+        {
+          error: message,
+          code: "NO_ROUTES_FOUND",
+          details: { candidates: err.candidateCount, dropped: err.dropped },
+          interpreted: err.spec,
+        },
+        { status: 422 }
+      );
+    }
     if (message.includes("geocode") || message.includes("location")) {
       return NextResponse.json(
         { error: message, code: "GEOCODE_FAILED" },
@@ -275,8 +288,8 @@ export async function POST(request: NextRequest) {
  * checks used for user-facing responses. */
 function classifyErrorCode(message: string): string {
   if (message.includes("timed out")) return "TIMEOUT";
-  if (message.includes("geocode") || message.includes("location")) return "GEOCODE_FAILED";
   if (message.includes("No valid routes")) return "NO_ROUTES_FOUND";
+  if (message.includes("geocode") || message.includes("location")) return "GEOCODE_FAILED";
   if (message.includes("host this workout") || message.includes("uninterrupted at that intensity")) return "NO_WORKOUT_MATCH";
   if (message.includes("Failed to parse LLM response")) return "PARSE_FAILED";
   if (message.includes("Overpass")) return "OVERPASS_ERROR";

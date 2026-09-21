@@ -348,6 +348,16 @@ async function main() {
     }
 
     const id = randomUUID();
+    // Provenance rule (CEO, 2026-09-21): a route earns the VERIFIED badge only
+    // when it comes from an external reputable source — an operator's published
+    // RideWithGPS route or the operator's own site. Self-sourced / no URL stays
+    // unverified. The source is recorded (privately) as the route's provenance.
+    const provenanceUrl = route.rwgps_url || route.operator_url || null;
+    let srcHost = "";
+    try { srcHost = provenanceUrl ? new URL(provenanceUrl).host.toLowerCase() : ""; } catch { srcHost = ""; }
+    const isExternalSource = !!srcHost && !srcHost.includes("loops.ie");
+    const provenanceName =
+      route.operator_name || (srcHost.includes("ridewithgps") ? "RideWithGPS (operator route)" : srcHost || null);
     try {
       await pool.query(
         `INSERT INTO routes (
@@ -378,10 +388,10 @@ async function main() {
           null,
           JSON.stringify(coords),
           null,
-          true,
-          "approved",
-          route.operator_name || null,
-          route.operator_url || null,
+          isExternalSource,                          // VERIFIED only with an external reputable source
+          isExternalSource ? "approved" : "pending",
+          provenanceName,
+          provenanceUrl,
         ]
       );
       console.log(`OK (${stats.distanceKm} km, +${stats.elevGain}m, ${coords.length} pts, quality=${qualityScore})`);

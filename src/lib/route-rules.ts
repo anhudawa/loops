@@ -28,6 +28,10 @@ export interface RouteValidationOptions {
   distanceKm?: number;
   /** Whether the route is labelled / queried as "minimum climbing". */
   labeledMinClimbing?: boolean;
+  /** Reject loops that contain an out-and-back SPUR (a U-turn finger where
+   *  the route retraces the same road). Set for GENERATED loops; leave off for
+   *  rider-drawn routes, which may be out-and-back on purpose. */
+  rejectSpurs?: boolean;
 }
 
 // ──── OSM types (mirrors route-quality.ts internals) ─────────────────────────
@@ -467,6 +471,61 @@ function checkDeadEnd(coords: [number, number][]): RuleViolation | null {
 }
 
 /**
+ * RULE 5b: SPUR_UTURN
+ * A loop that reaches out along a road, U-turns, and retraces the SAME road
+ * back is a spur — nobody would take a friend on it. checkDeadEnd only catches
+ * a PURE out-and-back (<15% unique), so a 2-3 km finger on an otherwise fine
+ * 50 km loop sails through. This finds the longest CONTIGUOUS retraced stretch
+ * and rejects the route if it exceeds SPUR_MAX_KM. Loop closure (the end
+ * returning to the start) is excluded, as is a modest shared access road.
+ */
+const SPUR_SAMPLE_M = 40;      // path sampling
+const SPUR_NEAR_KM = 0.035;    // "same road" = within 35 m of an earlier point
+const SPUR_GAP_PTS = 5;        // ignore the last ~200 m of path (gentle curves)
+const SPUR_CLOSURE_PTS = 15;   // tolerate ~600 m shared start/finish access road
+const SPUR_MAX_KM = 0.4;       // longest retraced stretch allowed
+
+export function findLongestSpur(
+  coords: [number, number][]
+): { km: number; at: [number, number] } | null {
+  if (coords.length < 10) return null;
+  const s = sampleCoords(coords, SPUR_SAMPLE_M);
+  const n = s.length;
+  if (n < SPUR_GAP_PTS * 4) return null;
+
+  const retraced = new Array<boolean>(n).fill(false);
+  for (let i = SPUR_GAP_PTS; i < n; i++) {
+    for (let j = 0; j <= i - SPUR_GAP_PTS; j++) {
+      // Loop closure: the finish approaching the start is not a spur.
+      if (j < SPUR_CLOSURE_PTS && i > n - 1 - SPUR_CLOSURE_PTS) continue;
+      if (haversineKm(s[i], s[j]) < SPUR_NEAR_KM) { retraced[i] = true; break; }
+    }
+  }
+
+  let best = 0, bestAt: [number, number] | null = null, run = 0, runStart = 0;
+  for (let i = 1; i < n; i++) {
+    if (retraced[i]) {
+      if (run === 0) runStart = i;
+      run += haversineKm(s[i - 1], s[i]);
+      if (run > best) { best = run; bestAt = s[runStart]; }
+    } else {
+      run = 0;
+    }
+  }
+  return best > 0 && bestAt ? { km: best, at: bestAt } : null;
+}
+
+function checkSpur(coords: [number, number][]): RuleViolation | null {
+  const spur = findLongestSpur(coords);
+  if (!spur || spur.km <= SPUR_MAX_KM) return null;
+  return {
+    rule: "SPUR_UTURN",
+    message: `${Math.round(spur.km * 1000)} m out-and-back spur — the loop U-turns and retraces the same road near ${spur.at[0].toFixed(4)}, ${spur.at[1].toFixed(4)}`,
+    severity: "fatal",
+  };
+}
+
+/**
  * RULE 6: MIN_DISTANCE
  * Fatal if road <15km, gravel <10km, mtb <5km.
  */
@@ -792,6 +851,12 @@ export function validateRouteRules(
 
   const deadEndViolation = checkDeadEnd(coordinates);
   if (deadEndViolation) violations.push(deadEndViolation);
+
+  // Generated loops only: a U-turn spur is a bad route, full stop.
+  if (options?.rejectSpurs) {
+    const spurViolation = checkSpur(coordinates);
+    if (spurViolation) violations.push(spurViolation);
+  }
 
   // ── Elevation sanity (pure GPS — needs elevation in options) ─────────────
 

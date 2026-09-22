@@ -1196,6 +1196,9 @@ async function buildLoopAroundCorridor(
   // qualified gradient profile applies to every rep.
   const coords: [number, number][] = [];
   const elevations: number[] = [];
+  // Per-edge road tags from the engine, aligned with `coords` (null where a
+  // segment came from the corridor finder, which carries no tags).
+  const edgeTags: EdgeTags = [];
 
   // Truncate the traversal to the longest rep's needed distance plus a
   // short roll-off: a 30-second effort must not drag the rider down an
@@ -1232,7 +1235,7 @@ async function buildLoopAroundCorridor(
     return null;
   }
 
-  const push = (cs: [number, number][], es: number[]) => {
+  const push = (cs: [number, number][], es: number[], tags: EdgeTags | null = null) => {
     // Skip the first point only when it actually duplicates the tail
     // (~1 m tolerance) — BRouter legs snap to slightly different points,
     // and unconditionally dropping a real point left a gap in effort 1.
@@ -1244,12 +1247,15 @@ async function buildLoopAroundCorridor(
       }
     }
     for (let i = start; i < cs.length; i++) {
+      // Edge into this point: from the leg's own edge (i-1 → i) when known,
+      // else the bridging edge from the previous leg's tail (untagged).
+      if (coords.length > 0) edgeTags.push(i > 0 ? tags?.[i - 1] ?? null : null);
       coords.push(cs[i]);
       elevations.push(es[i]);
     }
   };
 
-  push(warmupLeg.coords, warmupLeg.elevations);
+  push(warmupLeg.coords, warmupLeg.elevations, warmupLeg.edgeTags);
 
   // Effort segment bounds (by traversal): efforts occupy the corridor up
   // to the zone's required distance; any remainder is roll-off.
@@ -1300,7 +1306,7 @@ async function buildLoopAroundCorridor(
     }
   }
 
-  push(homeLeg.coords, homeLeg.elevations);
+  push(homeLeg.coords, homeLeg.elevations, homeLeg.edgeTags);
 
   // Elevation gaps from BRouter legs: backfill NaNs by interpolation
   for (let i = 0; i < elevations.length; i++) {
@@ -1334,9 +1340,18 @@ async function buildLoopAroundCorridor(
     return null;
   }
 
-  const quality = await scoreRoute(coords, spec.discipline);
+  // Engine road tags cover the legs; the corridor itself was already
+  // road-checked by the corridor finder. Scoring from tags avoids the full
+  // road download (the workout path's main timeout source).
+  const taggedShare = edgeTags.filter(Boolean).length / Math.max(1, edgeTags.length);
+  const quality = await scoreRoute(coords, spec.discipline, taggedShare >= 0.5 ? { edgeTags } : {});
   if (quality.total < QUALITY_FLOOR) {
     genDebug(`anchor-first: assembled loop quality ${quality.total} < ${QUALITY_FLOOR}`);
+    return null;
+  }
+  const roadReport = taggedShare >= 0.5 ? buildRoadReport(coords, edgeTags, spec.discipline) : undefined;
+  if (roadReport && !compromiseAcceptable(roadReport, distKm)) {
+    genDebug(`anchor-first: assembled loop fails the road standard — ${roadReport.summary}`);
     return null;
   }
 
@@ -1370,6 +1385,7 @@ async function buildLoopAroundCorridor(
     waypoints_used: [spec.start_point, A, B],
     match_score: matchScore,
     workout_fit: fit,
+    ...(roadReport ? { road_report: roadReport } : {}),
   };
 }
 

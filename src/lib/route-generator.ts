@@ -815,6 +815,8 @@ export interface RerouteResult {
   gpx_data: string;
   /** Geometric rule check — surfaced so the editor can warn honestly. */
   warnings: string[];
+  /** Road Standard report for this leg from the engine's road tags (trust rule). */
+  road_report?: RoadReport;
 }
 
 /**
@@ -864,6 +866,14 @@ export async function rerouteWaypoints(
     ? []
     : rules.violations.map((v) => v.message);
 
+  // Drawn legs get the same honesty as generated loops: the roads the
+  // engine used, and any main/fast/unpaved stretch named. A rider drawing
+  // through a compromise sees it while drawing, not after the ride.
+  const roadReport = path.edgeTags ? buildRoadReport(path.coords, path.edgeTags, discipline) : undefined;
+  if (roadReport && !roadReport.standard_met) {
+    for (const c of roadReport.compromises.slice(0, 3)) warnings.push(describeCompromise(c));
+  }
+
   return {
     coordinates: path.coords,
     elevations,
@@ -877,6 +887,7 @@ export async function rerouteWaypoints(
       discipline
     ),
     warnings,
+    ...(roadReport ? { road_report: roadReport } : {}),
   };
 }
 

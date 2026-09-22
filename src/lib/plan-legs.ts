@@ -1,3 +1,4 @@
+import type { Compromise } from "./road-segments";
 /**
  * Pure per-leg math for the map planner (src/components/MapPlanner.tsx).
  *
@@ -34,6 +35,10 @@ export interface PlanLeg {
   loss_m: number;
   status: LegStatus;
   error?: string;
+  /** Road Standard verdict for a snapped leg (from the engine's road tags). */
+  standard_met?: boolean;
+  /** Named compromise stretches on this leg ("600 m on the R755"). */
+  compromises?: Compromise[];
 }
 
 export interface LegTotals {

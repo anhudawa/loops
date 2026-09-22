@@ -51,6 +51,7 @@ import {
 } from "@/lib/plan-legs";
 import { track } from "@/lib/track";
 import { ANALYTICS_EVENTS } from "@/lib/metrics";
+import { describeCompromise, type Compromise } from "@/lib/road-segments";
 
 interface RerouteResult {
   coordinates: [number, number][];
@@ -58,6 +59,10 @@ interface RerouteResult {
   distance_km: number;
   elevation_gain_m: number;
   elevation_loss_m?: number | null;
+  road_report?: {
+    standard_met: boolean;
+    compromises: Compromise[];
+  };
 }
 
 type Discipline = "road" | "gravel" | "mtb";
@@ -217,6 +222,8 @@ export default function MapPlanner() {
         loss_m: typeof data.elevation_loss_m === "number" ? data.elevation_loss_m : 0,
         status: "snapped",
         error: undefined,
+        standard_met: data.road_report?.standard_met,
+        compromises: data.road_report?.compromises ?? [],
       });
     } catch {
       applyLegResult(id, seq, {
@@ -446,6 +453,10 @@ export default function MapPlanner() {
   const snapping = allLegs.some((l) => l.status === "pending");
   const failedCount = allLegs.filter((l) => l.status === "failed").length;
   const allSnapped = allLegs.length > 0 && allLegs.every((l) => l.status === "snapped");
+  // Road Standard across the drawn route (trust rule: a compromise is shown
+  // while drawing, never discovered on the road).
+  const standardKnown = allSnapped && allLegs.every((l) => l.standard_met !== undefined);
+  const compromises = allLegs.flatMap((l) => l.compromises ?? []).sort((a, b) => b.meters - a.meters);
 
   // Live elevation profile: rebuild the [lat,lng,ele] track whenever a leg's
   // geometry changes. ElevationProfile renders its own empty state when the
@@ -722,6 +733,27 @@ export default function MapPlanner() {
               <ElevationProfile coordinates={profileCoords} distanceKm={totals.distance_km} />
             </div>
           )}
+        </div>
+      )}
+
+      {/* Road Standard verdict for the drawn route — from the engine's own
+          road tags on every snapped leg. */}
+      {standardKnown && (
+        <div
+          className="px-3 py-1.5 border-t text-xs flex items-start gap-1.5 z-20"
+          style={{
+            background: "var(--bg-raised)",
+            borderColor: "var(--border)",
+            color: compromises.length === 0 ? "var(--text-muted)" : "#f5a524",
+          }}
+          data-testid="plan-road-standard"
+        >
+          <span aria-hidden="true">{compromises.length === 0 ? "✓" : "⚠"}</span>
+          <span>
+            {compromises.length === 0
+              ? "Every leg meets the Loops road standard: no main roads, nothing fast, paved."
+              : `Compromise: ${compromises.slice(0, 2).map(describeCompromise).join("; ")}${compromises.length > 2 ? ` (+${compromises.length - 2} more)` : ""}.`}
+          </span>
         </div>
       )}
 

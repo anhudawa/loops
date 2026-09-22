@@ -426,7 +426,7 @@ const LOOP_RETRACE_FIX_KM = 1.5;
  * a 5-candidate request inside the 55 s pipeline budget even when the
  * engine is slow (mountain tiles, strict no-route searches ≈ 3–4 s each).
  */
-const ROUTING_BUDGET_MS = 24_000;
+const ROUTING_BUDGET_MS = 20_000;
 /** Still losing more than this after the no-go return → try moving the far point. */
 const LOOP_MOVE_FAR_KM = 3.0;
 /** No-go weight for the outbound roads when routing the return leg. Tested on
@@ -666,12 +666,20 @@ async function routeLoopCandidate(
 }
 
 
+/** Per-request routing deadline (epoch ms) — engine calls never overrun it
+ *  by more than a couple of seconds. Set by generateFreshRoutes. */
+let currentRoutingDeadline = 0;
+
 async function routeViaBRouter(
   waypoints: [number, number][],       // [lat, lng]
   profile: string,
   retried = false,
   extraQuery = ""                      // e.g. "&polylines=…" (weighted no-go)
 ): Promise<RoutedPath | null> {
+  // Engine timeout bounded by the request's routing deadline (minimum 4 s
+  // so a first call always gets a fair chance).
+  const remaining = currentRoutingDeadline > 0 ? currentRoutingDeadline - Date.now() + 2000 : BROUTER_TIMEOUT_MS;
+  const timeoutMs = Math.max(4000, Math.min(BROUTER_TIMEOUT_MS, remaining));
   // BRouter expects lonlats as "lng,lat|lng,lat|..."
   const lonlats = waypoints.map(([lat, lng]) => `${lng},${lat}`).join("|");
   const url =
@@ -681,10 +689,10 @@ async function routeViaBRouter(
 
   let res: Response;
   try {
-    res = await withEngineSlot(() => fetch(url, { signal: AbortSignal.timeout(BROUTER_TIMEOUT_MS) }));
+    res = await withEngineSlot(() => fetch(url, { signal: AbortSignal.timeout(timeoutMs) }));
   } catch (e) {
     const name = e instanceof Error ? e.name : "";
-    lastBRouterFailure = name === "TimeoutError" || name === "AbortError" ? `timeout>${BROUTER_TIMEOUT_MS}ms` : `network:${(e instanceof Error ? e.message : String(e)).slice(0, 80)}`;
+    lastBRouterFailure = name === "TimeoutError" || name === "AbortError" ? `timeout>${timeoutMs}ms` : `network:${(e instanceof Error ? e.message : String(e)).slice(0, 80)}`;
     return null;
   }
   if (!res.ok) {
@@ -1659,7 +1667,8 @@ async function generateFreshRoutes(
   // kill half a compass).
   const runPass = async (waypointSets: [number, number][][], passLabel: string): Promise<GeneratedRoute[]> => {
   const routed: Routed[] = [];
-  const routingDeadline = Math.min(Date.now() + ROUTING_BUDGET_MS, t0 + 40_000);
+  const routingDeadline = Math.min(Date.now() + ROUTING_BUDGET_MS, t0 + 38_000);
+  currentRoutingDeadline = routingDeadline;
   await Promise.all(
     waypointSets.map(async (waypoints) => {
       const path = await routeLoopCandidate(waypoints, profile, spec.distance_km, spec.discipline, routingDeadline);
@@ -1721,6 +1730,7 @@ async function generateFreshRoutes(
     })
   );
 
+  currentRoutingDeadline = 0;
   lap(`${passLabel}: phase 1 routed ${routed.length}/${waypointSets.length} candidates`);
   markPhase("routing");
 
@@ -1873,7 +1883,7 @@ async function generateFreshRoutes(
   };
 
   let candidates = await runPass(waypointSets, "pass 1");
-  if (candidates.length < 2 && Date.now() - t0 < 26_000) {
+  if (candidates.length < 2 && Date.now() - t0 < 22_000) {
     const start = spec.start_point;
     const usedBearings = waypointSets.map((ws) => {
       let far = ws[1], farD = -1;

@@ -140,7 +140,9 @@ function toLibraryMatch(
   score: number,
   distanceFromStartKm: number
 ): LibraryMatch {
-  const raw = JSON.parse(route.coordinates) as number[][];
+  const stored = route.coordinates as unknown;
+  const raw = (typeof stored === "string" ? JSON.parse(stored) : stored) as number[][];
+  if (!Array.isArray(raw) || raw.length < 2) throw new Error("no usable track");
   const coordinates: [number, number][] = raw.map(([lat, lng]) => [lat, lng]);
   const hasEle = raw.length > 0 && raw.every((c) => typeof c[2] === "number");
   const elevations = hasEle ? raw.map((c) => c[2]) : undefined;
@@ -193,12 +195,18 @@ export async function matchLibraryRoutes(
     const distFromStart = haversineKm(
       startLat,
       startLng,
-      route.start_lat,
-      route.start_lng
+      Number(route.start_lat),
+      Number(route.start_lng)
     );
     const score = scoreLibraryRoute(route, spec, distFromStart);
     if (score < LIBRARY_MATCH_THRESHOLD) continue;
-    scored.push(toLibraryMatch(route, spec, score, distFromStart));
+    // One malformed stored track must never sink the whole match (it used
+    // to throw here and the rider got no library loops at all).
+    try {
+      scored.push(toLibraryMatch(route, spec, score, distFromStart));
+    } catch (e) {
+      console.error(`[library] skipping route ${route.id}: ${e instanceof Error ? e.message : e}`);
+    }
   }
 
   scored.sort((a, b) => b.match_score - a.match_score);

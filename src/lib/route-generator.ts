@@ -1069,6 +1069,7 @@ function estimateDurationMinutes(spec: RouteSpec): number {
  * test and any future structured (non-LLM) entry points.
  */
 export async function candidatesFromSpec(spec: RouteSpec): Promise<RouteCandidate[]> {
+  libraryDiag = "";
   const forecast =
     spec.wind_strategy !== "none"
       ? await fetchWindForecast(
@@ -1103,6 +1104,9 @@ export async function candidatesFromSpec(spec: RouteSpec): Promise<RouteCandidat
 
   return candidates;
 }
+
+/** Library outcome for the current request (diagnostics on a decline). */
+let libraryDiag = "";
 
 /** A loop starting within this distance of home is "from home" already. */
 const FROM_HOME_KM = 1.0;
@@ -1252,8 +1256,14 @@ async function candidatesFromSpecInner(
 
   // ── Library-first ──────────────────────────────────────────────────────────
   // Fail soft: a DB outage must never block fresh generation.
-  const libraryMatches = await matchLibraryRoutes(spec, 3).catch((e) => { console.error("[library] match failed:", e instanceof Error ? e.message : e); return []; });
+  const libraryMatches = await matchLibraryRoutes(spec, 3).catch((e) => {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[library] match failed:", msg);
+    libraryDiag = `error: ${msg.slice(0, 120)}`;
+    return [];
+  });
   const fromHome = await ridesFromHome(libraryMatches, spec);
+  if (!libraryDiag) libraryDiag = `${libraryMatches.length} matched, ${fromHome.length} served from home`;
   markPhase("library");
   if (fromHome.length > 0) {
     return fromHome.map((m) => ({ source: "library" as const, ...m }));
@@ -2128,6 +2138,7 @@ async function generateFreshRoutes(
 
   if (candidates.length === 0) {
     dropped["_engine"] = (() => { try { return new URL(BROUTER_URL).host; } catch { return "?"; } })() as unknown as number;
+    if (libraryDiag) dropped["_library"] = libraryDiag as unknown as number;
     throw new NoValidRoutesError(Object.values(dropped).reduce((a, b) => a + (typeof b === "number" ? b : 0), 0), dropped, {
       distance_km: spec.distance_km,
       discipline: spec.discipline,

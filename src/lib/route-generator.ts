@@ -350,6 +350,8 @@ interface RoutedPath {
 /** Why the most recent BRouter call returned null — surfaced in decline diagnostics. */
 let lastBRouterFailure = "unknown";
 export function getLastBRouterFailure(): string { return lastBRouterFailure; }
+/** Engine calls made in this process (diagnostics: calls per candidate). */
+let engineCalls = 0;
 
 /**
  * Strict profile → relaxed fallback. The strict road profile FORBIDS main
@@ -424,7 +426,7 @@ async function withEngineSlot<T>(run: () => Promise<T>): Promise<T> {
 // ── Loop-aware routing ───────────────────────────────────────────────────────
 
 /** A loop that would lose more than this to spur repair gets re-routed. */
-const LOOP_RETRACE_FIX_KM = 1.5;
+const LOOP_RETRACE_FIX_KM = 3.0;
 /**
  * Engine-time budget for the routing phase of one request. Every optional
  * improvement (moving the far point, no-go returns, distance fit) checks
@@ -520,6 +522,11 @@ async function routeLoopCandidate(
   deadline: number = Date.now() + ROUTING_BUDGET_MS
 ): Promise<RoutedPath | null> {
   const timeLeft = () => Date.now() < deadline;
+  const startedAt = Date.now();
+  const done = (p: RoutedPath | null, why: string) => {
+    genDebug(`candidate ${why} in ${((Date.now() - startedAt) / 1000).toFixed(1)}s`);
+    return p;
+  };
   const start = waypoints[0];
   const inner = waypoints.slice(1, waypoints.length - 1);
   let farIdx = 1;
@@ -539,6 +546,8 @@ async function routeLoopCandidate(
   // ceiling makes those a last resort, not impossible), is not a reason to
   // compromise — move the far point and stay on the standard. The relaxed
   // profile is the last resort, not the second attempt.
+  // Metres of compromise ONLY when the serving policy would reject the
+  // route; an acceptable short link is not worth five more engine calls.
   const compromiseM = (p: RoutedPath): number => {
     if (!p.edgeTags) return 0;
     const r = buildRoadReport(p.coords, p.edgeTags, discipline);
@@ -571,7 +580,7 @@ async function routeLoopCandidate(
     if (!first) lastBRouterFailure = strictFailure;
   }
   if (!first) first = await routeWithFallback(waypoints, profile);
-  if (!first) return null;
+  if (!first) return done(null, "no path");
 
   // Memoised per path: repair is the most expensive step and the loop-shaping
   // code asks for the same path's loss many times.
@@ -634,7 +643,7 @@ async function routeLoopCandidate(
 
   let best = first;
   let bestLoss = lossOf(first);
-  if (bestLoss <= LOOP_RETRACE_FIX_KM || waypoints.length < 4) return first;
+  if (bestLoss <= LOOP_RETRACE_FIX_KM || waypoints.length < 4) return done(first, "routed");
 
   // Attempt order: keep the far point (no-go return only); then, if the
   // loop still loses a lot, move the far point — rotated either way, then
@@ -675,7 +684,7 @@ async function routeLoopCandidate(
     if (!backPath || backPath.coords.length < 2) continue;
     consider(joinPaths(outPath, backPath), label);
   }
-  return best;
+  return done(best, "routed after loop shaping");
 }
 
 
@@ -701,6 +710,7 @@ async function routeViaBRouter(
     `&alternativeidx=0&format=geojson${extraQuery}`;
 
   let res: Response;
+  engineCalls++;
   try {
     res = await withEngineSlot(() => fetch(url, { signal: AbortSignal.timeout(timeoutMs) }));
   } catch (e) {
@@ -1657,13 +1667,15 @@ async function measureRoadFactor(start: [number, number], radiusKm: number, prof
   // detours far more than a whole loop does (2.2× measured at Banyoles
   // against ~1.3× for the loops themselves), which over-corrected.
   const probeProfile = RELAXED_PROFILE[profile] ?? profile;
-  const factors: number[] = [];
-  for (const bearing of [45, 225]) {
-    const target = destination(start, bearing, radiusKm * 0.7);
-    const straight = haversineKm(start[0], start[1], target[0], target[1]);
-    const leg = await routeViaBRouter([start, target], probeProfile);
-    if (leg && leg.coords.length >= 2 && straight > 1) factors.push(leg.distance_km / straight);
-  }
+  const legs = await Promise.all(
+    [45, 225].map(async (bearing) => {
+      const target = destination(start, bearing, radiusKm * 0.7);
+      const straight = haversineKm(start[0], start[1], target[0], target[1]);
+      const leg = await routeViaBRouter([start, target], probeProfile);
+      return leg && leg.coords.length >= 2 && straight > 1 ? leg.distance_km / straight : null;
+    })
+  );
+  const factors = legs.filter((f): f is number => f !== null);
   if (factors.length === 0) return CALIBRATED_ROAD_FACTOR;
   const mean = factors.reduce((a, b) => a + b, 0) / factors.length;
   return Math.max(1.15, Math.min(2.0, mean));
@@ -1716,6 +1728,7 @@ async function generateFreshRoutes(
     edgeTags: EdgeTags | null;
   }
   const t0 = Date.now();
+  const callsAtStart = engineCalls;
   const lap = (label: string) => genDebug(`⏱ ${label} at +${((Date.now() - t0) / 1000).toFixed(1)}s`);
 
   // Phases 1–3 for one set of candidates. Run once with the best-supported
@@ -1936,6 +1949,7 @@ async function generateFreshRoutes(
 
   lap(`${passLabel}: phase 3 scored → ${candidates.length} candidate(s)`);
   markPhase("scoring");
+  if (currentTimings) currentTimings.engine_calls = engineCalls - callsAtStart;
   return candidates;
   };
 

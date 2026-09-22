@@ -35,6 +35,18 @@ export interface LibraryMatch {
   workout_fit?: WorkoutFit;      // present on workout-mode matches
   /** Rider-facing wind summary; set by the generator when wind was requested. */
   wind_note?: string;
+  /** Per-point elevations when the stored track carries them (1:1 with coordinates). */
+  elevations?: number[];
+  /**
+   * Set when the generator turned this loop into a ride FROM HOME: the
+   * served coordinates are ride-out + loop + ride-back, `approach_km` is
+   * the one-way distance to the loop, `loop_km` the verified loop itself.
+   */
+  from_home?: boolean;
+  approach_km?: number;
+  loop_km?: number;
+  gpx_data?: string;
+  road_report?: import("./road-segments").RoadReport;
 }
 
 export interface WorkoutFit {
@@ -130,6 +142,8 @@ function toLibraryMatch(
 ): LibraryMatch {
   const raw = JSON.parse(route.coordinates) as number[][];
   const coordinates: [number, number][] = raw.map(([lat, lng]) => [lat, lng]);
+  const hasEle = raw.length > 0 && raw.every((c) => typeof c[2] === "number");
+  const elevations = hasEle ? raw.map((c) => c[2]) : undefined;
 
   return {
     route_id: route.id,
@@ -144,6 +158,7 @@ function toLibraryMatch(
     country: route.country,
     match_score: score,
     distance_from_start_km: Math.round(distanceFromStartKm * 10) / 10,
+    ...(elevations ? { elevations } : {}),
   };
 }
 

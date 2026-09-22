@@ -56,6 +56,12 @@ interface LibraryCandidate {
   distance_from_start_km: number;
   workout_fit?: WorkoutFit;
   wind_note?: string;
+  /** Served as ride-out + verified loop + ride-back from the rider's start. */
+  from_home?: boolean;
+  approach_km?: number;
+  loop_km?: number;
+  gpx_data?: string;
+  road_report?: { standard_met: boolean; summary: string };
 }
 
 interface GeneratedCandidate {
@@ -1004,7 +1010,11 @@ function CandidateCard({
                 {title}
               </h3>
               <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-                {isLibrary ? `${candidate.county} · verified` : "Freshly generated"}
+                {isLibrary
+                  ? candidate.from_home
+                    ? `${candidate.county} · verified loop · ${candidate.approach_km} km each way from your start`
+                    : `${candidate.county} · verified`
+                  : "Freshly generated"}
               </p>
             </div>
             <SourceBadge
@@ -1059,7 +1069,7 @@ function CandidateCard({
             </div>
           )}
 
-          {!isLibrary && candidate.road_report && (
+          {candidate.road_report && (
             <p
               className="text-xs mt-2 flex items-start gap-1.5"
               style={{ color: candidate.road_report.standard_met ? "var(--text-muted)" : "#f5a524" }}
@@ -1143,6 +1153,19 @@ function CandidateCard({
                   title={candidate.name}
                   distance={candidate.distance_km}
                 />
+                {candidate.from_home && candidate.gpx_data && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const filename = `loops-${candidate.name.slice(0, 30).replace(/[^a-z0-9]+/gi, "-")}-from-start.gpx`;
+                      downloadGpx(candidate.gpx_data!, filename);
+                    }}
+                    className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider"
+                    style={{ background: "transparent", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
+                  >
+                    Download GPX (from your start)
+                  </button>
+                )}
               </>
             ) : (
               <>

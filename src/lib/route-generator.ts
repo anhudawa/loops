@@ -68,6 +68,7 @@ import {
   type WindStrategy,
 } from "./wind";
 import { findEffortCorridors, type EffortCorridor } from "./session-assembly";
+import { isClosedLoop, nearestIndex, rotateLoop } from "./loop-geometry";
 import { ZONES } from "./intensity";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -1103,6 +1104,119 @@ export async function candidatesFromSpec(spec: RouteSpec): Promise<RouteCandidat
   return candidates;
 }
 
+/** A loop starting within this distance of home is "from home" already. */
+const FROM_HOME_KM = 1.0;
+
+/**
+ * Owner rule (2026-09-22): every route starts from home. A verified loop
+ * that starts elsewhere is served as ride-out + loop + ride-back: the loop
+ * is rotated to begin at its point nearest home, the engine routes the
+ * approach on the standard profile and the return with the approach as a
+ * weighted no-go (a different road home where one exists). The whole ride
+ * must fit the requested distance; the approach legs carry a road report
+ * and the serving policy applies to them. Loops that cannot be reached or
+ * would not fit are dropped — fresh generation takes over.
+ */
+async function ridesFromHome(matches: LibraryMatch[], spec: RouteSpec): Promise<LibraryMatch[]> {
+  const out: LibraryMatch[] = [];
+  const results = await Promise.all(matches.map((m) => rideFromHome(m, spec)));
+  for (const r of results) if (r) out.push(r);
+  out.sort((a, b) => b.match_score - a.match_score);
+  return out;
+}
+
+async function rideFromHome(match: LibraryMatch, spec: RouteSpec): Promise<LibraryMatch | null> {
+  if (match.distance_from_start_km <= FROM_HOME_KM) return match;
+  const home = spec.start_point;
+  const profile = DISCIPLINE_PROFILE[spec.discipline];
+
+  // Rotate a closed loop to start nearest home; an open track keeps its ends.
+  let loopCoords = match.coordinates;
+  let loopEle = match.elevations;
+  const closed = isClosedLoop(loopCoords);
+  if (closed) {
+    const k = nearestIndex(loopCoords, home);
+    const rotated = rotateLoop(loopCoords, k, loopEle);
+    loopCoords = rotated.coords;
+    loopEle = rotated.parallel;
+  }
+  const loopStart = loopCoords[0];
+  const loopEnd = loopCoords[loopCoords.length - 1];
+
+  const approach = await routeWithFallback([home, loopStart], profile);
+  if (!approach || approach.coords.length < 2) {
+    genDebug(`library loop "${match.name}" dropped: no ride out from home (${getLastBRouterFailure()})`);
+    return null;
+  }
+  const nogo = nogoPolyline(approach.coords, 0.5, 0.5);
+  const back =
+    (await routeViaBRouter([loopEnd, home], profile, false, nogo)) ??
+    (await routeWithFallback([loopEnd, home], profile));
+  if (!back || back.coords.length < 2) {
+    genDebug(`library loop "${match.name}" dropped: no ride home (${getLastBRouterFailure()})`);
+    return null;
+  }
+
+  const totalKm = approach.distance_km + match.distance_km + back.distance_km;
+  const allowance = Math.max(8, spec.distance_km * 0.35);
+  if (Math.abs(totalKm - spec.distance_km) > allowance) {
+    genDebug(`library loop "${match.name}" dropped: ${totalKm.toFixed(0)} km from home for a ${spec.distance_km} km ask`);
+    return null;
+  }
+
+  // Stitch: approach → loop → back (drop duplicated junction points).
+  const same = (a: [number, number], b: [number, number]) => Math.abs(a[0] - b[0]) < 1e-5 && Math.abs(a[1] - b[1]) < 1e-5;
+  const coords: [number, number][] = [...approach.coords];
+  const elevations: number[] = [...approach.elevations];
+  const edgeTags: EdgeTags = [...(approach.edgeTags ?? new Array(Math.max(0, approach.coords.length - 1)).fill(null))];
+  const pushLeg = (cs: [number, number][], es: number[] | undefined, tags: EdgeTags | null) => {
+    const start = coords.length > 0 && same(coords[coords.length - 1], cs[0]) ? 1 : 0;
+    for (let i = start; i < cs.length; i++) {
+      if (coords.length > 0) edgeTags.push(i > 0 ? tags?.[i - 1] ?? null : null);
+      coords.push(cs[i]);
+      elevations.push(es && typeof es[i] === "number" ? es[i] : NaN);
+    }
+  };
+  pushLeg(loopCoords, loopEle, null);
+  pushLeg(back.coords, back.elevations, back.edgeTags);
+
+  // Approach/return road standard (the loop itself is verified provenance).
+  // Loop edges carry no tags → "unknown", never a compromise; only the
+  // engine-routed legs are judged.
+  const report = buildRoadReport(coords, edgeTags, spec.discipline);
+  const legsKm = approach.distance_km + back.distance_km;
+  if (!compromiseAcceptable(report, legsKm)) {
+    genDebug(`library loop "${match.name}" dropped: ride out/back fails the road standard — ${report.summary}`);
+    return null;
+  }
+  if (!report.standard_met) await nameCompromises(coords, report.compromises);
+  report.summary = report.standard_met
+    ? `Verified loop; the ${Math.round(legsKm)} km out and back from your start meet the Loops road standard.`
+    : `Ride out/back compromise: ${report.compromises.slice(0, 2).map(describeCompromise).join("; ")}.`;
+
+  const approachGain = (approach.elevation_gain_m ?? elevationGainFromSeries(approach.elevations)) || 0;
+  const backGain = (back.elevation_gain_m ?? elevationGainFromSeries(back.elevations)) || 0;
+  const gain = Math.round(match.elevation_gain_m + approachGain + backGain);
+  const hasAllEle = elevations.every((e) => !Number.isNaN(e));
+  const distanceKm = Math.round(totalKm * 10) / 10;
+
+  return {
+    ...match,
+    coordinates: coords,
+    elevations: hasAllEle ? elevations : undefined,
+    distance_km: distanceKm,
+    elevation_gain_m: gain,
+    elevation_loss_m: Math.round(match.elevation_loss_m + approachGain + backGain), // symmetric out/back
+    distance_from_start_km: 0,
+    from_home: true,
+    approach_km: Math.round(approach.distance_km * 10) / 10,
+    loop_km: match.distance_km,
+    match_score: computeMatchScore(distanceKm, gain, spec, 90),
+    road_report: report,
+    gpx_data: buildGpx(coords, hasAllEle ? elevations : null, `${match.name} — from your start`, spec.discipline),
+  };
+}
+
 async function candidatesFromSpecInner(
   spec: RouteSpec,
   windForecast: WindForecast | null
@@ -1116,7 +1230,10 @@ async function candidatesFromSpecInner(
   // failure honestly rather than ship a generic route mislabelled as
   // workout-friendly.
   if (spec.workout) {
-    const workoutMatches = await matchLibraryForWorkout(spec, 3).catch((e) => { console.error("[library] workout match failed:", e instanceof Error ? e.message : e); return []; });
+    // Workout matches keep their segment indices, so only loops that already
+    // start at home qualify; others fall through to fresh assembly.
+    const workoutMatches = (await matchLibraryForWorkout(spec, 3).catch((e) => { console.error("[library] workout match failed:", e instanceof Error ? e.message : e); return []; }))
+      .filter((m) => m.distance_from_start_km <= FROM_HOME_KM);
     if (workoutMatches.length > 0) {
       return workoutMatches.map((m) => ({ source: "library" as const, ...m }));
     }
@@ -1136,9 +1253,10 @@ async function candidatesFromSpecInner(
   // ── Library-first ──────────────────────────────────────────────────────────
   // Fail soft: a DB outage must never block fresh generation.
   const libraryMatches = await matchLibraryRoutes(spec, 3).catch((e) => { console.error("[library] match failed:", e instanceof Error ? e.message : e); return []; });
+  const fromHome = await ridesFromHome(libraryMatches, spec);
   markPhase("library");
-  if (libraryMatches.length > 0) {
-    return libraryMatches.map((m) => ({ source: "library" as const, ...m }));
+  if (fromHome.length > 0) {
+    return fromHome.map((m) => ({ source: "library" as const, ...m }));
   }
 
   // ── Fresh generation ───────────────────────────────────────────────────────
@@ -1150,7 +1268,10 @@ async function candidatesFromSpecInner(
   // better than a generated one at "good" quality — trust signal.
   const hasExcellent = generated.some((g) => g.quality_tier === "excellent");
   if (!hasExcellent && generated.length > 0) {
-    const libraryFallbacks = await matchLibraryRoutes(spec, 2).catch((e) => { console.error("[library] fallback match failed:", e instanceof Error ? e.message : e); return []; });
+    const libraryFallbacks = await ridesFromHome(
+      await matchLibraryRoutes(spec, 2).catch((e) => { console.error("[library] fallback match failed:", e instanceof Error ? e.message : e); return []; }),
+      spec
+    );
     if (libraryFallbacks.length > 0) {
       return [
         ...libraryFallbacks.map((m) => ({ source: "library" as const, ...m })),

@@ -136,6 +136,15 @@ async function runMigrations() {
   await sql`ALTER TABLE routes ADD COLUMN IF NOT EXISTS quality_breakdown JSONB`;
   await sql`ALTER TABLE routes ADD COLUMN IF NOT EXISTS quality_surface JSONB`;
   await sql`ALTER TABLE routes ADD COLUMN IF NOT EXISTS road_report JSONB`;
+  // Persisted scenery lookups (coast/water/forest/POIs per map area) so
+  // repeat generations skip the slow public map query across instances.
+  await sql`
+    CREATE TABLE IF NOT EXISTS scenery_cache (
+      key TEXT PRIMARY KEY,
+      payload JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
   await sql`ALTER TABLE routes ADD COLUMN IF NOT EXISTS quality_scored_at TIMESTAMPTZ`;
   // Signup attribution (first-touch): which channel a rider came from.
   await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_source TEXT`;
@@ -1844,3 +1853,36 @@ export async function updateRouteElevation(
     WHERE id = ${id}
   `;
 }
+
+// ── Scenery cache ─────────────────────────────────────────────────────────────
+
+const SCENERY_CACHE_TTL_DAYS = 45;
+
+/** Cached scenery payload for a map area, or null (miss, stale, or DB down). */
+export async function getSceneryCache(key: string): Promise<unknown | null> {
+  try {
+    await migrateDb();
+    const { rows } = await sql`
+      SELECT payload FROM scenery_cache
+      WHERE key = ${key} AND created_at > NOW() - (${SCENERY_CACHE_TTL_DAYS} || ' days')::interval
+    `;
+    return rows[0]?.payload ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Store a scenery payload (fire-and-forget safe; never throws). */
+export async function setSceneryCache(key: string, payload: unknown): Promise<void> {
+  try {
+    await migrateDb();
+    await sql`
+      INSERT INTO scenery_cache (key, payload, created_at)
+      VALUES (${key}, ${JSON.stringify(payload)}::jsonb, NOW())
+      ON CONFLICT (key) DO UPDATE SET payload = EXCLUDED.payload, created_at = NOW()
+    `;
+  } catch (err) {
+    console.error("[db] setSceneryCache failed:", err instanceof Error ? err.message : err);
+  }
+}
+

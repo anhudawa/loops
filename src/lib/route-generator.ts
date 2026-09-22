@@ -24,7 +24,11 @@ import {
   DIRECTIONS_WIDE,
 } from "./route-waypoint-generator";
 import { validateRouteRules, repairSpurs } from "./route-rules";
-import { scoreRoute, prefetchScenic, bboxOf, unionBbox } from "./route-quality";
+import { scoreRoute, prefetchScenic, bboxOf, unionBbox, setSceneryStore } from "./route-quality";
+import { getSceneryCache, setSceneryCache } from "./db";
+
+// Persist scenery lookups in Postgres (server only; fail-soft without a DB).
+setSceneryStore({ get: getSceneryCache, set: setSceneryCache });
 import {
   parseBRouterMessages,
   remapEdgeTags,

@@ -365,6 +365,84 @@ out skel qt;
   return elements;
 }
 
+// ── Persisted scenery store (injected by the server-side caller) ─────────────
+
+export interface SceneryStore {
+  get(key: string): Promise<unknown | null>;
+  set(key: string, payload: unknown): Promise<void>;
+}
+let sceneryStore: SceneryStore | null = null;
+/** Wire a persistent store (Postgres) — done by route-generator on the server. */
+export function setSceneryStore(store: SceneryStore | null): void {
+  sceneryStore = store;
+}
+
+/**
+ * Compact form of a scenery download: only the tags the scorers read, way
+ * outlines simplified to ~40 m, coordinates to 1e-5°. Roughly 10× smaller
+ * than the raw elements and expands back to the same OsmElement shape.
+ */
+interface CompactScenery {
+  v: 1;
+  ways: Array<{ t: Record<string, string>; c: Array<[number, number]> }>;
+  nodes: Array<{ t: Record<string, string>; la: number; lo: number }>;
+}
+const SCENERY_TAG_KEYS = ["natural", "waterway", "landuse", "leisure", "tourism", "amenity", "historic"];
+
+function pickTags(tags: Record<string, string> | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!tags) return out;
+  for (const k of SCENERY_TAG_KEYS) if (tags[k] !== undefined) out[k] = tags[k];
+  return out;
+}
+
+export function compactScenery(elements: OsmElement[]): CompactScenery {
+  const nodeMap = buildNodeMap(elements);
+  const ways: CompactScenery["ways"] = [];
+  const nodes: CompactScenery["nodes"] = [];
+  for (const el of elements) {
+    if (el.type === "way" && el.nodes && el.tags) {
+      const t = pickTags(el.tags);
+      if (Object.keys(t).length === 0) continue;
+      const c: Array<[number, number]> = [];
+      let last: [number, number] | null = null;
+      for (const id of el.nodes) {
+        const n = nodeMap[id];
+        if (!n) continue;
+        const pt: [number, number] = [Math.round(n.lat * 1e5) / 1e5, Math.round(n.lon * 1e5) / 1e5];
+        if (last && haversineKm(last, pt) < 0.04) continue; // ~40 m radial simplification
+        c.push(pt);
+        last = pt;
+      }
+      if (c.length >= 2) ways.push({ t, c });
+    } else if (el.type === "node" && el.tags && el.lat !== undefined && el.lon !== undefined) {
+      const t = pickTags(el.tags);
+      if (Object.keys(t).length === 0) continue;
+      nodes.push({ t, la: Math.round(el.lat * 1e5) / 1e5, lo: Math.round(el.lon * 1e5) / 1e5 });
+    }
+  }
+  return { v: 1, ways, nodes };
+}
+
+export function expandScenery(c: CompactScenery): OsmElement[] {
+  const out: OsmElement[] = [];
+  let nextId = -1;
+  for (const w of c.ways) {
+    const ids: number[] = [];
+    for (const [la, lo] of w.c) {
+      out.push({ type: "node", id: nextId, lat: la, lon: lo });
+      ids.push(nextId--);
+    }
+    out.push({ type: "way", id: nextId--, nodes: ids, tags: w.t });
+  }
+  for (const n of c.nodes) out.push({ type: "node", id: nextId--, lat: n.la, lon: n.lo, tags: n.t });
+  return out;
+}
+
+function isCompactScenery(x: unknown): x is CompactScenery {
+  return !!x && typeof x === "object" && (x as { v?: unknown }).v === 1 && Array.isArray((x as { ways?: unknown }).ways) && Array.isArray((x as { nodes?: unknown }).nodes);
+}
+
 /**
  * Scenery-only query: water, coast, forest, peaks and POIs — NO roads. Used
  * when the routing engine has already told us every road on the track
@@ -376,6 +454,17 @@ async function queryOverpassScenic(rawBbox: BoundingBox): Promise<OsmElement[]> 
   const key = `scenic:${getCacheKey(bbox)}`;
   const cached = osmCache.get(key);
   if (cached && cached.expires > Date.now()) return cached.elements;
+
+  // Persistent store (survives serverless instances): repeat areas skip the
+  // public map query entirely.
+  if (sceneryStore) {
+    const stored = await sceneryStore.get(key);
+    if (isCompactScenery(stored)) {
+      const elements = expandScenery(stored);
+      osmCache.set(key, { elements, expires: Date.now() + CACHE_TTL_MS });
+      return elements;
+    }
+  }
 
   const { minLat, minLng, maxLat, maxLng } = bbox;
   const b = `${minLat},${minLng},${maxLat},${maxLng}`;
@@ -408,6 +497,7 @@ out skel qt;
   const json = await resp.json() as { elements: OsmElement[] };
   const elements = json.elements ?? [];
   osmCache.set(key, { elements, expires: Date.now() + CACHE_TTL_MS });
+  if (sceneryStore) void sceneryStore.set(key, compactScenery(elements));
   return elements;
 }
 

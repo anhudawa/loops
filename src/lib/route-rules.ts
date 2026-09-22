@@ -504,6 +504,45 @@ export interface SpurReport {
   accessKm: number;
 }
 
+/**
+ * Spatial grid over a point list so "which points lie within `nearKm` of
+ * this one" is a lookup of the 9 surrounding cells, not a scan of every
+ * point. The spur detector and repair were O(n²) over every coordinate — a
+ * 100 km loop has ~4 000 points and the loop-shaping code runs them dozens
+ * of times per candidate, which alone pushed requests past the timeout.
+ */
+class PointGrid {
+  private cells = new Map<string, number[]>();
+  private readonly cellDeg: number;
+  private readonly lngScale: number;
+  constructor(private pts: [number, number][], nearKm: number) {
+    // Cell edge ≥ nearKm in both axes (lat degrees; lng shrinks with cos φ).
+    const midLat = pts.length ? pts[Math.floor(pts.length / 2)][0] : 53;
+    this.lngScale = Math.max(0.2, Math.cos((midLat * Math.PI) / 180));
+    this.cellDeg = nearKm / 111.32;
+    for (let i = 0; i < pts.length; i++) {
+      const key = this.key(pts[i]);
+      let b = this.cells.get(key);
+      if (!b) { b = []; this.cells.set(key, b); }
+      b.push(i);
+    }
+  }
+  private key(p: [number, number]): string {
+    return `${Math.floor(p[0] / this.cellDeg)}:${Math.floor((p[1] * this.lngScale) / this.cellDeg)}`;
+  }
+  /** Indices of points in the 9 cells around `p` (superset of the true neighbours). */
+  near(p: [number, number]): number[] {
+    const a = Math.floor(p[0] / this.cellDeg);
+    const b = Math.floor((p[1] * this.lngScale) / this.cellDeg);
+    const out: number[] = [];
+    for (let da = -1; da <= 1; da++) for (let db = -1; db <= 1; db++) {
+      const bucket = this.cells.get(`${a + da}:${b + db}`);
+      if (bucket) for (const i of bucket) out.push(i);
+    }
+    return out;
+  }
+}
+
 export function findLongestSpur(coords: [number, number][]): SpurReport | null {
   if (coords.length < 10) return null;
   const s = sampleCoords(coords, SPUR_SAMPLE_M);
@@ -511,12 +550,16 @@ export function findLongestSpur(coords: [number, number][]): SpurReport | null {
   if (n < SPUR_GAP_PTS * 4) return null;
   const accessPts = Math.round((ACCESS_ZONE_KM * 1000) / SPUR_SAMPLE_M);
 
-  // For each sampled point, the earlier point it retraces (if any).
+  // For each sampled point, the EARLIEST earlier point it retraces (if any).
+  const grid = new PointGrid(s, SPUR_NEAR_KM);
   const match = new Array<number>(n).fill(-1);
   for (let i = SPUR_GAP_PTS; i < n; i++) {
-    for (let j = 0; j <= i - SPUR_GAP_PTS; j++) {
-      if (haversineKm(s[i], s[j]) < SPUR_NEAR_KM) { match[i] = j; break; }
+    let best = -1;
+    for (const j of grid.near(s[i])) {
+      if (j > i - SPUR_GAP_PTS) continue;
+      if ((best < 0 || j < best) && haversineKm(s[i], s[j]) < SPUR_NEAR_KM) best = j;
     }
+    match[i] = best;
   }
 
   // Walk contiguous retraced runs and classify each: an ACCESS retrace has all
@@ -561,15 +604,17 @@ export function repairSpurs(coords: [number, number][]): { coords: [number, numb
   const keep: number[] = [];
   let removedKm = 0;
   let i = 0;
+  const grid = new PointGrid(coords, NEAR);
   while (i < n) {
     out.push(coords[i]);
     keep.push(i);
     // look ahead for the FURTHEST later point that returns to within NEAR of coords[i]
     // with a meaningful excursion in between — that's an out-and-back finger.
     let j = -1;
-    for (let k = n - 1; k > i + 1; k--) {
-      if (cum[k] - cum[i] < MIN_EXCURSION_KM) break;
-      if (haversineKm(coords[i], coords[k]) < NEAR) { j = k; break; }
+    for (const k of grid.near(coords[i])) {
+      if (k <= i + 1 || k <= j) continue;
+      if (cum[k] - cum[i] < MIN_EXCURSION_KM) continue;
+      if (haversineKm(coords[i], coords[k]) < NEAR) j = k;
     }
     if (j > 0) {
       // Skip if this is the start/finish access retrace (keep + report elsewhere).

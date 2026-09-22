@@ -311,11 +311,12 @@ function extractAnchorPoints(
 function buildWaypointSet(
   spec: RouteSpec,
   direction: { name: string; bearingDeg: number },
-  anchors: AnchorPoint[]
+  anchors: AnchorPoint[],
+  radiusScale = 1
 ): [number, number][] {
   const [startLat, startLon] = spec.start_point;
 
-  const radiusKm = spec.distance_km / LOOP_PERIMETER_FACTOR;
+  const radiusKm = (spec.distance_km / LOOP_PERIMETER_FACTOR) * radiusScale;
 
   // Furthest point in the chosen direction
   const [fpLat, fpLon] = destinationPoint(
@@ -432,6 +433,12 @@ export interface WaypointSetOptions {
   exactDirections?: boolean;
   /** Bearings already tried (degrees); a second pass avoids ±30° of these. */
   excludeBearings?: number[];
+  /**
+   * Multiplier on the loop radius. 1 = the Irish calibration (roads add ~30%
+   * over straight lines). The generator measures the local road factor with
+   * two probe legs and passes e.g. 0.8 where roads wind more (Girona).
+   */
+  radiusScale?: number;
 }
 
 /**
@@ -448,7 +455,8 @@ export async function generateWaypointSets(
 ): Promise<Array<[number, number][]>> {
   const directions = options.directions ?? DIRECTIONS;
   const [startLat, startLon] = spec.start_point;
-  const radiusKm = spec.distance_km / LOOP_PERIMETER_FACTOR;
+  const radiusScale = options.radiusScale ?? 1;
+  const radiusKm = (spec.distance_km / LOOP_PERIMETER_FACTOR) * radiusScale;
 
   // Anchors = bundled populated places (villages, towns) around the start.
   // Local, instant, deterministic: no external lookup in the critical path.
@@ -491,7 +499,7 @@ export async function generateWaypointSets(
       : directions; // sparse anchor data — fall back to the fixed compass
 
   // Generate one waypoint set per direction
-  return chosen.map((direction) => buildWaypointSet(spec, direction, anchors));
+  return chosen.map((direction) => buildWaypointSet(spec, direction, anchors, radiusScale));
 }
 
 /**

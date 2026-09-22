@@ -573,7 +573,14 @@ async function routeLoopCandidate(
   if (!first) first = await routeWithFallback(waypoints, profile);
   if (!first) return null;
 
-  const lossOf = (p: RoutedPath) => repairSpurs(p.coords).removedKm;
+  // Memoised per path: repair is the most expensive step and the loop-shaping
+  // code asks for the same path's loss many times.
+  const lossCache = new WeakMap<RoutedPath, number>();
+  const lossOf = (p: RoutedPath) => {
+    let v = lossCache.get(p);
+    if (v === undefined) { v = repairSpurs(p.coords).removedKm; lossCache.set(p, v); }
+    return v;
+  };
   // A strict result that is wildly over the requested distance, or mostly
   // retrace, is the engine detouring around a fragmented quiet-lane network
   // (Girona: 137–204 km for an 80 km ask, 37–80 km of it retraced). That is
@@ -1635,13 +1642,46 @@ async function generateFreshWorkoutRoutes(
   return candidates.slice(0, 3);
 }
 
+/** Irish calibration baked into the waypoint radius (roads add ~30%). */
+const CALIBRATED_ROAD_FACTOR = 1.3;
+
+/**
+ * How much longer roads are than straight lines around this start. Two
+ * probe legs (opposite bearings, ~70% of the loop radius) on the strict
+ * profile; a leg into the sea or an island simply drops out. Mediterranean
+ * hill country runs 1.6–1.8 against Ireland's 1.3, which is why Banyoles
+ * loops came back 104 km for an 80 km ask before this.
+ */
+async function measureRoadFactor(start: [number, number], radiusKm: number, profile: string): Promise<number> {
+  // Probe on the relaxed profile where there is one: a single strict leg
+  // detours far more than a whole loop does (2.2× measured at Banyoles
+  // against ~1.3× for the loops themselves), which over-corrected.
+  const probeProfile = RELAXED_PROFILE[profile] ?? profile;
+  const factors: number[] = [];
+  for (const bearing of [45, 225]) {
+    const target = destination(start, bearing, radiusKm * 0.7);
+    const straight = haversineKm(start[0], start[1], target[0], target[1]);
+    const leg = await routeViaBRouter([start, target], probeProfile);
+    if (leg && leg.coords.length >= 2 && straight > 1) factors.push(leg.distance_km / straight);
+  }
+  if (factors.length === 0) return CALIBRATED_ROAD_FACTOR;
+  const mean = factors.reduce((a, b) => a + b, 0) / factors.length;
+  return Math.max(1.15, Math.min(2.0, mean));
+}
+
 async function generateFreshRoutes(
   spec: RouteSpec,
   windForecast: WindForecast | null = null
 ): Promise<GeneratedRoute[]> {
   const profile = DISCIPLINE_PROFILE[spec.discipline];
 
-  const waypointSets = await generateWaypointSets(spec);
+  // Size the loop for THIS road network before placing waypoints.
+  const baseRadiusKm = spec.distance_km / 3.0;
+  const roadFactor = await measureRoadFactor(spec.start_point, baseRadiusKm, profile);
+  // Only ever shrink: the Irish calibration is the ceiling.
+  const radiusScale = Math.max(0.7, Math.min(1.0, CALIBRATED_ROAD_FACTOR / roadFactor));
+  genDebug(`road factor ${roadFactor.toFixed(2)} → radius ×${radiusScale.toFixed(2)}`);
+  const waypointSets = await generateWaypointSets(spec, { radiusScale });
   markPhase("waypoints");
 
   // Kick off the scenery lookup NOW, for the whole search area, so it runs
@@ -1912,7 +1952,7 @@ async function generateFreshRoutes(
     // there = roads out there). Falls back to the plain compass only where
     // the anchor data is sparse. Directions already tried are excluded.
     const compassExtra = DIRECTIONS_WIDE.filter((d) => usedBearings.every((u) => angDiff(d.bearingDeg, u) >= 30)).slice(0, 4);
-    const more = await generateWaypointSets(spec, { directions: compassExtra, excludeBearings: usedBearings });
+    const more = await generateWaypointSets(spec, { directions: compassExtra, excludeBearings: usedBearings, radiusScale });
     const fresh = more.filter((ws) => {
       let far = ws[1], farD = -1;
       for (const w of ws.slice(1, -1)) { const d = haversineKm(start[0], start[1], w[0], w[1]); if (d > farD) { farD = d; far = w; } }

@@ -413,7 +413,7 @@ function checkConnectivity(coords: [number, number][]): RuleViolation | null {
   // have consecutive points 0.5-1 km apart (Spanish straights tripped 500 m on
   // 3-4 of 5 candidates). A genuinely broken route jumps kilometres, so the
   // threshold is a real disconnect, not node spacing.
-  const GAP_THRESHOLD_KM = 1.5;
+  const GAP_THRESHOLD_KM = 3.0; // long straight roads carry sparse nodes (2.4 km seen on Tenerife primaries)
   for (let i = 1; i < coords.length; i++) {
     const d = haversineKm(coords[i - 1], coords[i]);
     if (d > GAP_THRESHOLD_KM) {
@@ -543,12 +543,49 @@ class PointGrid {
   }
 }
 
+/**
+ * Owner rule (2026-09-22): "If it's a road to go get to the loop it's
+ * fine." A lollipop — ride out along a stem, ride a loop, come home the
+ * same stem — is a legitimate route. Returns the stem length in km: the
+ * longest stretch at the START that the FINISH retraces in mirror order
+ * (as the finish walks back, it matches ever-earlier start points).
+ * Capped so a real loop remains: the loop part must be ≥ 25 % of the ride,
+ * otherwise it is an out-and-back, not a lollipop.
+ */
+export function stemLengthKm(coords: [number, number][]): number {
+  if (coords.length < 10) return 0;
+  const s = sampleCoords(coords, SPUR_SAMPLE_M);
+  const n = s.length;
+  if (n < SPUR_GAP_PTS * 4) return 0;
+  const grid = new PointGrid(s, SPUR_NEAR_KM);
+  const SLACK = 12;      // sample points (~0.5 km) of misalignment tolerated
+  const MAX_GAP = 3;     // unmatched samples tolerated inside the stem
+  let gaps = 0;
+  let stemPts = 0;
+  for (let k = 0; k < n / 2; k++) {
+    const i = n - 1 - k; // walking back from the finish
+    let ok = false;
+    for (const j of grid.near(s[i])) {
+      if (j < i - SPUR_GAP_PTS && j <= k + SLACK && j >= k - SLACK && haversineKm(s[i], s[j]) < SPUR_NEAR_KM) { ok = true; break; }
+    }
+    if (ok) { stemPts = k + 1; gaps = 0; }
+    else if (++gaps > MAX_GAP) break;
+  }
+  let stemKm = 0;
+  for (let k = 1; k < Math.min(stemPts, n); k++) stemKm += haversineKm(s[k - 1], s[k]);
+  let totalKm = 0;
+  for (let k = 1; k < n; k++) totalKm += haversineKm(s[k - 1], s[k]);
+  if (totalKm - 2 * stemKm < totalKm * 0.25) return 0; // no real loop → out-and-back
+  return stemKm;
+}
+
 export function findLongestSpur(coords: [number, number][]): SpurReport | null {
   if (coords.length < 10) return null;
   const s = sampleCoords(coords, SPUR_SAMPLE_M);
   const n = s.length;
   if (n < SPUR_GAP_PTS * 4) return null;
-  const accessPts = Math.round((ACCESS_ZONE_KM * 1000) / SPUR_SAMPLE_M);
+  const accessKmZone = Math.max(ACCESS_ZONE_KM, stemLengthKm(coords) + 0.5);
+  const accessPts = Math.round((accessKmZone * 1000) / SPUR_SAMPLE_M);
 
   // For each sampled point, the EARLIEST earlier point it retraces (if any).
   const grid = new PointGrid(s, SPUR_NEAR_KM);
@@ -596,6 +633,9 @@ export function repairSpurs(coords: [number, number][]): { coords: [number, numb
   const NEAR = SPUR_NEAR_KM;
   const MIN_EXCURSION_KM = 0.15;   // ignore tiny wiggles
   const accessPts = Math.round((ACCESS_ZONE_KM * 1000) / SPUR_SAMPLE_M);
+  // The stem to a loop (lollipop) is access, however long, as long as a
+  // real loop remains at its end.
+  const accessZoneKm = Math.max(ACCESS_ZONE_KM, stemLengthKm(coords) + 0.5);
   // cumulative distance for zone tests
   const cum: number[] = [0];
   for (let i = 1; i < n; i++) cum.push(cum[i - 1] + haversineKm(coords[i - 1], coords[i]));
@@ -618,7 +658,7 @@ export function repairSpurs(coords: [number, number][]): { coords: [number, numb
     }
     if (j > 0) {
       // Skip if this is the start/finish access retrace (keep + report elsewhere).
-      const isAccess = cum[i] < ACCESS_ZONE_KM && (total - cum[j]) < ACCESS_ZONE_KM;
+      const isAccess = cum[i] < accessZoneKm && (total - cum[j]) < accessZoneKm;
       // Only treat as a spur if the excursion really retraces itself: its
       // midpoint must be far from both ends (a genuine finger), and it must
       // not be most of the loop (a loop closing on itself is not a spur).

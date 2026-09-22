@@ -84,6 +84,15 @@ to find a loop that meets the standard outright; only if the strict profile
 finds no route at all does it try `loops-road-relaxed`, whose result is
 measured exactly the same way.
 
+**Owner rules, 2026-09-22 (verbatim intent):** every route starts from
+home. "If it's a road to go get to the loop it's fine" — a stem out to a
+loop and back along it (a lollipop) is allowed, as long as a real loop
+(≥ 25 % of the ride) remains; a mid-ride U-turn is still a spur. "It
+becomes its own loop, like a derivative loop" — ride out + verified loop +
+ride back is served as a NEW loop from your start, built on the verified
+one, and sized to the ask: when the full loop would overshoot, only part
+of it is ridden before turning for home.
+
 **Access retrace.** A shared out/back stretch within the first and last
 6 km (a causeway, a peninsula, the one quiet road out of a city) is allowed
 and reported as `ACCESS_RETRACE`. A mid-route out-and-back over 400 m is a

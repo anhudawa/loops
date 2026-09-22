@@ -1012,7 +1012,7 @@ function CandidateCard({
               <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
                 {isLibrary
                   ? candidate.from_home
-                    ? `${candidate.county} · verified loop · ${candidate.approach_km} km each way from your start`
+                    ? `${candidate.county} · new loop from your start, built on this verified route`
                     : `${candidate.county} · verified`
                   : "Freshly generated"}
               </p>

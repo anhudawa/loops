@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { findLongestSpur, validateRouteRules, repairSpurs } from "@/lib/route-rules";
+import { findLongestSpur, validateRouteRules, repairSpurs, stemLengthKm } from "@/lib/route-rules";
 
 // ── Synthetic geometry helpers (≈ 53.5°N: 1 km ≈ 0.009° lat, ≈ 0.0151° lng) ──
 const KM_LAT = 0.009;
@@ -165,3 +165,43 @@ describe("repairSpurs", () => {
     expect(r.removedKm).toBeLessThan(0.2);
   });
 });
+
+/** Lollipop: a 12 km stem north to a 5×5 km loop and back down the stem. */
+function lollipop(stemKm = 12): P[] {
+  const home: P = [53.3, -6.1];
+  const stem = walk(home, 1, 0, stemKm);
+  const junction = stem[stem.length - 1];
+  let pts: P[] = [home, ...stem];
+  let cur = junction;
+  for (const [dlat, dlng] of [[1, 0], [0, 1], [-1, 0], [0, -1]] as const) {
+    const seg = walk(cur, dlat, dlng, 5);
+    pts = pts.concat(seg);
+    cur = seg[seg.length - 1];
+  }
+  return pts.concat([...stem].reverse().slice(1), [home]);
+}
+
+describe("lollipop (owner rule: a road out to a loop and back is fine)", () => {
+  it("measures the stem", () => {
+    const k = stemLengthKm(lollipop(12));
+    expect(k).toBeGreaterThan(11);
+    expect(k).toBeLessThan(13);
+    expect(stemLengthKm(cleanLoop())).toBeLessThan(0.5);
+  });
+  it("serves a 12 km stem to a loop (no SPUR_UTURN), and repair keeps the loop", () => {
+    const r = validateRouteRules(lollipop(12), "road", null, { elevationGain: 0, distanceKm: 44, rejectSpurs: true });
+    expect(r.violations.find((v) => v.rule === "SPUR_UTURN")).toBeUndefined();
+    expect(repairSpurs(lollipop(12)).removedKm).toBeLessThan(0.3);
+  });
+  it("a pure out-and-back is not a lollipop", () => {
+    const home: P = [53.3, -6.1];
+    const out = walk(home, 1, 0, 15);
+    const ob = [home, ...out, ...[...out].reverse().slice(1), home];
+    expect(stemLengthKm(ob)).toBe(0);
+  });
+  it("a mid-route finger is still a spur", () => {
+    const r = validateRouteRules(spurLoop(), "road", null, { elevationGain: 0, distanceKm: 20, rejectSpurs: true });
+    expect(r.violations.find((v) => v.rule === "SPUR_UTURN")).toBeDefined();
+  });
+});
+

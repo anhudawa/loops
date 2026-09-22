@@ -690,9 +690,19 @@ async function routeLoopCandidate(
   const runAttempt = async (wps: [number, number][]): Promise<RoutedPath | null> => {
     const outPath = await routeViaBRouter(wps.slice(0, farIdx + 1), usedProfile);
     if (!outPath || outPath.coords.length < 2) return null;
-    const nogo = nogoPolyline(outPath.coords, 2.0, 0.3);
+    // Keep the no-go 1.5 km clear of the turning point: the engine snaps a
+    // waypoint away from no-go roads, and with the no-go touching the far
+    // point the return leg started on a different road up to 9 km away —
+    // then the two legs were joined across the gap.
+    const nogo = nogoPolyline(outPath.coords, 2.0, 1.5);
     const backPath = await routeViaBRouter(wps.slice(farIdx), usedProfile, false, nogo);
     if (!backPath || backPath.coords.length < 2) return null;
+    const outEnd = outPath.coords[outPath.coords.length - 1];
+    const backStart = backPath.coords[0];
+    if (haversineKm(outEnd[0], outEnd[1], backStart[0], backStart[1]) > 0.1) {
+      genDebug("loop-aware attempt rejected: return leg did not start where the outbound ended");
+      return null;
+    }
     return joinPaths(outPath, backPath);
   };
   const [firstAttempt, ...movedAttempts] = attempts;
@@ -1162,20 +1172,67 @@ async function rideFromHome(match: LibraryMatch, spec: RouteSpec): Promise<Libra
     genDebug(`library loop "${match.name}" dropped: no ride out from home (${getLastBRouterFailure()})`);
     return why(`no ride out (${getLastBRouterFailure().slice(0, 40)})`);
   }
-  const nogo = nogoPolyline(approach.coords, 0.5, 0.5);
-  const back =
-    (await routeViaBRouter([loopEnd, home], profile, false, nogo)) ??
-    (await routeWithFallback([loopEnd, home], profile));
+  const nogo = nogoPolyline(approach.coords, 0.5, 1.5);
+  // Return with the approach as a no-go (a different road home where one
+  // exists) — but only if the engine starts the leg where we are; if the
+  // no-go pushed its snap elsewhere, route without it.
+  const routeHome = async (from: [number, number]) => {
+    const p = await routeViaBRouter([from, home], profile, false, nogo);
+    if (p && p.coords.length >= 2 && haversineKm(p.coords[0][0], p.coords[0][1], from[0], from[1]) <= 0.3) return p;
+    return routeWithFallback([from, home], profile);
+  };
+
+  // Owner rule (2026-09-22): the ride out + verified loop + ride back is
+  // "essentially a new loop", sized to the ask. The full loop is used when
+  // it fits; when it overshoots (a 60 km loop 20 km away is 100 km for an
+  // 80 km ask) we ride only part of the loop and turn for home early.
+  const loopCum: number[] = [0];
+  for (let i = 1; i < loopCoords.length; i++) {
+    loopCum.push(loopCum[i - 1] + haversineKm(loopCoords[i - 1][0], loopCoords[i - 1][1], loopCoords[i][0], loopCoords[i][1]));
+  }
+  const loopLen = loopCum[loopCum.length - 1] || match.distance_km;
+  const allowance = Math.max(8, spec.distance_km * 0.35);
+  const tolerance = Math.max(5, spec.distance_km * 0.1);
+
+  let cut = loopCoords.length - 1; // index where we leave the loop
+  let back = await routeHome(loopEnd);
   if (!back || back.coords.length < 2) {
     genDebug(`library loop "${match.name}" dropped: no ride home (${getLastBRouterFailure()})`);
     return why(`no ride home (${getLastBRouterFailure().slice(0, 40)})`);
   }
+  let totalKm = approach.distance_km + loopLen + back.distance_km;
 
-  const totalKm = approach.distance_km + match.distance_km + back.distance_km;
-  const allowance = Math.max(8, spec.distance_km * 0.35);
+  if (totalKm > spec.distance_km + tolerance) {
+    // Pick the exit point along the loop whose estimated total lands on the
+    // ask (return estimated at 1.3× the straight line), then route it.
+    let bestIdx = -1, bestErr = Infinity;
+    for (let i = Math.floor(loopCoords.length * 0.25); i < loopCoords.length - 1; i += Math.max(1, Math.floor(loopCoords.length / 60))) {
+      const est = approach.distance_km + loopCum[i] + 1.3 * haversineKm(loopCoords[i][0], loopCoords[i][1], home[0], home[1]);
+      const err = Math.abs(est - spec.distance_km);
+      if (err < bestErr) { bestErr = err; bestIdx = i; }
+    }
+    if (bestIdx > 0) {
+      const partBack = await routeHome(loopCoords[bestIdx]);
+      if (partBack && partBack.coords.length >= 2) {
+        const partTotal = approach.distance_km + loopCum[bestIdx] + partBack.distance_km;
+        if (Math.abs(partTotal - spec.distance_km) < Math.abs(totalKm - spec.distance_km)) {
+          genDebug(`library loop "${match.name}": riding ${loopCum[bestIdx].toFixed(0)} of ${loopLen.toFixed(0)} km of the loop → ${partTotal.toFixed(0)} km from home`);
+          cut = bestIdx;
+          back = partBack;
+          totalKm = partTotal;
+        }
+      }
+    }
+  }
+
   if (Math.abs(totalKm - spec.distance_km) > allowance) {
     genDebug(`library loop "${match.name}" dropped: ${totalKm.toFixed(0)} km from home for a ${spec.distance_km} km ask`);
     return why(`${totalKm.toFixed(0)}km total`);
+  }
+  const loopUsedKm = Math.round(loopCum[cut] * 10) / 10;
+  if (cut < loopCoords.length - 1) {
+    loopCoords = loopCoords.slice(0, cut + 1);
+    loopEle = loopEle ? loopEle.slice(0, cut + 1) : undefined;
   }
 
   // Stitch: approach → loop → back (drop duplicated junction points).
@@ -1198,20 +1255,33 @@ async function rideFromHome(match: LibraryMatch, spec: RouteSpec): Promise<Libra
   // Loop edges carry no tags → "unknown", never a compromise; only the
   // engine-routed legs are judged.
   const report = buildRoadReport(coords, edgeTags, spec.discipline);
-  const legsKm = approach.distance_km + back.distance_km;
-  if (!compromiseAcceptable(report, legsKm)) {
+  if (!compromiseAcceptable(report, totalKm)) {
     genDebug(`library loop "${match.name}" dropped: ride out/back fails the road standard — ${report.summary}`);
     return why(`legs fail standard: ${report.summary.slice(0, 60)}`);
   }
   if (!report.standard_met) await nameCompromises(coords, report.compromises);
+  const partial = loopUsedKm < loopLen - 0.5;
+  const built = `New loop from your start: ${Math.round(approach.distance_km)} km out, ${partial ? `${Math.round(loopUsedKm)} km of the ${Math.round(loopLen)} km verified loop` : "the full verified loop"}, ${Math.round(back.distance_km)} km home.`;
   report.summary = report.standard_met
-    ? `Verified loop; the ${Math.round(legsKm)} km out and back from your start meet the Loops road standard.`
-    : `Ride out/back compromise: ${report.compromises.slice(0, 2).map(describeCompromise).join("; ")}.`;
+    ? `${built} Out and home meet the Loops road standard.`
+    : `${built} Compromise: ${report.compromises.slice(0, 2).map(describeCompromise).join("; ")}.`;
 
   const approachGain = (approach.elevation_gain_m ?? elevationGainFromSeries(approach.elevations)) || 0;
   const backGain = (back.elevation_gain_m ?? elevationGainFromSeries(back.elevations)) || 0;
-  const gain = Math.round(match.elevation_gain_m + approachGain + backGain);
   const hasAllEle = elevations.every((e) => !Number.isNaN(e));
+  // Climbing of the ride actually served: from the stitched series when the
+  // stored loop has elevations, else the loop's share (by distance) + legs.
+  const share = loopLen > 0 ? loopUsedKm / loopLen : 1;
+  let gain: number, loss: number;
+  if (hasAllEle) {
+    gain = Math.round(elevationGainFromSeries(elevations) ?? 0);
+    let l = 0;
+    for (let i = 1; i < elevations.length; i++) { const d = elevations[i] - elevations[i - 1]; if (d < 0) l -= d; }
+    loss = Math.round(l);
+  } else {
+    gain = Math.round(match.elevation_gain_m * share + approachGain + backGain);
+    loss = Math.round(match.elevation_loss_m * share + approachGain + backGain);
+  }
   const distanceKm = Math.round(totalKm * 10) / 10;
 
   return {
@@ -1220,14 +1290,14 @@ async function rideFromHome(match: LibraryMatch, spec: RouteSpec): Promise<Libra
     elevations: hasAllEle ? elevations : undefined,
     distance_km: distanceKm,
     elevation_gain_m: gain,
-    elevation_loss_m: Math.round(match.elevation_loss_m + approachGain + backGain), // symmetric out/back
+    elevation_loss_m: loss,
     distance_from_start_km: 0,
     from_home: true,
     approach_km: Math.round(approach.distance_km * 10) / 10,
-    loop_km: match.distance_km,
+    loop_km: loopUsedKm,
     match_score: computeMatchScore(distanceKm, gain, spec, 90),
     road_report: report,
-    gpx_data: buildGpx(coords, hasAllEle ? elevations : null, `${match.name} — from your start`, spec.discipline),
+    gpx_data: buildGpx(coords, hasAllEle ? elevations : null, `New loop from your start via ${match.name}`, spec.discipline),
   };
 }
 

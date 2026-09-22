@@ -1,11 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
-import {
-  insertRoute,
-  getUserBySession,
-  recordEvent,
-  ANALYTICS_EVENTS,
-} from "@/lib/db";
+import { insertRoute, getUserBySession, recordEvent, ANALYTICS_EVENTS, storeRouteQuality, storeRouteRoadReport } from "@/lib/db";
 import { apiError, handleApiError, stripHtml } from "@/lib/api-utils";
 import {
   DISCIPLINES,
@@ -39,6 +34,12 @@ interface Body {
   county?: string;
   country?: string;
   region?: string | null;
+  /** From the generator: persisted so the saved route shows the same
+   *  verdict the rider saw (never re-guessed later). */
+  quality_score?: number;
+  quality_breakdown?: Record<string, number>;
+  surface_breakdown?: { paved_pct: number; unpaved_pct: number; unknown_pct: number };
+  road_report?: { standard_met: boolean; summary: string; compromises: unknown[]; [k: string]: unknown };
 }
 
 export async function POST(request: NextRequest) {
@@ -167,6 +168,32 @@ export async function POST(request: NextRequest) {
       strava_activity_id: null,
       quality_status: "pending",
     });
+
+    // Persist the generator's verdicts with the route. Shape-checked and
+    // size-capped: this is client-supplied JSON.
+    if (typeof body.quality_score === "number" && body.quality_score > 0 && body.quality_score <= 100 &&
+        body.quality_breakdown && typeof body.quality_breakdown === "object" &&
+        JSON.stringify(body.quality_breakdown).length < 2000) {
+      await storeRouteQuality(id, {
+        total: body.quality_score,
+        breakdown: body.quality_breakdown,
+        surface_breakdown: body.surface_breakdown,
+      });
+    }
+    if (body.road_report && typeof body.road_report === "object" &&
+        typeof body.road_report.standard_met === "boolean" &&
+        typeof body.road_report.summary === "string" &&
+        Array.isArray(body.road_report.compromises) &&
+        JSON.stringify(body.road_report).length < 20_000) {
+      await storeRouteRoadReport(id, {
+        standard_met: body.road_report.standard_met,
+        summary: stripHtml(body.road_report.summary).slice(0, 500),
+        compromises: body.road_report.compromises.slice(0, 20),
+        surface: body.road_report.surface ?? null,
+        road_class_pct: body.road_report.road_class_pct ?? null,
+        main_road_pct: body.road_report.main_road_pct ?? null,
+      });
+    }
 
     // Funnel: a generated/drawn route was saved (fire-and-forget, no PII).
     // Separate the draw milestone from a generated save via the description

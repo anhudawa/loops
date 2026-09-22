@@ -153,6 +153,11 @@ async function saveGeneratedRoute(
       discipline,
       country: interpreted?.country,
       region: interpreted?.region,
+      // The verdicts the rider saw — saved with the route, never re-guessed.
+      quality_score: candidate.quality_score,
+      quality_breakdown: candidate.quality_breakdown,
+      surface_breakdown: candidate.surface_breakdown,
+      road_report: candidate.road_report,
     }),
   });
   const body = await res.json().catch(() => ({}));

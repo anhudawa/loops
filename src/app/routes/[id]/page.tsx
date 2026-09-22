@@ -56,6 +56,7 @@ interface Route {
   quality_score?: number | null;
   quality_breakdown?: Record<string, number> | null;
   quality_surface?: SurfaceBreakdown | null;
+  road_report?: { standard_met: boolean; summary: string } | null;
 }
 
 interface RouteQualityData {
@@ -543,6 +544,16 @@ export default function RouteDetail() {
                 {quality.total}/100
               </span>
             </div>
+            {route?.road_report && (
+              <p
+                className="text-xs mt-2 flex items-start gap-1.5"
+                style={{ color: route.road_report.standard_met ? "var(--text-muted)" : "#f5a524" }}
+                data-testid="road-standard"
+              >
+                <span aria-hidden="true">{route.road_report.standard_met ? "✓" : "⚠"}</span>
+                <span>{route.road_report.summary}</span>
+              </p>
+            )}
             {quality.surface_breakdown && <SurfaceSummary breakdown={quality.surface_breakdown} />}
             <QualityFactors breakdown={quality.breakdown} />
           </div>

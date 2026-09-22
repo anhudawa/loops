@@ -135,6 +135,7 @@ async function runMigrations() {
   await sql`ALTER TABLE routes ADD COLUMN IF NOT EXISTS quality_score INT`;
   await sql`ALTER TABLE routes ADD COLUMN IF NOT EXISTS quality_breakdown JSONB`;
   await sql`ALTER TABLE routes ADD COLUMN IF NOT EXISTS quality_surface JSONB`;
+  await sql`ALTER TABLE routes ADD COLUMN IF NOT EXISTS road_report JSONB`;
   await sql`ALTER TABLE routes ADD COLUMN IF NOT EXISTS quality_scored_at TIMESTAMPTZ`;
   // Signup attribution (first-touch): which channel a rider came from.
   await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_source TEXT`;
@@ -437,6 +438,9 @@ export interface Route {
   quality_score?: number | null;
   quality_breakdown?: Record<string, number> | null;
   quality_surface?: { paved_pct: number; unpaved_pct: number; unknown_pct: number } | null;
+  /** Road Standard report saved with a generated/drawn route (trust rule:
+   *  the compromise a rider saw when saving stays on the saved route). */
+  road_report?: Record<string, unknown> | null;
 }
 
 export interface RouteFilters {
@@ -717,6 +721,14 @@ export async function getRoute(id: string): Promise<(Route & { is_verified?: num
 
 /** Persist a verified quality score on a route so the detail page can show it
  *  instantly next time without re-hitting Overpass. Fire-and-safe. */
+export async function storeRouteRoadReport(routeId: string, report: unknown): Promise<void> {
+  try {
+    await sql`UPDATE routes SET road_report = ${JSON.stringify(report)}::jsonb WHERE id = ${routeId}`;
+  } catch (err) {
+    console.error("[db] storeRouteRoadReport failed:", err instanceof Error ? err.message : err);
+  }
+}
+
 export async function storeRouteQuality(
   routeId: string,
   quality: { total: number; breakdown: Record<string, number>; surface_breakdown?: unknown }

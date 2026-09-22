@@ -85,3 +85,4 @@ Net monthly cost unchanged: ~€10.44 + ~€2.09 = **~€12.53** (Phase 1 ceilin
 No other resources created. Verification: `GET /api/engine/status?probe=1`
 on www.loops.ie must report server_version "v3 (relaxed profile present)".
 
+**Verified 2026-09-22:** `GET /api/engine/status?probe=1` → `server_version: "v3 (relaxed profile present)"`, both profiles route a test leg. Token copy shredded; owner asked to revoke it.

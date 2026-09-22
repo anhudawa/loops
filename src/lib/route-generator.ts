@@ -1078,7 +1078,7 @@ async function candidatesFromSpecInner(
   // failure honestly rather than ship a generic route mislabelled as
   // workout-friendly.
   if (spec.workout) {
-    const workoutMatches = await matchLibraryForWorkout(spec, 3).catch(() => []);
+    const workoutMatches = await matchLibraryForWorkout(spec, 3).catch((e) => { console.error("[library] workout match failed:", e instanceof Error ? e.message : e); return []; });
     if (workoutMatches.length > 0) {
       return workoutMatches.map((m) => ({ source: "library" as const, ...m }));
     }
@@ -1097,7 +1097,7 @@ async function candidatesFromSpecInner(
 
   // ── Library-first ──────────────────────────────────────────────────────────
   // Fail soft: a DB outage must never block fresh generation.
-  const libraryMatches = await matchLibraryRoutes(spec, 3).catch(() => []);
+  const libraryMatches = await matchLibraryRoutes(spec, 3).catch((e) => { console.error("[library] match failed:", e instanceof Error ? e.message : e); return []; });
   markPhase("library");
   if (libraryMatches.length > 0) {
     return libraryMatches.map((m) => ({ source: "library" as const, ...m }));
@@ -1112,7 +1112,7 @@ async function candidatesFromSpecInner(
   // better than a generated one at "good" quality — trust signal.
   const hasExcellent = generated.some((g) => g.quality_tier === "excellent");
   if (!hasExcellent && generated.length > 0) {
-    const libraryFallbacks = await matchLibraryRoutes(spec, 2).catch(() => []);
+    const libraryFallbacks = await matchLibraryRoutes(spec, 2).catch((e) => { console.error("[library] fallback match failed:", e instanceof Error ? e.message : e); return []; });
     if (libraryFallbacks.length > 0) {
       return [
         ...libraryFallbacks.map((m) => ({ source: "library" as const, ...m })),

@@ -302,6 +302,7 @@ async function geocodePlace(place: string, countryCode?: string): Promise<Geocod
     format: "json",
     limit: "1",
     addressdetails: "1",
+    "accept-language": "en", // country names in English ("Spain", not "España")
   });
   if (countryCode) params.set("countrycodes", countryCode);
   const url = `https://nominatim.openstreetmap.org/search?${params.toString()}`;

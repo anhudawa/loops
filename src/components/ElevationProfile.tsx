@@ -16,6 +16,8 @@ interface ElevationProfileProps {
   distanceKm: number;
   onPositionChange?: (index: number | null) => void;
   highlightIndex?: number | null;
+  /** Chart height in px (default 200; the map planner passes 120 on phones). */
+  height?: number;
 }
 
 const GRADIENT_LEGEND = [
@@ -32,6 +34,7 @@ export default function ElevationProfile({
   distanceKm,
   onPositionChange,
   highlightIndex,
+  height: chartHeight = 200,
 }: ElevationProfileProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -256,7 +259,7 @@ export default function ElevationProfile({
         <canvas
           ref={canvasRef}
           className="w-full"
-          style={{ height: "200px", cursor: "crosshair", touchAction: "none" }}
+          style={{ height: `${chartHeight}px`, cursor: "crosshair", touchAction: "none" }}
           onMouseMove={handleMouseMove}
           onMouseLeave={handleLeave}
           onTouchStart={(e) => handleTouchMove(e)}

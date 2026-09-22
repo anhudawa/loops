@@ -130,7 +130,10 @@ export default function MapPlanner() {
   const [needsAuth, setNeedsAuth] = useState(false);
   const [resnapNote, setResnapNote] = useState<string | null>(null);
   const [geoCenter, setGeoCenter] = useState<LatLng | null>(null);
-  const [showProfile, setShowProfile] = useState(true);
+  // On a phone the elevation panel + controls left the map as a thin strip
+  // mid-draw, so it starts collapsed there (one tap to open) and is shorter.
+  const compact = typeof window !== "undefined" && window.innerWidth < 768;
+  const [showProfile, setShowProfile] = useState(!compact);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -730,7 +733,7 @@ export default function MapPlanner() {
           </button>
           {showProfile && (
             <div className="px-3 pb-2">
-              <ElevationProfile coordinates={profileCoords} distanceKm={totals.distance_km} />
+              <ElevationProfile coordinates={profileCoords} distanceKm={totals.distance_km} height={compact ? 120 : 200} />
             </div>
           )}
         </div>
@@ -751,7 +754,7 @@ export default function MapPlanner() {
           <span aria-hidden="true">{compromises.length === 0 ? "✓" : "⚠"}</span>
           <span>
             {compromises.length === 0
-              ? "Every leg meets the Loops road standard: no main roads, nothing fast, paved."
+              ? "Every leg meets the Loops road standard."
               : `Compromise: ${compromises.slice(0, 2).map(describeCompromise).join("; ")}${compromises.length > 2 ? ` (+${compromises.length - 2} more)` : ""}.`}
           </span>
         </div>
@@ -762,9 +765,13 @@ export default function MapPlanner() {
         className="px-3 pt-2 pb-3 border-t z-20"
         style={{ background: "var(--bg-raised)", borderColor: "var(--border)" }}
       >
-        <p className="text-[11px] pb-2" style={{ color: "var(--text-muted)" }}>
-          tap the map to add · drag a pin to move · drag the middle of a leg to reshape · tap a pin to remove
-        </p>
+        {/* Gesture hint only until the first point is down — after that it is
+            map space on a phone. */}
+        {allLegs.length === 0 && (
+          <p className="text-[11px] pb-2" style={{ color: "var(--text-muted)" }}>
+            tap the map to add · drag a pin to move · drag the middle of a leg to reshape · tap a pin to remove
+          </p>
+        )}
         <div className="flex flex-wrap items-center gap-2">
           <div
             className="flex rounded-xl overflow-hidden"

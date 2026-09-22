@@ -602,12 +602,18 @@ export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
   if (filters.verified) {
     havingClauses.push("(bool_or(r.verified) = true OR (COUNT(rt.id) >= 3 AND COALESCE(AVG(rt.score), 0) >= 3.0))");
   }
+  // Great-circle distance, with the parameters cast explicitly (a bare $n
+  // inside radians() leaves the driver to guess the type) and the acos
+  // argument clamped to [-1, 1] — floating error on a start point at or
+  // very near the query point pushes it past 1 and acos raises
+  // "input is out of range" for the WHOLE query.
+  const haversineSql = `6371 * acos(LEAST(1::double precision, GREATEST(-1::double precision,
+      cos(radians($${latIdx}::double precision)) * cos(radians(r.start_lat::double precision)) *
+      cos(radians(r.start_lng::double precision) - radians($${lngIdx}::double precision)) +
+      sin(radians($${latIdx}::double precision)) * sin(radians(r.start_lat::double precision))
+    )))`;
   if (hasLocation && filters.maxRadius !== undefined) {
-    havingClauses.push(`(6371 * acos(
-      cos(radians($${latIdx})) * cos(radians(r.start_lat)) *
-      cos(radians(r.start_lng) - radians($${lngIdx})) +
-      sin(radians($${latIdx})) * sin(radians(r.start_lat))
-    )) <= $${idx}`);
+    havingClauses.push(`(${haversineSql}) <= $${idx}::double precision`);
     params.push(filters.maxRadius);
     idx++;
   }
@@ -639,13 +645,7 @@ export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
     orderBy = "avg_rating DESC NULLS LAST, rating_count DESC";
   }
 
-  const haversineExpr = hasLocation
-    ? `6371 * acos(
-        cos(radians($${latIdx})) * cos(radians(r.start_lat)) *
-        cos(radians(r.start_lng) - radians($${lngIdx})) +
-        sin(radians($${latIdx})) * sin(radians(r.start_lat))
-      )`
-    : "NULL::double precision";
+  const haversineExpr = hasLocation ? haversineSql : "NULL::double precision";
 
   const limitVal = (filters.limit ?? 20) + 1; // fetch one extra to check hasMore
   const offsetVal = filters.offset ?? 0;

@@ -620,11 +620,14 @@ export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
   const having = havingClauses.length > 0 ? `HAVING ${havingClauses.join(" AND ")}` : "";
 
   // Determine ORDER BY
+  // ORDER BY runs on the OUTER select over the CTE: columns are the CTE's
+  // (created_at, distance_km, …), never `r.` — and computed aliases can be
+  // used only as real columns, hence the extra subquery layer below.
   const sortMap: Record<string, string> = {
-    newest: "r.created_at DESC",
-    distance: "r.distance_km DESC",
+    newest: "created_at DESC",
+    distance: "distance_km DESC",
     rating: "avg_rating DESC NULLS LAST, rating_count DESC",
-    nearby: hasLocation ? "haversine_distance ASC" : "r.created_at DESC",
+    nearby: hasLocation ? "haversine_distance ASC" : "created_at DESC",
     duration_match: "estimated_minutes ASC",
   };
 
@@ -673,18 +676,20 @@ export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
       GROUP BY r.id, u.name, u.avatar_url
       ${having}
     )
-    SELECT *,
-      CASE
-        WHEN haversine_distance IS NULL THEN 3
-        WHEN haversine_distance < 25 THEN 1
-        WHEN haversine_distance < 75 THEN 2
-        ELSE 3
-      END AS base_zone,
-      CASE
-        WHEN avg_rating >= 4.5 AND rating_count >= 3 THEN -1
-        ELSE 0
-      END AS zone_boost
-    FROM routes_with_distance
+    SELECT * FROM (
+      SELECT *,
+        CASE
+          WHEN haversine_distance IS NULL THEN 3
+          WHEN haversine_distance < 25 THEN 1
+          WHEN haversine_distance < 75 THEN 2
+          ELSE 3
+        END AS base_zone,
+        CASE
+          WHEN avg_rating >= 4.5 AND rating_count >= 3 THEN -1
+          ELSE 0
+        END AS zone_boost
+      FROM routes_with_distance
+    ) zoned
     ORDER BY ${orderBy}
     LIMIT $${limitIdx}::int OFFSET $${offsetIdx}::int
   `;

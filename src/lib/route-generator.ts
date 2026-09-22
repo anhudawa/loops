@@ -370,7 +370,11 @@ async function routeStrict(waypoints: [number, number][], profile: string): Prom
   return routeViaBRouter(waypoints, profile);
 }
 
-const NO_ROUTE_RE = /no track found|target island|not found/i;
+// "error re-tracking track": the engine found a track but could not re-run
+// it under the strict profile's cost ceiling (seen on Mallorca; the same
+// waypoints route fine on the relaxed profile) — treat as no route under
+// the standard.
+const NO_ROUTE_RE = /no track found|target island|not found|re-tracking/i;
 
 async function routeWithFallback(
   waypoints: [number, number][],
@@ -415,6 +419,14 @@ async function withEngineSlot<T>(run: () => Promise<T>): Promise<T> {
 
 /** A loop that would lose more than this to spur repair gets re-routed. */
 const LOOP_RETRACE_FIX_KM = 1.5;
+/**
+ * Engine-time budget for the routing phase of one request. Every optional
+ * improvement (moving the far point, no-go returns, distance fit) checks
+ * this deadline; the mandatory route and its relaxed fallback do not. Keeps
+ * a 5-candidate request inside the 55 s pipeline budget even when the
+ * engine is slow (mountain tiles, strict no-route searches ≈ 3–4 s each).
+ */
+const ROUTING_BUDGET_MS = 24_000;
 /** Still losing more than this after the no-go return → try moving the far point. */
 const LOOP_MOVE_FAR_KM = 3.0;
 /** No-go weight for the outbound roads when routing the return leg. Tested on
@@ -498,8 +510,10 @@ async function routeLoopCandidate(
   waypoints: [number, number][],
   profile: string,
   targetKm: number,
-  discipline: Discipline
+  discipline: Discipline,
+  deadline: number = Date.now() + ROUTING_BUDGET_MS
 ): Promise<RoutedPath | null> {
+  const timeLeft = () => Date.now() < deadline;
   const start = waypoints[0];
   const inner = waypoints.slice(1, waypoints.length - 1);
   let farIdx = 1;
@@ -536,6 +550,7 @@ async function routeLoopCandidate(
       { label: "far point -45°", wps: moveFar(farBearing - 45, farDist * 0.85) },
     ];
     for (const m of moved) {
+      if (!timeLeft()) { genDebug("routing budget spent — skipping further far-point moves"); break; }
       const p = await routeStrict(m.wps, profile);
       if (!p) continue;
       const c = compromiseM(p);
@@ -565,6 +580,42 @@ async function routeLoopCandidate(
     if (alt && alt.coords.length >= 2 && !garbage(alt)) {
       genDebug(`strict route was ${first.distance_km.toFixed(0)} km with ${lossOf(first).toFixed(0)} km retrace for a ${targetKm} km ask — using the relaxed profile (${alt.distance_km.toFixed(0)} km), compromise to be measured`);
       first = alt;
+    }
+  }
+
+  // Distance fit: the waypoint radius assumes roads add ~30% over straight
+  // lines. Where the network detours more (Girona: 112 km for an 80 km ask)
+  // or less, scale the loop's inner points toward/away from the start once
+  // and re-route on the same profile. One extra engine call, kept only if
+  // it lands closer to the ask without retracing more.
+  if (waypoints.length >= 4 && timeLeft()) {
+    const served = first.distance_km - lossOf(first);
+    const ratio = targetKm / Math.max(1, served);
+    if (ratio < 0.8 || ratio > 1.25) {
+      const scale = Math.max(0.5, Math.min(1.5, ratio));
+      const scaled = waypoints.map((w, i) =>
+        i === 0 || i === waypoints.length - 1
+          ? w
+          : destination(start, bearingDegFrom(start, w), haversineKm(start[0], start[1], w[0], w[1]) * scale)
+      );
+      const p = await routeViaBRouter(scaled, first.profile);
+      if (p && p.coords.length >= 2) {
+        const pServed = p.distance_km - lossOf(p);
+        const gain = Math.abs(served - targetKm) - Math.abs(pServed - targetKm); // km closer to the ask
+        const accept =
+          (gain > 0 && lossOf(p) <= lossOf(first) + 1) ||
+          (gain > targetKm * 0.2 && lossOf(p) <= lossOf(first) + 3);
+        if (accept) {
+          genDebug(`distance fit: ${served.toFixed(0)} km → ${pServed.toFixed(0)} km for a ${targetKm} km ask (inner points scaled ×${scale.toFixed(2)})`);
+          first = p;
+          waypoints = scaled;
+          farDist *= scale;
+        } else {
+          genDebug(`distance fit rejected: scaled ×${scale.toFixed(2)} gave ${pServed.toFixed(0)} km (loss ${lossOf(p).toFixed(1)} km) vs ${served.toFixed(0)} km (loss ${lossOf(first).toFixed(1)} km)`);
+        }
+      } else {
+        genDebug(`distance fit: scaled ×${scale.toFixed(2)} did not route (${lastBRouterFailure})`);
+      }
     }
   }
 
@@ -603,6 +654,7 @@ async function routeLoopCandidate(
 
   for (const { label, wps, onlyIfLossAbove } of attempts) {
     if (bestLoss <= onlyIfLossAbove) continue;
+    if (!timeLeft()) { genDebug("routing budget spent — skipping further loop-shape attempts"); break; }
     const outPath = await routeViaBRouter(wps.slice(0, farIdx + 1), usedProfile);
     if (!outPath || outPath.coords.length < 2) continue;
     const nogo = nogoPolyline(outPath.coords, 2.0, 0.3);
@@ -1584,12 +1636,13 @@ async function generateFreshRoutes(
   }
   const routed: Routed[] = [];
   const t0 = Date.now();
+  const routingDeadline = t0 + ROUTING_BUDGET_MS;
   const lap = (label: string) => genDebug(`⏱ ${label} at +${((Date.now() - t0) / 1000).toFixed(1)}s`);
   await Promise.all(
     waypointSets.map(async (waypoints) => {
-      const path = await routeLoopCandidate(waypoints, profile, spec.distance_km, spec.discipline);
+      const path = await routeLoopCandidate(waypoints, profile, spec.distance_km, spec.discipline, routingDeadline);
       if (!path || path.coords.length < 2) {
-        genDebug("candidate dropped: BRouter returned no path");
+        genDebug(`candidate dropped: BRouter returned no path (${getLastBRouterFailure()}) for ${JSON.stringify(waypoints.map((w) => [+w[0].toFixed(4), +w[1].toFixed(4)]))}`);
         drop(`NO_PATH[${getLastBRouterFailure()}]`);
         return;
       }

@@ -409,14 +409,18 @@ function buildWaypointSet(
   const snappedFp = snapToAnchor(fpLat, fpLon);
   const snappedMid2 = snapToAnchor(mid2Lat, mid2Lon);
 
-  // Return loop: start → mid1 → furthest → mid2 → start
-  return [
-    [startLat, startLon],
-    snappedMid1,
-    snappedFp,
-    snappedMid2,
-    [startLat, startLon],
-  ];
+  // Return loop: start → mid1 → furthest → mid2 → start. Two synthetic
+  // points can snap to the same anchor (a coast with one village); a
+  // repeated via point makes the engine fail with "error re-tracking
+  // track", so collapse near-duplicates (< 300 m apart).
+  const loop: [number, number][] = [[startLat, startLon]];
+  for (const pt of [snappedMid1, snappedFp, snappedMid2]) {
+    const prev = loop[loop.length - 1];
+    if (haversineKm(prev[0], prev[1], pt[0], pt[1]) < 0.3) continue;
+    loop.push(pt);
+  }
+  loop.push([startLat, startLon]);
+  return loop;
 }
 
 // ── Main export ──────────────────────────────────────────────────────────────

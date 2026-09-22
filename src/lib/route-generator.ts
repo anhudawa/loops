@@ -1070,6 +1070,7 @@ function estimateDurationMinutes(spec: RouteSpec): number {
  */
 export async function candidatesFromSpec(spec: RouteSpec): Promise<RouteCandidate[]> {
   libraryDiag = "";
+  libraryReasons.length = 0;
   const forecast =
     spec.wind_strategy !== "none"
       ? await fetchWindForecast(
@@ -1121,15 +1122,24 @@ const FROM_HOME_KM = 1.0;
  * and the serving policy applies to them. Loops that cannot be reached or
  * would not fit are dropped — fresh generation takes over.
  */
+const libraryReasons: string[] = [];
+
 async function ridesFromHome(matches: LibraryMatch[], spec: RouteSpec): Promise<LibraryMatch[]> {
   const out: LibraryMatch[] = [];
   const results = await Promise.all(matches.map((m) => rideFromHome(m, spec)));
+  results.forEach((r, i) => {
+    const m = matches[i];
+    libraryReasons.push(`${m.name.slice(0, 24)}@${m.distance_from_start_km}km:${r ? `ok ${r.distance_km}km` : lastRideFromHomeWhy.get(m.route_id) ?? "dropped"}`);
+  });
   for (const r of results) if (r) out.push(r);
   out.sort((a, b) => b.match_score - a.match_score);
   return out;
 }
 
+const lastRideFromHomeWhy = new Map<string, string>();
+
 async function rideFromHome(match: LibraryMatch, spec: RouteSpec): Promise<LibraryMatch | null> {
+  const why = (w: string) => { lastRideFromHomeWhy.set(match.route_id, w); return null; };
   if (match.distance_from_start_km <= FROM_HOME_KM) return match;
   const home = spec.start_point;
   const profile = DISCIPLINE_PROFILE[spec.discipline];
@@ -1150,7 +1160,7 @@ async function rideFromHome(match: LibraryMatch, spec: RouteSpec): Promise<Libra
   const approach = await routeWithFallback([home, loopStart], profile);
   if (!approach || approach.coords.length < 2) {
     genDebug(`library loop "${match.name}" dropped: no ride out from home (${getLastBRouterFailure()})`);
-    return null;
+    return why(`no ride out (${getLastBRouterFailure().slice(0, 40)})`);
   }
   const nogo = nogoPolyline(approach.coords, 0.5, 0.5);
   const back =
@@ -1158,14 +1168,14 @@ async function rideFromHome(match: LibraryMatch, spec: RouteSpec): Promise<Libra
     (await routeWithFallback([loopEnd, home], profile));
   if (!back || back.coords.length < 2) {
     genDebug(`library loop "${match.name}" dropped: no ride home (${getLastBRouterFailure()})`);
-    return null;
+    return why(`no ride home (${getLastBRouterFailure().slice(0, 40)})`);
   }
 
   const totalKm = approach.distance_km + match.distance_km + back.distance_km;
   const allowance = Math.max(8, spec.distance_km * 0.35);
   if (Math.abs(totalKm - spec.distance_km) > allowance) {
     genDebug(`library loop "${match.name}" dropped: ${totalKm.toFixed(0)} km from home for a ${spec.distance_km} km ask`);
-    return null;
+    return why(`${totalKm.toFixed(0)}km total`);
   }
 
   // Stitch: approach → loop → back (drop duplicated junction points).
@@ -1191,7 +1201,7 @@ async function rideFromHome(match: LibraryMatch, spec: RouteSpec): Promise<Libra
   const legsKm = approach.distance_km + back.distance_km;
   if (!compromiseAcceptable(report, legsKm)) {
     genDebug(`library loop "${match.name}" dropped: ride out/back fails the road standard — ${report.summary}`);
-    return null;
+    return why(`legs fail standard: ${report.summary.slice(0, 60)}`);
   }
   if (!report.standard_met) await nameCompromises(coords, report.compromises);
   report.summary = report.standard_met
@@ -1263,7 +1273,7 @@ async function candidatesFromSpecInner(
     return [];
   });
   const fromHome = await ridesFromHome(libraryMatches, spec);
-  if (!libraryDiag) libraryDiag = `${libraryMatches.length} matched, ${fromHome.length} served from home`;
+  if (!libraryDiag) libraryDiag = `${libraryMatches.length} matched, ${fromHome.length} served from home — ${libraryReasons.join(" | ")}`;
   markPhase("library");
   if (fromHome.length > 0) {
     return fromHome.map((m) => ({ source: "library" as const, ...m }));

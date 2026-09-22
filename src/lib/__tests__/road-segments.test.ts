@@ -111,8 +111,8 @@ describe("buildRoadReport", () => {
   });
 
   it("measures a mid-route primary stretch and names its kind (trust rule)", () => {
-    const coords = line(101);
-    const tags = edges([[QUIET, 40], [PRIMARY, 30], [QUIET, 30]]); // 30 edges ≈ 600 m
+    const coords = line(1001);                                      // 20 km
+    const tags = edges([[QUIET, 400], [PRIMARY, 30], [QUIET, 570]]); // 600 m at km 8
     const r = buildRoadReport(coords, tags, "road");
     expect(r.standard_met).toBe(false);
     expect(r.compromises.length).toBe(1);
@@ -120,9 +120,10 @@ describe("buildRoadReport", () => {
     expect(c.kind).toBe("main_road");
     expect(c.meters).toBeGreaterThan(550);
     expect(c.meters).toBeLessThan(650);
-    expect(c.start).toBe(40);
-    expect(c.end).toBe(70);
-    expect(r.main_road_pct).toBe(30);
+    expect(c.start).toBe(400);
+    expect(c.end).toBe(430);
+    expect(c.near_start).toBeUndefined();
+    expect(r.main_road_pct).toBe(3);
     expect(describeCompromise(c)).toMatch(/^\d+ m on a primary road \(main road\)$/);
     expect(describeCompromise({ ...c, name: "R755" })).toBe(`${c.meters} m on the R755 (main road)`);
     expect(r.summary).toMatch(/^Compromise: /);
@@ -177,6 +178,20 @@ describe("compromiseAcceptable", () => {
     const bad = { highway: "path", surface: "ground", smoothness: "bad" };
     const tags = edges([[QUIET, 1000], [bad, 30], [QUIET, 1470]]);
     expect(compromiseAcceptable(buildRoadReport(coords, tags, "road"), 50)).toBe(false);
+  });
+  it("exit allowance: a 2 km main-road stretch leaving the start town is served, named near the start", () => {
+    const tags = edges([[PRIMARY, 100], [QUIET, 2400]]);            // first 2 km
+    const r = buildRoadReport(coords, tags, "road");
+    expect(r.compromises[0].near_start).toBe(true);
+    expect(describeCompromise(r.compromises[0])).toMatch(/near the start\/finish \(main road\)$/);
+    expect(compromiseAcceptable(r, 50)).toBe(true);
+  });
+  it("…but the same 2 km mid-ride is refused, and the exit allowance has limits", () => {
+    const mid = edges([[QUIET, 1200], [PRIMARY, 100], [QUIET, 1200]]);
+    expect(buildRoadReport(coords, mid, "road").compromises[0].near_start).toBeUndefined();
+    expect(compromiseAcceptable(buildRoadReport(coords, mid, "road"), 50)).toBe(false);
+    const tooLong = edges([[PRIMARY, 150], [QUIET, 2350]]);         // 3 km at the start
+    expect(compromiseAcceptable(buildRoadReport(coords, tooLong, "road"), 50)).toBe(false);
   });
   it("refuses when the compromises add up past 3% of the ride", () => {
     const runs: Array<[Record<string, string>, number]> = [];

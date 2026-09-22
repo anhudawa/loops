@@ -224,6 +224,12 @@ export interface Compromise {
   surface?: string;
   /** Road ref/name when we could resolve one ("R755", "N81"). */
   name?: string;
+  /**
+   * The stretch lies within EXIT_ZONE_KM of the start or finish: the way in
+   * or out of the start town. A valley or island town (Sóller) often has no
+   * exit that meets the standard — every rider there uses it.
+   */
+  near_start?: boolean;
 }
 
 export interface RoadReport {
@@ -254,6 +260,8 @@ export function classifyEdge(t: WayTags, discipline: Discipline): CompromiseKind
   return null;
 }
 
+/** Start/finish zone for the exit allowance (see compromiseAcceptable). */
+export const EXIT_ZONE_KM = 6;
 const MIN_COMPROMISE_M = 40;   // shorter = crossing a junction, not riding the road
 const MERGE_GAP_M = 60;        // same-kind stretches this close are one stretch
 
@@ -314,17 +322,26 @@ export function buildRoadReport(
     merged.push({ ...r });
   }
 
+  // Distance along the route at each edge start, for the exit zone.
+  const cumM: number[] = new Array(n + 1).fill(0);
+  for (let i = 0; i < n; i++) cumM[i + 1] = cumM[i] + lens[i];
+  const exitM = EXIT_ZONE_KM * 1000;
+
   const compromises: Compromise[] = merged
     .filter((r) => r.meters >= MIN_COMPROMISE_M)
-    .map((r) => ({
-      kind: r.kind,
-      start: r.start,
-      end: r.end,
-      meters: Math.round(r.meters),
-      highway: r.tags.highway ?? "road",
-      ...(r.tags.maxspeed ? { maxspeed: r.tags.maxspeed } : {}),
-      ...(r.tags.surface ? { surface: r.tags.surface } : {}),
-    }))
+    .map((r) => {
+      const nearStart = cumM[r.start] <= exitM || total - cumM[Math.min(r.end, n)] <= exitM;
+      return {
+        kind: r.kind,
+        start: r.start,
+        end: r.end,
+        meters: Math.round(r.meters),
+        highway: r.tags.highway ?? "road",
+        ...(r.tags.maxspeed ? { maxspeed: r.tags.maxspeed } : {}),
+        ...(r.tags.surface ? { surface: r.tags.surface } : {}),
+        ...(nearStart ? { near_start: true } : {}),
+      };
+    })
     .sort((a, b) => b.meters - a.meters);
 
   const pct = (m: number) => (total > 0 ? Math.round((m / total) * 100) : 0);
@@ -358,11 +375,12 @@ function summarise(r: RoadReport, discipline: Discipline): string {
 export function describeCompromise(c: Compromise): string {
   const dist = c.meters >= 1000 ? `${(c.meters / 1000).toFixed(1)} km` : `${c.meters} m`;
   const where = c.name ? `on the ${c.name}` : `on a ${roadWord(c.highway)}`;
+  const near = c.near_start ? " near the start/finish" : "";
   switch (c.kind) {
-    case "main_road": return `${dist} ${where} (main road)`;
-    case "fast_road": return `${dist} ${where} signed ${c.maxspeed ?? "80+"} km/h with no cycle track`;
-    case "unpaved":   return `${dist} ${where} that is ${c.surface ?? "unpaved"}`;
-    case "unsuitable": return `${dist} ${where} tagged unsuitable for bikes`;
+    case "main_road": return `${dist} ${where}${near} (main road)`;
+    case "fast_road": return `${dist} ${where}${near} signed ${c.maxspeed ?? "80+"} km/h with no cycle track`;
+    case "unpaved":   return `${dist} ${where}${near} that is ${c.surface ?? "unpaved"}`;
+    case "unsuitable": return `${dist} ${where}${near} tagged unsuitable for bikes`;
   }
 }
 
@@ -398,8 +416,17 @@ export function compromiseAcceptable(report: RoadReport, distanceKm: number): bo
   // Main/fast roads: a short, unavoidable link (a bridge, a bypass crossing)
   // is served WITH the warning; anything longer is not our route.
   const roadM = report.compromises.filter((c) => c.kind === "main_road" || c.kind === "fast_road");
-  const totalM = roadM.reduce((s, c) => s + c.meters, 0);
-  const longest = roadM.reduce((m, c) => Math.max(m, c.meters), 0);
+  // Exit allowance: the way in/out of the start town. A valley or island
+  // town may have no exit that meets the standard (Sóller: 1.6 km of the
+  // Ma-11 is how every rider leaves). Up to 2.5 km per stretch and 4 km in
+  // total there, always named "near the start/finish"; it does not eat the
+  // mid-ride allowance.
+  const exitM = roadM.filter((c) => c.near_start);
+  const exitTotal = exitM.reduce((s, c) => s + c.meters, 0);
+  if (exitM.some((c) => c.meters > 2500) || exitTotal > 4000) return false;
+  const midM = roadM.filter((c) => !c.near_start);
+  const totalM = midM.reduce((s, c) => s + c.meters, 0);
+  const longest = midM.reduce((m, c) => Math.max(m, c.meters), 0);
   const allowance = Math.max(500, distanceKm * 1000 * 0.03);
   return totalM <= allowance && longest <= 1500;
 }

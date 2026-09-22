@@ -73,7 +73,12 @@ the R755", or into a dropped candidate.
 compromise named** only when it is short and unavoidable — main/fast road
 stretches totalling ≤ max(500 m, 3 % of the ride) with no single stretch
 over 1.5 km; unpaved ≤ 200 m; unsuitable ≤ 100 m; any motorway → never.
-Anything beyond is dropped. Before any compromise is accepted the generator
+Anything beyond is dropped. **Exit allowance (2026-09-22):** a main/fast
+stretch within 6 km of the start or finish — the way in or out of the start
+town — may be up to 2.5 km (4 km total) and does not count against the
+mid-ride allowance; it is always named "near the start/finish". Needed for
+valley and island towns (Sóller: 1.6 km of the Ma-11 is how every rider
+leaves); mid-ride limits are unchanged. Before any compromise is accepted the generator
 tries to move the far point of the loop (rotated ±25°/±45°, pulled in 30 %)
 to find a loop that meets the standard outright; only if the strict profile
 finds no route at all does it try `loops-road-relaxed`, whose result is

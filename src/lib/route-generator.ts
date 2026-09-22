@@ -1683,6 +1683,16 @@ async function generateFreshRoutes(
         return null;
       }
 
+      // Distance honesty: a "100 km loop" is not 17 km and not 146 km. The
+      // match score already penalises the gap, but with few survivors a
+      // wildly-off loop could still be served — decline instead.
+      const distanceAllowance = Math.max(8, spec.distance_km * 0.35);
+      if (Math.abs(distKm - spec.distance_km) > distanceAllowance) {
+        genDebug(`candidate dropped: ${Math.round(distKm)} km for a ${spec.distance_km} km ask (allowance ±${Math.round(distanceAllowance)} km)`);
+        drop("DISTANCE_OFF");
+        return null;
+      }
+
       // Road Standard (engine-native). A compromise stretch is measured and,
       // if short and unavoidable, served WITH the warning; anything longer
       // is not a route we'd take a friend on.

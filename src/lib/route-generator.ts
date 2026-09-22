@@ -1881,11 +1881,19 @@ async function generateFreshRoutes(
       return bearingDegFrom(start, far);
     });
     const angDiff = (a: number, b: number) => { const d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; };
-    const extra = DIRECTIONS_WIDE.filter((d) => usedBearings.every((u) => angDiff(d.bearingDeg, u) >= 30)).slice(0, 4);
-    if (extra.length > 0) {
-      genDebug(`only ${candidates.length} loop(s) survived — second pass towards ${extra.map((d) => d.name).join(", ")}`);
-      const more = await generateWaypointSets(spec, { directions: extra, exactDirections: true });
-      candidates = candidates.concat(await runPass(more, "pass 2"));
+    // Second pass: the best-SUPPORTED bearings not yet tried (villages out
+    // there = roads out there). Falls back to the plain compass only where
+    // the anchor data is sparse. Directions already tried are excluded.
+    const compassExtra = DIRECTIONS_WIDE.filter((d) => usedBearings.every((u) => angDiff(d.bearingDeg, u) >= 30)).slice(0, 4);
+    const more = await generateWaypointSets(spec, { directions: compassExtra, excludeBearings: usedBearings });
+    const fresh = more.filter((ws) => {
+      let far = ws[1], farD = -1;
+      for (const w of ws.slice(1, -1)) { const d = haversineKm(start[0], start[1], w[0], w[1]); if (d > farD) { farD = d; far = w; } }
+      return usedBearings.every((u) => angDiff(bearingDegFrom(start, far), u) >= 20);
+    });
+    if (fresh.length > 0) {
+      genDebug(`only ${candidates.length} loop(s) survived — second pass with ${fresh.length} new direction(s)`);
+      candidates = candidates.concat(await runPass(fresh, "pass 2"));
     }
   }
 

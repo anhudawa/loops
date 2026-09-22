@@ -45,9 +45,14 @@ from the engine's own per-segment road tags, no external lookup).
   and Irish L-roads carry 80. Applied literally, the rule left Girona — our
   flagship — with **zero** routable loops. As applied:
   - 100 km/h+ on any class → fast road (compromise) unless a segregated track;
-  - 80/90 on a **regional road (secondary)** → fast road, unless the engine's
-    traffic estimate says genuinely quiet (class 1–2). Unknown traffic on a
-    regional road counts as fast. (The R755 example stays a compromise.)
+  - 80/90 on a **regional road (secondary)** → fast road when the engine
+    estimates it busy (traffic class 4+) or its traffic is unknown; class
+    1–3 regional roads are quiet lanes (the Ma-roads round Pollença bay
+    are class 2–3). A busy R-road stays a compromise.
+  - **Main roads are not impossible in the profile any more** — primary
+    30×, trunk 60× (motorways impossible). With them impossible, a 200 m
+    link cost more than a 70 km detour and Girona loops ballooned to
+    200 km. Every main-road metre is still named; the policy decides.
   - 80/90 on a **tertiary/unclassified/residential lane** → a quiet lane,
     unless the engine estimates real traffic on it (class 4+).
   - A painted cycle lane is not segregated; only `cycleway=track/separate` is.
@@ -79,8 +84,9 @@ measured exactly the same way.
 and reported as `ACCESS_RETRACE`. A mid-route out-and-back over 400 m is a
 spur and the candidate is rejected (`SPUR_UTURN`).
 
-**Known gap (open):** from Girona city under the strict profile, fresh
-loops still fail on mid-route retraces — the quiet-lane network there
-funnels outbound and return onto the same corridors. Girona is library-first
-in production (verified operator routes), so riders get curated loops; the
-fresh-generation gap is the next engineering item.
+**Status (2026-09-22, local engine with the v3 profiles):** Clontarf 3 loops
+meeting the standard; Girona 2 loops (82.9 km with ~2 km of national road
+in 4 named stretches; 93.9 km with ~0.5 km); Calpe "263 m on the CV-734";
+Mallorca from Port de Pollença 2 loops (~1.1 km of named regional/primary
+links each). Production shows the same only after the routing server is
+rebuilt with cloud-init v3 (owner action: Hetzner token).

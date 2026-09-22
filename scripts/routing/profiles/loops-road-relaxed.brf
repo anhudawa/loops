@@ -268,7 +268,7 @@ assign costfactor
              not or highway=cycleway or cycleway=track or cycleway:left=track or cycleway:right=track cycleway:both=track
          6.0
   switch and maxspeed=80|90
-         and ( or and highway=secondary|secondary_link not estimated_traffic_class=1|2
+         and ( or and highway=secondary|secondary_link not estimated_traffic_class=1|2|3
                   estimated_traffic_class=4|5|6|7 )
              not or highway=cycleway or cycleway=track or cycleway:left=track or cycleway:right=track cycleway:both=track
          6.0

@@ -90,7 +90,8 @@ describe("classifyEdge (Road Standard)", () => {
     expect(classifyEdge({ highway: "tertiary", maxspeed: "90", estimated_traffic_class: "5" }, "road")).toBe("fast_road");
     // Regional roads at 80/90: fast unless the engine says genuinely quiet; unknown traffic = fast.
     expect(classifyEdge({ highway: "secondary", maxspeed: "90", estimated_traffic_class: "2" }, "road")).toBeNull();
-    expect(classifyEdge({ highway: "secondary", maxspeed: "90", estimated_traffic_class: "3" }, "road")).toBe("fast_road");
+    expect(classifyEdge({ highway: "secondary", maxspeed: "90", estimated_traffic_class: "3" }, "road")).toBeNull();
+    expect(classifyEdge({ highway: "secondary", maxspeed: "90", estimated_traffic_class: "4" }, "road")).toBe("fast_road");
     expect(classifyEdge({ highway: "secondary", maxspeed: "80" }, "road")).toBe("fast_road");
   });
 });

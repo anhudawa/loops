@@ -176,10 +176,11 @@ export function isFastRoad(t: WayTags): boolean {
   if (MAIN_ROADS.has(hw)) return true;
   const etc = parseInt(t.estimated_traffic_class ?? "", 10);
   if (hw === "secondary" || hw === "secondary_link") {
-    // A regional road at 80/90 is fast unless the engine's traffic estimate
-    // says it is genuinely quiet (class 1–2: the GI-5xx lanes pros train on
-    // around Girona). Unknown traffic on a regional road counts as fast.
-    return Number.isNaN(etc) || etc >= 3;
+    // A regional road at 80/90 is fast when the engine estimates it busy
+    // (class 4+) or when its traffic is unknown. Class 1–3 regional roads
+    // (the GI-5xx lanes around Girona, the Ma-roads round Pollença bay)
+    // are what riders go there for.
+    return Number.isNaN(etc) || etc >= 4;
   }
   return !Number.isNaN(etc) && etc >= 4;
 }

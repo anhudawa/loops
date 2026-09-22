@@ -428,8 +428,10 @@ function buildWaypointSet(
 export interface WaypointSetOptions {
   /** Override the default 5-direction compass for candidate generation. */
   directions?: Array<{ name: string; bearingDeg: number }>;
-  /** Use `directions` exactly (no anchor-support re-ranking) — second pass. */
+  /** Use `directions` exactly (no anchor-support re-ranking). */
   exactDirections?: boolean;
+  /** Bearings already tried (degrees); a second pass avoids ±30° of these. */
+  excludeBearings?: number[];
 }
 
 /**
@@ -477,7 +479,8 @@ export async function generateWaypointSets(
     startLon,
     radiusKm,
     anchors,
-    directions.length
+    directions.length,
+    options.excludeBearings ?? []
   );
   const chosen =
     supported.length >= 2 && !options.exactDirections
@@ -502,10 +505,12 @@ function rankBearingsByAnchorSupport(
   startLon: number,
   radiusKm: number,
   anchors: AnchorPoint[],
-  count: number
+  count: number,
+  excludeBearings: number[] = []
 ): number[] {
   const candidates: Array<{ bearing: number; support: number }> = [];
   for (let b = 0; b < 360; b += 30) {
+    if (excludeBearings.some((e) => { let d = Math.abs(e - b) % 360; if (d > 180) d = 360 - d; return d < 30; })) continue;
     let support = 0;
     for (const a of anchors) {
       const dist = haversineKm(startLat, startLon, a.lat, a.lon);

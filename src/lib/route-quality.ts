@@ -529,14 +529,36 @@ export function unionBbox(boxes: BoundingBox[]): BoundingBox {
   };
 }
 
+// Per-download memo: the scenery download is shared by every candidate of a
+// request, and each candidate was rebuilding the node map and the scenic /
+// terrain way lists (and their spatial grids) from 150k elements — seconds
+// of CPU per candidate, five times over.
+const nodeMapMemo = new WeakMap<OsmElement[], OsmNodeMap>();
+const scenicWaysMemo = new WeakMap<OsmElement[], ProcessedWay[]>();
+const terrainWaysMemo = new WeakMap<OsmElement[], ProcessedWay[]>();
+const peakNodesMemo = new WeakMap<OsmElement[], [number, number][]>();
+
 function buildNodeMap(elements: OsmElement[]): OsmNodeMap {
+  const memo = nodeMapMemo.get(elements);
+  if (memo) return memo;
   const map: OsmNodeMap = {};
   for (const el of elements) {
     if (el.type === "node" && el.lat !== undefined && el.lon !== undefined) {
       map[el.id] = { lat: el.lat, lon: el.lon };
     }
   }
+  nodeMapMemo.set(elements, map);
   return map;
+}
+
+function peakNodesOf(elements: OsmElement[]): [number, number][] {
+  const memo = peakNodesMemo.get(elements);
+  if (memo) return memo;
+  const peaks: [number, number][] = elements
+    .filter((el) => el.type === "node" && el.tags?.natural === "peak" && el.lat !== undefined)
+    .map((el) => [el.lat!, el.lon!]);
+  peakNodesMemo.set(elements, peaks);
+  return peaks;
 }
 
 function buildProcessedWays(elements: OsmElement[], nodeMap: OsmNodeMap): ProcessedWay[] {
@@ -849,38 +871,40 @@ function scoreScenic(
 ): { score: number; flags: string[] } {
   const flags: string[] = [];
 
-  // Separate scenic ways and nodes
-  const scenicWays: ProcessedWay[] = [];
-  for (const el of elements) {
-    if (el.type !== "way" || !el.nodes) continue;
-    const t = el.tags ?? {};
-    const isScenic =
-      t.natural === "water" ||
-      t.natural === "forest" ||
-      t.natural === "wood" ||
-      t.natural === "coastline" ||
-      t.waterway === "river" ||
-      t.waterway === "stream" ||
-      t.waterway === "canal" ||
-      t.landuse === "forest" ||
-      t.landuse === "wood" ||
-      t.landuse === "grass" ||
-      t.landuse === "meadow" ||
-      t.leisure === "nature_reserve" ||
-      t.landuse === "nature_reserve";
+  // Separate scenic ways and nodes (memoised per download)
+  let scenicWays = scenicWaysMemo.get(elements);
+  if (!scenicWays) {
+    scenicWays = [];
+    for (const el of elements) {
+      if (el.type !== "way" || !el.nodes) continue;
+      const t = el.tags ?? {};
+      const isScenic =
+        t.natural === "water" ||
+        t.natural === "forest" ||
+        t.natural === "wood" ||
+        t.natural === "coastline" ||
+        t.waterway === "river" ||
+        t.waterway === "stream" ||
+        t.waterway === "canal" ||
+        t.landuse === "forest" ||
+        t.landuse === "wood" ||
+        t.landuse === "grass" ||
+        t.landuse === "meadow" ||
+        t.leisure === "nature_reserve" ||
+        t.landuse === "nature_reserve";
 
-    if (isScenic) {
-      const nodes = el.nodes
-        .map((id) => nodeMap[id])
-        .filter((n): n is { lat: number; lon: number } => n !== undefined);
-      if (nodes.length >= 2) scenicWays.push({ tags: t, nodes });
+      if (isScenic) {
+        const nodes = el.nodes
+          .map((id) => nodeMap[id])
+          .filter((n): n is { lat: number; lon: number } => n !== undefined);
+        if (nodes.length >= 2) scenicWays.push({ tags: t, nodes });
+      }
     }
+    scenicWaysMemo.set(elements, scenicWays);
   }
 
   // Peak nodes
-  const peakNodes: [number, number][] = elements
-    .filter((el) => el.type === "node" && el.tags?.natural === "peak" && el.lat !== undefined)
-    .map((el) => [el.lat!, el.lon!]);
+  const peakNodes = peakNodesOf(elements);
 
   let bonusPoints = 0;
   const foundFeatures = new Set<string>();
@@ -1032,23 +1056,25 @@ function scoreScenicDiversity(
 ): { score: number; flags: string[] } {
   const flags: string[] = [];
 
-  // Build terrain ways from all non-highway elements
-  const terrainWays: ProcessedWay[] = [];
-  for (const el of elements) {
-    if (el.type !== "way" || !el.nodes || !el.tags) continue;
-    if (el.tags.highway) continue; // skip roads
-    const key = scenicDiversityKey(el.tags);
-    if (!key) continue;
-    const nodes = el.nodes
-      .map((id) => nodeMap[id])
-      .filter((n): n is { lat: number; lon: number } => n !== undefined);
-    if (nodes.length >= 2) terrainWays.push({ tags: el.tags, nodes });
+  // Build terrain ways from all non-highway elements (memoised per download)
+  let terrainWays = terrainWaysMemo.get(elements);
+  if (!terrainWays) {
+    terrainWays = [];
+    for (const el of elements) {
+      if (el.type !== "way" || !el.nodes || !el.tags) continue;
+      if (el.tags.highway) continue; // skip roads
+      const key = scenicDiversityKey(el.tags);
+      if (!key) continue;
+      const nodes = el.nodes
+        .map((id) => nodeMap[id])
+        .filter((n): n is { lat: number; lon: number } => n !== undefined);
+      if (nodes.length >= 2) terrainWays.push({ tags: el.tags, nodes });
+    }
+    terrainWaysMemo.set(elements, terrainWays);
   }
 
   // Check for peaks (nodes)
-  const peakNodes: [number, number][] = elements
-    .filter((el) => el.type === "node" && el.tags?.natural === "peak" && el.lat !== undefined)
-    .map((el) => [el.lat!, el.lon!]);
+  const peakNodes = peakNodesOf(elements);
 
   const foundTypes = new Set<string>();
 

@@ -48,8 +48,11 @@ src/
     route-intent.ts      # Claude NL parser → RouteSpec (incl. workout + wind_strategy)
     route-generator.ts   # Orchestrator: library-first → candidates → guardrails → scoring
     route-library.ts     # Library matching (verified routes beat fresh generation)
-    route-quality.ts     # 10-factor 0-100 scoring via Overpass
-    route-rules.ts       # Hard guardrails (auto-reject)
+    route-quality.ts     # 10-factor 0-100 scoring (roads from the engine's tags; scenery via Overpass)
+    road-segments.ts     # Engine-native road intelligence: per-edge tags, road rules, compromise report
+    places.ts / places-known.ts  # Bundled GeoNames places (waypoint anchors) + launch-destination lookup
+    engine-profiles.ts   # Upload routing profiles to the live engine (POST /api/engine/sync-profiles)
+    route-rules.ts       # Hard guardrails (auto-reject); spur repair; access-retrace zone
     wind.ts              # Wind forecast + bearing alignment ("tailwind home")
     session-assembly.ts  # Anchor-first corridor finder (spec §3)
     interval-segments.ts # Workout segment detection
@@ -60,6 +63,9 @@ src/
 scripts/
   import-routes.mjs      # Manifest → DB importer (supports --dry-run, RWGPS URLs)
   hub-data/*.json        # Route manifests for all 10 launch destinations
+  routing/               # Own BRouter server: profiles/*.brf (SOURCE OF TRUTH), template →
+                         #   build-cloud-init.mjs → cloud-init-brouter.yaml + src/data/engine-profiles.json
+  anchors/build-places.mjs  # GeoNames → src/data/places-eu.json
 tests/                   # Playwright suite
 src/lib/__tests__/       # Vitest unit tests (npm test)
 ```
@@ -98,7 +104,27 @@ npm run golden            # Golden route suite (needs ANTHROPIC_API_KEY)
 node scripts/import-routes.mjs scripts/hub-data/girona-eat-sleep-cycle.json --dry-run
 ```
 
+## Routing engine (read before touching generation)
+- Own BRouter 1.7.10 on Hetzner (`BROUTER_URL`, project `gravel-ireland` on Vercel).
+  Profiles: `loops-road` (the Road Standard) and `loops-road-relaxed` (fallback).
+  `docs/superpowers/specs/2026-09-21-road-standard.md` — the rules AND how they
+  are applied in code (owner-confirmed interpretations live there).
+- Generation pipeline: bundled places → candidate diamonds → engine (strict →
+  moved far point → relaxed) → spur repair → rules → road report + serving
+  policy → scoring (roads from engine tags, scenery from one Overpass call) →
+  second pass if < 2 loops. Per-phase timings are logged (`timings`).
+- Trust rules enforced in code: a named place must resolve or we decline;
+  every generated/drawn route carries a `road_report`; loops > ±35 % off the
+  requested distance are declined; nothing is silently downgraded.
+- `GET /api/engine/status?probe=1` shows wiring, model-key presence and
+  whether the server runs cloud-init v3 (relaxed profile present).
+- Local testing: scratchpad `local-up.sh` (engine + dev server), `sweep-run.sh`.
+
 ## Known Technical Debt / Open Items
+- Routing server still on cloud-init v2 (old strict profile, absolute custom
+  dir): rebuild with v3 needs a Hetzner API token from the owner. Until then
+  Girona/Mallorca/Calpe fresh loops mostly decline in production.
+- ANTHROPIC_API_KEY appears unset on the production project (parser: basic).
 - DB credential leaked in git history (removed from files) — MUST be
   rotated in the Vercel/Neon dashboard
 - Anchor-first session assembly SHIPPED (src/lib/session-assembly.ts +

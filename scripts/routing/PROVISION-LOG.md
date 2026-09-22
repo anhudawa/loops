@@ -73,3 +73,15 @@ ids in place and routes a test leg with each. Verified locally end to end
 (create → update → route). On the live v2 server the upload fails (absolute
 custom dir) — the rebuild is still needed once.
 
+## Rebuild with cloud-init v3 — 2026-09-22 (API only, token from owner, revoked after)
+Billable calls, in order:
+1. PUT primary_ips/150807758 and /150807759 auto_delete=false — free (keeps 2.28.33.245).
+2. DELETE servers/166828758 (old loops-routing-2, v2) — stops its billing.
+3. POST servers → **166956007** loops-routing-2, CX33, fsn1, ubuntu-24.04, same primary
+   IPs (2.28.33.245), firewall 11657836, cloud-init v3 (25 KB), labels
+   project=loops. First attempt: "error during placement" (capacity); retried.
+4. POST servers/166956007/actions/enable_backup — 20 % of server price.
+Net monthly cost unchanged: ~€10.44 + ~€2.09 = **~€12.53** (Phase 1 ceiling €13).
+No other resources created. Verification: `GET /api/engine/status?probe=1`
+on www.loops.ie must report server_version "v3 (relaxed profile present)".
+

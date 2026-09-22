@@ -61,6 +61,7 @@ write_files:
       # LOOPS profiles must live in profiles2 (named profiles resolve there).
       # loops-road = the Road Standard; loops-road-relaxed = fallback that
       # the app only uses when the strict profile finds no route at all.
+      python3 /opt/brouter/profiles/derive-relaxed.py
       cp /opt/brouter/profiles/*.brf brouter-1.7.10/profiles2/
       mkdir -p segments4 custom
       BASE=https://brouter.de/brouter/segments4

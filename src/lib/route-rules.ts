@@ -823,7 +823,7 @@ function checkTunnelCheck(
 
 /**
  * RULE 10: ELEVATION_SANITY
- * Fatal if elevation gain exceeds 20m per km of distance (impossibly steep average).
+ * Fatal if elevation gain exceeds 40 m per km of distance (impossibly steep average).
  * Warning if route is labelled "minimum climbing" but has >500m elevation gain.
  */
 function checkElevationSanity(
@@ -833,8 +833,11 @@ function checkElevationSanity(
 ): RuleViolation | null {
   if (elevationGain === undefined || distanceKm === 0) return null;
 
+  // 20 m/km declined every real mountain loop (Sóller/Tramuntana runs
+  // 25–30 m/km; Sa Calobra out-and-backs more). GPS garbage sits far above
+  // 40 m/km, which is where this now bites.
   const gainPerKm = elevationGain / distanceKm;
-  if (gainPerKm > 20) {
+  if (gainPerKm > 40) {
     return {
       rule: "ELEVATION_SANITY",
       message: `Elevation gain of ${Math.round(elevationGain)}m over ${distanceKm.toFixed(1)}km averages ${gainPerKm.toFixed(1)}m/km — likely a GPS error`,

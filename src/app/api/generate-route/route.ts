@@ -197,7 +197,9 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ data: result });
+    // Phase timings ride along (cumulative seconds; no PII) so production
+    // latency can be profiled from a request, not from log access.
+    return NextResponse.json({ data: result, timings: result.timings ?? null });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     const code = err instanceof NoValidRoutesError ? "NO_ROUTES_FOUND" : classifyErrorCode(message);

@@ -48,3 +48,19 @@ Until the server is re-provisioned with v3, relaxed-profile requests return
 rebuild `loops-routing-2` with the new user_data (no new server, no new
 cost), verify `profile=loops-road-relaxed` returns GeoJSON, then revoke the
 token.
+
+## cloud-init v3 addendum (2026-09-22)
+- Strict profile `loops-road` now costs primary 30×, trunk 60×, fast roads
+  20× instead of "impossible" (the engine's cost ceiling made a 200 m link
+  dearer than a 70 km detour; Girona loops ballooned to 200 km). Motorways,
+  unpaved, tracks, paths stay impossible. Every main/fast metre is still
+  measured and named by the compromise detector; the serving policy decides.
+- The custom-profile directory is passed RELATIVE (`../../custom`). Verified
+  locally: `POST /brouter/profile` returns `{"profileid":"custom_<n>"}`,
+  `POST /brouter/profile/custom_<n>` updates it in place, and
+  `profile=custom_<n>` routes. After the v3 rebuild the app can push profile
+  updates itself — no further re-provisioning for profile changes.
+- The LIVE server (v2) still has the absolute path and the old 10000-cost
+  profile, so uploads fail there and Girona/Calpe loops keep declining until
+  the rebuild.
+

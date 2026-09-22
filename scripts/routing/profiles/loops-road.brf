@@ -242,10 +242,14 @@ assign costfactor
   add no_river_penalty
   add noise_penalty
   # ── LOOPS ROAD STANDARD (CEO, 2026-09-21) ────────────────────────────────
-  # Rule 1: no main roads. Ever.
+  # Rule 1: no main roads. Motorways impossible; trunk/primary cost 60x/30x —
+  # the engine's cost ceiling (9999) made a 200 m primary link dearer than a
+  # 70 km detour, so Girona loops ballooned to 200 km with 80 km of retrace.
+  # At 30x a 300 m link costs like 9 km of quiet lane: taken only when the
+  # alternative is absurd, and ALWAYS named by the compromise detector.
   switch or highway=motorway highway=motorway_link    10000
-  switch or highway=trunk highway=trunk_link          10000
-  switch or highway=primary highway=primary_link      10000
+  switch or highway=trunk highway=trunk_link          60.0
+  switch or highway=primary highway=primary_link      30.0
   # Rule 2: no 80 km/h+ roads unless there is a segregated cycle track —
   # applied to roads that are actually fast: 100 km/h+ on any class, or
   # 80/90 on regional roads (secondary+) or on lanes the engine estimates
@@ -254,12 +258,12 @@ assign costfactor
   # left Girona with no routable loop.) Mirrors isFastRoad() in the app.
   switch and maxspeed=100|110|120|130
              not or highway=cycleway or cycleway=track or cycleway:left=track or cycleway:right=track cycleway:both=track
-         10000
+         20.0
   switch and maxspeed=80|90
          and ( or and highway=secondary|secondary_link not estimated_traffic_class=1|2
                   estimated_traffic_class=4|5|6|7 )
              not or highway=cycleway or cycleway=track or cycleway:left=track or cycleway:right=track cycleway:both=track
-         10000
+         20.0
   # Rule 4: paved only. Explicitly unpaved is forbidden; untagged minor roads
   # are assumed paved (as the surface scorer does).
   switch or isunpaved surface=unpaved|gravel|fine_gravel|compacted|dirt|earth|grass|ground|mud|sand|pebblestone|rock|stone|clay|grass_paver  10000

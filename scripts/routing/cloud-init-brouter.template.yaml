@@ -76,8 +76,12 @@ write_files:
       After=network-online.target
       Wants=network-online.target
       [Service]
+      # NOTE: the custom-profile directory MUST be given relative to the
+      # profiles directory (the upload handler concatenates them). With
+      # ../../custom, POST /brouter/profile[/custom_<id>] stores or updates a
+      # profile on the server — the app can ship profile changes without SSH.
       WorkingDirectory=/opt/brouter/brouter-1.7.10
-      ExecStart=/usr/bin/java -Xmx2g -cp brouter-1.7.10-all.jar btools.server.RouteServer /opt/brouter/segments4 /opt/brouter/brouter-1.7.10/profiles2 /opt/brouter/custom 17777 4
+      ExecStart=/usr/bin/java -Xmx2g -cp brouter-1.7.10-all.jar btools.server.RouteServer /opt/brouter/segments4 /opt/brouter/brouter-1.7.10/profiles2 ../../custom 17777 4
       Restart=always
       RestartSec=5
       [Install]

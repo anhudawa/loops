@@ -411,7 +411,11 @@ async function routeWithFallback(
  * so 5 candidates never cost us one. BROUTER_THREADS defaults to the 4 we
  * provision (scripts/routing/cloud-init-brouter.yaml).
  */
-const BROUTER_MAX_INFLIGHT = Math.max(1, (parseInt(process.env.BROUTER_THREADS ?? "4", 10) || 4) - 1);
+// In-flight cap = the server's worker threads (4 on our CX33). Pre-launch
+// nothing else hits the engine, so a full house of 4 is safe; the watchdog
+// retry in routeStrict covers the rare kill if the planner's reroute calls
+// land at the same moment.
+const BROUTER_MAX_INFLIGHT = Math.max(1, parseInt(process.env.BROUTER_THREADS ?? "4", 10) || 4);
 let brouterInflight = 0;
 const brouterQueue: Array<() => void> = [];
 async function withEngineSlot<T>(run: () => Promise<T>): Promise<T> {

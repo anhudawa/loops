@@ -428,6 +428,8 @@ function buildWaypointSet(
 export interface WaypointSetOptions {
   /** Override the default 5-direction compass for candidate generation. */
   directions?: Array<{ name: string; bearingDeg: number }>;
+  /** Use `directions` exactly (no anchor-support re-ranking) — second pass. */
+  exactDirections?: boolean;
 }
 
 /**
@@ -478,7 +480,7 @@ export async function generateWaypointSets(
     directions.length
   );
   const chosen =
-    supported.length >= 2
+    supported.length >= 2 && !options.exactDirections
       ? supported.map((bearingDegVal, i) => ({
           name: `auto-${Math.round(bearingDegVal)}`,
           bearingDeg: bearingDegVal,

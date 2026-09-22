@@ -1650,10 +1650,16 @@ async function generateFreshRoutes(
     elevLoss: number;
     edgeTags: EdgeTags | null;
   }
-  const routed: Routed[] = [];
   const t0 = Date.now();
-  const routingDeadline = t0 + ROUTING_BUDGET_MS;
   const lap = (label: string) => genDebug(`⏱ ${label} at +${((Date.now() - t0) / 1000).toFixed(1)}s`);
+
+  // Phases 1–3 for one set of candidates. Run once with the best-supported
+  // directions; if fewer than two loops survive and time allows, run again
+  // with the remaining compass directions (a coast or a mountain wall can
+  // kill half a compass).
+  const runPass = async (waypointSets: [number, number][][], passLabel: string): Promise<GeneratedRoute[]> => {
+  const routed: Routed[] = [];
+  const routingDeadline = Math.min(Date.now() + ROUTING_BUDGET_MS, t0 + 40_000);
   await Promise.all(
     waypointSets.map(async (waypoints) => {
       const path = await routeLoopCandidate(waypoints, profile, spec.distance_km, spec.discipline, routingDeadline);
@@ -1715,7 +1721,7 @@ async function generateFreshRoutes(
     })
   );
 
-  lap(`phase 1 routed ${routed.length}/${waypointSets.length} candidates`);
+  lap(`${passLabel}: phase 1 routed ${routed.length}/${waypointSets.length} candidates`);
   markPhase("routing");
 
   // ── Phase 2: one scenery lookup for the whole batch ─────────────────────
@@ -1725,7 +1731,11 @@ async function generateFreshRoutes(
   // biggest latency and timeout source in generation. Fail-soft: null means
   // "scenery not assessed", reported honestly and left out of the score.
   const withTags = routed.filter((r) => r.edgeTags && r.edgeTags.length > 0);
-  const scenic = withTags.length > 0 ? await scenicPromise : undefined;
+  const scenic = withTags.length > 0
+    ? await (passLabel === "pass 1"
+        ? scenicPromise
+        : prefetchScenic(unionBbox(waypointSets.map((w) => bboxOf(w, 0.08)))))
+    : undefined;
   if (withTags.length > 0) {
     genDebug(`scenery ${scenic ? `loaded (${scenic.length} elements)` : "unavailable"} for ${withTags.length} engine-tagged candidate(s)`);
   }
@@ -1857,12 +1867,31 @@ async function generateFreshRoutes(
     }
   }
 
-  lap(`phase 3 scored → ${candidates.length} candidate(s) served`);
+  lap(`${passLabel}: phase 3 scored → ${candidates.length} candidate(s)`);
   markPhase("scoring");
+  return candidates;
+  };
+
+  let candidates = await runPass(waypointSets, "pass 1");
+  if (candidates.length < 2 && Date.now() - t0 < 26_000) {
+    const start = spec.start_point;
+    const usedBearings = waypointSets.map((ws) => {
+      let far = ws[1], farD = -1;
+      for (const w of ws.slice(1, -1)) { const d = haversineKm(start[0], start[1], w[0], w[1]); if (d > farD) { farD = d; far = w; } }
+      return bearingDegFrom(start, far);
+    });
+    const angDiff = (a: number, b: number) => { const d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; };
+    const extra = DIRECTIONS_WIDE.filter((d) => usedBearings.every((u) => angDiff(d.bearingDeg, u) >= 30)).slice(0, 4);
+    if (extra.length > 0) {
+      genDebug(`only ${candidates.length} loop(s) survived — second pass towards ${extra.map((d) => d.name).join(", ")}`);
+      const more = await generateWaypointSets(spec, { directions: extra, exactDirections: true });
+      candidates = candidates.concat(await runPass(more, "pass 2"));
+    }
+  }
 
   if (candidates.length === 0) {
     dropped["_engine"] = (() => { try { return new URL(BROUTER_URL).host; } catch { return "?"; } })() as unknown as number;
-    throw new NoValidRoutesError(waypointSets.length, dropped, {
+    throw new NoValidRoutesError(Object.values(dropped).reduce((a, b) => a + (typeof b === "number" ? b : 0), 0), dropped, {
       distance_km: spec.distance_km,
       discipline: spec.discipline,
       elevation_preference: spec.elevation_preference,

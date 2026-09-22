@@ -99,7 +99,7 @@ as home-turf pages outside the count. Route manifests for all 10 are in
 npm test                  # Vitest unit suite
 npx tsc --noEmit          # Typecheck
 npm run build             # Production build (passes without DB — fail-soft)
-npx playwright test tests/loops-comprehensive.spec.ts --project=chromium
+npx playwright test tests/loops-comprehensive.spec.ts   # no config: needs a local config with launchOptions.executablePath in this sandbox
 npm run golden            # Golden route suite (needs ANTHROPIC_API_KEY)
 node scripts/import-routes.mjs scripts/hub-data/girona-eat-sleep-cycle.json --dry-run
 ```
@@ -121,10 +121,16 @@ node scripts/import-routes.mjs scripts/hub-data/girona-eat-sleep-cycle.json --dr
 - Local testing: scratchpad `local-up.sh` (engine + dev server), `sweep-run.sh`.
 
 ## Known Technical Debt / Open Items
-- Routing server still on cloud-init v2 (old strict profile, absolute custom
-  dir): rebuild with v3 needs a Hetzner API token from the owner. Until then
-  Girona/Mallorca/Calpe fresh loops mostly decline in production.
-- ANTHROPIC_API_KEY appears unset on the production project (parser: basic).
+- Routing server is on cloud-init v3 (2026-09-22): both profiles live, custom
+  profile uploads work (`POST /api/engine/sync-profiles`, admin). Profile
+  changes need NO re-provisioning: edit `scripts/routing/profiles/loops-road.brf`,
+  run `node scripts/routing/build-cloud-init.mjs`, deploy, call the sync endpoint.
+- ANTHROPIC_API_KEY is unset on the production project (parser: basic —
+  plain rides work, workout prompts cannot parse). Owner action.
+- Library-first serves verified loops starting up to 40 km from the named
+  place (Banyoles gets Girona's loops). Owner to decide the radius.
+- tests/loops-comprehensive.spec.ts targets the old public homepage; it fails
+  wholesale against the login-gated product and needs rewriting.
 - DB credential leaked in git history (removed from files) — MUST be
   rotated in the Vercel/Neon dashboard
 - Anchor-first session assembly SHIPPED (src/lib/session-assembly.ts +

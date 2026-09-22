@@ -1133,7 +1133,7 @@ async function ridesFromHome(matches: LibraryMatch[], spec: RouteSpec): Promise<
   });
   for (const r of results) if (r) out.push(r);
   out.sort((a, b) => b.match_score - a.match_score);
-  return out;
+  return out.slice(0, 3);
 }
 
 const lastRideFromHomeWhy = new Map<string, string>();
@@ -1266,7 +1266,7 @@ async function candidatesFromSpecInner(
 
   // ── Library-first ──────────────────────────────────────────────────────────
   // Fail soft: a DB outage must never block fresh generation.
-  const libraryMatches = await matchLibraryRoutes(spec, 3).catch((e) => {
+  const libraryMatches = await matchLibraryRoutes(spec, 5).catch((e) => {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[library] match failed:", msg);
     libraryDiag = `error: ${msg.slice(0, 120)}`;

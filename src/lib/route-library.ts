@@ -198,7 +198,13 @@ export async function matchLibraryRoutes(
       Number(route.start_lat),
       Number(route.start_lng)
     );
-    const score = scoreLibraryRoute(route, spec, distFromStart);
+    // Every route starts from home (owner rule): judge a loop by the whole
+    // ride — the loop plus an estimated ride out and back (roads ≈1.3× the
+    // straight line) — not by the loop alone. Otherwise a loop 18 km away
+    // with a nicer headline distance outranks the one starting in town.
+    const approachKm = distFromStart > 1 ? distFromStart * 1.3 : 0;
+    const asRidden = { ...route, distance_km: route.distance_km + 2 * approachKm } as Route;
+    const score = scoreLibraryRoute(asRidden, spec, distFromStart);
     if (score < LIBRARY_MATCH_THRESHOLD) continue;
     // One malformed stored track must never sink the whole match (it used
     // to throw here and the rider got no library loops at all).

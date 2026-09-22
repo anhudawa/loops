@@ -678,15 +678,28 @@ async function routeLoopCandidate(
     if (better) { best = p; bestLoss = loss; }
   };
 
-  for (const { label, wps, onlyIfLossAbove } of attempts) {
-    if (bestLoss <= onlyIfLossAbove) continue;
-    if (!timeLeft()) { genDebug("routing budget spent — skipping further loop-shape attempts"); break; }
+  // One attempt = out leg, then the return leg with the out leg as a
+  // weighted no-go. The first (unmoved) attempt runs alone; if the loop is
+  // still losing a lot, the three moved-far attempts run CONCURRENTLY —
+  // same engine calls, a third of the wall time.
+  const runAttempt = async (wps: [number, number][]): Promise<RoutedPath | null> => {
     const outPath = await routeViaBRouter(wps.slice(0, farIdx + 1), usedProfile);
-    if (!outPath || outPath.coords.length < 2) continue;
+    if (!outPath || outPath.coords.length < 2) return null;
     const nogo = nogoPolyline(outPath.coords, 2.0, 0.3);
     const backPath = await routeViaBRouter(wps.slice(farIdx), usedProfile, false, nogo);
-    if (!backPath || backPath.coords.length < 2) continue;
-    consider(joinPaths(outPath, backPath), label);
+    if (!backPath || backPath.coords.length < 2) return null;
+    return joinPaths(outPath, backPath);
+  };
+  const [firstAttempt, ...movedAttempts] = attempts;
+  if (bestLoss > firstAttempt.onlyIfLossAbove && timeLeft()) {
+    const p = await runAttempt(firstAttempt.wps);
+    if (p) consider(p, firstAttempt.label);
+  }
+  if (bestLoss > LOOP_MOVE_FAR_KM && timeLeft()) {
+    const results = await Promise.all(movedAttempts.map((a) => runAttempt(a.wps)));
+    results.forEach((p, i) => { if (p) consider(p, movedAttempts[i].label); });
+  } else if (bestLoss > LOOP_MOVE_FAR_KM) {
+    genDebug("routing budget spent — skipping far-point attempts");
   }
   return done(best, "routed after loop shaping");
 }

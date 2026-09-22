@@ -1,15 +1,14 @@
 #
 # loops-road-relaxed — FALLBACK ONLY.
 #
-# Identical to loops-road (the Loops Road Standard) except that main roads,
-# 80 km/h+ roads without a segregated track, and unpaved SURFACES are made
-# very expensive instead of impossible. The app tries loops-road first; only
-# when that finds no route at all does it try this profile, and it then
-# measures and names every non-standard stretch ("600 m on the R755") or
-# refuses the route if the compromise is too long. Motorways, tracks, paths,
-# footways and steps stay forbidden (allowing footways broke routing in
-# testing: "no track found").
-#
+# Identical to loops-road (the Loops Road Standard) except that main roads
+# (primary 8x, trunk 15x) and fast roads (6x) are very expensive instead of
+# impossible. Unpaved surfaces, tracks, paths, footways, steps and motorways
+# stay forbidden — a road bike on gravel is never a "compromise", it is a
+# dropped candidate. The app tries loops-road first; only when that finds
+# no sane route does it try this profile, and it then measures and names
+# every non-standard stretch ("600 m on the R755") or refuses the route if
+# the compromise is too long.
 #
 #
 # A fastbike could be a racing bike or a speed pedelec.
@@ -275,7 +274,7 @@ assign costfactor
          6.0
   # Rule 4: paved only. Explicitly unpaved is forbidden; untagged minor roads
   # are assumed paved (as the surface scorer does).
-  switch or isunpaved surface=unpaved|gravel|fine_gravel|compacted|dirt|earth|grass|ground|mud|sand|pebblestone|rock|stone|clay|grass_paver  8.0
+  switch or isunpaved surface=unpaved|gravel|fine_gravel|compacted|dirt|earth|grass|ground|mud|sand|pebblestone|rock|stone|clay|grass_paver  10000
   switch or highway=track or highway=path or highway=bridleway highway=footway  10000
   switch highway=steps 10000
   switch route=ferry switch allow_ferries 5.67 10000

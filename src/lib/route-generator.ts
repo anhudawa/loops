@@ -553,6 +553,21 @@ async function routeLoopCandidate(
   if (!first) return null;
 
   const lossOf = (p: RoutedPath) => repairSpurs(p.coords).removedKm;
+  // A strict result that is wildly over the requested distance, or mostly
+  // retrace, is the engine detouring around a fragmented quiet-lane network
+  // (Girona: 137–204 km for an 80 km ask, 37–80 km of it retraced). That is
+  // "no sane route under the standard" — try the relaxed profile, whose
+  // main-road links the compromise policy then measures and names, or drops.
+  const garbage = (p: RoutedPath) => p.distance_km > targetKm * 1.6 || lossOf(p) > p.distance_km * 0.35;
+  const relaxed = RELAXED_PROFILE[profile];
+  if (relaxed && first.profile === profile && garbage(first)) {
+    const alt = await routeViaBRouter(waypoints, relaxed);
+    if (alt && alt.coords.length >= 2 && !garbage(alt)) {
+      genDebug(`strict route was ${first.distance_km.toFixed(0)} km with ${lossOf(first).toFixed(0)} km retrace for a ${targetKm} km ask — using the relaxed profile (${alt.distance_km.toFixed(0)} km), compromise to be measured`);
+      first = alt;
+    }
+  }
+
   let best = first;
   let bestLoss = lossOf(first);
   if (bestLoss <= LOOP_RETRACE_FIX_KM || waypoints.length < 4) return first;

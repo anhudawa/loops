@@ -686,7 +686,7 @@ const NAME_LOOKUP_URL = "https://overpass-api.de/api/interpreter";
 /**
  * Resolve "R755"/"N81"-style refs (or names) for compromise stretches so the
  * rider is told exactly where the compromise is. One ~200-byte query per
- * stretch, 4 s budget each, never throws — a missing name degrades to
+ * stretch, 1.5 s budget, never throws — a missing name degrades to
  * "on a primary road".
  */
 export async function nameCompromises(
@@ -698,13 +698,17 @@ export async function nameCompromises(
     compromises.slice(0, 3).map(async (c) => {
       const mid = coords[Math.min(coords.length - 1, Math.floor((c.start + c.end) / 2))];
       if (!mid) return;
-      const q = `[out:json][timeout:4];way(around:25,${mid[0].toFixed(6)},${mid[1].toFixed(6)})["highway"="${c.highway}"];out tags 3;`;
+      const q = `[out:json][timeout:2];way(around:25,${mid[0].toFixed(6)},${mid[1].toFixed(6)})["highway"="${c.highway}"];out tags 3;`;
       try {
         const res = await fetchImpl(NAME_LOOKUP_URL, {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "loops.ie route generator (https://www.loops.ie)" },
           body: `data=${encodeURIComponent(q)}`,
-          signal: AbortSignal.timeout(4500),
+          // Hard 1.5 s budget: a name is nice ("on the R755"), but the
+          // lookup blocked the whole scoring phase for its full timeout
+          // whenever the public map service was slow. Unnamed degrades to
+          // "on a primary road" — still honest.
+          signal: AbortSignal.timeout(1500),
         });
         if (!res.ok) return;
         const json = (await res.json()) as { elements?: Array<{ tags?: WayTags }> };

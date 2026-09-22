@@ -1844,6 +1844,8 @@ async function generateFreshRoutes(
     routed.map(async ({ waypoints, path, elevations, elevGain, elevLoss, edgeTags }): Promise<GeneratedRoute | null> => {
       const distKm = path.distance_km;
       const gain = elevGain;
+      const t3 = Date.now();
+      const step = (label: string) => genDebug(`  ⏱ ${label} +${Date.now() - t3}ms (${Math.round(distKm)} km, ${path.coords.length} pts)`);
 
       const rulesResult = validateRouteRules(path.coords, spec.discipline, null, {
         elevationGain: gain,
@@ -1853,6 +1855,7 @@ async function generateFreshRoutes(
           (spec.max_elevation_gain_m ?? Infinity) < distKm * 6,
         rejectSpurs: true,
       });
+      step("rules");
       if (!rulesResult.passed) {
         genDebug(`candidate dropped: rules — ${rulesResult.violations?.map((v) => v.rule).join("; ") ?? "failed"} (${Math.round(distKm)}km)`);
         for (const v of rulesResult.violations ?? []) if (v.severity === "fatal") drop(v.rule);
@@ -1889,12 +1892,14 @@ async function generateFreshRoutes(
         genDebug("candidate has no engine road tags — falling back to OSM road download for scoring");
       }
 
+      step("road report");
       let quality;
       try {
         quality = await scoreRoute(path.coords, spec.discipline, {
           edgeTags,
           scenic: edgeTags ? scenic : undefined,
         });
+        step("quality");
       } catch (err) {
         genDebug(`candidate dropped: quality scoring threw — ${err instanceof Error ? err.message : err}`);
         drop("QUALITY_ERROR");
@@ -1908,6 +1913,7 @@ async function generateFreshRoutes(
         spec.discipline
       );
 
+      step("gpx");
       let matchScore = computeMatchScore(distKm, gain, spec, quality.total);
 
       // Wind alignment shapes the ranking: a loop oriented for the

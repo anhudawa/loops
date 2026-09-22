@@ -213,7 +213,7 @@ const DISCIPLINE_PROFILE: Record<Discipline, string> = {
   // loops-road = the CEO Road Standard as a routing profile (no main roads,
   // no 80 km/h+ without a segregated track, paved only, quiet lanes win even
   // when longer). Ships on our own routing server; see scripts/routing/profiles.
-  road: process.env.BROUTER_URL ? "loops-road" : "fastbike-lowtraffic",
+  road: process.env.BROUTER_ROAD_PROFILE || (process.env.BROUTER_URL ? "loops-road" : "fastbike-lowtraffic"),
   gravel: "gravel",
   mtb: "mtb",
 };
@@ -359,7 +359,13 @@ export function getLastBRouterFailure(): string { return lastBRouterFailure; }
  * measured and named by the compromise report (or the candidate is dropped
  * if the compromise is too long). Trust rule: say so, never serve silently.
  */
-const RELAXED_PROFILE: Record<string, string> = { "loops-road": "loops-road-relaxed" };
+const RELAXED_PROFILE: Record<string, string> = {
+  "loops-road": process.env.BROUTER_ROAD_RELAXED_PROFILE || "loops-road-relaxed",
+  // Uploaded-profile mode (see /api/engine/sync-profiles): strict id → relaxed id.
+  ...(process.env.BROUTER_ROAD_PROFILE
+    ? { [process.env.BROUTER_ROAD_PROFILE]: process.env.BROUTER_ROAD_RELAXED_PROFILE || "loops-road-relaxed" }
+    : {}),
+};
 
 /** Strict-profile route with one retry when the engine's watchdog killed
  *  the request (server saturation is load, not "no route"). */

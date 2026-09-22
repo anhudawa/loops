@@ -20,7 +20,8 @@ export async function GET() {
     data: {
       engine: host ?? "brouter.de (public demo — BROUTER_URL not set)",
       own_engine: ownEngine,
-      road_profile: ownEngine ? "loops-road" : "fastbike-lowtraffic",
+      road_profile: process.env.BROUTER_ROAD_PROFILE || (ownEngine ? "loops-road" : "fastbike-lowtraffic"),
+      relaxed_profile: process.env.BROUTER_ROAD_RELAXED_PROFILE || "loops-road-relaxed",
       brouter_url_set: !!raw,
       brouter_url_valid: raw ? host !== "invalid-url" : false,
       expected: "http://2.28.33.245:17777/brouter",

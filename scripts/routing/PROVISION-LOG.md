@@ -64,3 +64,12 @@ token.
   profile, so uploads fail there and Girona/Calpe loops keep declining until
   the rebuild.
 
+## Profile sync from the app (built 2026-09-22, usable after the v3 rebuild)
+`POST /api/engine/sync-profiles` (admin) uploads the repo's profiles to the
+live engine: the first sync CREATES custom ids (the engine assigns them) and
+returns the env lines to set on Vercel (`BROUTER_ROAD_PROFILE=custom_<n>`,
+`BROUTER_ROAD_RELAXED_PROFILE=custom_<n>`); every later sync UPDATES those
+ids in place and routes a test leg with each. Verified locally end to end
+(create → update → route). On the live v2 server the upload fails (absolute
+custom dir) — the rebuild is still needed once.
+

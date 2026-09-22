@@ -23,4 +23,9 @@ const blocks = files.map((f) => {
 
 const out = template.replace("#__PROFILES__\n", blocks.join(""));
 writeFileSync(join(here, "cloud-init-brouter.yaml"), out);
+
+// The same profiles as JSON for the app: POST /api/engine/sync-profiles
+// uploads them to the live engine (custom profile ids) without a rebuild.
+const asJson = Object.fromEntries(files.map((f) => [f.replace(/\.brf$/, ""), readFileSync(join(profilesDir, f), "utf8")]));
+writeFileSync(join(here, "..", "..", "src", "data", "engine-profiles.json"), JSON.stringify(asJson));
 console.log(`cloud-init-brouter.yaml: ${files.length} profile(s) embedded (${files.join(", ")}), ${(out.length / 1024).toFixed(1)} KB`);

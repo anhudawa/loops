@@ -39,11 +39,22 @@ export const QUALITY_FLOOR = 50;
 export const QUALITY_WORLD_CLASS = 72;
 export const DEFAULT_COUNTRY = "Ireland";
 
-// ──── Filter system ────
+// ──── Ride time (one model — src/lib/ride-time.ts) ────
+// DEFAULT_SPEED_KMH is the road default and the baseline a rider's own
+// avg_speed_kmh is measured against. CRUISE_SPEED_KMH is the steady club
+// pace per discipline at that baseline; CLIMB_KM_PER_100M is the climbing
+// cost (every 100 m climbed counts as one extra flat kilometre). The SQL in
+// db.ts getRoutes is built from these same numbers (rideMinutesSql).
 export const DEFAULT_SPEED_KMH = 25;
 export const MIN_SPEED_KMH = 15;
 export const MAX_SPEED_KMH = 45;
-export const ELEVATION_MINUTES_PER_10M = 1;
+export const CRUISE_SPEED_KMH = {
+  road: DEFAULT_SPEED_KMH,
+  gravel: 19,
+  mtb: 13,
+  mixed: 22,
+} as const;
+export const CLIMB_KM_PER_100M = 1;
 
 export const DURATION_TIERS = {
   "1h": { label: "1h", maxMinutes: 90 },

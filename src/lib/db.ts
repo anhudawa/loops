@@ -1,6 +1,7 @@
 import { sql } from "@vercel/postgres";
 import { v4 as uuidv4 } from "uuid";
 import { DURATION_TIERS, DEFAULT_SPEED_KMH } from "@/config/constants";
+import { clampSpeedKmh, rideMinutesSql } from "@/lib/ride-time";
 import {
   computeUsageMetrics,
   type RawEventRow,
@@ -600,17 +601,21 @@ export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
   // Only show approved routes (or legacy routes without a quality_status yet)
   conditions.push(`(r.quality_status = 'approved' OR r.quality_status IS NULL)`);
 
-  // Duration filtering (uses route fields directly, no aggregation needed)
-  const avgSpeed = filters.avgSpeedKmh ?? DEFAULT_SPEED_KMH;
+  // Duration filtering (uses route fields directly, no aggregation needed).
+  // Riding minutes are the SQL twin of estimateRideMinutes in
+  // src/lib/ride-time.ts — rideMinutesSql() is built from the same constants,
+  // so cards, the tier filter, the sort and the FAQ can never disagree. The
+  // rider's own avg_speed_kmh (clamped) replaces the road default as before.
+  const avgSpeed = clampSpeedKmh(filters.avgSpeedKmh ?? DEFAULT_SPEED_KMH);
   if (filters.duration && filters.duration in DURATION_TIERS) {
     const tier = DURATION_TIERS[filters.duration as keyof typeof DURATION_TIERS];
     if ("maxMinutes" in tier && tier.maxMinutes !== undefined) {
-      conditions.push(`(r.distance_km / $${idx}::numeric * 60 + r.elevation_gain_m / 10) <= $${idx + 1}::numeric`);
+      conditions.push(`${rideMinutesSql(`$${idx}`)} <= $${idx + 1}::numeric`);
       params.push(avgSpeed, tier.maxMinutes);
       idx += 2;
     }
     if ("minMinutes" in tier && tier.minMinutes !== undefined) {
-      conditions.push(`(r.distance_km / $${idx}::numeric * 60 + r.elevation_gain_m / 10) >= $${idx + 1}::numeric`);
+      conditions.push(`${rideMinutesSql(`$${idx}`)} >= $${idx + 1}::numeric`);
       params.push(avgSpeed, tier.minMinutes);
       idx += 2;
     }
@@ -703,7 +708,7 @@ export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
         COALESCE((SELECT AVG(rt2.score) FROM routes r2 JOIN ratings rt2 ON rt2.route_id = r2.id WHERE r2.created_by = r.created_by), 0) as creator_rating,
         COALESCE((SELECT COUNT(rt2.id) FROM routes r2 JOIN ratings rt2 ON rt2.route_id = r2.id WHERE r2.created_by = r.created_by), 0) as creator_rating_count,
         (SELECT COUNT(*) FROM comments cm WHERE cm.route_id = r.id) as comment_count,
-        (r.distance_km / $${speedIdx}::numeric * 60 + r.elevation_gain_m / 10) as estimated_minutes,
+        ${rideMinutesSql(`$${speedIdx}`)} as estimated_minutes,
         ${haversineExpr} as haversine_distance
       FROM routes r
       LEFT JOIN ratings rt ON rt.route_id = r.id

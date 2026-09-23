@@ -19,6 +19,7 @@ import { useGeolocation } from "@/lib/useGeolocation";
 import { track } from "@/lib/track";
 import { ANALYTICS_EVENTS } from "@/lib/metrics";
 import { deliveryNote } from "@/lib/delivery-note";
+import { estimateRideMinutes, formatRideTime } from "@/lib/ride-time";
 
 // ── Types mirror the /api/generate-route unified response ───────────────────
 
@@ -98,6 +99,8 @@ type Candidate = LibraryCandidate | GeneratedCandidate;
 interface Interpreted {
   distance_km: number;
   duration_minutes?: number;
+  /** The rider's own avg_speed_kmh when the server used it. */
+  rider_speed_kmh?: number;
   discipline: "road" | "gravel" | "mtb";
   elevation_preference: "flat" | "rolling" | "hilly" | "mountainous" | "any";
   region?: string;
@@ -665,12 +668,9 @@ function InterpretedPanel({ interpreted }: { interpreted: Interpreted }) {
   );
 }
 
+/** The rider's asked-for duration, rounded like every other ride time (ride-time.ts). */
 function formatDuration(minutes: number): string {
-  const h = Math.floor(minutes / 60);
-  const m = Math.round(minutes % 60);
-  if (h === 0) return `${m} min`;
-  if (m === 0) return `${h}h`;
-  return `${h}h ${m}m`;
+  return formatRideTime(minutes, { style: "card", approx: false });
 }
 
 // ── Error panel ───────────────────────────────────────────────────────────────
@@ -1044,6 +1044,20 @@ function CandidateCard({
               <dt className="inline">Climbing </dt>
               <dd className="inline font-bold" style={{ color: "var(--text)" }}>
                 {candidate.elevation_gain_m} m
+              </dd>
+            </div>
+            <div title="Riding time at a steady pace — stops go on top">
+              <dt className="inline">Riding time </dt>
+              <dd className="inline font-bold" style={{ color: "var(--text)" }}>
+                {formatRideTime(
+                  estimateRideMinutes({
+                    distance_km: candidate.distance_km,
+                    elevation_gain_m: candidate.elevation_gain_m,
+                    discipline: interpreted?.discipline,
+                    avgSpeedKmh: interpreted?.rider_speed_kmh,
+                  }),
+                  { style: "card" }
+                )}
               </dd>
             </div>
             {!isLibrary && candidate.quality_score !== undefined && (

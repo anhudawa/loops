@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRoute } from "@/lib/db";
 import { apiError, handleApiError } from "@/lib/api-utils";
-import { DEFAULT_SPEED_KMH } from "@/config/constants";
+import { estimateRideMinutes } from "@/lib/ride-time";
 import type { ForecastHour } from "@/lib/ride-wind";
 
 const cache = new Map<string, { data: unknown; timestamp: number }>();
@@ -57,7 +57,14 @@ export async function GET(
       return NextResponse.json(cached.data);
     }
 
-    const windowHours = Math.min(MAX_RIDE_HOURS, Math.max(2, Math.ceil(Number(route.distance_km || 0) / DEFAULT_SPEED_KMH) + 1));
+    // Hours of forecast to return: the riding time (one model, ride-time.ts)
+    // plus an hour, at least 2 and at most MAX_RIDE_HOURS.
+    const rideMinutes = estimateRideMinutes({
+      distance_km: Number(route.distance_km || 0),
+      elevation_gain_m: Number(route.elevation_gain_m || 0),
+      discipline: route.discipline,
+    });
+    const windowHours = Math.min(MAX_RIDE_HOURS, Math.max(2, Math.ceil(rideMinutes / 60) + 1));
     const url =
       `https://api.open-meteo.com/v1/forecast?latitude=${route.start_lat}&longitude=${route.start_lng}` +
       `&current=temperature_2m,relative_humidity_2m,precipitation,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m` +

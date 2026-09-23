@@ -18,6 +18,7 @@
  */
 
 import type { RouteSpec, Discipline, WorkoutSpec } from "./route-intent";
+import { estimateRideMinutes } from "./ride-time";
 import { mergeLoopReport } from "./library-road-report";
 import { parseRouteIntent } from "./route-intent";
 import {
@@ -127,6 +128,8 @@ export type RouteCandidate =
 export interface InterpretedIntent {
   distance_km: number;
   duration_minutes?: number;
+  /** The rider's own avg_speed_kmh when it was used (so the UI times results at it). */
+  rider_speed_kmh?: number;
   discipline: "road" | "gravel" | "mtb";
   elevation_preference: "flat" | "rolling" | "hilly" | "mountainous" | "any";
   region?: string;
@@ -1106,9 +1109,9 @@ export async function generateRouteCandidates(
     origin: options.origin,
   });
   markPhase("intent");
-  const interpreted = await summariseIntent(spec);
+  const interpreted = await summariseIntent(spec, options.userSpeedKmh);
   markPhase("summarise");
-  const candidates = await candidatesFromSpec(spec);
+  const candidates = await candidatesFromSpec(spec, { userSpeedKmh: options.userSpeedKmh });
   markPhase("total");
   const timings = currentTimings;
   currentTimings = null;
@@ -1133,7 +1136,7 @@ async function reverseGeocode(lat: number, lng: number): Promise<string | null> 
   }
 }
 
-async function summariseIntent(spec: RouteSpec): Promise<InterpretedIntent> {
+async function summariseIntent(spec: RouteSpec, userSpeedKmh?: number): Promise<InterpretedIntent> {
   let workout_summary: string | undefined;
   if (spec.workout) {
     workout_summary = spec.workout.intervals
@@ -1164,6 +1167,7 @@ async function summariseIntent(spec: RouteSpec): Promise<InterpretedIntent> {
   return {
     distance_km: spec.distance_km,
     duration_minutes: spec.duration_minutes,
+    rider_speed_kmh: userSpeedKmh,
     discipline: spec.discipline,
     elevation_preference: spec.elevation_preference,
     region,
@@ -1178,9 +1182,21 @@ async function summariseIntent(spec: RouteSpec): Promise<InterpretedIntent> {
   };
 }
 
-/** Rough ride duration for forecasting which hour the rider is on each leg. */
-function estimateDurationMinutes(spec: RouteSpec): number {
-  return spec.duration_minutes ?? Math.round((spec.distance_km / 25) * 60);
+/**
+ * Ride duration for sizing the wind-forecast window: the rider's own ask
+ * when they gave one, else the one ride-time model (src/lib/ride-time.ts)
+ * at their speed, with the elevation cap (if any) as the climbing estimate.
+ */
+function estimateDurationMinutes(spec: RouteSpec, userSpeedKmh?: number): number {
+  return (
+    spec.duration_minutes ??
+    estimateRideMinutes({
+      distance_km: spec.distance_km,
+      elevation_gain_m: spec.max_elevation_gain_m ?? 0,
+      discipline: spec.discipline,
+      avgSpeedKmh: userSpeedKmh,
+    })
+  );
 }
 
 /**
@@ -1194,7 +1210,10 @@ function estimateDurationMinutes(spec: RouteSpec): number {
  * Generate candidates from an already-built RouteSpec — used by the smoke
  * test and any future structured (non-LLM) entry points.
  */
-export async function candidatesFromSpec(spec: RouteSpec): Promise<RouteCandidate[]> {
+export async function candidatesFromSpec(
+  spec: RouteSpec,
+  options: { userSpeedKmh?: number } = {}
+): Promise<RouteCandidate[]> {
   libraryDiag = "";
   libraryReasons.length = 0;
   const forecast =
@@ -1202,7 +1221,7 @@ export async function candidatesFromSpec(spec: RouteSpec): Promise<RouteCandidat
       ? await fetchWindForecast(
           spec.start_point,
           new Date(),
-          estimateDurationMinutes(spec),
+          estimateDurationMinutes(spec, options.userSpeedKmh),
           spec.wind_strategy
         )
       : null;

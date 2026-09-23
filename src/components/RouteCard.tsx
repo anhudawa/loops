@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { SOCIAL_FEATURES_ENABLED } from "@/config/constants";
+import { formatRideTime } from "@/lib/ride-time";
 import Link from "next/link";
 
 interface RouteCardProps {
@@ -37,14 +38,6 @@ interface RouteCardProps {
   isSelected?: boolean;
   onHover?: (id: string | null) => void;
   showDistance?: boolean;
-}
-
-function formatDuration(minutes: number): string {
-  const h = Math.floor(minutes / 60);
-  const m = Math.round(minutes % 60);
-  if (h === 0) return `${m}m`;
-  if (m === 0) return `${h}h`;
-  return `${h}h ${m.toString().padStart(2, "0")}m`;
 }
 
 const DISCIPLINE_LABELS: Record<string, { icon: string; label: string }> = {
@@ -242,8 +235,13 @@ export default function RouteCard({ route, showDistance }: RouteCardProps) {
               {route.estimated_minutes !== undefined && route.estimated_minutes > 0 && (
                 <>
                   <span style={{ color: "var(--border-light)" }} aria-hidden="true">·</span>
-                  <span className="font-bold" style={{ color: "var(--accent)" }}>
-                    ~{formatDuration(route.estimated_minutes)}
+                  <span
+                    className="font-bold"
+                    style={{ color: "var(--accent)" }}
+                    title="Riding time at a steady pace — stops go on top"
+                    aria-label={`Riding time ${formatRideTime(route.estimated_minutes, { style: "card", approx: false })}`}
+                  >
+                    {formatRideTime(route.estimated_minutes, { style: "card" })}
                   </span>
                 </>
               )}

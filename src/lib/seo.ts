@@ -1,5 +1,6 @@
 import { SOCIAL_FEATURES_ENABLED } from "@/config/constants";
 import { freeGpxPhrase, gpxIsPublic } from "@/lib/copy";
+import { rideTimeSentence } from "@/lib/ride-time";
 // ============================================================
 // seo.ts — SEO utility functions: slugify, JSON-LD generators
 // ============================================================
@@ -150,17 +151,16 @@ interface RouteFaqInput {
   discipline: string;
 }
 
-// Rough ride-time estimate using distance + climbing. Average recreational
-// cyclist ~22 km/h on road, slower on gravel/mtb, plus ~1 min per 10m climbed.
-function estimateRideTime(input: RouteFaqInput): string {
-  const baseSpeed = input.discipline === "road" ? 22 : input.discipline === "gravel" ? 17 : 12;
-  const climbingMinutes = input.elevation_gain_m / 10;
-  const totalMinutes = (input.distance_km / baseSpeed) * 60 + climbingMinutes;
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = Math.round(totalMinutes % 60);
-  if (hours === 0) return `${minutes} minutes`;
-  if (minutes === 0) return `${hours} hour${hours > 1 ? "s" : ""}`;
-  return `${hours} hour${hours > 1 ? "s" : ""} ${minutes} minutes`;
+// Ride time comes from the one model in src/lib/ride-time.ts (same numbers
+// as the cards, the duration filter and the weather window). Public copy is
+// always at the club default pace, so the visible FAQ and the FAQPage
+// JSON-LD say the same thing to every reader.
+function rideTimeAnswer(input: RouteFaqInput): string {
+  return `${input.name} is ${input.distance_km} km with ${input.elevation_gain_m} m of climbing. ${rideTimeSentence({
+    distance_km: input.distance_km,
+    elevation_gain_m: input.elevation_gain_m,
+    discipline: input.discipline,
+  })}`;
 }
 
 function beginnerSuitability(input: RouteFaqInput): string {
@@ -200,7 +200,7 @@ export function buildRouteFaqs(input: RouteFaqInput): FaqItem[] {
     },
     {
       question: `How long does ${input.name} take to ride?`,
-      answer: `${input.name} is ${input.distance_km}km with ${input.elevation_gain_m}m of climbing. Most riders complete it in around ${estimateRideTime(input)}, depending on fitness, stops, and conditions.`,
+      answer: rideTimeAnswer(input),
     },
     {
       question: `What bike do I need for ${input.name}?`,

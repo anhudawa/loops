@@ -122,6 +122,34 @@ export default function AdminPage() {
     }
   }, []);
 
+  // Bundled LOOPS-curated route sets (e.g. Dublin) — one-tap import.
+  const [bundles, setBundles] = useState<{ key: string; label: string; routes: string[] }[]>([]);
+  const [importMsg, setImportMsg] = useState<string | null>(null);
+  const [importing, setImporting] = useState<string | null>(null);
+  useEffect(() => {
+    fetch("/api/admin/import-bundle").then((r) => (r.ok ? r.json() : null)).then((d) => d?.data && setBundles(d.data)).catch(() => {});
+  }, []);
+  const importBundle = async (key: string) => {
+    setImporting(key);
+    setImportMsg(null);
+    try {
+      const res = await fetch("/api/admin/import-bundle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bundle: key }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d?.error ?? "Import failed");
+      const results = (d.data?.results ?? []) as { name: string; status: string }[];
+      setImportMsg(results.map((r) => `${r.name}: ${r.status === "inserted" ? "added" : "already there"}`).join(" · "));
+      setRoutes([]); // refetch the table
+    } catch (e) {
+      setImportMsg(e instanceof Error ? e.message : "Import failed");
+    } finally {
+      setImporting(null);
+    }
+  };
+
   const fetchRoutes = useCallback(async () => {
     try {
       const res = await fetch("/api/admin/routes");
@@ -464,6 +492,29 @@ export default function AdminPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {!loadingTab && tab === "routes" && bundles.length > 0 && (
+            <div className="p-3 mb-2 rounded-lg" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+              <p className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>
+                LOOPS route sets, checked against the Road Standard. Safe to press twice — existing routes are skipped.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {bundles.map((b) => (
+                  <button
+                    key={b.key}
+                    onClick={() => importBundle(b.key)}
+                    disabled={importing !== null}
+                    title={b.routes.join(", ")}
+                    className="px-3 py-2 rounded-lg text-xs font-bold disabled:opacity-40"
+                    style={{ background: "var(--accent)", color: "var(--bg)" }}
+                  >
+                    {importing === b.key ? "Importing…" : `Import ${b.label} routes (${b.routes.length})`}
+                  </button>
+                ))}
+              </div>
+              {importMsg && <p className="text-xs mt-2" style={{ color: "var(--text)" }}>{importMsg}</p>}
             </div>
           )}
 

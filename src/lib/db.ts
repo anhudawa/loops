@@ -790,6 +790,33 @@ export async function insertRoute(
   return (await getRoute(route.id))!;
 }
 
+/** A LOOPS-curated route from a bundled library file (src/data/hub-bundles).
+ *  Shown publicly (approved) but NOT verified — self-sourced, not an
+ *  external operator's route. Idempotent: an existing name+county is skipped. */
+export async function insertCuratedRoute(r: {
+  id: string; name: string; description: string | null; county: string; country: string; region: string;
+  discipline: string; surface_type: string; distance_km: number; elevation_gain_m: number; elevation_loss_m: number;
+  coordinates: number[][]; road_report: unknown;
+}): Promise<"inserted" | "exists"> {
+  await migrateDb();
+  const { rows } = await sql`SELECT id FROM routes WHERE name = ${r.name} AND county = ${r.county} LIMIT 1`;
+  if (rows.length > 0) return "exists";
+  await sql`
+    INSERT INTO routes (
+      id, name, description, distance_km, elevation_gain_m, elevation_loss_m,
+      surface_type, county, country, region, discipline,
+      start_lat, start_lng, gpx_filename, coordinates,
+      created_by, verified, quality_status, operator_name, operator_url, road_report
+    ) VALUES (
+      ${r.id}, ${r.name}, ${r.description}, ${r.distance_km}, ${r.elevation_gain_m}, ${r.elevation_loss_m},
+      ${r.surface_type}, ${r.county}, ${r.country}, ${r.region}, ${r.discipline},
+      ${r.coordinates[0][0]}, ${r.coordinates[0][1]}, ${null}, ${JSON.stringify(r.coordinates)},
+      ${null}, FALSE, 'approved', 'LOOPS', 'https://www.loops.ie', ${JSON.stringify(r.road_report)}::jsonb
+    )
+  `;
+  return "inserted";
+}
+
 // ──── Users ────
 export async function getUserByEmail(email: string): Promise<User | undefined> {
   const { rows } = await sql`SELECT * FROM users WHERE email = ${email}`;

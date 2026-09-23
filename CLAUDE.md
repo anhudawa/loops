@@ -142,6 +142,12 @@ node scripts/import-routes.mjs scripts/hub-data/girona-eat-sleep-cycle.json --dr
   ANTHROPIC_API_KEY + network); expand to 100 cases and wire into CI
 - BRouter public demo is rate-limited — set BROUTER_URL before launch
 - Gran Canaria manifest has 7 routes (bar is 8)
+- Dublin library: /admin → Routes → "Import Dublin routes" inserts the bundled
+  src/data/hub-bundles/dublin.json (2 Skerries loops, road report measured on the
+  engine, approved but not VERIFIED). Of dublin.json, the Canal Ride (~5 km gravel
+  towpath) and Wicklow 200 (~11 km primary) FAIL the Road Standard — not bundled.
+  Note: import-routes.mjs inserts self-sourced routes as quality_status 'pending'
+  (hidden publicly).
 - No CSRF tokens; cookie-only sessions; locale hardcoded en-IE
 
 ## Conventions

@@ -118,6 +118,21 @@ unsuitable, MTB only impassable; access bans and fords stay unsuitable for
 everyone. Reports carry `rules_version` (ROAD_RULES_VERSION); older stored
 reports are re-traced on next view.
 
+**Where the trust shows (2026-09-23, evening).** Route page: the Road
+Standard card with a "Where" list of every stretch; amber markers on the
+map at the 12 longest stretches, named on tap (each compromise carries its
+midpoint, `at`); "not measured yet" when there is no report. Route cards:
+a ✓ Road Standard / ⚠ Road notes chip (card-sized verdict, no full report
+shipped). Generate results: the same "Where" list per candidate; library
+loops carry their measured report and a ride from home folds the loop's
+own compromises in. Preview image: "Road Standard: met" / "Road notes on
+route" badge. GPX: a "Road note: …" waypoint at each stretch for the head
+unit. Tracing is per chunk (~24 km): a stretch the engine cannot follow
+(> 20 % off its own track distance, or unreachable via points even after
+thinning) stays "unknown"; a report is published only when ≥ 60 % is
+measured. Road names come from one batched Overpass query per route; a
+report without names gets them filled in after a later view.
+
 **Ride verdict (2026-09-23).** The weather card says what the wind will do
 to THIS loop at THIS time (`src/lib/ride-wind.ts`), judging each stretch
 against the forecast for the hour the rider reaches it. It never suggests

@@ -157,6 +157,10 @@ node scripts/import-routes.mjs scripts/hub-data/girona-eat-sleep-cycle.json --dr
   stores it; unknown beats wrong (length drift > 8 % → nothing stored, retry
   in 1 h). Shown as the "Road Standard" card on the route page and as a
   badge on the OG preview. Roadman spin: meets the standard.
+- Trust surfaces: Road Standard card + "Where" list + map markers (route
+  page), ✓/⚠ chip on cards, badge on the OG image, "Road note" GPX
+  waypoints, "Where" list on Generate results. Trace is per chunk with a
+  60 % measured floor; names batched via Overpass and lazily back-filled.
 - Ride verdict (src/lib/ride-wind.ts): weather card says what wind/rain do
   to THIS loop for the hours of the ride; never suggests reversing a loop
   (start point decides out/home balance under steady wind).

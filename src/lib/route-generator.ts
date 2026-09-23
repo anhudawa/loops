@@ -1573,8 +1573,14 @@ async function candidatesFromSpecInner(
   if (spec.workout) {
     // Workout matches keep their segment indices, so only loops that already
     // start at home qualify; others fall through to fresh assembly.
-    const workoutMatches = (await matchLibraryForWorkout(spec, 3).catch((e) => { console.error("[library] workout match failed:", e instanceof Error ? e.message : e); return []; }))
-      .filter((m) => m.distance_from_start_km <= FROM_HOME_KM);
+    // Only when efforts are spread (a library loop's own stretches), and
+    // time-boxed: it checks each loop's segments on the public map service,
+    // which once took 42 s of a 55 s request.
+    const workoutMatches = spec.effort_layout !== "spread" ? [] : (await Promise.race([
+      matchLibraryForWorkout(spec, 3).catch((e) => { console.error("[library] workout match failed:", e instanceof Error ? e.message : e); return [] as LibraryMatch[]; }),
+      new Promise<LibraryMatch[]>((r) => setTimeout(() => r([]), 8000)),
+    ])).filter((m) => m.distance_from_start_km <= FROM_HOME_KM);
+    markPhase("library");
     if (workoutMatches.length > 0) {
       return workoutMatches.map((m) => ({ source: "library" as const, ...m }));
     }

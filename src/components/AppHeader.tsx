@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useRef } from "react";
 import { useAuth } from "@/components/AuthProvider";
 
 /**
@@ -45,12 +46,22 @@ export default function AppHeader({ sticky = true }: { sticky?: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
   const loginHref = `/login?redirect=${encodeURIComponent(pathname ?? "/")}`;
-  // Keep the query (a ride link's day/time/meeting point) through sign-in;
-  // read at click time so server and client render the same markup.
+  // Keep the query (a ride link's day/time/meeting point) through sign-in.
+  // The server cannot see the query, so the markup carries the path only;
+  // after mount the real href (for long-press / new tab) is set on the DOM
+  // and a normal tap reads it at click time.
+  const fullLoginHref = () => `/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+  const loginRef = useRef<HTMLAnchorElement>(null);
+  const signupRef = useRef<HTMLAnchorElement>(null);
+  useEffect(() => {
+    const href = fullLoginHref();
+    if (loginRef.current) loginRef.current.href = href;
+    if (signupRef.current) signupRef.current.href = href;
+  }, [pathname]);
   const goToLogin = (e: React.MouseEvent) => {
     if (e.metaKey || e.ctrlKey || e.shiftKey) return;
     e.preventDefault();
-    router.push(`/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+    router.push(fullLoginHref());
   };
 
   return (
@@ -150,6 +161,7 @@ export default function AppHeader({ sticky = true }: { sticky?: boolean }) {
             ) : (
               <>
                 <Link
+                  ref={loginRef}
                   href={loginHref}
                   onClick={goToLogin}
                   className="text-sm font-semibold hover:opacity-80 px-2.5 min-h-[44px] inline-flex items-center"
@@ -158,6 +170,7 @@ export default function AppHeader({ sticky = true }: { sticky?: boolean }) {
                   Log in
                 </Link>
                 <Link
+                  ref={signupRef}
                   href={loginHref}
                   onClick={goToLogin}
                   className="text-sm font-bold px-4 rounded-lg hover:opacity-90 min-h-[44px] inline-flex items-center"

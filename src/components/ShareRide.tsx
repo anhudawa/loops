@@ -37,6 +37,7 @@ const WA_ICON = (
 
 export default function ShareRide({ route, ride }: ShareRideProps) {
   const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [startTime, setStartTime] = useState(() => (formatRideWhen(ride?.t) ? ride!.t!.trim() : getDefaultTime()));
   const [meetingPoint, setMeetingPoint] = useState(ride?.meet ?? "");
   const forwarding = !!(ride && (ride.t || ride.meet));
@@ -72,6 +73,32 @@ export default function ShareRide({ route, ride }: ShareRideProps) {
     const waUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
     window.open(waUrl, "_blank");
     setOpen(false);
+  };
+
+  // Not everyone is on WhatsApp: the phone's own share sheet (iMessage,
+  // Telegram, Signal…) or a plain copy of the same message.
+  const copyMessage = async () => {
+    if (!when) return;
+    try {
+      await navigator.clipboard.writeText(message);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      window.prompt("Copy this message:", message);
+    }
+  };
+  const nativeShare = async () => {
+    if (!when) return;
+    if (typeof navigator.share === "function") {
+      try {
+        await navigator.share({ text: message });
+        setOpen(false);
+        return;
+      } catch {
+        /* cancelled — fall through to copy */
+      }
+    }
+    await copyMessage();
   };
 
   const inputStyle = {
@@ -183,6 +210,28 @@ export default function ShareRide({ route, ride }: ShareRideProps) {
                 {WA_ICON}
                 Send on WhatsApp
               </button>
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <button
+                  onClick={nativeShare}
+                  disabled={!when}
+                  className="py-2.5 rounded-xl text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed"
+                  style={{ background: "var(--bg)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
+                >
+                  Share another way…
+                </button>
+                <button
+                  onClick={copyMessage}
+                  disabled={!when}
+                  className="py-2.5 rounded-xl text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed"
+                  style={{
+                    background: copied ? "var(--accent-glow)" : "var(--bg)",
+                    border: copied ? "1px solid var(--accent)" : "1px solid var(--border)",
+                    color: copied ? "var(--accent)" : "var(--text-secondary)",
+                  }}
+                >
+                  {copied ? "Copied!" : "Copy message"}
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -775,8 +775,9 @@ const NAME_LOOKUP_URL = "https://overpass-api.de/api/interpreter";
 // map service answered with 429s — every name on production came back
 // null. A 2.5 s budget fits its usual 1–3 s answer; names are cached by
 // spot so the same road is looked up once.
-const NAME_MAX_INFLIGHT = 3;
-const NAME_TIMEOUT_MS = 2500;
+const NAME_MAX_INFLIGHT = 5;
+const NAME_TIMEOUT_MS = 1500;      // generation: names never cost the rider more than this
+const NAME_MAX_PER_CALL = 2;       // generation: the two longest stretches per candidate
 let nameInflight = 0;
 const nameQueue: Array<() => void> = [];
 const nameCache = new Map<string, string | null>();
@@ -790,10 +791,13 @@ async function withNameSlot<T>(run: () => Promise<T>): Promise<T> {
 export async function nameCompromises(
   coords: [number, number][],
   compromises: Compromise[],
-  fetchImpl: typeof fetch = fetch
+  fetchImpl: typeof fetch = fetch,
+  opts: { timeoutMs?: number; max?: number } = {}
 ): Promise<void> {
+  const timeoutMs = opts.timeoutMs ?? NAME_TIMEOUT_MS;
+  const max = opts.max ?? NAME_MAX_PER_CALL;
   await Promise.all(
-    compromises.slice(0, 3).map(async (c) => {
+    compromises.slice(0, max).map(async (c) => {
       const mid = coords[Math.min(coords.length - 1, Math.floor((c.start + c.end) / 2))];
       if (!mid) return;
       const key = `${mid[0].toFixed(4)},${mid[1].toFixed(4)}:${c.highway}`;
@@ -808,7 +812,7 @@ export async function nameCompromises(
             body: `data=${encodeURIComponent(q)}`,
             // Bounded: a name is nice ("on the R755") but never worth
             // stalling scoring. Unnamed degrades to "on a primary road".
-            signal: AbortSignal.timeout(NAME_TIMEOUT_MS),
+            signal: AbortSignal.timeout(timeoutMs),
           });
           if (!res.ok) return;
           const json = (await res.json()) as { elements?: Array<{ tags?: WayTags }> };

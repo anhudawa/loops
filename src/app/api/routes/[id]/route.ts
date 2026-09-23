@@ -131,7 +131,9 @@ function scheduleRoadTrace(route: NonNullable<Awaited<ReturnType<typeof getRoute
     try {
       const coords: [number, number][] = JSON.parse(route.coordinates).map((c: number[]) => [c[0], c[1]]);
       const discipline = route.discipline === "gravel" || route.discipline === "mtb" ? route.discipline : "road";
-      const report = await traceRoadReport(coords, discipline, engineTrace, TRACE_BUDGET_MS, nameCompromises);
+      // After the response, names can take their time: three stretches, 2.5 s each.
+      const namer = (c: [number, number][], comps: Parameters<typeof nameCompromises>[1]) => nameCompromises(c, comps, fetch, { timeoutMs: 2500, max: 3 });
+      const report = await traceRoadReport(coords, discipline, engineTrace, TRACE_BUDGET_MS, namer);
       if (report) {
         await storeRouteRoadReport(route.id, report);
         console.log(JSON.stringify({ evt: "route_road_traced", route_id: route.id, standard_met: report.standard_met, compromises: report.compromises.length, ms: Date.now() - started }));

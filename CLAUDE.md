@@ -228,6 +228,18 @@ node scripts/import-routes.mjs scripts/hub-data/girona-eat-sleep-cycle.json --dr
   (route-generator.ts): out, a different road home when one really exists
   (measured shared < 50 %), plus the same road back. Labels are measured, never
   assumed. Road Standard applies (compromises named; motorway/unpaved decline).
+- Intervals (owner 2026-09-23: "4x4 VO2 from Clontarf → all 4 on Howth hill"):
+  parseBasicWorkout (route-intent.ts) parses sessions without the model; the
+  rider's ride length wins over the session length. Generate asks "OK to
+  repeat your efforts on the same stretch?" (repeat_efforts, default yes).
+  Yes → generateRepeatWorkoutRoutes: VO2/anaerobic seek a hill (src/data/
+  hills.json = GeoNames + OSM peaks, scripts/anchors/build-hills.mjs; summit
+  ROAD found via a trekking route), loops aimed at it / via a same-side town,
+  else out to the climb and home; effort-repeats.ts finds the best stretch
+  (gradient, steadiness, effort-grade roads, no lights/stop/give-way/junction
+  turn — from the engine's NodeTags/TurnCost, direction-aware) and splices
+  the reps in; long flat efforts may be laps of a quiet flat stretch.
+  No → one different stretch per rep on the loop pipeline's loops.
 - No CSRF tokens; cookie-only sessions; locale hardcoded en-IE
 
 ## Conventions

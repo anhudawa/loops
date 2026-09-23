@@ -186,9 +186,12 @@ node scripts/import-routes.mjs scripts/hub-data/girona-eat-sleep-cycle.json --dr
   evening) is per chunk with a profile chain — discipline profile → trekking
   → permissive `loops-trace` (scripts/routing/profiles, uploaded by the app
   itself once per instance) — so any track can be measured as ridden.
-  FINDING: Coll de Bracons, Turó de l'Home and Rocacorba Gravel ride the
-  AP-7/C-25 autovías for tens of km (car-routed imports, not rides) —
-  owner to delete or replace. Karoo (US) has no map data. The iconic Canary/Balearic climbs
+  FINDING: the ten Girona routes from scripts/build-all-girona-gpx.mjs were
+  car-routed (OSRM demo /cycling = car profile; autovías). Rebuilt on our
+  engine from the same waypoints → src/data/hub-bundles/girona-rebuild.json;
+  /admin → Routes → "Rebuild Girona tracks (10)" (replaceRouteTrack by name
+  within Spain; relaxed profile for Mare de Déu del Mont 99 km, Coll de
+  Bracons 151 km, Turó de l'Home 176 km). Karoo (US) has no map data. The iconic Canary/Balearic climbs
   are OSM "primary" (TF-21 Teide 43 km, GC-60 Fataga 42 km) with no traffic
   estimate or maxspeed in the engine data, so no automatic rule separates
   them from busy N-roads. LIBRARY_ROAD_POLICY (constants.ts) is the owner

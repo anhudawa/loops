@@ -2,16 +2,19 @@
 
 import { useState, useEffect, Suspense, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { useAuth } from "@/components/AuthProvider";
 import AnimatedNumber from "@/components/AnimatedNumber";
 import FadeIn from "@/components/FadeIn";
 import GoogleButton from "@/components/GoogleButton";
 import { safeRedirectPath } from "@/lib/safe-redirect";
 import FeaturedRouteTeaser, { type FeaturedRoute } from "@/components/FeaturedRouteTeaser";
+import { gateHeading, isPrivatePath } from "./private-paths";
 
 /* ── Demo prompts for the answer-machine preview ── */
 const DEMO_PROMPTS = [
   "3 hours, quiet roads, tailwind home",
-  "80 km gravel loop from Girona",
+  "80 km road loop from Girona",
   "2 hours rolling hills, back for coffee",
   "60 km road with 2x20 min threshold efforts",
 ];
@@ -19,6 +22,7 @@ const DEMO_PROMPTS = [
 /* ── Login page — everything answers "Where should I ride today?" ── */
 function LoginPage() {
   const searchParams = useSearchParams();
+  const { user, logout } = useAuth();
   const [manualError, setManualError] = useState("");
   const [stats, setStats] = useState<{
     routes: number;
@@ -38,7 +42,7 @@ function LoginPage() {
   const paramErr = searchParams.get("error");
   const urlError =
     paramErr === "google_failed"
-      ? "Could not sign in with Google. Please try again."
+      ? "Couldn't log in with Google. Please try again."
       : paramErr === "account_suspended"
         ? "This account has been suspended."
         : paramErr === "link_expired"
@@ -70,6 +74,19 @@ function LoginPage() {
   // The way back never carries gpx=1: a rider who backs out (or copies that
   // link) must not trigger an automatic download later.
   const backHref = returnTo ? returnTo.replace(/([?&])gpx=1(&|$)/, (_, a, b) => (b ? a : "")).replace(/[?&]$/, "") : null;
+  // Heading. A returning rider who tapped "Log in" gets "Welcome back"; a
+  // rider sent here by the login wall (/generate…) or for a GPX is usually
+  // new, so they get a neutral line that works for both.
+  const gated = returnTo ? gateHeading(returnTo) : null;
+  const heading = wantsGpx ? "Get the GPX" : isSignup ? "Where should I ride today?" : gated ?? "Welcome back";
+  const subline = isSignup && !wantsGpx
+    ? "Stop riding the same loops."
+    : wantsGpx || gated
+      ? "Log in, or create your free account: the same button does both."
+      : "Log in to LOOPS";
+  // A way back for any same-site page, unless it is a private one (that
+  // would only bounce the rider straight back here).
+  const showBack = !!backHref && !isPrivatePath(backHref) && !returnRouteId;
   const [returnRouteName, setReturnRouteName] = useState<string | null>(null);
   useEffect(() => {
     if (!returnRouteId) return;
@@ -84,14 +101,16 @@ function LoginPage() {
     return () => { cancelled = true; };
   }, [returnRouteId]);
 
+  // Stats and featured routes only feed the sign-up pitch.
   useEffect(() => {
+    if (!isSignup) return;
     fetch("/api/stats")
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (data && typeof data.routes === "number") setStats(data);
       })
       .catch(() => {});
-  }, []);
+  }, [isSignup]);
 
   // Sticky nav transition
   useEffect(() => {
@@ -148,10 +167,10 @@ function LoginPage() {
       }
       const res = await fetch("/api/auth/google");
       const data = await res.json();
-      if (!data.url) { setManualError("Could not sign in with Google. Please try again."); return; }
+      if (!data.url) { setManualError("Couldn't log in with Google. Please try again."); return; }
       window.location.href = data.url;
     } catch {
-      setManualError("Could not sign in with Google. Please try again.");
+      setManualError("Couldn't log in with Google. Please try again.");
     }
   }, [searchParams]);
 
@@ -172,8 +191,14 @@ function LoginPage() {
         }}
       >
         <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <span className="logo-mark text-xl" style={{ color: "var(--text)" }}>LOOPS</span>
-          <GoogleButton size="small" onClick={() => { remember("google"); handleGoogleLogin(); }} />
+          <Link href="/" aria-label="LOOPS home" className="min-h-[44px] inline-flex items-center">
+            <span className="logo-mark text-xl" style={{ color: "var(--text)" }}>LOOPS</span>
+          </Link>
+          {/* The long sign-up pitch keeps a sign-in button in reach; the short
+              log-in page has one already, right under the heading. */}
+          {isSignup && !user && (
+            <GoogleButton size="small" onClick={() => { remember("google"); handleGoogleLogin(); }} />
+          )}
         </div>
       </nav>
 
@@ -196,10 +221,10 @@ function LoginPage() {
             className="font-extrabold tracking-tight leading-[1.02] mt-4 mb-3"
             style={{ fontSize: "clamp(2rem, 6vw, 3.5rem)", color: "var(--text)" }}
           >
-            {isSignup ? "Where should I ride today?" : "Welcome back"}
+            {heading}
           </h1>
           <p className="text-base md:text-xl font-bold max-w-lg mx-auto" style={{ color: "var(--text-muted)" }}>
-            {isSignup ? "Stop riding the same loops." : "Log in to LOOPS"}
+            {subline}
           </p>
 
           {/* The one CTA */}
@@ -207,16 +232,43 @@ function LoginPage() {
             {returnRouteId && returnTo && (
               <div className="mb-4 text-sm" data-testid="login-return-context">
                 <p className="font-bold" style={{ color: "var(--text)" }}>
-                  {wantsGpx ? "Sign in to get the GPX" : "Sign in to save"} {returnRouteName ? <>{wantsGpx ? "for" : ""} <span style={{ color: "var(--accent)" }}>{returnRouteName}</span></> : wantsGpx ? `for this ${returnKind}` : `this ${returnKind}`}
+                  {wantsGpx ? "The GPX for " : "Log in and we'll bring you back to "}
+                  {returnRouteName ? <span style={{ color: "var(--accent)" }}>{returnRouteName}</span> : `this ${returnKind}`}
                 </p>
                 <a href={backHref ?? returnTo} className="inline-flex items-center min-h-[44px] text-xs font-bold underline" style={{ color: "var(--text-muted)" }}>
                   ← Back to the {returnKind}
                 </a>
               </div>
             )}
+            {showBack && backHref && (
+              <a href={backHref} className="inline-flex items-center min-h-[44px] mb-2 text-xs font-bold underline" style={{ color: "var(--text-muted)" }}>
+                ← Back
+              </a>
+            )}
             {error && (
               <div className="alert-error mb-3 text-sm" role="alert">{error}</div>
             )}
+            {user ? (
+              // Already signed in (bookmark, stale tab): say so, don't ask again.
+              <div className="text-sm" data-testid="login-signed-in">
+                <p style={{ color: "var(--text)" }}>
+                  You&apos;re logged in as <strong>{user.name || user.email}</strong>.
+                </p>
+                <Link
+                  href={returnTo ?? "/"}
+                  className="btn-accent mt-4 w-full inline-flex items-center justify-center min-h-[48px] rounded-xl font-bold text-sm uppercase tracking-wider"
+                >
+                  Continue
+                </Link>
+                <button
+                  onClick={() => { void logout(); }}
+                  className="mt-2 inline-flex items-center min-h-[44px] text-xs font-bold underline"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  Not you? Log out
+                </button>
+              </div>
+            ) : (<>
             <GoogleButton onClick={() => { remember("google"); handleGoogleLogin(); }} />
             {lastMethod && (
               <p className="text-[11px] mt-2" style={{ color: "var(--text-muted)" }}>
@@ -239,13 +291,13 @@ function LoginPage() {
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="you@example.com"
                       autoComplete="email"
-                      className="flex-1 min-w-0 px-3 py-2.5 rounded-xl text-sm"
+                      className="flex-1 min-w-0 px-3 py-3 min-h-[44px] rounded-xl text-sm"
                       style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
                     />
                     <button
                       type="submit"
                       disabled={emailState === "sending"}
-                      className="px-4 py-2.5 rounded-xl text-sm font-bold disabled:opacity-50"
+                      className="px-4 py-3 min-h-[44px] rounded-xl text-sm font-bold disabled:opacity-50"
                       style={{ background: "var(--bg-raised)", border: "1px solid var(--border)", color: "var(--text)" }}
                     >
                       {emailState === "sending" ? "Sending…" : "Email me"}
@@ -272,15 +324,19 @@ function LoginPage() {
             <p className="text-[11px] text-center mt-2.5" style={{ color: "var(--text-muted)" }}>
               {isSignup ? (
                 <>Free forever. No credit card. Pro (coming) adds training intelligence.{" "}
-                  <a href={`/login${redirectParam ? `?redirect=${encodeURIComponent(redirectParam)}` : ""}`} className="underline font-bold">Already have an account? Log in</a></>
+                  <a href={`/login${redirectParam ? `?redirect=${encodeURIComponent(redirectParam)}` : ""}`} className="underline font-bold inline-flex items-center min-h-[44px]">Already have an account? Log in</a></>
               ) : (
-                <>New to LOOPS? The same button creates your free account.{" "}
-                  <a href={`/login?mode=signup${redirectParam ? `&redirect=${encodeURIComponent(redirectParam)}` : ""}`} className="underline font-bold">See what it does</a></>
+                <>{gated || wantsGpx ? "Want to know what you get first?" : "New to LOOPS? The same button creates your free account."}{" "}
+                  <a href={`/login?mode=signup${redirectParam ? `&redirect=${encodeURIComponent(redirectParam)}` : ""}`} className="underline font-bold inline-flex items-center min-h-[44px]">See what it does</a></>
               )}
             </p>
+            </>)}
           </div>
 
-          {/* Demo of the answer machine — ask it, sign in, get a real route */}
+          {/* Demo of the answer machine — ask it, sign in, get a real route.
+              Sign-up pitch only, and not when the rider is on their way back
+              somewhere (it would replace their redirect). */}
+          {isSignup && !returnTo && !user && (
           <div className="mt-10 max-w-md mx-auto">
             <p className="text-[10px] uppercase tracking-wider font-bold mb-2" style={{ color: "var(--text-muted)" }}>
               Ask it like you&apos;d ask a riding buddy
@@ -299,18 +355,19 @@ function LoginPage() {
               </span>
               <button
                 onClick={handleTryDemo}
-                className="btn-accent shrink-0 px-4 py-2.5 rounded-lg font-bold text-xs uppercase tracking-wider"
+                className="btn-accent shrink-0 px-4 py-2.5 min-h-[44px] rounded-lg font-bold text-xs uppercase tracking-wider"
               >
-                Try it
+                Sign up &amp; try it
               </button>
             </div>
             <p className="text-[11px] mt-2" style={{ color: "var(--text-muted)", opacity: 0.7 }}>
-              Sign in and we&apos;ll generate this ride for you — wind-aware, quality-scored.
+              Continue with Google and we&apos;ll plan this ride for you: wind-aware, quality-scored.
             </p>
           </div>
+          )}
 
-          {/* Live stats — evidence, not marketing */}
-          {stats && (
+          {/* Live stats — evidence, not marketing (sign-up pitch only) */}
+          {isSignup && stats && (
             <div className="flex items-center justify-center gap-8 md:gap-14 mt-12">
               {[
                 { value: stats.routes, label: "Routes" },
@@ -332,7 +389,7 @@ function LoginPage() {
       </section>
 
       {/* ─── Featured Routes: real answers waiting inside ─── */}
-      {stats?.featuredRoutes && stats.featuredRoutes.length > 0 && (
+      {isSignup && stats?.featuredRoutes && stats.featuredRoutes.length > 0 && (
         <FadeIn className="px-4 pb-16 md:pb-24 pt-8">
           <div className="max-w-3xl mx-auto">
             <h2 className="text-center font-extrabold text-sm uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>
@@ -363,6 +420,7 @@ function LoginPage() {
       )}
 
       {/* ─── Why LOOPS (comparison — every claim verified true) ─── */}
+      {isSignup && (
       <FadeIn className="px-4 pb-20 md:pb-28">
         <div className="max-w-xl mx-auto">
           <h2 className="text-center font-extrabold text-sm uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>
@@ -404,6 +462,7 @@ function LoginPage() {
           </div>
         </div>
       </FadeIn>
+      )}
     </div>
   );
 }

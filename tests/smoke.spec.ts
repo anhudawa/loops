@@ -238,3 +238,20 @@ test.describe("log in vs sign up", () => {
     await expect(page.getByRole("link", { name: /already have an account\? log in/i })).toBeVisible();
   });
 });
+
+test.describe("login wall says the right thing", () => {
+  test("the planner gate never greets a new rider with 'Welcome back'", async ({ page }) => {
+    await open(page, "/generate");
+    await expect(page).toHaveURL(/\/login\?redirect=%2Fgenerate/);
+    await expect(page.getByRole("heading", { level: 1, name: /plan a ride with loops/i })).toBeVisible();
+  });
+  test("an unknown URL is the 404 page, not the login wall", async ({ page }) => {
+    const res = await open(page, "/nope-404");
+    expect(res.status()).toBe(404);
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("404");
+  });
+  test("pricing 'Create a free account' opens the sign-up page", async ({ page }) => {
+    await open(page, "/pricing");
+    await expect(page.getByRole("link", { name: /create a free account/i })).toHaveAttribute("href", /mode=signup/);
+  });
+});

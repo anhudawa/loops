@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { RATE_LIMIT_AUTH, RATE_LIMIT_UPLOAD, RATE_LIMIT_WRITE, RATE_LIMIT_READ } from "@/config/constants";
 import { ATTRIBUTION_COOKIE, attributionFromParams, encodeAttribution } from "@/lib/attribution";
+import { isPrivatePath } from "@/app/login/private-paths";
 
 function getRateLimitConfig(pathname: string, method: string) {
   if (pathname.startsWith("/api/auth")) {
@@ -114,35 +115,16 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Public pages — homepage, info pages, login, route pages, photos
-  const publicExactPaths = ["/", "/about", "/privacy", "/terms", "/feedback", "/switch", "/pricing"];
-  if (
-    publicExactPaths.includes(pathname) ||
-    pathname.startsWith("/login") ||
-    pathname.startsWith("/routes/") ||
-    pathname.startsWith("/photos") ||
-    pathname === "/collections" ||
-    pathname.startsWith("/collections/") ||
-    // SEO pillars must be crawlable and browsable pre-signup
-    pathname === "/cycling" ||
-    pathname.startsWith("/cycling/") ||
-    pathname === "/blog" ||
-    pathname.startsWith("/blog/") ||
-    pathname === "/share" ||
-    pathname.startsWith("/share/") ||
-    // Group-ride invite links (WhatsApp) — public like route pages
-    pathname.startsWith("/ride/")
-  ) {
-    return applyAttribution(NextResponse.next());
-  }
-
   // Redirect /explore to homepage (anchor id is scroll-anchor)
   if (pathname === "/explore") {
     return NextResponse.redirect(new URL("/#scroll-anchor", request.url));
   }
 
-  const session = request.cookies.get("session")?.value;
-  if (!session) {
+  // Only the signed-in pages sit behind the login wall (see private-paths.ts).
+  // Everything else is public — the homepage, route and ride pages, the
+  // planner (it draws logged out and says so), SEO pages — and an unknown
+  // URL falls through to the 404 page instead of "Log in".
+  if (isPrivatePath(pathname) && !request.cookies.get("session")?.value) {
     // Preserve intent: come back to where the user was heading
     const login = new URL("/login", request.url);
     login.searchParams.set("redirect", pathname + request.nextUrl.search);

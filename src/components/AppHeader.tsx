@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
+import { SOCIAL_FEATURES_ENABLED } from "@/config/constants";
 
 /**
  * The one shared header (2026-06-11 "Where should I ride today?" redesign).
@@ -29,7 +30,7 @@ function NavLinks({ pathname }: { pathname: string }) {
             key={item.href}
             href={item.href}
             aria-current={active ? "page" : undefined}
-            className="text-xs font-bold uppercase tracking-wider px-3 min-h-[44px] inline-flex items-center rounded-lg whitespace-nowrap hover:opacity-80 transition-opacity"
+            className="text-xs font-bold uppercase tracking-wider max-[360px]:tracking-wide px-3 max-[360px]:px-2 min-h-[44px] inline-flex items-center rounded-lg whitespace-nowrap hover:opacity-80 transition-opacity"
             style={{ color: active ? "var(--accent)" : "var(--text-secondary)" }}
           >
             {item.label}
@@ -90,7 +91,7 @@ export default function AppHeader({ sticky = true }: { sticky?: boolean }) {
             {user && (
               <Link
                 href="/upload"
-                className="btn-accent rounded-lg text-sm font-bold inline-flex items-center justify-center gap-1.5 px-2.5 md:px-3 min-h-[44px]"
+                className="btn-accent rounded-lg text-sm font-bold inline-flex items-center justify-center gap-1.5 px-2.5 md:px-3 min-h-[44px] min-w-[44px]"
                 aria-label="Upload route"
               >
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
@@ -108,7 +109,8 @@ export default function AppHeader({ sticky = true }: { sticky?: boolean }) {
                 Admin
               </Link>
             )}
-            {user && (
+            {/* Messaging is a social feature — hidden for launch */}
+            {SOCIAL_FEATURES_ENABLED && user && (
               <Link
                 href="/messages"
                 className="relative min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:opacity-80 transition-opacity"
@@ -146,12 +148,14 @@ export default function AppHeader({ sticky = true }: { sticky?: boolean }) {
               </Link>
             )}
             {user ? (
+              // Leave for home once signed out: staying on a private page
+              // would bounce the rider to /login ("Welcome back").
               <button
-                onClick={logout}
+                onClick={() => { void logout({ redirectTo: "/" }); }}
                 className="text-xs font-medium hover:opacity-80 px-2 min-h-[44px]"
                 style={{ color: "var(--text-muted)" }}
               >
-                Sign out
+                Log out
               </button>
             ) : authLoading || authError ? (
               // Auth not resolved yet, or a transient failure — show nothing
@@ -182,10 +186,10 @@ export default function AppHeader({ sticky = true }: { sticky?: boolean }) {
           </div>
         </div>
 
-        {/* Mobile nav — second row so all primary links stay visible at 375px */}
+        {/* Mobile nav — second row. All four links fit from 320px (tighter
+            padding under 360px), so no fade mask hiding "Destinations". */}
         <nav
-          className="md:hidden flex items-center gap-1 overflow-x-auto -mx-1 px-1 pr-6 [scrollbar-width:none]"
-          style={{ maskImage: "linear-gradient(to right, black 88%, transparent)", WebkitMaskImage: "linear-gradient(to right, black 88%, transparent)" }}
+          className="md:hidden flex items-center gap-1 overflow-x-auto -mx-1 px-1 [scrollbar-width:none]"
           aria-label="Primary"
         >
           <NavLinks pathname={pathname} />

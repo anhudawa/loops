@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { pageOpenGraph, siteUrl } from "@/lib/site-meta";
 import Link from "next/link";
 import JsonLd from "@/components/JsonLd";
+import AppHeader from "@/components/AppHeader";
 import { getAllPosts, getPostsGroupedByCategory, type BlogPost } from "@/lib/blog";
 
 export const metadata: Metadata = {
@@ -96,18 +97,7 @@ export default function BlogIndexPage() {
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
       <JsonLd data={itemListJsonLd} />
 
-      {/* Header */}
-      <header className="sticky top-0 z-40 border-b" style={{ background: "var(--bg)", borderColor: "var(--border)" }}>
-        <div className="max-w-5xl mx-auto px-4 h-14 flex items-center gap-4">
-          <Link href="/" className="font-black text-xl tracking-tight" style={{ color: "var(--accent)" }}>
-            LOOPS
-          </Link>
-          <span style={{ color: "var(--border-light)" }} aria-hidden="true">/</span>
-          <span className="font-semibold text-sm" style={{ color: "var(--text)" }}>
-            Blog
-          </span>
-        </div>
-      </header>
+      <AppHeader />
 
       <main className="max-w-5xl mx-auto px-4 py-10">
         <div className="mb-10">
@@ -117,7 +107,7 @@ export default function BlogIndexPage() {
           <p className="text-base max-w-2xl leading-relaxed" style={{ color: "var(--text-muted)" }}>
             Destination guides to the world&apos;s best riding and evidence-based training advice you can
             actually take outdoors. Then plan it with{" "}
-            <Link href="/generate" className="font-semibold underline underline-offset-2" style={{ color: "var(--accent)" }}>
+            <Link href="/generate" className="font-semibold underline underline-offset-2 py-3" style={{ color: "var(--accent)" }}>
               AI route planning
             </Link>
             .

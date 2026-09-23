@@ -3,6 +3,7 @@ import { DEFAULT_OG_IMAGE, pageOpenGraph, siteUrl } from "@/lib/site-meta";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import JsonLd from "@/components/JsonLd";
+import AppHeader from "@/components/AppHeader";
 import BlogPostContent from "@/components/BlogPostContent";
 import { generateBreadcrumbJsonLd, generateFaqJsonLd } from "@/lib/seo";
 import { getAllSlugs, getAllPosts, getPostBySlug, postPlainText, type BlogPost } from "@/lib/blog";
@@ -103,24 +104,19 @@ export default async function BlogPostPage({ params }: Props) {
       <JsonLd data={generateFaqJsonLd(post.faqs)} />
       <JsonLd data={breadcrumb} />
 
-      {/* Header */}
-      <header className="sticky top-0 z-40 border-b" style={{ background: "var(--bg)", borderColor: "var(--border)" }}>
-        <div className="max-w-3xl mx-auto px-4 h-14 flex items-center gap-3">
-          <Link href="/" className="font-black text-xl tracking-tight" style={{ color: "var(--accent)" }}>
-            LOOPS
-          </Link>
-          <span style={{ color: "var(--border-light)" }} aria-hidden="true">/</span>
-          <Link href="/blog" className="text-sm font-semibold hover:opacity-80" style={{ color: "var(--text-muted)" }}>
+      <AppHeader />
+
+      <main className="max-w-3xl mx-auto px-4 pt-4 pb-10">
+        {/* Breadcrumb */}
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-6 text-sm font-semibold min-w-0">
+          <Link href="/blog" className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] px-1 -mx-1 hover:opacity-80" style={{ color: "var(--text-muted)" }}>
             Blog
           </Link>
           <span style={{ color: "var(--border-light)" }} aria-hidden="true">/</span>
-          <span className="text-sm font-semibold truncate" style={{ color: "var(--text)" }}>
+          <span className="truncate" style={{ color: "var(--text)" }}>
             {post.category}
           </span>
-        </div>
-      </header>
-
-      <main className="max-w-3xl mx-auto px-4 py-10">
+        </nav>
         <article>
           {/* Title block */}
           <div className="mb-8">

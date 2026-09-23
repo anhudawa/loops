@@ -15,6 +15,8 @@ export interface GeolocationState {
   coords: [number, number] | null;
   loading: boolean;
   error: string | null;
+  /** The browser has blocked location for this site: it will not prompt again. */
+  blocked: boolean;
   request: () => Promise<[number, number] | null>;
 }
 
@@ -22,6 +24,7 @@ export function useGeolocation(): GeolocationState {
   const [coords, setCoords] = useState<[number, number] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [blocked, setBlocked] = useState(false);
 
   const request = useCallback(async (): Promise<[number, number] | null> => {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
@@ -31,6 +34,7 @@ export function useGeolocation(): GeolocationState {
 
     setLoading(true);
     setError(null);
+    setBlocked(false);
 
     // Already allowed or recently known: no prompt at all.
     const known = await locationIfAllowed();
@@ -51,6 +55,7 @@ export function useGeolocation(): GeolocationState {
           resolve(c);
         },
         (err) => {
+          setBlocked(err.code === err.PERMISSION_DENIED);
           setError(
             err.code === err.PERMISSION_DENIED
               ? "Location access was blocked. Name a starting point instead."
@@ -64,5 +69,5 @@ export function useGeolocation(): GeolocationState {
     });
   }, []);
 
-  return { coords, loading, error, request };
+  return { coords, loading, error, blocked, request };
 }

@@ -11,7 +11,8 @@ import AppHeader from "@/components/AppHeader";
 import { useAuth } from "@/components/AuthProvider";
 import Link from "next/link";
 import { DEFAULT_SPEED_KMH, DEFAULT_COUNTRY } from "@/config/constants";
-import { locationIfAllowed, requestLocation } from "@/lib/location";
+import { locationIfAllowed, requestLocation, lastLocationBlocked } from "@/lib/location";
+import LocationHelp from "@/components/LocationHelp";
 import FeaturedCollections from "./FeaturedCollections";
 import RouteSearchBox from "@/components/RouteSearchBox";
 
@@ -227,9 +228,11 @@ function HomeContent() {
     locationIfAllowed().then((p) => { if (!cancelled && p) setUserLocation(p); });
     return () => { cancelled = true; };
   }, []);
+  const [locationBlocked, setLocationBlocked] = useState(false);
   const askLocation = async () => {
     const p = await requestLocation();
-    if (p) setUserLocation(p); else setLocationDenied(true);
+    if (p) { setUserLocation(p); setLocationBlocked(false); }
+    else { setLocationDenied(true); setLocationBlocked(lastLocationBlocked); }
   };
 
   // Persist filters to localStorage and URL
@@ -584,6 +587,11 @@ function HomeContent() {
             </button>
           )}
         </div>
+        {locationBlocked && !userLocation && (
+          <div className="pb-3">
+            <LocationHelp onRetry={askLocation} onDismiss={() => setLocationBlocked(false)} />
+          </div>
+        )}
 
         {/* Route Cards */}
         <div className="space-y-2">

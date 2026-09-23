@@ -16,6 +16,7 @@ import ShareButton from "@/components/ShareButton";
 import { useVoiceInput } from "@/lib/useVoiceInput";
 import { describeCompromise, type Compromise } from "@/lib/road-segments";
 import { useGeolocation } from "@/lib/useGeolocation";
+import LocationHelp from "@/components/LocationHelp";
 import { track } from "@/lib/track";
 import { ANALYTICS_EVENTS } from "@/lib/metrics";
 import { deliveryNote } from "@/lib/delivery-note";
@@ -501,9 +502,11 @@ function GenerateContent() {
             </svg>
             {geo.loading ? "Locating…" : useMyLocation ? "Starting from my location" : "Start from my location"}
           </button>
-          {geo.error && (
+          {geo.blocked ? (
+            <LocationHelp onRetry={toggleLocation} />
+          ) : geo.error ? (
             <p className="text-xs mt-2" style={{ color: "#ff6b6b" }}>{geo.error}</p>
-          )}
+          ) : null}
 
           <div className="flex flex-wrap gap-2 mt-3">
             {EXAMPLES.map((ex) => (

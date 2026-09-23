@@ -30,16 +30,20 @@ function writeCache(p: LatLng) {
   try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ...p, at: Date.now() })); } catch { /* private mode */ }
 }
 
+/** Set when the last request was refused by the browser (blocked for this site). */
+export let lastLocationBlocked = false;
+
 function position(): Promise<LatLng | null> {
   return new Promise((resolve) => {
     if (typeof navigator === "undefined" || !navigator.geolocation) return resolve(null);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        lastLocationBlocked = false;
         const p = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         writeCache(p);
         resolve(p);
       },
-      () => resolve(null),
+      (err) => { lastLocationBlocked = err.code === err.PERMISSION_DENIED; resolve(null); },
       { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
     );
   });

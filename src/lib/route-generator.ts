@@ -1911,6 +1911,7 @@ async function generateRepeatWorkoutRoutes(spec: RouteSpec, workout: WorkoutSpec
     return hits;
   };
   const found = searchStretches(loops);
+  markPhase("stretch search");
   // A climb with one road up (a headland, a col road that ends at the top):
   // ride out to it, do the reps, come home — the destination-ride builder,
   // held to the loop Road Standard since the rider did not ask for that road.

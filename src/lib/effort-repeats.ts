@@ -48,6 +48,8 @@ const HILL_IDEAL_PCT = 6;
 const STOP_NEAR_KM = 0.02;
 /** Starting from a junction is fine: stops in the first metres don't count. */
 const START_GRACE_KM = 0.05;
+/** Candidate effort starts are tried this far apart. */
+const START_STEP_KM = 0.05;
 
 export function isHillSession(workout: WorkoutSpec): boolean {
   return workout.intervals.some((iv) => HILL_ZONES.has(iv.zone));
@@ -138,8 +140,10 @@ export function findEffortStretch(
   for (const st of stops) {
     // A speed hump slows a flat effort; on a climb the rider is going slowly anyway.
     if (hill && st.kind === "traffic_calming") continue;
+    // Cheap box test first (0.0003° ≈ 20–33 m), exact distance only near it.
     let best = -1, bestD = Infinity;
     for (let i = 0; i < n; i++) {
+      if (Math.abs(coords[i][0] - st.lat) > 0.0003 || Math.abs(coords[i][1] - st.lng) > 0.0005) continue;
       const d = haversine(coords[i], [st.lat, st.lng]);
       if (d < bestD) { bestD = d; best = i; }
     }
@@ -152,17 +156,23 @@ export function findEffortStretch(
   };
 
   let best: EffortStretch | null = null;
+  // Starts every START_STEP_KM (not every point: a 90 km loop has ~10k),
+  // and a blocked window skips every start that would run into the same block.
+  let lastStart = -Infinity;
   for (let i = 0; i < n - 1; i++) {
     if (cum[i] < skipStart) continue;
     if (!roadOk(i) || avoided(i)) continue;
+    if (cum[i] - lastStart < START_STEP_KM) continue;
+    lastStart = cum[i];
     // Grow until the window holds one rep at its own gradient.
     let j = i + 1;
     let ok = true;
+    let blockedAt = -1;
     let maxG = -Infinity;
     for (; j < n; j++) {
       const e = j - 1;
-      if (!roadOk(e) || avoided(j)) { opts.debug?.(`${cum[i].toFixed(2)}: road ${edgeTags[e]?.highway ?? "?"} at ${cum[j].toFixed(2)}`); ok = false; break; }
-      if (stopAt.has(j) && cum[j] - cum[i] > START_GRACE_KM) { opts.debug?.(`${cum[i].toFixed(2)}: stop at ${cum[j].toFixed(2)}`); ok = false; break; }
+      if (!roadOk(e) || avoided(j)) { opts.debug?.(`${cum[i].toFixed(2)}: road ${edgeTags[e]?.highway ?? "?"} at ${cum[j].toFixed(2)}`); ok = false; blockedAt = j; break; }
+      if (stopAt.has(j) && cum[j] - cum[i] > START_GRACE_KM) { opts.debug?.(`${cum[i].toFixed(2)}: stop at ${cum[j].toFixed(2)}`); ok = false; blockedAt = j - 1; break; }
       const stepKm = cum[j] - cum[j - 1];
       if (stepKm > 0.02) {
         const g = ((elev[j] - elev[j - 1]) / (stepKm * 1000)) * 100;
@@ -173,10 +183,20 @@ export function findEffortStretch(
       const need = repKm(rep.zone, rep.duration_minutes, Math.max(0, avg));
       if (len >= (opts.laps ? Math.max(LAP_MIN_KM, need / LAP_MAX_PASSES) : need)) break;
     }
-    if (!ok || j >= n) continue;
+    if (!ok) {
+      // Every start before the block runs into it too (windows only grow).
+      if (blockedAt > i) { i = blockedAt; lastStart = -Infinity; i--; }
+      continue;
+    }
+    if (j >= n) continue;
     if (cum[j] > total - skipEnd) break; // later starts only get later
     const len = cum[j] - cum[i];
     const avg = ((elev[j] - elev[i]) / (len * 1000)) * 100;
+    // Cheap gradient checks before the steadiness scan.
+    if (opts.laps ? Math.abs(avg) > LAP_MAX_ABS_PCT : hill ? avg < HILL_MIN_PCT || avg > HILL_MAX_PCT : avg < terrain.min_gradient_pct || avg > terrain.max_gradient_pct) {
+      opts.debug?.(`${cum[i].toFixed(2)}: avg ${avg.toFixed(1)}%`);
+      continue;
+    }
     // Steadiness: variance of 100 m gradients across the window.
     const grads: number[] = [];
     let a = i;

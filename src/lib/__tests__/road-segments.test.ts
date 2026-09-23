@@ -6,6 +6,7 @@ import {
   scoreEdges,
   validateRoadEdges,
   compromiseAcceptable,
+  fixedPartBreaksPolicy,
   classifyEdge,
   describeCompromise,
   type EdgeTags,
@@ -198,6 +199,33 @@ describe("compromiseAcceptable", () => {
     for (let i = 0; i < 5; i++) runs.push([QUIET, 400], [FAST, 30]); // 5 × 600 m = 3 km > 1.5 km
     runs.push([QUIET, 350]);
     expect(compromiseAcceptable(buildRoadReport(coords, edges(runs), "road"), 50)).toBe(false);
+  });
+});
+
+describe("fixedPartBreaksPolicy", () => {
+  const coords = line(2501); // 2500 edges ≈ 50 km
+  const whole: Array<[number, number]> = [[0, 2500]];
+  it("judges only the edges inside the ranges", () => {
+    const tags = edges([[PRIMARY, 150], [QUIET, 2350]]);              // 3 km main road leaving the start
+    expect(fixedPartBreaksPolicy(coords, tags, "road", whole)).toBe(true);
+    expect(fixedPartBreaksPolicy(coords, tags, "road", [[1000, 2500]])).toBe(false); // the stretch lies outside
+    expect(fixedPartBreaksPolicy(coords, tags, "road", [[0, 100]])).toBe(false);    // only 2 km of it inside → within the exit allowance
+  });
+  it("applies the distance-independent rules only", () => {
+    const longMid = edges([[QUIET, 1200], [PRIMARY, 100], [QUIET, 1200]]);   // one 2 km stretch mid-ride
+    expect(fixedPartBreaksPolicy(coords, longMid, "road", whole)).toBe(true);
+    const shortMid = edges([[QUIET, 1200], [PRIMARY, 60], [QUIET, 1240]]);   // 1.2 km: under the single-stretch cap
+    expect(fixedPartBreaksPolicy(coords, shortMid, "road", whole)).toBe(false);
+    // Several sub-1.5 km stretches that only fail the 3 %-of-ride sum are NOT
+    // a verdict here — the ride length of the routes this stands in for is unknown.
+    const runs: Array<[Record<string, string>, number]> = [];
+    for (let i = 0; i < 5; i++) runs.push([QUIET, 400], [FAST, 30]);
+    runs.push([QUIET, 350]);
+    expect(compromiseAcceptable(buildRoadReport(coords, edges(runs), "road"), 50)).toBe(false);
+    expect(fixedPartBreaksPolicy(coords, edges(runs), "road", whole)).toBe(false);
+    const gravel = edges([[QUIET, 1000], [GRAVEL, 30], [QUIET, 1470]]);      // 600 m unpaved
+    expect(fixedPartBreaksPolicy(coords, gravel, "road", whole)).toBe(true);
+    expect(fixedPartBreaksPolicy(coords, gravel, "gravel", whole)).toBe(false);
   });
 });
 

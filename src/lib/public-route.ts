@@ -40,7 +40,7 @@ export function publicRoute<T extends Record<string, unknown>>(route: T): T {
  * column is empty or a description names a different operator.
  * Keep it to businesses: event names ("La Traka") are route facts.
  */
-export const KNOWN_OPERATOR_NAMES = ["Eat Sleep Cycle", "Epic Road Rides"] as const;
+export const KNOWN_OPERATOR_NAMES = ["Eat Sleep Cycle", "Epic Road Rides", "SunVelo"] as const;
 
 /** Our own brand is never "attribution". */
 const NEVER_STRIP = new Set(["loops", "roadman", "roadman cycling"]);
@@ -71,11 +71,11 @@ export function stripOperatorAttribution(
     if (routeName && routeName.toLowerCase().includes(t.toLowerCase())) continue;
     names.add(t);
   }
-  if (names.size === 0) return description;
-  const pattern = new RegExp(
-    [...names].map((n) => escapeRegExp(n).replace(/\s+/g, "\\s+")).join("|"),
-    "i",
-  );
+  // Names match with or without spaces ("Epic Road Rides" ≈ epicroadrides.com);
+  // credits and links are attribution whoever they name.
+  const alts = [...names].map((n) => escapeRegExp(n).replace(/\s+/g, "\\s*"));
+  alts.push("courtesy of", "https?:\\/\\/", "www\\.");
+  const pattern = new RegExp(alts.join("|"), "i");
   if (!pattern.test(description)) return description;
 
   // Sentences end at terminal punctuation (plus closing quotes/brackets)

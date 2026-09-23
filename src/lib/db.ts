@@ -731,7 +731,7 @@ export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
         END AS zone_boost
       FROM routes_with_distance
     ) zoned
-    ORDER BY ${orderBy}
+    ORDER BY ${orderBy}, created_at DESC, id ASC
     LIMIT $${limitIdx}::int OFFSET $${offsetIdx}::int
   `;
 
@@ -784,10 +784,16 @@ export async function storeRouteQuality(
   }
 }
 
+/** Trim and collapse whitespace in a stored label ("Tipperary " → "Tipperary"). */
+export function cleanLabel<T extends string | null | undefined>(v: T): T {
+  return (typeof v === "string" ? v.replace(/\s+/g, " ").trim() : v) as T;
+}
+
 export async function insertRoute(
   route: Omit<Route, "created_at" | "quality_status" | "operator_name" | "operator_url"> &
     Partial<Pick<Route, "quality_status" | "operator_name" | "operator_url">>
 ): Promise<Route> {
+  route = { ...route, name: cleanLabel(route.name), county: cleanLabel(route.county), region: cleanLabel(route.region), country: cleanLabel(route.country) };
   await sql`
     INSERT INTO routes (id, name, description, distance_km, elevation_gain_m, elevation_loss_m, surface_type, county, country, region, discipline, start_lat, start_lng, gpx_filename, coordinates, created_by, strava_activity_id, operator_name, operator_url)
     VALUES (${route.id}, ${route.name}, ${route.description}, ${route.distance_km}, ${route.elevation_gain_m}, ${route.elevation_loss_m}, ${route.surface_type}, ${route.county}, ${route.country}, ${route.region}, ${route.discipline}, ${route.start_lat}, ${route.start_lng}, ${route.gpx_filename}, ${route.coordinates}, ${route.created_by}, ${route.strava_activity_id ?? null}, ${route.operator_name ?? null}, ${route.operator_url ?? null})
@@ -803,6 +809,7 @@ export async function insertCuratedRoute(r: {
   discipline: string; surface_type: string; distance_km: number; elevation_gain_m: number; elevation_loss_m: number;
   coordinates: number[][]; road_report: unknown;
 }): Promise<"inserted" | "exists"> {
+  r = { ...r, name: cleanLabel(r.name), county: cleanLabel(r.county), region: cleanLabel(r.region), country: cleanLabel(r.country) };
   await migrateDb();
   const { rows } = await sql`SELECT id FROM routes WHERE name = ${r.name} AND county = ${r.county} LIMIT 1`;
   if (rows.length > 0) return "exists";
@@ -840,6 +847,56 @@ export async function replaceRouteTrack(r: {
         quality_score = NULL, quality_breakdown = NULL, quality_surface = NULL, quality_scored_at = NULL
     WHERE name = ${r.name} AND country = ${r.country}
   `;
+  return rowCount ?? 0;
+}
+
+/**
+ * Library data hygiene (admin, one tap, idempotent). Every change is a
+ * label normalisation — nothing is deleted. Returns rows changed per fix.
+ */
+export const TEST_UPLOAD_IDS = [
+  "033a076f-474c-4485-b98c-c0965c7de711",
+  "1ee51944-419f-4ceb-ba36-029805d334e6",
+  "393ca702-24fc-4e05-84ca-533874b30194",
+  "b31b023b-40b3-4097-be47-daaf92b54cf1",
+] as const;
+
+export async function tidyLibraryData(): Promise<Record<string, number>> {
+  await migrateDb();
+  const n = (r: { rowCount: number | null }) => r.rowCount ?? 0;
+  const out: Record<string, number> = {};
+  out.whitespace = n(await sql`
+    UPDATE routes SET
+      name = regexp_replace(TRIM(name), '\s{2,}', ' ', 'g'),
+      region = regexp_replace(TRIM(region), '\s{2,}', ' ', 'g'),
+      county = regexp_replace(TRIM(county), '\s{2,}', ' ', 'g')
+    WHERE name <> regexp_replace(TRIM(name), '\s{2,}', ' ', 'g')
+       OR region <> regexp_replace(TRIM(region), '\s{2,}', ' ', 'g')
+       OR county <> regexp_replace(TRIM(county), '\s{2,}', ' ', 'g')`);
+  out.london = n(await sql`
+    UPDATE routes SET region = CASE WHEN region = 'london' THEN 'London' ELSE region END,
+                      county = CASE WHEN county = 'london' THEN 'London' ELSE county END
+    WHERE region = 'london' OR county = 'london'`);
+  out.mallorca = n(await sql`
+    UPDATE routes SET
+      region = CASE WHEN region IN ('Majorca', 'Balearic Islands', 'Islas Baleares') THEN 'Mallorca' ELSE region END,
+      county = CASE WHEN county IN ('Majorca', 'Balearic Islands', 'Islas Baleares') THEN 'Mallorca' ELSE county END
+    WHERE country = 'Spain'
+      AND (region IN ('Majorca', 'Balearic Islands', 'Islas Baleares') OR county IN ('Majorca', 'Balearic Islands', 'Islas Baleares'))`);
+  out.girona = n(await sql`
+    UPDATE routes SET region = 'Girona' WHERE country = 'Spain' AND region = 'Cataluña'`);
+  out.featured_collections = n(await sql`
+    UPDATE collections SET featured = TRUE WHERE slug IN ('mallorca', 'calpe', 'dublin') AND featured = FALSE`);
+  return out;
+}
+
+/** Hide (not delete) the four known test uploads; reversible via quality_status. */
+export async function hideTestUploads(): Promise<number> {
+  await migrateDb();
+  const { rowCount } = await sql.query(
+    `UPDATE routes SET quality_status = 'pending' WHERE id = ANY($1::text[]) AND (quality_status IS NULL OR quality_status <> 'pending')`,
+    [TEST_UPLOAD_IDS as unknown as string[]]
+  );
   return rowCount ?? 0;
 }
 
@@ -1258,21 +1315,21 @@ export async function getUserStats(userId: string): Promise<UserStats> {
 }
 
 export async function getCounties(): Promise<string[]> {
-  const { rows } = await sql`SELECT DISTINCT county FROM routes ORDER BY county`;
+  const { rows } = await sql`SELECT DISTINCT county FROM routes WHERE (quality_status = 'approved' OR quality_status IS NULL) ORDER BY county`;
   return rows.map((r) => r.county);
 }
 
 export async function getRegions(country?: string): Promise<string[]> {
   if (country) {
-    const { rows } = await sql`SELECT DISTINCT region FROM routes WHERE country = ${country} AND region IS NOT NULL ORDER BY region`;
+    const { rows } = await sql`SELECT DISTINCT region FROM routes WHERE country = ${country} AND region IS NOT NULL AND (quality_status = 'approved' OR quality_status IS NULL) ORDER BY region`;
     return rows.map((r) => r.region);
   }
-  const { rows } = await sql`SELECT DISTINCT region FROM routes WHERE region IS NOT NULL ORDER BY region`;
+  const { rows } = await sql`SELECT DISTINCT region FROM routes WHERE region IS NOT NULL AND (quality_status = 'approved' OR quality_status IS NULL) ORDER BY region`;
   return rows.map((r) => r.region);
 }
 
 export async function getCountries(): Promise<string[]> {
-  const { rows } = await sql`SELECT DISTINCT country FROM routes ORDER BY country`;
+  const { rows } = await sql`SELECT DISTINCT country FROM routes WHERE (quality_status = 'approved' OR quality_status IS NULL) ORDER BY country`;
   return rows.map((r) => r.country);
 }
 
@@ -1339,7 +1396,7 @@ export async function getAllRoutes(page = 1, limit = 50): Promise<{ routes: Rout
 // ──── SEO Queries ────
 
 export async function getAllRoutesForSitemap(): Promise<{ id: string; created_at: string }[]> {
-  const { rows } = await sql`SELECT id, created_at FROM routes ORDER BY created_at DESC`;
+  const { rows } = await sql`SELECT id, created_at FROM routes WHERE (quality_status = 'approved' OR quality_status IS NULL) ORDER BY created_at DESC`;
   return rows as { id: string; created_at: string }[];
 }
 
@@ -1367,7 +1424,7 @@ export async function getRoutesByCountrySlug(slug: string): Promise<Route[]> {
     `SELECT r.*, COALESCE(AVG(rt.score), 0) as avg_score, COUNT(rt.id) as rating_count
      FROM routes r
      LEFT JOIN ratings rt ON rt.route_id = r.id
-     WHERE ${slugSql("r.country")} = $1
+     WHERE ${slugSql("r.country")} = $1 AND (r.quality_status = 'approved' OR r.quality_status IS NULL)
      GROUP BY r.id
      ORDER BY COALESCE(AVG(rt.score), 0) DESC, r.created_at DESC`,
     [slug]
@@ -1380,7 +1437,7 @@ export async function getRoutesByRegionSlug(countrySlug: string, regionSlug: str
     `SELECT r.*, COALESCE(AVG(rt.score), 0) as avg_score, COUNT(rt.id) as rating_count
      FROM routes r
      LEFT JOIN ratings rt ON rt.route_id = r.id
-     WHERE ${slugSql("r.country")} = $1
+     WHERE ${slugSql("r.country")} = $1 AND (r.quality_status = 'approved' OR r.quality_status IS NULL)
        AND ${slugSql("r.region")} = $2
      GROUP BY r.id
      ORDER BY COALESCE(AVG(rt.score), 0) DESC, r.created_at DESC`,
@@ -1404,21 +1461,21 @@ export async function getCountryStats(countrySlug: string): Promise<{
        COALESCE((SELECT AVG(rt.score) FROM ratings rt JOIN routes r2 ON rt.route_id = r2.id WHERE ${slugSql("r2.country")} = $1), 0) as avg_rating,
        MIN(country) as display_name
      FROM routes
-     WHERE ${slugSql("country")} = $1`,
+     WHERE (quality_status = 'approved' OR quality_status IS NULL) AND ${slugSql("country")} = $1`,
     [countrySlug]
   );
 
   if (!rows[0] || Number(rows[0].route_count) === 0) return null;
 
   const { rows: disciplineRows } = await sql.query(
-    `SELECT DISTINCT discipline FROM routes WHERE ${slugSql("country")} = $1 ORDER BY discipline`,
+    `SELECT DISTINCT discipline FROM routes WHERE (quality_status = 'approved' OR quality_status IS NULL) AND ${slugSql("country")} = $1 ORDER BY discipline`,
     [countrySlug]
   );
 
   const { rows: regionRows } = await sql.query(
     `SELECT region as name, COUNT(*) as route_count
      FROM routes
-     WHERE ${slugSql("country")} = $1 AND region IS NOT NULL
+     WHERE (quality_status = 'approved' OR quality_status IS NULL) AND ${slugSql("country")} = $1 AND region IS NOT NULL
      GROUP BY region
      ORDER BY region`,
     [countrySlug]
@@ -1450,7 +1507,7 @@ export async function getRegionStats(countrySlug: string, regionSlug: string): P
        MIN(region) as display_name,
        MIN(country) as country_display_name
      FROM routes
-     WHERE ${slugSql("country")} = $1
+     WHERE (quality_status = 'approved' OR quality_status IS NULL) AND ${slugSql("country")} = $1
        AND ${slugSql("region")} = $2`,
     [countrySlug, regionSlug]
   );
@@ -1458,7 +1515,7 @@ export async function getRegionStats(countrySlug: string, regionSlug: string): P
   if (!rows[0] || Number(rows[0].route_count) === 0) return null;
 
   const { rows: disciplineRows } = await sql.query(
-    `SELECT DISTINCT discipline FROM routes WHERE ${slugSql("country")} = $1 AND ${slugSql("region")} = $2 ORDER BY discipline`,
+    `SELECT DISTINCT discipline FROM routes WHERE (quality_status = 'approved' OR quality_status IS NULL) AND ${slugSql("country")} = $1 AND ${slugSql("region")} = $2 ORDER BY discipline`,
     [countrySlug, regionSlug]
   );
 
@@ -1480,14 +1537,14 @@ export async function getRelatedRoutes(
 ): Promise<Route[]> {
   if (region) {
     const { rows } = await sql.query(
-      `SELECT * FROM routes WHERE country = $1 AND region = $2 AND id != $3 ORDER BY created_at DESC LIMIT $4`,
+      `SELECT * FROM routes WHERE (quality_status = 'approved' OR quality_status IS NULL) AND country = $1 AND region = $2 AND id != $3 ORDER BY created_at DESC LIMIT $4`,
       [country, region, routeId, limit]
     );
     if (rows.length > 0) return publicRows(rows) as Route[];
   }
   // Fall back to same country
   const { rows } = await sql.query(
-    `SELECT * FROM routes WHERE country = $1 AND id != $2 ORDER BY created_at DESC LIMIT $3`,
+    `SELECT * FROM routes WHERE (quality_status = 'approved' OR quality_status IS NULL) AND country = $1 AND id != $2 ORDER BY created_at DESC LIMIT $3`,
     [country, routeId, limit]
   );
   return publicRows(rows) as Route[];

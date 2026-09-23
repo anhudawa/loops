@@ -129,6 +129,22 @@ export default function AdminPage() {
   useEffect(() => {
     fetch("/api/admin/import-bundle").then((r) => (r.ok ? r.json() : null)).then((d) => d?.data && setBundles(d.data)).catch(() => {});
   }, []);
+  const runTidy = async (action: "tidy" | "hide-tests") => {
+    setImporting(action);
+    setImportMsg(null);
+    try {
+      const res = await fetch("/api/admin/tidy", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }) });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d?.error ?? "Failed");
+      setImportMsg(Object.entries(d.data ?? {}).map(([k, v]) => `${k.replace(/_/g, " ")}: ${v}`).join(" · ") + " — done");
+      setRoutes([]);
+    } catch (e) {
+      setImportMsg(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setImporting(null);
+    }
+  };
+
   const importBundle = async (key: string) => {
     setImporting(key);
     setImportMsg(null);
@@ -493,6 +509,22 @@ export default function AdminPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {!loadingTab && tab === "routes" && (
+            <div className="p-3 mb-2 rounded-lg" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+              <p className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>
+                Library tidy-up. Safe to press twice. Nothing is deleted.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button onClick={() => runTidy("tidy")} disabled={importing !== null} className="px-3 py-2 rounded-lg text-xs font-bold disabled:opacity-40" style={{ background: "var(--accent)", color: "var(--bg)" }} title="Trim names/regions, one spelling for Mallorca and Girona, London capitalised, feature the Mallorca, Calpe and Dublin collections">
+                  {importing === "tidy" ? "Working…" : "Tidy library data"}
+                </button>
+                <button onClick={() => runTidy("hide-tests")} disabled={importing !== null} className="px-3 py-2 rounded-lg text-xs font-bold disabled:opacity-40" style={{ background: "var(--bg)", color: "var(--text)", border: "1px solid var(--border)" }} title="Oregon Karoo, Battersea, Redhill, Windsor — hidden from the public library, not deleted">
+                  {importing === "hide-tests" ? "Working…" : "Hide test uploads (4)"}
+                </button>
+              </div>
             </div>
           )}
 

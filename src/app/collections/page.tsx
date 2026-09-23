@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { pageOpenGraph, siteUrl } from "@/lib/site-meta";
 import { getCollections } from "@/lib/db";
 import AppHeader from "@/components/AppHeader";
+
+// Cached for an hour (was rendered per request).
+export const revalidate = 3600;
 import CollectionCard from "@/components/CollectionCard";
 
 export const metadata: Metadata = {

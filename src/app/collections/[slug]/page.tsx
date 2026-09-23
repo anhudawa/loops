@@ -8,6 +8,10 @@ import RouteCard from "@/components/RouteCard";
 import JsonLd from "@/components/JsonLd";
 import { generateCollectionJsonLd, generateBreadcrumbJsonLd } from "@/lib/seo";
 import Link from "next/link";
+import AppHeader from "@/components/AppHeader";
+
+// Collections change rarely: cache for an hour (was rendered per request).
+export const revalidate = 3600;
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -93,20 +97,12 @@ export default async function CollectionPage({ params }: Props) {
       <JsonLd data={generateCollectionJsonLd(collection)} />
       <JsonLd data={breadcrumbJsonLd} />
 
-      {/* Header */}
-      <header className="sticky top-0 z-40 border-b" style={{ background: "var(--bg)", borderColor: "var(--border)" }}>
-        <div className="max-w-5xl mx-auto px-4 h-14 flex items-center gap-4">
-          <Link href="/" className="font-black text-xl tracking-tight" style={{ color: "var(--accent)" }}>
-            LOOPS
-          </Link>
-          <span style={{ color: "var(--border-light)" }} aria-hidden="true">/</span>
-          <Link href="/collections" className="text-sm font-semibold hover:opacity-80" style={{ color: "var(--text-muted)" }}>
-            Collections
-          </Link>
-          <span style={{ color: "var(--border-light)" }} aria-hidden="true">/</span>
-          <span className="text-sm font-semibold truncate" style={{ color: "var(--text)" }}>{collection.name}</span>
-        </div>
-      </header>
+      <AppHeader />
+      <nav aria-label="Breadcrumb" className="max-w-5xl mx-auto px-4 pt-3 text-xs flex items-center gap-2" style={{ color: "var(--text-muted)" }}>
+        <Link href="/collections" className="font-semibold hover:opacity-80 py-3 -my-3">Collections</Link>
+        <span aria-hidden="true" style={{ color: "var(--border-light)" }}>/</span>
+        <span className="font-semibold truncate" style={{ color: "var(--text)" }}>{collection.name}</span>
+      </nav>
 
       {/* Hero cover image */}
       {collection.cover_image_url && (
@@ -155,11 +151,24 @@ export default async function CollectionPage({ params }: Props) {
             )}
           </div>
 
-          {collection.description && (
-            <p className="text-base leading-relaxed max-w-2xl" style={{ color: "var(--text-muted)" }}>
-              {collection.description}
-            </p>
-          )}
+          {collection.description && (() => {
+            // Stored with blank-line paragraph breaks: lead paragraph shown,
+            // the rest behind "Read more" so the routes are near the top.
+            const paras = collection.description.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+            return (
+              <div className="max-w-2xl text-base leading-relaxed space-y-3" style={{ color: "var(--text-muted)" }}>
+                <p>{paras[0]}</p>
+                {paras.length > 1 && (
+                  <details>
+                    <summary className="text-sm font-bold cursor-pointer select-none py-2" style={{ color: "var(--accent)" }}>Read more</summary>
+                    <div className="space-y-3 mt-2">
+                      {paras.slice(1).map((p, i) => <p key={i}>{p}</p>)}
+                    </div>
+                  </details>
+                )}
+              </div>
+            );
+          })()}
         </div>
 
         {/* Route list */}

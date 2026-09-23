@@ -8,7 +8,7 @@
     "difficulty": "hard",
     "county": "Mallorca",
     "country": "Spain",
-    "region": "Islas Baleares",
+    "region": "Mallorca",
     "operator_name": "Epic Road Rides",
     "operator_url": "https://epicroadrides.com"
   },
@@ -21,7 +21,7 @@
     "difficulty": "hard",
     "county": "Mallorca",
     "country": "Spain",
-    "region": "Islas Baleares",
+    "region": "Mallorca",
     "operator_name": "Epic Road Rides",
     "operator_url": "https://epicroadrides.com"
   },
@@ -34,7 +34,7 @@
     "difficulty": "moderate",
     "county": "Mallorca",
     "country": "Spain",
-    "region": "Islas Baleares",
+    "region": "Mallorca",
     "operator_name": "Epic Road Rides",
     "operator_url": "https://epicroadrides.com"
   },
@@ -47,7 +47,7 @@
     "difficulty": "moderate",
     "county": "Mallorca",
     "country": "Spain",
-    "region": "Islas Baleares",
+    "region": "Mallorca",
     "operator_name": "Epic Road Rides",
     "operator_url": "https://epicroadrides.com"
   },
@@ -60,7 +60,7 @@
     "difficulty": "moderate",
     "county": "Mallorca",
     "country": "Spain",
-    "region": "Islas Baleares",
+    "region": "Mallorca",
     "operator_name": "Epic Road Rides",
     "operator_url": "https://epicroadrides.com"
   },
@@ -73,7 +73,7 @@
     "difficulty": "hard",
     "county": "Mallorca",
     "country": "Spain",
-    "region": "Islas Baleares",
+    "region": "Mallorca",
     "allow_non_loop": true,
     "operator_name": "Epic Road Rides",
     "operator_url": "https://epicroadrides.com"
@@ -87,7 +87,7 @@
     "difficulty": "hard",
     "county": "Mallorca",
     "country": "Spain",
-    "region": "Islas Baleares"
+    "region": "Mallorca"
   },
   {
     "name": "Cap de Formentor",
@@ -98,7 +98,7 @@
     "difficulty": "moderate",
     "county": "Mallorca",
     "country": "Spain",
-    "region": "Islas Baleares"
+    "region": "Mallorca"
   },
   {
     "name": "Pollença Bay Flat Triangle",
@@ -109,6 +109,6 @@
     "difficulty": "easy",
     "county": "Mallorca",
     "country": "Spain",
-    "region": "Islas Baleares"
+    "region": "Mallorca"
   }
 ]

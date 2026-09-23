@@ -30,7 +30,7 @@ export const destinations: Destination[] = [
   {
     slug: "girona",
     routesCountry: "Spain",
-    routesRegion: "Cataluña",
+    routesRegion: "Girona",
     name: "Girona",
     tagline: "Where the pros train and the roads stay quiet",
     country: "Spain",
@@ -90,7 +90,7 @@ export const destinations: Destination[] = [
   {
     slug: "mallorca",
     routesCountry: "Spain",
-    routesRegion: "Islas Baleares",
+    routesRegion: "Mallorca",
     name: "Mallorca",
     tagline: "The original spring training island",
     country: "Spain",

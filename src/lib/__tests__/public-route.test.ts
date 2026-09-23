@@ -115,3 +115,17 @@ describe("road standard on cards", () => {
     expect(card.road_report).toBeUndefined();
   });
 });
+
+import { stripOperatorAttribution as strip2 } from "../public-route";
+describe("attribution: credits and links", () => {
+  it("drops 'Courtesy of' credits and URLs", () => {
+    expect(strip2("Courtesy of SunVelo. Read more about this ride here: https://epicroadrides.com/cycling-blog/best-mallorca-cycling-routes/", null, "Southern Coast Classic")).toBeNull();
+    expect(strip2("Coastal loop with a café stop. More at www.example.com today.", null, "X")).toBe("Coastal loop with a café stop.");
+  });
+  it("matches operator names without spaces", () => {
+    expect(strip2("A fine loop. See epicroadrides for more.", null, "X")).toBe("A fine loop.");
+  });
+  it("leaves ordinary text alone", () => {
+    expect(strip2("Climb 2.5 km to St. Feliu, then home.", null, "X")).toBe("Climb 2.5 km to St. Feliu, then home.");
+  });
+});

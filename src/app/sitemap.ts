@@ -54,6 +54,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   // Get regions for each country
   const regionPages: MetadataRoute.Sitemap = [];
+  const seen = new Set<string>(); // "london" and "London" are one page
   for (const country of countries) {
     let regions: string[] = [];
     try {
@@ -62,8 +63,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       continue;
     }
     for (const region of regions) {
+      const url = `https://www.loops.ie/routes/country/${slugify(country)}/${slugify(region)}`;
+      if (seen.has(url)) continue;
+      seen.add(url);
       regionPages.push({
-        url: `https://www.loops.ie/routes/country/${slugify(country)}/${slugify(region)}`,
+        url,
         changeFrequency: "weekly",
         priority: 0.6,
       });

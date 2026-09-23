@@ -12,7 +12,7 @@
  * "unknown" — never a report about a different road.
  */
 
-import { buildRoadReport, describeCompromise, type EdgeTags, type RoadReport } from "./road-segments";
+import { buildRoadReport, describeCompromise, measuredSuffix, type EdgeTags, type RoadReport } from "./road-segments";
 import type { Discipline } from "./route-intent";
 import { haversine } from "./climb-detection";
 
@@ -125,5 +125,5 @@ export function summariseReport(r: RoadReport): string {
   if (r.standard_met) return r.summary;
   const parts = r.compromises.slice(0, 2).map(describeCompromise);
   const more = r.compromises.length - parts.length;
-  return `Compromise: ${parts.join("; ")}${more > 0 ? ` (+${more} more)` : ""}.`;
+  return `Compromise: ${parts.join("; ")}${more > 0 ? ` (+${more} more)` : ""}${measuredSuffix(r)}.`;
 }

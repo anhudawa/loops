@@ -389,14 +389,22 @@ function buildRoadReportInner(
   return report;
 }
 
+/** "; measured on 76% of the route" when part of it could not be traced (unknown ≠ unpaved). */
+export function measuredSuffix(r: Pick<RoadReport, "known_pct">): string {
+  return r.known_pct < 95 ? `; measured on ${r.known_pct}% of the route` : "";
+}
+
 function summarise(r: RoadReport, discipline: Discipline): string {
   if (r.standard_met) {
-    const paved = discipline === "road" ? `, ${r.surface.paved_pct}% paved` : "";
-    return `Meets the Loops road standard: no main roads, nothing over 80 km/h${paved}.`;
+    // Paved share over the measured part, so a partly-traced route does not
+    // read as partly unpaved.
+    const pavedOfKnown = r.known_pct > 0 ? Math.min(100, Math.round((r.surface.paved_pct / r.known_pct) * 100)) : r.surface.paved_pct;
+    const paved = discipline === "road" ? `, ${pavedOfKnown}% paved` : "";
+    return `Meets the Loops road standard: no main roads, nothing over 80 km/h${paved}${measuredSuffix(r)}.`;
   }
   const top = r.compromises.slice(0, 2).map(describeCompromise);
   const more = r.compromises.length > 2 ? ` (+${r.compromises.length - 2} more)` : "";
-  return `Compromise: ${top.join("; ")}${more}.`;
+  return `Compromise: ${top.join("; ")}${more}${measuredSuffix(r)}.`;
 }
 
 export function describeCompromise(c: Compromise): string {

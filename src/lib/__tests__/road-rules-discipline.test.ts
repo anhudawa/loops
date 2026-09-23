@@ -66,3 +66,17 @@ describe("compromise position", () => {
     expect(r.rules_version).toBe(4);
   });
 });
+
+describe("partly measured routes", () => {
+  it("says how much was measured and never counts unknown as unpaved", () => {
+    const step = 0.0001;
+    const line: [number, number][] = Array.from({ length: 101 }, (_, i) => [53 + i * step, -6.2]);
+    // first 70 edges tagged tertiary asphalt, last 30 untagged (could not be traced)
+    const tags = Array.from({ length: 100 }, (_, i) => (i < 70 ? { highway: "tertiary", surface: "asphalt" } : null));
+    const r = buildRoadReport(line, tags, "road");
+    expect(r.known_pct).toBe(70);
+    expect(r.standard_met).toBe(true);
+    expect(r.summary).toContain("100% paved");
+    expect(r.summary).toContain("measured on 70% of the route");
+  });
+});

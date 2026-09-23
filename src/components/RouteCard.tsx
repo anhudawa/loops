@@ -48,7 +48,18 @@ const DISCIPLINE_LABELS: Record<string, { icon: string; label: string }> = {
 
 /** Small Road Standard chip: ✓ met / ⚠ notes; nothing when unmeasured. */
 function RoadStandardChip({ status, small }: { status: "met" | "notes" | null; small?: boolean }) {
-  if (!status) return null;
+  if (!status) {
+    // Unknown is not clean: say it has not been measured yet.
+    return (
+      <span
+        className={`shrink-0 inline-flex items-center rounded-full font-bold ${small ? "text-[9px] px-1.5 py-px" : "text-[10px] px-2 py-0.5"}`}
+        style={{ color: "var(--text-muted)", border: "1px solid var(--border)" }}
+        title="Road Standard not measured yet"
+      >
+        Not yet measured
+      </span>
+    );
+  }
   const met = status === "met";
   return (
     <span

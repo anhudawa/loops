@@ -4,22 +4,8 @@ import { useState, useRef, useEffect } from "react";
 import { GPX_ACCESS } from "@/config/constants";
 import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
+import { useClientUrl, loginHrefFor, paramFrom } from "@/lib/useClientUrl";
 
-
-/** Current page (path + query) as a login redirect target — keeps a ride
- *  invite's day/time/meeting point through sign-in. */
-function loginHref(opts: { gpx?: boolean } = {}): string {
-  if (typeof window === "undefined") return "/login";
-  let search = window.location.search;
-  if (opts.gpx) {
-    // Ask for the GPX on return: RideActions downloads it once when a
-    // signed-in rider lands with gpx=1. t & m stay untouched.
-    const q = new URLSearchParams(search);
-    q.set("gpx", "1");
-    search = `?${q.toString()}`;
-  }
-  return `/login?redirect=${encodeURIComponent(window.location.pathname + search)}`;
-}
 
 /** Read one query param on the client (null during SSR / on error). */
 function queryParam(name: string): string | null {
@@ -48,7 +34,8 @@ export default function RideActions({ routeId, routeName, rideLink = false }: Ri
   const downloadRef = useRef<HTMLAnchorElement>(null);
 
   // On a ride link the meeting point (?m=) names the GPX start waypoint.
-  const [meet] = useState(() => (rideLink ? queryParam("m") : null));
+  const clientUrl = useClientUrl();
+  const meet = rideLink ? paramFrom(clientUrl, "m") : null;
   const gpxUrl = `/api/routes/${routeId}/gpx${rideLink ? `?via=ride${meet ? `&m=${encodeURIComponent(meet)}` : ""}` : ""}`;
 
   // Back from "Sign up to download GPX" (redirect carried gpx=1): download
@@ -161,7 +148,7 @@ export default function RideActions({ routeId, routeName, rideLink = false }: Ri
         </a>
       ) : (
         <Link
-          href={loginHref({ gpx: true })}
+          href={loginHrefFor(clientUrl, { gpx: true })}
           className="w-full flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-bold text-sm uppercase tracking-wider transition-all hover:brightness-110"
           style={{
             background: "linear-gradient(135deg, var(--accent), #7acc00)",
@@ -179,7 +166,7 @@ export default function RideActions({ routeId, routeName, rideLink = false }: Ri
       {!user && canDownload && (
         <p className="text-xs text-center" style={{ color: "var(--text-muted)" }}>
           Want to save it or plan your own loops?{" "}
-          <Link href={loginHref()} className="font-bold underline" style={{ color: "var(--accent)" }}>Join LOOPS free</Link>
+          <Link href={loginHrefFor(clientUrl)} className="font-bold underline" style={{ color: "var(--accent)" }}>Join LOOPS free</Link>
         </p>
       )}
 

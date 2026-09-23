@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import { useClientUrl, loginHrefFor } from "@/lib/useClientUrl";
 import ElevationProfile from "@/components/ElevationProfile";
 import ClimbCards from "@/components/ClimbCards";
 import StarRating from "@/components/StarRating";
@@ -28,12 +29,6 @@ import { SOCIAL_FEATURES_ENABLED } from "@/config/constants";
 import { detectClimbs, haversine, CATEGORY_COLORS, type Climb } from "@/lib/climb-detection";
 
 
-/** Current page (path + query) as a login redirect target — keeps a ride
- *  invite's day/time/meeting point through sign-in. */
-function loginHref(): string {
-  if (typeof window === "undefined") return "/login";
-  return `/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`;
-}
 
 const MapView = dynamic(() => import("@/components/MapView"), { ssr: false });
 
@@ -84,13 +79,16 @@ export interface RideInvite {
   meet: string | null;
 }
 
-export default function RouteDetailView({ ride }: { ride?: RideInvite | null } = {}) {
+export default function RouteDetailView({ ride, initialRoute }: { ride?: RideInvite | null; initialRoute?: Route | null } = {}) {
   const params = useParams();
+  const clientUrl = useClientUrl();
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
-  const [route, setRoute] = useState<Route | null>(null);
-  const [loading, setLoading] = useState(true);
+  // The server passes the route it already fetched, so the banner, title and
+  // Road Standard card paint with the HTML instead of after a second fetch.
+  const [route, setRoute] = useState<Route | null>(initialRoute ?? null);
+  const [loading, setLoading] = useState(!initialRoute);
   const [windData, setWindData] = useState<{ direction: number; speed: number } | null>(null);
   const [windOverlayEnabled, setWindOverlayEnabled] = useState(false);
   // Ride links show the direction of travel from the start — riders want to
@@ -125,17 +123,17 @@ export default function RouteDetailView({ ride }: { ride?: RideInvite | null } =
     color: string;
   } | null>(null);
 
-  const fetchRoute = async () => {
+  const fetchRoute = async (silent = false) => {
     if (!params.id) return;
     setFetchError(false);
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       const res = await fetch(`/api/routes/${params.id}`);
       // A 5xx returns { error, code } — treat it as a transient failure
       // ("Try again"), NOT as "this route doesn't exist". Only a real 404
       // (or a payload with no coordinates) is a genuine missing route.
       if (res.status >= 500) {
-        setFetchError(true);
+        if (!silent) setFetchError(true);
         return;
       }
       const data = await res.json();
@@ -151,14 +149,16 @@ export default function RouteDetailView({ ride }: { ride?: RideInvite | null } =
         });
       }
     } catch {
-      setFetchError(true);
+      if (!silent) setFetchError(true);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchRoute();
+    // With server data: refresh quietly (the API heals tracks and starts the
+    // road trace); without: the normal loading path.
+    fetchRoute(!!initialRoute);
   }, [params.id]);
 
 
@@ -301,7 +301,7 @@ export default function RouteDetailView({ ride }: { ride?: RideInvite | null } =
         <div className="flex flex-col items-center justify-center gap-4 py-32">
           <p className="text-sm" style={{ color: "var(--text-muted)" }}>Something went wrong loading this route.</p>
           <button
-            onClick={() => fetchRoute()}
+            onClick={() => fetchRoute(false)}
             className="btn-accent px-4 py-2 rounded-lg text-sm font-bold"
           >
             Try again
@@ -547,7 +547,7 @@ export default function RouteDetailView({ ride }: { ride?: RideInvite | null } =
               </button>
               ) : (
               <Link
-                href={loginHref()}
+                href={loginHrefFor(clientUrl)}
                 className="flex items-center gap-1 px-2.5 py-2 min-h-[44px] rounded-lg transition-all hover:opacity-80"
                 style={{
                   background: "rgba(255,255,255,0.05)",
@@ -867,7 +867,7 @@ export default function RouteDetailView({ ride }: { ride?: RideInvite | null } =
               </p>
             </div>
             <Link
-              href={loginHref()}
+              href={loginHrefFor(clientUrl)}
               className="shrink-0 px-5 min-h-[44px] inline-flex items-center rounded-xl font-bold text-sm uppercase tracking-wider transition-all hover:brightness-110"
               style={{
                 background: "var(--accent)",

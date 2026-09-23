@@ -129,3 +129,17 @@ describe("attribution: credits and links", () => {
     expect(strip2("Climb 2.5 km to St. Feliu, then home.", null, "X")).toBe("Climb 2.5 km to St. Feliu, then home.");
   });
 });
+
+import { initialRouteForPage } from "../public-route";
+describe("initialRouteForPage", () => {
+  it("thins the track, keeps elevations and ends, strips private fields", () => {
+    const coords = Array.from({ length: 5000 }, (_, i) => [53 + i * 1e-4, -6.2, 10 + i]);
+    const out = initialRouteForPage({ id: "x", name: "Loop", operator_name: "Secret", coordinates: JSON.stringify(coords) }, 1000);
+    const thin = JSON.parse(out.coordinates as string);
+    expect(thin.length).toBeLessThanOrEqual(1001);
+    expect(thin[0]).toEqual(coords[0]);
+    expect(thin[thin.length - 1]).toEqual(coords[coords.length - 1]);
+    expect(thin[1].length).toBe(3);
+    expect(out.operator_name).toBeUndefined();
+  });
+});

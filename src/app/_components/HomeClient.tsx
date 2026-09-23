@@ -543,7 +543,7 @@ function HomeContent() {
             className="cursor-pointer disabled:opacity-50"
             style={selectStyle}
           >
-            <option value="">All Cities</option>
+            <option value="">All regions</option>
             {cities.map((c) => (
               <option key={c} value={c}>{c}</option>
             ))}

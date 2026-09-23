@@ -149,7 +149,7 @@ export default function WeatherCard({ routeId, windOverlayEnabled, onWindToggle,
 
   return (
     <div className="rounded-2xl p-5 md:p-6" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
         <h2 className="text-xs font-extrabold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
           {weather.forecastFor && rideWhen ? `Forecast · ${rideWhen}` : "Weather now"}
         </h2>

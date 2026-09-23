@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getRoute } from "@/lib/db";
 import { formatRideWhen, cleanMeet } from "@/lib/ride-invite";
 import RouteDetailView from "@/components/RouteDetailView";
+import { initialRouteForPage } from "@/lib/public-route";
 import { freeGpxPhrase, gpxIsPublic } from "@/lib/copy";
 
 /**
@@ -65,8 +66,11 @@ export default async function RidePage({ params, searchParams }: Props) {
   // not: the client view keeps its own fail-soft retry UI.
   const { id } = await params;
   let missing = false;
+  let initialRoute: Record<string, unknown> | null = null;
   try {
-    missing = (await getRoute(id)) === undefined;
+    const r = await getRoute(id);
+    missing = r === undefined;
+    if (r) initialRoute = initialRouteForPage(r as unknown as Record<string, unknown>);
   } catch {
     missing = false;
   }
@@ -76,5 +80,5 @@ export default async function RidePage({ params, searchParams }: Props) {
   const t = one(sp.t);
   const when = formatRideWhen(t);
   const meet = cleanMeet(one(sp.m));
-  return <RouteDetailView ride={when || meet ? { when, meet, t: when ? t : null } : null} />;
+  return <RouteDetailView initialRoute={initialRoute as never} ride={when || meet ? { when, meet, t: when ? t : null } : null} />;
 }

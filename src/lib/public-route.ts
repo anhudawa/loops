@@ -147,3 +147,23 @@ export function thinCoordinates(coordinates: unknown, max = 150): string | unkno
     return coordinates;
   }
 }
+
+/**
+ * The route for a server-rendered first paint: public fields, with the
+ * stored track thinned to at most `max` points (elevations kept) so the
+ * HTML stays small; the client refreshes with the full track afterwards.
+ */
+export function initialRouteForPage(route: Record<string, unknown>, max = 1200): Record<string, unknown> {
+  const out = publicRoute(route) as Record<string, unknown>;
+  try {
+    const raw = typeof out.coordinates === "string" ? JSON.parse(out.coordinates as string) : out.coordinates;
+    if (Array.isArray(raw) && raw.length > max) {
+      const step = Math.ceil(raw.length / max);
+      const thin = raw.filter((_: unknown, i: number) => i % step === 0 || i === raw.length - 1);
+      out.coordinates = JSON.stringify(thin);
+    }
+  } catch {
+    /* leave as is */
+  }
+  return JSON.parse(JSON.stringify(out));
+}

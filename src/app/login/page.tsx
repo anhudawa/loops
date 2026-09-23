@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import AnimatedNumber from "@/components/AnimatedNumber";
 import FadeIn from "@/components/FadeIn";
 import GoogleButton from "@/components/GoogleButton";
+import { safeRedirectPath } from "@/lib/safe-redirect";
 import FeaturedRouteTeaser, { type FeaturedRoute } from "@/components/FeaturedRouteTeaser";
 
 /* ── Demo prompts for the answer-machine preview ── */
@@ -58,8 +59,9 @@ function LoginPage() {
     } catch { /* private mode */ }
   }, []);
   const remember = (m: "google" | "email") => { try { localStorage.setItem("loops:lastSignIn", m); } catch { /* noop */ } };
-  const redirectParam = searchParams.get("redirect");
-  const returnTo = redirectParam && redirectParam.startsWith("/") && !redirectParam.startsWith("//") ? redirectParam : null;
+  // Only same-site paths are honoured anywhere (see safeRedirectPath).
+  const redirectParam = safeRedirectPath(searchParams.get("redirect"));
+  const returnTo = redirectParam;
   const routeMatch = returnTo?.match(/^\/(ride|routes)\/([^/?#]+)(?:[?#]|$)/);
   const returnKind = routeMatch ? (routeMatch[1] === "ride" ? "ride" : "route") : null;
   const returnRouteId = routeMatch && routeMatch[2] !== "country" ? routeMatch[2] : null;
@@ -116,7 +118,7 @@ function LoginPage() {
     e.preventDefault();
     try { localStorage.setItem("loops:lastSignIn", "email"); } catch { /* noop */ }
     setEmailError(null);
-    const redirect = searchParams.get("redirect");
+    const redirect = safeRedirectPath(searchParams.get("redirect"));
     if (redirect) document.cookie = `login_redirect=${encodeURIComponent(redirect)}; path=/; max-age=1800; SameSite=Lax`;
     if (newsletterOptInRef.current) document.cookie = `newsletter_optin=1; path=/; max-age=1800; SameSite=Lax`;
     setEmailState("sending");
@@ -135,7 +137,7 @@ function LoginPage() {
     try {
       // Store redirect URL in a cookie so the OAuth callback can send the
       // rider where they were headed — e.g. straight into /generate?q=…
-      const redirect = redirectOverride ?? searchParams.get("redirect");
+      const redirect = safeRedirectPath(redirectOverride ?? searchParams.get("redirect"));
       if (redirect) {
         document.cookie = `login_redirect=${encodeURIComponent(redirect)}; path=/; max-age=600; SameSite=Lax`;
       }

@@ -12,3 +12,12 @@ describe("safeRedirectPath", () => {
     }
   });
 });
+
+describe("safeRedirectPath: tricks from the security audit", () => {
+  it("rejects backslash and tab variants that resolve off-site", () => {
+    for (const bad of ["/\\evil.example", "/\t/evil.example", decodeURIComponent("%2F%09%2Fevil.example"), "/%5Cevil".replace("%5C", "\\")]) {
+      expect(safeRedirectPath(bad)).toBeNull();
+    }
+    expect(new URL(safeRedirectPath("/ride/abc?t=1") ?? "/", "https://www.loops.ie").host).toBe("www.loops.ie");
+  });
+});

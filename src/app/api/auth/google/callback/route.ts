@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import { sql } from "@vercel/postgres";
 import { upsertGoogleUser, getUserByGoogleId, migrateDb, recordEvent, markNewsletterOptIn, ANALYTICS_EVENTS } from "@/lib/db";
 import { ATTRIBUTION_COOKIE, decodeAttribution } from "@/lib/attribution";
+import { safeRedirectPath } from "@/lib/safe-redirect";
 import { subscribeToNewsletter } from "@/lib/beehiiv";
 
 export async function GET(request: NextRequest) {
@@ -112,11 +113,11 @@ export async function GET(request: NextRequest) {
     const loginRedirect = request.cookies.get("login_redirect")?.value;
     let redirectTo = "/";
     if (loginRedirect) {
-      const decoded = decodeURIComponent(loginRedirect);
-      // Only allow relative paths to prevent open redirect
-      if (decoded.startsWith("/") && !decoded.startsWith("//")) {
-        redirectTo = decoded;
-      }
+      // Same-site paths only: "/\evil.example" and "/\t/evil.example" resolve
+      // off-site in a URL, so the shared guard rejects them too.
+      let decoded: string | null = null;
+      try { decoded = decodeURIComponent(loginRedirect); } catch { decoded = null; }
+      redirectTo = safeRedirectPath(decoded) ?? "/";
     }
 
     const response = NextResponse.redirect(new URL(redirectTo, baseUrl));

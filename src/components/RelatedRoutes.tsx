@@ -49,7 +49,7 @@ export default function RelatedRoutes({ routes, regionOrCountry, country, isRegi
       </div>
       <Link
         href={linkHref}
-        className="inline-block mt-3 text-sm font-semibold hover:opacity-80"
+        className="inline-flex items-center min-h-[44px] mt-1 text-sm font-semibold hover:opacity-80"
         style={{ color: "var(--accent)" }}
       >
         View all routes in {regionOrCountry} &rarr;

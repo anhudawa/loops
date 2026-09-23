@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
 import { getRoute, getRouteRating } from "@/lib/db";
 import {
   generateRouteJsonLd,
@@ -26,7 +25,7 @@ export async function generateMetadata({
   }
 
   if (!route) {
-    return { title: "Route Not Found - LOOPS" };
+    return { title: "Route not found | LOOPS", robots: { index: false } };
   }
 
   const location = route.region || route.county;
@@ -78,10 +77,10 @@ export default async function RouteLayout({
     return children;
   }
 
-  // The route definitively does not exist (the DB answered, no row): a real
-  // 404, not a 200 "Route not found" page. A DB hiccup (catch above) still
-  // renders the shell, fail-soft.
-  if (!route) notFound();
+  // The route definitively does not exist (the DB answered, no row): the
+  // page answers with a real 404 (its not-found.tsx keeps the app header).
+  // A DB hiccup (catch above) still renders the shell, fail-soft.
+  if (!route) return children;
 
   const routeJsonLd = generateRouteJsonLd({
     id: route.id,

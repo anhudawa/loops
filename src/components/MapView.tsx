@@ -35,9 +35,15 @@ export default function MapView({
   highlightSection,
   onPolylineClick,
   onMapClick,
+  detailsLink = true,
+  attributionPosition,
 }: {
   routes: Route[];
   selectedRouteId?: string;
+  /** "View details →" in the start-marker popup; off on the route's own page. */
+  detailsLink?: boolean;
+  /** Where the map credit sits (route page: top right, clear of the weather card). */
+  attributionPosition?: L.ControlPosition;
   onRouteSelect?: (id: string) => void;
   windOverlay?: { direction: number; speed: number } | null;
   travelOverlay?: boolean;
@@ -93,6 +99,7 @@ export default function MapView({
       attribution: tileAttribution,
       maxZoom: 19,
     }).addTo(mapRef.current);
+    if (attributionPosition) mapRef.current.attributionControl?.setPosition(attributionPosition);
 
     layersRef.current = L.layerGroup().addTo(mapRef.current);
     windLayerRef.current = L.layerGroup().addTo(mapRef.current);
@@ -110,7 +117,7 @@ export default function MapView({
       mapRef.current?.remove();
       mapRef.current = null;
     };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- the map is built once
 
   useEffect(() => {
     if (!mapRef.current || !layersRef.current) return;
@@ -140,8 +147,8 @@ export default function MapView({
           <strong style="font-size: 14px; letter-spacing: -0.02em;">${route.name}</strong><br/>
           <span style="color: ${color}; font-weight: 700; text-transform: uppercase; font-size: 11px; letter-spacing: 0.05em;">${route.discipline}</span>
           &middot; <span style="color: #c8ff00; font-weight: 700;">${route.distance_km} km</span><br/>
-          <span style="color: #666;">${route.region || route.county}${route.country ? `, ${route.country}` : ""}</span><br/>
-          <a href="/routes/${route.id}" style="color: #c8ff00; text-decoration: none; font-size: 13px; font-weight: 600; display: inline-block; min-height: 44px; line-height: 44px;">View details &rarr;</a>
+          <span style="color: #666;">${route.region || route.county}${route.country ? `, ${route.country}` : ""}</span>
+          ${detailsLink ? `<br/><a href="/routes/${route.id}" style="color: #c8ff00; text-decoration: none; font-size: 13px; font-weight: 600; display: inline-block; min-height: 44px; line-height: 44px;">View details &rarr;</a>` : ""}
         </div>
       `);
 
@@ -178,7 +185,7 @@ export default function MapView({
         mapRef.current.fitBounds(L.latLngBounds(allCoords), { padding: [30, 30] });
       }
     }
-  }, [routes, selectedRouteId, onRouteSelect, onPolylineClick, startLabel]);
+  }, [routes, selectedRouteId, onRouteSelect, onPolylineClick, startLabel, detailsLink]);
 
   // Hover marker from elevation profile
   useEffect(() => {
@@ -284,8 +291,8 @@ export default function MapView({
       L.circleMarker(m.at, { radius: 5, fillColor: "#f5a524", color: "#0a0a0a", weight: 1.5, fillOpacity: 0.95 })
         .bindTooltip(m.label, tip)
         .addTo(compromiseLayerRef.current);
-      // Invisible 22 px halo: a thumb can land on the dot.
-      L.circleMarker(m.at, { radius: 11, stroke: false, fillOpacity: 0 })
+      // Invisible 44 px halo: a thumb can land on the dot.
+      L.circleMarker(m.at, { radius: 22, stroke: false, fillOpacity: 0 })
         .bindTooltip(m.label, tip)
         .addTo(compromiseLayerRef.current);
     }

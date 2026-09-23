@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useId } from "react";
 import { createPortal } from "react-dom";
-import { formatRideWhen, cleanMeet, rideUrl } from "@/lib/ride-invite";
+import { formatRideWhen, cleanMeet, rideUrl, parseRideTime } from "@/lib/ride-invite";
 
 interface ShareRideProps {
   route: {
@@ -29,6 +29,22 @@ function getDefaultTime(): string {
   return `${y}-${m}-${d}T09:00`;
 }
 
+/**
+ * The time to start the sheet from when forwarding a ride: the ride's own
+ * time, or — when that day has been — the same weekday and time next time
+ * round (last Saturday's 9:00 spin becomes this Saturday's).
+ */
+function forwardTime(t: string | null | undefined): string | null {
+  const p = parseRideTime(t);
+  if (!p) return null;
+  const at = new Date(p.y, p.mo - 1, p.d, p.h, p.mi);
+  const dayOver = new Date(p.y, p.mo - 1, p.d + 1).getTime() <= Date.now();
+  if (!dayOver) return t!.trim();
+  while (at.getTime() <= Date.now()) at.setDate(at.getDate() + 7);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}T${pad(p.h)}:${pad(p.mi)}`;
+}
+
 const WA_ICON = (
   <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
     <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
@@ -38,17 +54,49 @@ const WA_ICON = (
 export default function ShareRide({ route, ride }: ShareRideProps) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [startTime, setStartTime] = useState(() => (formatRideWhen(ride?.t) ? ride!.t!.trim() : getDefaultTime()));
+  const [startTime, setStartTime] = useState(() => forwardTime(ride?.t) ?? getDefaultTime());
   const [meetingPoint, setMeetingPoint] = useState(ride?.meet ?? "");
   const forwarding = !!(ride && (ride.t || ride.meet));
+  const meetId = useId();
+  const timeId = useId();
 
   const surface = route.surface_type.charAt(0).toUpperCase() + route.surface_type.slice(1);
 
   const when = formatRideWhen(startTime);
+
+  // The sheet owns a history entry, so the phone's back button / gesture
+  // closes it instead of leaving the page.
+  const pushedEntry = useRef(false);
+  const openSheet = () => {
+    setOpen(true);
+    try {
+      window.history.pushState({ ...(window.history.state ?? {}), loopsSheet: 1 }, "");
+      pushedEntry.current = true;
+    } catch {
+      pushedEntry.current = false;
+    }
+  };
+  const closeSheet = () => {
+    if (pushedEntry.current) {
+      pushedEntry.current = false;
+      window.history.back(); // popstate below closes the sheet
+    }
+    setOpen(false);
+  };
+  useEffect(() => {
+    if (!open) return;
+    const onPop = () => {
+      pushedEntry.current = false;
+      setOpen(false);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [open]);
+
   // Esc closes the sheet.
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") closeSheet(); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
@@ -72,7 +120,7 @@ export default function ShareRide({ route, ride }: ShareRideProps) {
     if (!when) return; // guarded in the UI too — never send "Invalid Date"
     const waUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
     window.open(waUrl, "_blank");
-    setOpen(false);
+    closeSheet();
   };
 
   // Not everyone is on WhatsApp: the phone's own share sheet (iMessage,
@@ -92,10 +140,12 @@ export default function ShareRide({ route, ride }: ShareRideProps) {
     if (typeof navigator.share === "function") {
       try {
         await navigator.share({ text: message });
-        setOpen(false);
+        closeSheet();
         return;
-      } catch {
-        /* cancelled — fall through to copy */
+      } catch (e) {
+        // The rider closed the share sheet: nothing more to do.
+        if ((e as Error)?.name === "AbortError") return;
+        /* share failed — fall through to copy */
       }
     }
     await copyMessage();
@@ -111,7 +161,7 @@ export default function ShareRide({ route, ride }: ShareRideProps) {
     <>
       {/* Full-width trigger button */}
       <button
-        onClick={() => setOpen(true)}
+        onClick={openSheet}
         className="w-full flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-xl font-bold text-sm uppercase tracking-wider transition-all hover:brightness-110"
         style={{
           background: "linear-gradient(135deg, #25D366, #128C7E)",
@@ -125,7 +175,7 @@ export default function ShareRide({ route, ride }: ShareRideProps) {
 
       {/* Modal */}
       {open && typeof document !== "undefined" && createPortal(
-        <div className="fixed inset-0 z-[1000] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setOpen(false)}>
+        <div className="fixed inset-0 z-[1000] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm" onClick={closeSheet}>
           <div
             role="dialog"
             aria-modal="true"
@@ -148,7 +198,7 @@ export default function ShareRide({ route, ride }: ShareRideProps) {
                     <p className="text-xs" style={{ color: "var(--text-muted)" }}>{route.name} · {route.region || route.county}</p>
                   </div>
                 </div>
-                <button onClick={() => setOpen(false)} aria-label="Close" autoFocus={forwarding} className="hover:opacity-70 min-w-[44px] min-h-[44px] -mr-2 flex items-center justify-center" style={{ color: "var(--text-muted)" }}>
+                <button onClick={closeSheet} aria-label="Close" autoFocus className="hover:opacity-70 min-w-[44px] min-h-[44px] -mr-2 flex items-center justify-center" style={{ color: "var(--text-muted)" }}>
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                   </svg>
@@ -160,25 +210,27 @@ export default function ShareRide({ route, ride }: ShareRideProps) {
               {/* Fields */}
               <div className="space-y-4">
                 <div>
-                  <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>
-                    <span>📍</span> Meeting point
+                  <label htmlFor={meetId} className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>
+                    <span aria-hidden="true">📍</span> Meeting point
                   </label>
+                  {/* No autofocus: on a phone it opens the keyboard over the sheet. */}
                   <input
+                    id={meetId}
                     type="text"
                     value={meetingPoint}
                     onChange={(e) => setMeetingPoint(e.target.value)}
                     placeholder="e.g. Lidl car park, Fermoy"
                     className="w-full rounded-lg px-4 py-2.5 text-sm focus:outline-none"
                     style={{ ...inputStyle, transition: "border-color 0.15s" }}
-                    autoFocus={!forwarding}
                   />
                 </div>
 
                 <div>
-                  <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>
-                    <span>🕐</span> Start time
+                  <label htmlFor={timeId} className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>
+                    <span aria-hidden="true">🕐</span> Start time
                   </label>
                   <input
+                    id={timeId}
                     type="datetime-local"
                     value={startTime}
                     onChange={(e) => setStartTime(e.target.value)}

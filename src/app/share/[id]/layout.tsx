@@ -13,7 +13,7 @@ export async function generateMetadata({
   const route = await getRoute(id).catch(() => undefined);
 
   if (!route) {
-    return { title: "Route Not Found - LOOPS" };
+    return { title: "Route not found | LOOPS", robots: { index: false } };
   }
 
   const location = route.region || route.county;

@@ -221,7 +221,8 @@ export default function ElevationProfile({
       const distance = ratio * distanceKm;
       const gradient = tooltipGradient(chartData.gradients, idx);
 
-      setTooltip({ x: mouseX, y: clientY - rect.top, elevation, distance, gradient });
+      // Keep the tooltip (~140 px wide) inside the chart.
+      setTooltip({ x: Math.max(0, Math.min(mouseX, rect.width - 140)), y: clientY - rect.top, elevation, distance, gradient });
 
       // Map the sampled index back to original coordinates index
       if (onPositionChange) {
@@ -237,15 +238,49 @@ export default function ElevationProfile({
 
   const handleMouseMove = (e: React.MouseEvent) => handleInteraction(e.clientX, e.clientY);
 
-  const handleTouchMove = (e: React.TouchEvent) => {
-    e.preventDefault(); // prevent scroll while scrubbing
-    const touch = e.touches[0];
-    handleInteraction(touch.clientX, touch.clientY);
-  };
-
-  const handleLeave = () => {
+  const handleLeave = useCallback(() => {
     setTooltip(null);
     onPositionChange?.(null);
+  }, [onPositionChange]);
+
+  // After a tap the reading stays up (a lifted finger would otherwise hide
+  // it at once); the next touch outside the chart clears it.
+  const touchReading = useRef(false);
+  useEffect(() => {
+    if (!tooltip || !touchReading.current) return;
+    const onOutside = (e: TouchEvent) => {
+      if (canvasRef.current && e.target instanceof Node && canvasRef.current.contains(e.target)) return;
+      touchReading.current = false;
+      handleLeave();
+    };
+    document.addEventListener("touchstart", onOutside, { passive: true });
+    return () => document.removeEventListener("touchstart", onOutside);
+  }, [tooltip, handleLeave]);
+
+  // Touch: a tap or a sideways drag reads the profile; a vertical swipe
+  // scrolls the page (touch-action: pan-y) and clears the reading.
+  const touchStart = useRef<{ x: number; y: number; scrolling: boolean } | null>(null);
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    if (!touch) return;
+    touchReading.current = true;
+    touchStart.current = { x: touch.clientX, y: touch.clientY, scrolling: false };
+    handleInteraction(touch.clientX, touch.clientY);
+  };
+  const handleTouchMove = (e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    const start = touchStart.current;
+    if (!touch || !start || start.scrolling) return;
+    const dx = Math.abs(touch.clientX - start.x);
+    const dy = Math.abs(touch.clientY - start.y);
+    if (dy > 10 && dy > dx) {
+      // A vertical swipe is the page scrolling, not a reading.
+      start.scrolling = true;
+      touchReading.current = false;
+      handleLeave();
+      return;
+    }
+    handleInteraction(touch.clientX, touch.clientY);
   };
 
   if (!hasRealData) {
@@ -265,18 +300,18 @@ export default function ElevationProfile({
         <canvas
           ref={canvasRef}
           className="w-full"
-          style={{ height: `${chartHeight}px`, cursor: "crosshair", touchAction: "none" }}
+          style={{ height: `${chartHeight}px`, cursor: "crosshair", touchAction: "pan-y" }}
           onMouseMove={handleMouseMove}
-          onMouseLeave={handleLeave}
-          onTouchStart={(e) => handleTouchMove(e)}
-          onTouchMove={(e) => handleTouchMove(e)}
-          onTouchEnd={handleLeave}
+          onMouseLeave={() => { if (!touchReading.current) handleLeave(); }}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchCancel={() => { touchReading.current = false; handleLeave(); }}
         />
         {tooltip && (
           <div
             className="absolute pointer-events-none z-10 px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap"
             style={{
-              left: Math.min(tooltip.x, (containerRef.current?.offsetWidth ?? 300) - 140),
+              left: tooltip.x,
               top: Math.max(0, tooltip.y - 48),
               background: "rgba(0,0,0,0.85)",
               border: "1px solid rgba(200,255,0,0.3)",

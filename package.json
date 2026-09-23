@@ -13,6 +13,7 @@
     "cap:android": "npx cap open android",
     "test": "vitest run",
     "test:watch": "vitest",
+    "smoke": "playwright test tests/smoke.spec.ts",
     "golden": "tsx scripts/run-golden-routes.mts",
     "utterances": "tsx scripts/run-utterance-suite.mts",
     "sweep": "node scripts/qa/sweep.mjs"

@@ -66,7 +66,7 @@ scripts/
   routing/               # Own BRouter server: profiles/*.brf (SOURCE OF TRUTH), template →
                          #   build-cloud-init.mjs → cloud-init-brouter.yaml + src/data/engine-profiles.json
   anchors/build-places.mjs  # GeoNames → src/data/places-eu.json
-tests/                   # Playwright suite
+tests/                   # Playwright smoke suite (npm run smoke; read-only, against production)
 src/lib/__tests__/       # Vitest unit tests (npm test)
 ```
 
@@ -99,7 +99,8 @@ as home-turf pages outside the count. Route manifests for all 10 are in
 npm test                  # Vitest unit suite
 npx tsc --noEmit          # Typecheck
 npm run build             # Production build (passes without DB — fail-soft)
-npx playwright test tests/loops-comprehensive.spec.ts   # no config: needs a local config with launchOptions.executablePath in this sandbox
+npm run smoke             # Read-only production smoke suite (tests/smoke.spec.ts, iPhone 13 emulation);
+                          #   BASE_URL=<deploy> targets another deployment; PW_SANDBOX=1 in this sandbox
 npm run golden            # Golden route suite (needs ANTHROPIC_API_KEY)
 node scripts/import-routes.mjs scripts/hub-data/girona-eat-sleep-cycle.json --dry-run
 ```
@@ -129,8 +130,10 @@ node scripts/import-routes.mjs scripts/hub-data/girona-eat-sleep-cycle.json --dr
   plain rides work, workout prompts cannot parse). Owner action.
 - Library-first serves verified loops starting up to 40 km from the named
   place (Banyoles gets Girona's loops). Owner to decide the radius.
-- tests/loops-comprehensive.spec.ts targets the old public homepage; it fails
-  wholesale against the login-gated product and needs rewriting.
+- Playwright: `npm run smoke` (tests/smoke.spec.ts) is the read-only production
+  smoke suite — never signs in, blocks every mutating request. The older
+  tests/loops-ie-tests.spec.ts predates the current login page (stale) and is
+  excluded by playwright.config.ts; fold what is still useful into smoke.spec.ts.
 - DB credential leaked in git history (removed from files) — MUST be
   rotated in the Vercel/Neon dashboard
 - Anchor-first session assembly SHIPPED (src/lib/session-assembly.ts +

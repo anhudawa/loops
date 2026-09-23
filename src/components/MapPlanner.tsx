@@ -51,6 +51,7 @@ import {
 } from "@/lib/plan-legs";
 import { track } from "@/lib/track";
 import { ANALYTICS_EVENTS } from "@/lib/metrics";
+import { locationIfAllowed, requestLocation } from "@/lib/location";
 import { describeCompromise, type Compromise } from "@/lib/road-segments";
 
 interface RerouteResult {
@@ -106,14 +107,11 @@ function ClickToAdd({ onAdd }: { onAdd: (latlng: LatLng) => void }) {
 }
 
 /** Pans to the rider's location once, if it arrives before they start drawing. */
+/** Centres the map each time a new target is set (on load if allowed, or on "Use my location"). */
 function RecenterOnce({ target }: { target: LatLng | null }) {
   const map = useMap();
-  const done = useRef(false);
   useEffect(() => {
-    if (target && !done.current) {
-      done.current = true;
-      map.setView(target, 12);
-    }
+    if (target) map.setView(target, 12);
   }, [target, map]);
   return null;
 }
@@ -149,19 +147,15 @@ export default function MapPlanner() {
   const loopLegRef = useRef(loopLeg);
   loopLegRef.current = loopLeg;
 
-  // Centre on the rider if they allow it — silently fall back to Dublin.
+  // Centre on the rider only if location is already allowed (or cached) —
+  // never prompt on load; silently fall back to Dublin.
   useEffect(() => {
-    if (typeof navigator === "undefined" || !navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        // Don't yank the map away if they've already started drawing.
-        if (anchorsRef.current.length === 0) {
-          setGeoCenter([pos.coords.latitude, pos.coords.longitude]);
-        }
-      },
-      () => {},
-      { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
-    );
+    let cancelled = false;
+    locationIfAllowed().then((p) => {
+      // Don't yank the map away if they've already started drawing.
+      if (!cancelled && p && anchorsRef.current.length === 0) setGeoCenter([p.lat, p.lng]);
+    });
+    return () => { cancelled = true; };
   }, []);
 
   // ── Per-leg snapping ───────────────────────────────────────────────────────
@@ -683,6 +677,17 @@ export default function MapPlanner() {
             />
           ))}
         </MapContainer>
+        <button
+          onClick={async () => {
+            const p = await requestLocation();
+            if (p) setGeoCenter([p.lat, p.lng]);
+          }}
+          className="absolute bottom-3 right-3 z-[500] min-h-[44px] px-3 rounded-lg text-xs font-bold shadow"
+          style={{ background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
+          aria-label="Centre the map on my location"
+        >
+          Use my location
+        </button>
 
         {/* Honest empty state */}
         {anchors.length === 0 && (

@@ -11,6 +11,7 @@ import AppHeader from "@/components/AppHeader";
 import { useAuth } from "@/components/AuthProvider";
 import Link from "next/link";
 import { DEFAULT_SPEED_KMH, DEFAULT_COUNTRY } from "@/config/constants";
+import { locationIfAllowed, requestLocation } from "@/lib/location";
 import FeaturedCollections from "./FeaturedCollections";
 import RouteSearchBox from "@/components/RouteSearchBox";
 
@@ -219,16 +220,17 @@ function HomeContent() {
   const [locationDenied, setLocationDenied] = useState(false);
   const [avgSpeedKmh, setAvgSpeedKmh] = useState(DEFAULT_SPEED_KMH);
 
+  // Never prompt on load: use the position only if already allowed (or
+  // cached); otherwise the heading offers "Use my location".
   useEffect(() => {
-    if (!navigator.geolocation) {
-      setLocationDenied(true);
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => setLocationDenied(true)
-    );
+    let cancelled = false;
+    locationIfAllowed().then((p) => { if (!cancelled && p) setUserLocation(p); });
+    return () => { cancelled = true; };
   }, []);
+  const askLocation = async () => {
+    const p = await requestLocation();
+    if (p) setUserLocation(p); else setLocationDenied(true);
+  };
 
   // Persist filters to localStorage and URL
   useEffect(() => {
@@ -366,8 +368,8 @@ function HomeContent() {
     if (filters.sort) return null;
     if (filters.city || filters.country || filters.duration) return null;
     if (userLocation) return "Closest rideable loops first";
-    if (locationDenied) return `Location off — showing ${DEFAULT_COUNTRY} first. Turn on location for loops near you.`;
-    return `${DEFAULT_COUNTRY} first — turn on location for loops near you`;
+    if (locationDenied) return `Location off — showing ${DEFAULT_COUNTRY} first`;
+    return null;
   }, [filters.sort, filters.city, filters.country, filters.duration, isSearching, userLocation, locationDenied]);
 
   const sortSelect = (
@@ -571,6 +573,15 @@ function HomeContent() {
           </span>
           {sortSubLabel && !loading && (
             <span className="text-xs" style={{ color: "var(--text-muted)" }}>· {sortSubLabel}</span>
+          )}
+          {!userLocation && !isSearching && !filters.sort && !filters.city && !filters.country && !filters.duration && (
+            <button
+              onClick={askLocation}
+              className="text-xs font-bold underline min-h-[44px] px-1"
+              style={{ color: "var(--accent)" }}
+            >
+              Use my location
+            </button>
           )}
         </div>
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { locationIfAllowed, rememberLocation } from "@/lib/location";
 
 /**
  * On-demand browser geolocation. The rider taps "use my location" (or
@@ -31,10 +32,20 @@ export function useGeolocation(): GeolocationState {
     setLoading(true);
     setError(null);
 
+    // Already allowed or recently known: no prompt at all.
+    const known = await locationIfAllowed();
+    if (known) {
+      const c: [number, number] = [known.lat, known.lng];
+      setCoords(c);
+      setLoading(false);
+      return c;
+    }
+
     return new Promise((resolve) => {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const c: [number, number] = [pos.coords.latitude, pos.coords.longitude];
+          rememberLocation({ lat: c[0], lng: c[1] });
           setCoords(c);
           setLoading(false);
           resolve(c);

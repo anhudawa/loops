@@ -8,6 +8,8 @@ interface WeatherData {
   precipitation: number;
   weatherCode: number;
   windSpeed: number;
+  /** Set when this is the forecast for a ride time, not current conditions. */
+  forecastFor?: string | null;
   windDirection: number;
 }
 
@@ -19,6 +21,9 @@ interface WeatherCardProps {
   onTravelToggle: (enabled: boolean) => void;
   onWeatherLoaded: (wind: { direction: number; speed: number }) => void;
   coordinates?: [number, number][];
+  /** Group-ride start (wall clock "2026-09-26T09:00"): show the forecast for then. */
+  rideTime?: string | null;
+  rideWhen?: string | null;
 }
 
 function weatherIcon(code: number): string {
@@ -67,7 +72,7 @@ function calcWindBreakdown(coords: [number, number][], windDir: number): { headw
   };
 }
 
-export default function WeatherCard({ routeId, windOverlayEnabled, onWindToggle, travelOverlayEnabled, onTravelToggle, onWeatherLoaded, coordinates }: WeatherCardProps) {
+export default function WeatherCard({ routeId, windOverlayEnabled, onWindToggle, travelOverlayEnabled, onTravelToggle, onWeatherLoaded, coordinates, rideTime, rideWhen }: WeatherCardProps) {
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -75,7 +80,7 @@ export default function WeatherCard({ routeId, windOverlayEnabled, onWindToggle,
   useEffect(() => {
     setLoading(true); // eslint-disable-line react-hooks/set-state-in-effect
     setError(false);  
-    fetch(`/api/routes/${routeId}/weather`)
+    fetch(`/api/routes/${routeId}/weather${rideTime ? `?t=${encodeURIComponent(rideTime)}` : ""}`)
       .then((r) => {
         if (!r.ok) throw new Error();
         return r.json();
@@ -89,7 +94,7 @@ export default function WeatherCard({ routeId, windOverlayEnabled, onWindToggle,
         setError(true);
         setLoading(false);
       });
-  }, [routeId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [routeId, rideTime]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) {
     return (
@@ -119,7 +124,7 @@ export default function WeatherCard({ routeId, windOverlayEnabled, onWindToggle,
     <div className="rounded-2xl p-5 md:p-6" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xs font-extrabold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
-          Current Weather
+          {weather.forecastFor && rideWhen ? `Forecast · ${rideWhen}` : "Weather now"}
         </h2>
         <div className="flex items-center gap-2">
           <button
@@ -177,6 +182,7 @@ export default function WeatherCard({ routeId, windOverlayEnabled, onWindToggle,
               <polyline points="5 12 12 5 19 12" />
             </svg>
             {Math.round(weather.windSpeed)}
+            <span className="text-xs font-bold ml-0.5" style={{ color: "var(--text-muted)" }}>km/h</span>
           </p>
           <p className="text-[10px] uppercase tracking-wider font-bold mt-0.5" style={{ color: "var(--text-muted)" }}>
             Wind ({windLabel(weather.windDirection)})

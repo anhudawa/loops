@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { formatRideWhen, cleanMeet, rideUrl } from "@/lib/ride-invite";
 
 interface ShareRideProps {
@@ -53,6 +54,13 @@ export default function ShareRide({ route }: ShareRideProps) {
   const surface = route.surface_type.charAt(0).toUpperCase() + route.surface_type.slice(1);
 
   const when = formatRideWhen(startTime);
+  // Esc closes the sheet.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
   const handleShare = () => {
     if (!when) return; // guarded in the UI too — never send "Invalid Date"
     // Always the public site, even inside the mobile app (whose origin is
@@ -100,8 +108,8 @@ export default function ShareRide({ route }: ShareRideProps) {
       </button>
 
       {/* Modal */}
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setOpen(false)}>
+      {open && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[1000] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setOpen(false)}>
           <div
             className="w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl overflow-hidden mx-0 sm:mx-4"
             style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
@@ -200,7 +208,7 @@ export default function ShareRide({ route }: ShareRideProps) {
             </div>
           </div>
         </div>
-      )}
+      , document.body)}
     </>
   );
 }

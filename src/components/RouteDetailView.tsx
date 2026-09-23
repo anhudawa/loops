@@ -26,6 +26,14 @@ import { slugify } from "@/lib/seo";
 import { SOCIAL_FEATURES_ENABLED } from "@/config/constants";
 import { detectClimbs, haversine, CATEGORY_COLORS, type Climb } from "@/lib/climb-detection";
 
+
+/** Current page (path + query) as a login redirect target — keeps a ride
+ *  invite's day/time/meeting point through sign-in. */
+function loginHref(): string {
+  if (typeof window === "undefined") return "/login";
+  return `/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+}
+
 const MapView = dynamic(() => import("@/components/MapView"), { ssr: false });
 
 interface Route {
@@ -70,6 +78,8 @@ interface RouteQualityData {
 export interface RideInvite {
   /** Human "Sat 26 Sep · 9:00" (already formatted, wall-clock). */
   when: string | null;
+  /** Raw wall-clock "2026-09-26T09:00" for the forecast. */
+  t?: string | null;
   meet: string | null;
 }
 
@@ -374,18 +384,28 @@ export default function RouteDetailView({ ride }: { ride?: RideInvite | null } =
       {/* Group-ride invite banner (the /ride/<id> link from WhatsApp) */}
       {ride && (ride.when || ride.meet) && (
         <div className="px-4 py-3 border-b" style={{ background: "var(--accent-glow)", borderColor: "var(--accent)" }} data-testid="ride-banner">
-          <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--accent)" }}>Group ride</p>
-          <p className="text-base font-extrabold" style={{ color: "var(--text)" }}>
-            {[ride.when, ride.meet && `Meet: ${ride.meet}`].filter(Boolean).join(" · ")}
+          <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--accent)" }}>
+            Group ride{ride.when ? ` · ${ride.when}` : ""}
           </p>
-          <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-            {route.distance_km} km · +{route.elevation_gain_m} m · GPX for your bike computer below
+          <h1 className="text-lg font-extrabold leading-tight mt-0.5" style={{ color: "var(--text)" }}>{route.name}</h1>
+          <p className="text-sm mt-1" style={{ color: "var(--text)" }}>
+            {route.distance_km} km · +{route.elevation_gain_m} m
+            {ride.meet ? <> · Meet: <strong>{ride.meet}</strong></> : null}
           </p>
+          <a
+            href={`https://www.google.com/maps/search/?api=1&query=${route.start_lat},${route.start_lng}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 mt-2 px-3 py-2 min-h-[40px] rounded-lg text-xs font-bold"
+            style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+          >
+            Directions to the start ↗
+          </a>
         </div>
       )}
 
       {/* Hero: Map full-bleed */}
-      <div className="h-[200px] md:h-[360px] relative">
+      <div className="h-[42vh] min-h-[260px] md:h-[400px] relative">
         <MapView
           routes={[route]}
           selectedRouteId={route.id}
@@ -410,6 +430,8 @@ export default function RouteDetailView({ ride }: { ride?: RideInvite | null } =
             onTravelToggle={setTravelOverlayEnabled}
             onWeatherLoaded={(wind) => setWindData(wind)}
             coordinates={coordinates}
+            rideTime={ride?.t ?? null}
+            rideWhen={ride?.when ?? null}
           />
         </div>
 
@@ -489,7 +511,7 @@ export default function RouteDetailView({ ride }: { ride?: RideInvite | null } =
               </button>
               ) : (
               <Link
-                href={`/login?redirect=/routes/${route.id}`}
+                href={loginHref()}
                 className="flex items-center gap-1 px-2.5 py-2 min-h-[44px] rounded-lg transition-all hover:opacity-80"
                 style={{
                   background: "rgba(255,255,255,0.05)",
@@ -758,11 +780,11 @@ export default function RouteDetailView({ ride }: { ride?: RideInvite | null } =
                 Join LOOPS
               </p>
               <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                Download routes, rate rides, join the community
+                Save routes, get GPX, plan your own loops
               </p>
             </div>
             <Link
-              href={`/login?redirect=/routes/${route.id}`}
+              href={loginHref()}
               className="shrink-0 px-5 py-2.5 rounded-xl font-bold text-sm uppercase tracking-wider transition-all hover:brightness-110"
               style={{
                 background: "var(--accent)",

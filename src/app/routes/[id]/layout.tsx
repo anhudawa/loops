@@ -30,13 +30,13 @@ export async function generateMetadata({
   const location = route.region || route.county;
   const title = `${route.name} — ${route.distance_km}km ${route.discipline} route in ${location}, ${route.country} | LOOPS`;
   const description = route.description
-    ? `${route.description.slice(0, 120)}. ${route.distance_km}km ${route.discipline} route in ${location}, ${route.country}. ${route.elevation_gain_m}m climbing. Free GPX download.`
-    : `${route.distance_km}km ${route.discipline} route in ${location}, ${route.country}. ${route.elevation_gain_m}m climbing. Free GPX download.`;
+    ? `${route.description.slice(0, 120).replace(/[.\s]+$/, "")}. ${route.distance_km}km ${route.discipline} route in ${location}, ${route.country}. ${route.elevation_gain_m}m climbing. GPX for your bike computer.`
+    : `${route.distance_km}km ${route.discipline} route in ${location}, ${route.country}. ${route.elevation_gain_m}m climbing. GPX for your bike computer.`;
 
   return {
     title,
     description,
-    alternates: { canonical: `https://loops.ie/routes/${id}` },
+    alternates: { canonical: `https://www.loops.ie/routes/${id}` },
     robots: { index: true, follow: true },
     openGraph: {
       title: `${route.name} — ${route.distance_km}km ${route.discipline} route in ${location}, ${route.country}`,

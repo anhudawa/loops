@@ -4,6 +4,14 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
 
+
+/** Current page (path + query) as a login redirect target — keeps a ride
+ *  invite's day/time/meeting point through sign-in. */
+function loginHref(): string {
+  if (typeof window === "undefined") return "/login";
+  return `/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+}
+
 interface RideActionsProps {
   routeId: string;
   routeName: string;
@@ -103,7 +111,7 @@ export default function RideActions({ routeId, routeName }: RideActionsProps) {
         </a>
       ) : (
         <Link
-          href={`/login?redirect=/routes/${routeId}`}
+          href={loginHref()}
           className="w-full flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-bold text-sm uppercase tracking-wider transition-all hover:brightness-110"
           style={{
             background: "linear-gradient(135deg, var(--accent), #7acc00)",

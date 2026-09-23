@@ -31,6 +31,10 @@ export default function InstallPrompt() {
   // Check localStorage on mount
   useEffect(() => {
     if (isStandalone()) return; // already installed
+    // Riders arriving from a shared link (WhatsApp) came for one ride: no
+    // "add to home screen" bar over it. (WhatsApp's in-app browser can't
+    // add to home screen anyway.)
+    if (/^\/(ride|routes|share)\//.test(window.location.pathname)) return;
     const wasDismissed = localStorage.getItem(DISMISSED_KEY) === "1";
     if (wasDismissed) return;
 

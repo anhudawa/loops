@@ -4,6 +4,14 @@ import { useState, useEffect, useRef } from "react";
 import { useAuth } from "./AuthProvider";
 import Link from "next/link";
 
+
+/** Current page (path + query) as a login redirect target — keeps a ride
+ *  invite's day/time/meeting point through sign-in. */
+function loginHref(): string {
+  if (typeof window === "undefined") return "/login";
+  return `/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+}
+
 const photoSrc = (filename: string) =>
   filename.startsWith("http") ? filename : `/photos/${filename}`;
 
@@ -110,7 +118,7 @@ export default function PhotoGallery({ routeId }: { routeId: string }) {
 
       {!error && !user && photos.length === 0 && (
         <p className="text-sm text-center py-4" style={{ color: "var(--text-muted)" }}>
-          <Link href={`/login?redirect=/routes/${routeId}`} className="font-bold hover:opacity-80" style={{ color: "var(--accent)" }}>Sign in</Link> to add photos
+          <Link href={loginHref()} className="font-bold hover:opacity-80" style={{ color: "var(--accent)" }}>Sign in</Link> to add photos
         </p>
       )}
 

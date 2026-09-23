@@ -12,8 +12,8 @@ export default function ShareButton({ routeId, title, distance }: ShareButtonPro
   const [copied, setCopied] = useState(false);
 
   const shareUrl = typeof window !== "undefined"
-    ? `${window.location.origin}/share/${routeId}`
-    : `https://www.loops.ie/share/${routeId}`;
+    ? `${/^https:\/\/(www\.)?loops\.ie$/.test(window.location.origin) ? window.location.origin : "https://www.loops.ie"}/routes/${routeId}`
+    : `https://www.loops.ie/routes/${routeId}`;
 
   const shareText = `${title} — ${distance}km ride on LOOPS`;
 

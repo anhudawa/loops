@@ -60,7 +60,8 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
 
 export default async function RidePage({ searchParams }: Props) {
   const sp = await searchParams;
-  const when = formatRideWhen(one(sp.t));
+  const t = one(sp.t);
+  const when = formatRideWhen(t);
   const meet = cleanMeet(one(sp.m));
-  return <RouteDetailView ride={when || meet ? { when, meet } : null} />;
+  return <RouteDetailView ride={when || meet ? { when, meet, t: when ? t : null } : null} />;
 }

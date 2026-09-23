@@ -123,7 +123,7 @@ export default function AdminPage() {
   }, []);
 
   // Bundled LOOPS-curated route sets (e.g. Dublin) — one-tap import.
-  const [bundles, setBundles] = useState<{ key: string; label: string; routes: string[] }[]>([]);
+  const [bundles, setBundles] = useState<{ key: string; label: string; mode?: string; routes: string[] }[]>([]);
   const [importMsg, setImportMsg] = useState<string | null>(null);
   const [importing, setImporting] = useState<string | null>(null);
   useEffect(() => {
@@ -141,7 +141,8 @@ export default function AdminPage() {
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d?.error ?? "Import failed");
       const results = (d.data?.results ?? []) as { name: string; status: string }[];
-      setImportMsg(results.map((r) => `${r.name}: ${r.status === "inserted" ? "added" : "already there"}`).join(" · "));
+      const word: Record<string, string> = { inserted: "added", exists: "already there", replaced: "track replaced", not_found: "not found" };
+      setImportMsg(results.map((r) => `${r.name}: ${word[r.status] ?? r.status}`).join(" · "));
       setRoutes([]); // refetch the table
     } catch (e) {
       setImportMsg(e instanceof Error ? e.message : "Import failed");
@@ -498,7 +499,7 @@ export default function AdminPage() {
           {!loadingTab && tab === "routes" && bundles.length > 0 && (
             <div className="p-3 mb-2 rounded-lg" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
               <p className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>
-                LOOPS route sets, checked against the Road Standard. Safe to press twice — existing routes are skipped.
+                LOOPS route sets, checked against the Road Standard. Safe to press twice — imports skip existing routes; rebuilds re-apply the same track.
               </p>
               <div className="flex flex-wrap gap-2">
                 {bundles.map((b) => (
@@ -510,7 +511,7 @@ export default function AdminPage() {
                     className="px-3 py-2 rounded-lg text-xs font-bold disabled:opacity-40"
                     style={{ background: "var(--accent)", color: "var(--bg)" }}
                   >
-                    {importing === b.key ? "Importing…" : `Import ${b.label} routes (${b.routes.length})`}
+                    {importing === b.key ? "Working…" : `${b.label} (${b.routes.length})`}
                   </button>
                 ))}
               </div>

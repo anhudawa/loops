@@ -822,6 +822,27 @@ export async function insertCuratedRoute(r: {
   return "inserted";
 }
 
+/** Replace a stored route's track (a rebuilt version of the same ride): new
+ *  coordinates, distance and climbing, a fresh road report, quality reset.
+ *  Matched by name within a country. Returns how many rows changed (0 = no
+ *  such route, 1 = replaced). */
+export async function replaceRouteTrack(r: {
+  name: string; country: string; coordinates: number[][]; distance_km: number;
+  elevation_gain_m: number; elevation_loss_m: number; road_report: unknown;
+}): Promise<number> {
+  await migrateDb();
+  const { rowCount } = await sql`
+    UPDATE routes
+    SET coordinates = ${JSON.stringify(r.coordinates)}, distance_km = ${r.distance_km},
+        elevation_gain_m = ${r.elevation_gain_m}, elevation_loss_m = ${r.elevation_loss_m},
+        start_lat = ${r.coordinates[0][0]}, start_lng = ${r.coordinates[0][1]},
+        road_report = ${JSON.stringify(r.road_report)}::jsonb,
+        quality_score = NULL, quality_breakdown = NULL, quality_surface = NULL, quality_scored_at = NULL
+    WHERE name = ${r.name} AND country = ${r.country}
+  `;
+  return rowCount ?? 0;
+}
+
 // ──── Users ────
 export async function getUserByEmail(email: string): Promise<User | undefined> {
   const { rows } = await sql`SELECT * FROM users WHERE email = ${email}`;

@@ -137,8 +137,10 @@ Mallorca from Port de Pollença 2 loops (~1.1 km of named regional/primary
 links each). Production shows the same only after the routing server is
 rebuilt with cloud-init v3 (owner action: Hetzner token).
 
-**Library measured (2026-09-23, rules v2, 107 routes):** 8 meet the
-standard, 86 carry named compromises, 13 unknown. Algarve 0/8 clean,
+**Library measured (2026-09-23, 107 routes):** rules v2: 8 meet the
+standard, 86 carry named compromises, 13 unknown; rules v3 (crossings
+< 100 m ignored, discipline-aware "unsuitable"): 10 / 86 / 11 — the
+refinements shortened the lists, they did not clear routes. Algarve 0/8 clean,
 Tenerife 0/8, Mallorca 1/21, Girona/Cataluña 2/32, Gran Canaria 2/7. The
 iconic climbs are OSM "primary" (TF-21, GC-60, Ma-10 links) and the engine
 data carries no traffic estimate or maxspeed for them, so rule 1 cannot be

@@ -165,8 +165,9 @@ node scripts/import-routes.mjs scripts/hub-data/girona-eat-sleep-cycle.json --dr
   token (works from Gmail/Outlook in-app browsers).
 - GPX access is one switch: GPX_ACCESS in src/config/constants.ts
   ("signed-in" default | "ride-links" | "everyone"); copy derives from it.
-- Library Road Standard tally (2026-09-23, rules v2, 107 routes): 8 meet,
-  86 carry named compromises, 13 unknown. The iconic Canary/Balearic climbs
+- Library Road Standard tally (2026-09-23, 107 routes): rules v2 8 meet /
+  86 notes / 13 unknown; rules v3 (crossings < 100 m ignored, gravel-aware)
+  10 / 86 / 11 — the compromises are real kilometres of primary road. The iconic Canary/Balearic climbs
   are OSM "primary" (TF-21 Teide 43 km, GC-60 Fataga 42 km) with no traffic
   estimate or maxspeed in the engine data, so no automatic rule separates
   them from busy N-roads. LIBRARY_ROAD_POLICY (constants.ts) is the owner

@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { routeCard } from "@/lib/public-route";
+import { SOCIAL_FEATURES_ENABLED as SHOW_RATINGS } from "@/config/constants";
+import { freeGpxPhrase, placeLabel, plural } from "@/lib/copy";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCountries, getRegions, getRegionStats, getRoutesByRegionSlug } from "@/lib/db";
@@ -42,8 +44,9 @@ export async function generateMetadata({
   }
   if (!stats) return { title: "Not Found - LOOPS" };
 
-  const title = `Cycling Routes in ${stats.displayName}, ${stats.countryDisplayName} — ${stats.routeCount} Routes | LOOPS`;
-  const description = `Discover ${stats.routeCount} cycling routes in ${stats.displayName}, ${stats.countryDisplayName}. Free GPX downloads, community ratings.`;
+  const place = placeLabel(stats.displayName, stats.countryDisplayName);
+  const title = `Cycling Routes in ${place} — ${plural(stats.routeCount, "Route")} | LOOPS`;
+  const description = `Discover ${plural(stats.routeCount, "cycling route")} in ${place}. ${freeGpxPhrase({ title: true })}, elevation profiles and road-quality notes.`;
 
   return {
     title,
@@ -86,6 +89,7 @@ export default async function RegionPage({
   if (dbDown) return <RoutesUnavailable />;
   if (!stats) notFound();
 
+  const place = placeLabel(stats.displayName, stats.countryDisplayName);
   const breadcrumbItems = [
     { name: "LOOPS", url: "https://www.loops.ie" },
     { name: stats.countryDisplayName, url: `https://www.loops.ie/routes/country/${countrySlug}` },
@@ -94,25 +98,25 @@ export default async function RegionPage({
 
   const faqItems = [
     {
-      question: `What are the best cycling routes in ${stats.displayName}, ${stats.countryDisplayName}?`,
+      question: `What are the best cycling routes in ${place}?`,
       answer: routes.length > 0
-        ? `Top routes include: ${routes.slice(0, 3).map((r) => `${r.name} (${r.distance_km}km)`).join(", ")}.`
+        ? `${routes.length === 1 ? "The route here is" : "Routes include"}: ${routes.slice(0, 3).map((r) => `${r.name} (${r.distance_km}km)`).join(", ")}.`
         : `Browse all routes on LOOPS to find rides in ${stats.displayName}.`,
     },
     {
       question: `How many cycling routes are in ${stats.displayName}?`,
-      answer: `There are ${stats.routeCount} cycling routes in ${stats.displayName}, ${stats.countryDisplayName} on LOOPS.`,
+      answer: `There ${Number(stats.routeCount) === 1 ? "is" : "are"} ${plural(stats.routeCount, "cycling route")} in ${place} on LOOPS.`,
     },
     {
       question: `Can I download GPX files for routes in ${stats.displayName}?`,
-      answer: `Yes — all routes in ${stats.displayName} include free GPX downloads. Works with Strava, Komoot, Wahoo, and Garmin.`,
+      answer: `Yes — ${Number(stats.routeCount) === 1 ? "the route" : "every route"} in ${stats.displayName} comes with ${freeGpxPhrase()}. Works with Strava, Komoot, Wahoo, and Garmin.`,
     },
   ];
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
       <JsonLd data={generateBreadcrumbJsonLd(breadcrumbItems)} />
-      <JsonLd data={generateItemListJsonLd(`Cycling Routes in ${stats.displayName}, ${stats.countryDisplayName}`, routes)} />
+      <JsonLd data={generateItemListJsonLd(`Cycling Routes in ${place}`, routes.map((r) => ({ id: r.id, name: r.name })))} />
       <JsonLd data={generateFaqJsonLd(faqItems)} />
 
       <header className="px-4 md:px-6 py-3" style={{ background: "var(--bg-raised)", borderBottom: "1px solid var(--border)" }}>
@@ -136,25 +140,25 @@ export default async function RegionPage({
         ]} />
 
         <h1 className="text-3xl md:text-4xl font-extrabold mt-3 mb-4" style={{ color: "var(--text)" }}>
-          Cycling Routes in {stats.displayName}, {stats.countryDisplayName}
+          Cycling Routes in {place}
         </h1>
 
         <p className="text-sm leading-relaxed mb-8" style={{ color: "var(--text-secondary)" }}>
-          {stats.routeCount} cycling routes in {stats.displayName}, {stats.countryDisplayName} on LOOPS.
-          Browse {stats.disciplines.join(", ")} routes with free GPX downloads.
+          {plural(stats.routeCount, "cycling route")} in {place} on LOOPS.
+          Browse {stats.disciplines.join(", ")} routes with {freeGpxPhrase()}.
         </p>
 
         {/* Stats bar */}
         <div className="flex gap-6 mb-8 flex-wrap">
           <div>
             <div className="text-2xl font-extrabold" style={{ color: "var(--accent)" }}>{stats.routeCount}</div>
-            <div className="text-xs uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>Routes</div>
+            <div className="text-xs uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>{Number(stats.routeCount) === 1 ? "Route" : "Routes"}</div>
           </div>
           <div>
             <div className="text-2xl font-extrabold" style={{ color: "var(--accent)" }}>{stats.totalDistanceKm.toLocaleString()}</div>
             <div className="text-xs uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>Total km</div>
           </div>
-          {stats.avgRating > 0 && (
+          {SHOW_RATINGS && stats.avgRating > 0 && (
             <div>
               <div className="text-2xl font-extrabold" style={{ color: "var(--accent)" }}>{stats.avgRating}</div>
               <div className="text-xs uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>Avg rating</div>
@@ -164,7 +168,7 @@ export default async function RegionPage({
 
         {/* All routes */}
         <h2 className="text-sm font-bold uppercase tracking-wider mb-4" style={{ color: "var(--text-muted)" }}>
-          All Routes
+          {routes.length === 1 ? "The route" : "All Routes"}
         </h2>
         <div className="grid gap-3 md:grid-cols-2 mb-10">
           {routes.map((route) => (

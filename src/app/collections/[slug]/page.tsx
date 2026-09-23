@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { DEFAULT_OG_IMAGE, pageOpenGraph, siteUrl } from "@/lib/site-meta";
 import { routeCard } from "@/lib/public-route";
+import { placeLabel, plural } from "@/lib/copy";
 import { notFound } from "next/navigation";
 import { getCollectionBySlug } from "@/lib/db";
 import RouteCard from "@/components/RouteCard";
@@ -26,7 +27,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const description =
     collection.seo_description ||
     collection.description ||
-    `${collection.total_routes_count} curated cycling routes${collection.location ? ` in ${collection.location}` : ""}.`;
+    `${plural(collection.total_routes_count, "curated cycling route")}${collection.location ? ` in ${collection.location}` : ""}.`;
 
   return {
     title,
@@ -79,7 +80,7 @@ export default async function CollectionPage({ params }: Props) {
   if (!collection) notFound();
 
   const disc = DISCIPLINE_LABELS[collection.discipline] ?? DISCIPLINE_LABELS.mixed;
-  const locationText = [collection.location, collection.country].filter(Boolean).join(", ");
+  const locationText = placeLabel(collection.location, collection.country);
 
   const breadcrumbJsonLd = generateBreadcrumbJsonLd([
     { name: "Home", url: siteUrl("/") },
@@ -144,7 +145,7 @@ export default async function CollectionPage({ params }: Props) {
 
           <div className="flex items-center gap-3 text-sm mb-4" style={{ color: "var(--text-muted)" }}>
             <span className="font-bold" style={{ color: "var(--accent)" }}>
-              {collection.total_routes_count} route{collection.total_routes_count !== 1 ? "s" : ""}
+              {plural(collection.total_routes_count, "route")}
             </span>
             {locationText && (
               <>

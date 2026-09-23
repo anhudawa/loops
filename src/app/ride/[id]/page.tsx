@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getRoute } from "@/lib/db";
 import { formatRideWhen, cleanMeet } from "@/lib/ride-invite";
 import RouteDetailView from "@/components/RouteDetailView";
+import { freeGpxPhrase, gpxIsPublic } from "@/lib/copy";
 
 /**
  * A group-ride link: the route page plus the ride's day, time and meeting
@@ -34,7 +35,7 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
 
   const stats = `${route.distance_km} km · ${route.elevation_gain_m} m climbing`;
   const title = when ? `${route.name} — ${when}` : route.name;
-  const description = [when && `Group ride ${when}`, meet && `Meet: ${meet}`, stats, "Route, elevation and GPX for your bike computer."]
+  const description = [when && `Group ride ${when}`, meet && `Meet: ${meet}`, stats, gpxIsPublic("ride") ? "Route, elevation and GPX for your bike computer." : `Route and elevation — ${freeGpxPhrase()}.`]
     .filter(Boolean)
     .join(" · ");
   const og = new URLSearchParams();

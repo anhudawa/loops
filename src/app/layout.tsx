@@ -8,6 +8,7 @@ import Footer from "@/components/Footer";
 import InstallPrompt from "@/components/InstallPrompt";
 import JsonLd from "@/components/JsonLd";
 import { generateOrganizationJsonLd, generateWebSiteJsonLd } from "@/lib/seo";
+import { freeGpxPhrase } from "@/lib/copy";
 import "./globals.css";
 
 const outfit = Outfit({
@@ -21,8 +22,9 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://www.loops.ie"),
   // No site-wide canonical: each page sets its own (a root canonical of "/"
   // made every page without one point at the homepage).
-  title: "LOOPS — Cycling Routes Worldwide | Free GPX Downloads",
-  description: "Discover cycling routes worldwide. Free GPX downloads, community ratings, elevation profiles. Gravel, road & MTB routes from real riders.",
+  // GPX copy follows the GPX_ACCESS owner switch — never promise more.
+  title: `LOOPS — Cycling Routes Worldwide | ${freeGpxPhrase({ title: true })}`,
+  description: `Discover cycling routes worldwide. ${freeGpxPhrase({ title: true })}, elevation profiles and road-quality notes. Gravel, road & MTB routes from real riders.`,
   keywords: ["cycling routes", "gravel cycling", "GPX", "bike routes", "MTB trails", "road cycling", "route sharing", "cycling community"],
   verification: {
     google: "0-mGmMRQK6Iu8na6wuEcwzm1I7RO2uT3-XJ3T8C5wys",

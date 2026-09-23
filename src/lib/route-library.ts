@@ -176,7 +176,7 @@ function toLibraryMatch(
  * Generate. Under "name" (default) it is offered with the compromise
  * named. A loop with no report yet always passes — unknown is not a fail.
  */
-export function libraryRoutePassesPolicy(route: Pick<Route, "road_report" | "distance_km">, policy = LIBRARY_ROAD_POLICY): boolean {
+export function libraryRoutePassesPolicy(route: { road_report?: unknown; distance_km: number | string }, policy = LIBRARY_ROAD_POLICY): boolean {
   if (policy !== "enforce") return true;
   const report = validRoadReport(route.road_report);
   if (!report) return true;

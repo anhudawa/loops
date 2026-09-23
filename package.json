@@ -14,7 +14,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "golden": "tsx scripts/run-golden-routes.mts",
-    "utterances": "tsx scripts/run-utterance-suite.mts"
+    "utterances": "tsx scripts/run-utterance-suite.mts",
+    "sweep": "node scripts/qa/sweep.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",

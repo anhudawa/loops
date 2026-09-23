@@ -21,6 +21,8 @@ interface RouteCardProps {
     is_verified?: number;
     /** Road Standard verdict: from routeCard() lists, or the full report on route objects. */
     road_standard?: "met" | "notes" | null;
+    /** Stored track not fit to ride: the card is not shown. */
+    track_broken?: boolean;
     road_report?: { standard_met?: boolean } | null;
     distance_km_away?: number;
     estimated_minutes?: number;
@@ -80,6 +82,7 @@ function RoadStandardChip({ status, small }: { status: "met" | "notes" | null; s
 
 export default function RouteCard({ route, showDistance }: RouteCardProps) {
   const [imgError, setImgError] = useState(false);
+  if (route.track_broken) return null;
   const discipline = route.discipline ? DISCIPLINE_LABELS[route.discipline] : null;
   const roadStatus: "met" | "notes" | null =
     route.road_standard ?? (route.road_report?.standard_met === true ? "met" : route.road_report?.standard_met === false ? "notes" : null);

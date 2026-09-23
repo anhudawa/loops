@@ -1,3 +1,4 @@
+import { checkTrack } from "./track-shape";
 import { SOCIAL_FEATURES_ENABLED } from "@/config/constants";
 
 /**
@@ -121,6 +122,7 @@ export function routeCard<T extends Record<string, unknown>>(route: T): Record<s
   if (SOCIAL_FEATURES_ENABLED) for (const k of CARD_SOCIAL_FIELDS) if (k in clean) out[k] = clean[k];
   const rs = roadStandardStatus(clean.road_report);
   if (rs) out.road_standard = rs;
+  if (hasBrokenTrack(route)) out.track_broken = true;
   return out;
 }
 
@@ -166,4 +168,16 @@ export function initialRouteForPage(route: Record<string, unknown>, max = 1200):
     /* leave as is */
   }
   return JSON.parse(JSON.stringify(out));
+}
+
+/** The stored track is not fit to ride (a "loop" ridden twice, a gap): keep it out of lists. */
+export function hasBrokenTrack(route: Record<string, unknown>): boolean {
+  try {
+    const raw = typeof route.coordinates === "string" ? JSON.parse(route.coordinates) : route.coordinates;
+    if (!Array.isArray(raw) || raw.length < 3) return false;
+    const coords = raw.map((c: number[]) => [Number(c[0]), Number(c[1])] as [number, number]);
+    return !!checkTrack(coords, String(route.name ?? ""))?.broken;
+  } catch {
+    return false;
+  }
 }

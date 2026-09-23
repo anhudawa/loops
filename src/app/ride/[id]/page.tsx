@@ -4,6 +4,7 @@ import { getRoute } from "@/lib/db";
 import { formatRideWhen, cleanMeet } from "@/lib/ride-invite";
 import RouteDetailView from "@/components/RouteDetailView";
 import { initialRouteForPage } from "@/lib/public-route";
+import { withBundleCorrection } from "@/lib/bundle-corrections";
 import { freeGpxPhrase, gpxIsPublic } from "@/lib/copy";
 
 /**
@@ -68,7 +69,8 @@ export default async function RidePage({ params, searchParams }: Props) {
   let missing = false;
   let initialRoute: Record<string, unknown> | null = null;
   try {
-    const r = await getRoute(id);
+    const r0 = await getRoute(id);
+    const r = r0 ? await withBundleCorrection(r0) : r0;
     missing = r === undefined;
     if (r) initialRoute = initialRouteForPage(r as unknown as Record<string, unknown>);
   } catch {

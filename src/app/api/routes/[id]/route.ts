@@ -6,6 +6,7 @@ import { fetchElevations } from "@/lib/elevation";
 import { rerouteWaypoints, engineTrace } from "@/lib/route-generator";
 import { traceRoadReport, traceProfileChain, summariseReport } from "@/lib/road-trace";
 import { ensureTraceProfile } from "@/lib/engine-profiles";
+import { withBundleCorrection } from "@/lib/bundle-corrections";
 import { ROAD_RULES_VERSION, nameCompromises, type RoadReport } from "@/lib/road-segments";
 
 export const maxDuration = 30;
@@ -191,6 +192,7 @@ export async function GET(
       return apiError("Route not found", "NOT_FOUND", 404);
     }
 
+    route = await withBundleCorrection(route);
     route = await repairElevationIfFlat(route);
     route = await repairGapsIfAny(route);
     scheduleRoadTrace(route);

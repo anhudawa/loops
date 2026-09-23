@@ -11,6 +11,7 @@
 
 import type { RouteSpec, WorkoutSpec } from "./route-intent";
 import { validRoadReport } from "./library-road-report";
+import { checkTrack } from "./track-shape";
 import { compromiseAcceptable } from "./road-segments";
 import { LIBRARY_ROAD_POLICY } from "@/config/constants";
 import { getRoutes, type Route } from "./db";
@@ -147,6 +148,10 @@ function toLibraryMatch(
   const raw = (typeof stored === "string" ? JSON.parse(stored) : stored) as number[][];
   if (!Array.isArray(raw) || raw.length < 2) throw new Error("no usable track");
   const coordinates: [number, number][] = raw.map(([lat, lng]) => [lat, lng]);
+  // A broken stored track (a "loop" that is an out-and-back, a gap in the
+  // data) is never offered: riders would ride it.
+  const check = checkTrack(coordinates, route.name);
+  if (check?.broken) throw new Error(`broken track: ${check.broken}`);
   const hasEle = raw.length > 0 && raw.every((c) => typeof c[2] === "number");
   const elevations = hasEle ? raw.map((c) => c[2]) : undefined;
   const report = validRoadReport(route.road_report);

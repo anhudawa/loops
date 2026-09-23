@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useClientUrl, loginHrefFor } from "@/lib/useClientUrl";
+import { checkTrack, shapeLabel, type TrackCheck } from "@/lib/track-shape";
 import ElevationProfile from "@/components/ElevationProfile";
 import ClimbCards from "@/components/ClimbCards";
 import StarRating from "@/components/StarRating";
@@ -29,6 +30,14 @@ import { SOCIAL_FEATURES_ENABLED } from "@/config/constants";
 import { detectClimbs, haversine, CATEGORY_COLORS, type Climb } from "@/lib/climb-detection";
 
 
+
+// Track shape is measured once per route/track (hover re-renders are frequent).
+const trackCheckCache = new Map<string, TrackCheck | null>();
+function cachedTrackCheck(id: string, coords: [number, number][], name: string): TrackCheck | null {
+  const key = `${id}:${coords.length}`;
+  if (!trackCheckCache.has(key)) trackCheckCache.set(key, checkTrack(coords, name));
+  return trackCheckCache.get(key) ?? null;
+}
 
 const MapView = dynamic(() => import("@/components/MapView"), { ssr: false });
 
@@ -356,6 +365,7 @@ export default function RouteDetailView({ ride, initialRoute }: { ride?: RideInv
   const coordinates: [number, number][] = rawCoords.map((c) => [c[0], c[1]]);
   const elevations: number[] = rawCoords.map((c) => c[2] ?? 0);
   const climbs = detectClimbs(fullCoordinates);
+  const track = cachedTrackCheck(route.id, coordinates, route.name);
 
   const handlePositionChange = (index: number | null) => {
     setHoverIndex(index);
@@ -402,7 +412,7 @@ export default function RouteDetailView({ ride, initialRoute }: { ride?: RideInv
           </p>
           <h1 className="text-lg font-extrabold leading-tight mt-0.5" style={{ color: "var(--text)" }}>{route.name}</h1>
           <p className="text-sm mt-1" style={{ color: "var(--text)" }}>
-            {route.distance_km} km · +{route.elevation_gain_m} m
+            {route.distance_km} km · +{route.elevation_gain_m} m{track ? ` · ${shapeLabel(track)}` : ""}
             {ride.meet ? <> · Meet: <strong>{ride.meet}</strong></> : null}
           </p>
           {/* Always the route's first point: a typed meeting point can't be
@@ -425,8 +435,16 @@ export default function RouteDetailView({ ride, initialRoute }: { ride?: RideInv
         <div className="px-4 py-2.5 border-b md:hidden" style={{ background: "var(--bg-raised)", borderColor: "var(--border)" }}>
           <p className="text-base font-extrabold leading-tight truncate" style={{ color: "var(--text)" }}>{route.name}</p>
           <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-            {route.distance_km} km · +{route.elevation_gain_m} m · {route.region || route.county}
+            {route.distance_km} km · +{route.elevation_gain_m} m · {route.region || route.county}{track ? ` · ${shapeLabel(track)}` : ""}
           </p>
+        </div>
+      )}
+
+      {/* A track that is not fit to ride says so — before anyone rides it. */}
+      {track?.broken && (
+        <div className="px-4 py-3 border-b" style={{ background: "rgba(245,165,36,0.12)", borderColor: "rgba(245,165,36,0.5)" }} role="alert" data-testid="track-broken">
+          <p className="text-sm font-bold" style={{ color: "#f5a524" }}>We&apos;re rebuilding this route — don&apos;t ride it yet.</p>
+          <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>Its stored track isn&apos;t right: {track.broken}.</p>
         </div>
       )}
 

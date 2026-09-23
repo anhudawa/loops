@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { publicRoute, thinCoordinates } from "@/lib/public-route";
+import { publicRoute, thinCoordinates, hasBrokenTrack } from "@/lib/public-route";
 import { getRoutes, insertRoute, getCounties, getRegions, getCountries, getUserBySession, recordEvent, ANALYTICS_EVENTS } from "@/lib/db";
 import { parseRouteFile } from "@/lib/route-parser";
 import { fetchRideWithGPS } from "@/lib/ridewithgps";
@@ -63,7 +63,8 @@ export async function GET(request: NextRequest) {
     const hasMore = rows.length > pageSize;
     const routes = hasMore ? rows.slice(0, pageSize) : rows;
     return NextResponse.json({
-      data: routes.map((r) => {
+      // Broken stored tracks (a "loop" ridden twice, a gap) stay out of the feed.
+      data: routes.filter((r) => !hasBrokenTrack(r as unknown as Record<string, unknown>)).map((r) => {
         const pr = publicRoute(r as unknown as Record<string, unknown>);
         // List view: map-sized track, no stored GPX (the route page has both).
         return { ...pr, coordinates: thinCoordinates(pr.coordinates), gpx_data: undefined };

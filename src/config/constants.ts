@@ -79,3 +79,11 @@ export const SOCIAL_FEATURES_ENABLED = false;
  *  - "everyone"   : public, like Komoot's shared tours
  */
 export const GPX_ACCESS: "signed-in" | "ride-links" | "everyone" = "signed-in";
+/**
+ * What Generate does with a library loop whose MEASURED road report fails
+ * the serving policy (owner switch, 2026-09-23):
+ *   "name"    — serve it with the compromise named, ranked below clean loops
+ *   "enforce" — drop it from Generate (it stays browsable in the library,
+ *               with its Road Standard card)
+ */
+export const LIBRARY_ROAD_POLICY: "name" | "enforce" = "name";

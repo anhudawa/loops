@@ -11,6 +11,8 @@
 
 import type { RouteSpec, WorkoutSpec } from "./route-intent";
 import { validRoadReport } from "./library-road-report";
+import { compromiseAcceptable } from "./road-segments";
+import { LIBRARY_ROAD_POLICY } from "@/config/constants";
 import { getRoutes, type Route } from "./db";
 import {
   detectIntervalSegments,
@@ -169,6 +171,19 @@ function toLibraryMatch(
 }
 
 /**
+ * Owner switch (LIBRARY_ROAD_POLICY): under "enforce", a loop whose
+ * measured road report fails the serving policy is not offered by
+ * Generate. Under "name" (default) it is offered with the compromise
+ * named. A loop with no report yet always passes — unknown is not a fail.
+ */
+export function libraryRoutePassesPolicy(route: Pick<Route, "road_report" | "distance_km">, policy = LIBRARY_ROAD_POLICY): boolean {
+  if (policy !== "enforce") return true;
+  const report = validRoadReport(route.road_report);
+  if (!report) return true;
+  return compromiseAcceptable(report, Number(route.distance_km) || 0);
+}
+
+/**
  * Query the library for route candidates and return those that score above
  * the match threshold, ranked by score.
  *
@@ -196,6 +211,7 @@ export async function matchLibraryRoutes(
   const scored: LibraryMatch[] = [];
   for (const route of pool) {
     if (route.coordinates == null) continue;
+    if (!libraryRoutePassesPolicy(route)) continue;
     const distFromStart = haversineKm(
       startLat,
       startLng,

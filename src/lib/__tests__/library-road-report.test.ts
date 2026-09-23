@@ -44,3 +44,16 @@ describe("mergeLoopReport", () => {
     expect(m.standard_met).toBe(true);
   });
 });
+
+import { libraryRoutePassesPolicy } from "../route-library";
+describe("libraryRoutePassesPolicy", () => {
+  const bad = { road_report: loopBad, distance_km: 60 };
+  it("'name' offers everything; 'enforce' drops a loop beyond the allowance", () => {
+    expect(libraryRoutePassesPolicy(bad, "name")).toBe(true);
+    expect(libraryRoutePassesPolicy(bad, "enforce")).toBe(false);
+  });
+  it("'enforce' keeps clean loops and loops without a report", () => {
+    expect(libraryRoutePassesPolicy({ road_report: clean, distance_km: 60 }, "enforce")).toBe(true);
+    expect(libraryRoutePassesPolicy({ road_report: null, distance_km: 60 }, "enforce")).toBe(true);
+  });
+});

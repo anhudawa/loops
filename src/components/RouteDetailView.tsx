@@ -659,6 +659,14 @@ export default function RouteDetailView({ ride }: { ride?: RideInvite | null } =
           </div>
         )}
 
+        {/* No report yet: say so — unknown is not the same as clean. The first
+            view of a route starts the trace; the next view shows the card. */}
+        {route && !route.road_report && (
+          <p className="text-xs mb-4 px-1" style={{ color: "var(--text-muted)" }} data-testid="road-standard-pending">
+            Road Standard: not measured yet for this route.
+          </p>
+        )}
+
         {/* Route quality — same scoring engine as /generate; renders only
             when the score arrives, degrades silently otherwise */}
         {quality && (

@@ -49,6 +49,24 @@ describe("road-trace", () => {
   it("returns unknown (null) when the trace is a different ride", async () => {
     expect(await traceRoadReport(track(), "road", engine("tertiary", 1.5))).toBeNull();
   });
+  it("keeps what the engine could follow and leaves a detoured chunk unknown", async () => {
+    // A ~90 km loop → four chunks; the second one detours and must stay unknown.
+    const big: [number, number][] = [];
+    for (let i = 0; i <= 300; i++) big.push([53 + i * 0.0009, -6.2]);
+    for (let i = 1; i <= 200; i++) big.push([53.27, -6.2 + i * 0.0015]);
+    for (let i = 1; i <= 300; i++) big.push([53.27 - i * 0.0009, -5.9]);
+    for (let i = 1; i <= 200; i++) big.push([53, -5.9 - i * 0.0015]);
+    let call = 0;
+    const flaky: TraceEngine = async (via) => {
+      call++;
+      return engine("tertiary", call === 2 ? 1.5 : 1)(via);
+    };
+    const r = await traceRoadReport(big, "road", flaky);
+    expect(r).not.toBeNull();
+    expect(r!.known_pct).toBeLessThan(100);
+    expect(r!.known_pct).toBeGreaterThanOrEqual(60);
+    expect(r!.standard_met).toBe(true);
+  });
   it("returns unknown when the engine fails or the budget is gone", async () => {
     expect(await traceRoadReport(track(), "road", engine("tertiary", 1, true))).toBeNull();
     expect(await traceRoadReport(track(), "road", engine("tertiary"), -1)).toBeNull();

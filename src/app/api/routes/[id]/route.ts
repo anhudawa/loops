@@ -4,8 +4,8 @@ import { getRoute, updateRouteElevation, updateRouteGeometry, storeRouteRoadRepo
 import { apiError, handleApiError } from "@/lib/api-utils";
 import { fetchElevations } from "@/lib/elevation";
 import { rerouteWaypoints, engineTrace } from "@/lib/route-generator";
-import { traceRoadReport, traceProfileFor } from "@/lib/road-trace";
-import { ROAD_RULES_VERSION, nameCompromises } from "@/lib/road-segments";
+import { traceRoadReport, traceProfileFor, summariseReport } from "@/lib/road-trace";
+import { ROAD_RULES_VERSION, nameCompromises, type RoadReport } from "@/lib/road-segments";
 
 export const maxDuration = 30;
 
@@ -121,7 +121,8 @@ const TRACE_BUDGET_MS = 20_000;
 
 function scheduleRoadTrace(route: NonNullable<Awaited<ReturnType<typeof getRoute>>>) {
   const stored = route.road_report as { rules_version?: number } | null | undefined;
-  if ((stored && stored.rules_version === ROAD_RULES_VERSION) || !process.env.BROUTER_URL) return;
+  if (stored && stored.rules_version === ROAD_RULES_VERSION) { scheduleNameFill(route); return; }
+  if (!process.env.BROUTER_URL) return;
   if (tracing.has(route.id)) return;
   const failed = traceFailedAt.get(route.id);
   if (failed && Date.now() - failed < TRACE_RETRY_MS) return;
@@ -132,7 +133,7 @@ function scheduleRoadTrace(route: NonNullable<Awaited<ReturnType<typeof getRoute
       const coords: [number, number][] = JSON.parse(route.coordinates).map((c: number[]) => [c[0], c[1]]);
       const discipline = route.discipline === "gravel" || route.discipline === "mtb" ? route.discipline : "road";
       // After the response, names can take their time: three stretches, 2.5 s each.
-      const namer = (c: [number, number][], comps: Parameters<typeof nameCompromises>[1]) => nameCompromises(c, comps, fetch, { timeoutMs: 2500, max: 3 });
+      const namer = (c: [number, number][], comps: Parameters<typeof nameCompromises>[1]) => nameCompromises(c, comps, fetch, { timeoutMs: 8000, max: 3 });
       const engine = (wps: [number, number][]) => engineTrace(wps, traceProfileFor(discipline));
       const report = await traceRoadReport(coords, discipline, engine, TRACE_BUDGET_MS, namer);
       if (report) {
@@ -147,6 +148,30 @@ function scheduleRoadTrace(route: NonNullable<Awaited<ReturnType<typeof getRoute
       console.error("[routes/:id] road trace failed:", err instanceof Error ? err.message : err);
     } finally {
       tracing.delete(route.id);
+    }
+  });
+}
+
+// A current report whose compromises carry no road names yet: fill the
+// names in after the response on a later view (one lookup, hourly backoff),
+// so "on a primary road" becomes "on the Ma-2200" without a re-trace.
+const nameFillAt = new Map<string, number>();
+function scheduleNameFill(route: NonNullable<Awaited<ReturnType<typeof getRoute>>>) {
+  const rr = route.road_report as RoadReport | null | undefined;
+  if (!rr || !rr.compromises?.length || rr.compromises.some((c) => c.name)) return;
+  const last = nameFillAt.get(route.id);
+  if (last && Date.now() - last < TRACE_RETRY_MS) return;
+  nameFillAt.set(route.id, Date.now());
+  after(async () => {
+    try {
+      await nameCompromises([], rr.compromises, fetch, { timeoutMs: 8000, max: 3 });
+      if (rr.compromises.some((c) => c.name)) {
+        rr.summary = summariseReport(rr);
+        await storeRouteRoadReport(route.id, rr);
+        console.log(JSON.stringify({ evt: "route_road_named", route_id: route.id, named: rr.compromises.filter((c) => c.name).length }));
+      }
+    } catch (err) {
+      console.error("[routes/:id] name fill failed:", err instanceof Error ? err.message : err);
     }
   });
 }

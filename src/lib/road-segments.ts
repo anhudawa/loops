@@ -245,15 +245,35 @@ export interface RoadReport {
   standard_met: boolean;
   /** Rider-facing one-liner. */
   summary: string;
+  /** ROAD_RULES_VERSION the report was built with (older → re-traced). */
+  rules_version?: number;
 }
 
 /** Classify one edge against the Road Standard (road discipline is strictest). */
+/**
+ * Bump when the classification rules change: stored reports with an older
+ * (or missing) version are re-traced on next view (api/routes/[id]).
+ */
+export const ROAD_RULES_VERSION = 2;
+
+// "Unsuitable" by surface is discipline-aware: smoothness=bad is a hazard on
+// a road bike and the whole point of a gravel ride; class:bicycle −2 is
+// "unsuitable for road bikes" in practice. Access bans and fords stay
+// unsuitable for everyone.
+const UNSUITABLE_SMOOTHNESS: Record<Discipline, Set<string>> = {
+  road: BAD_SMOOTHNESS,
+  gravel: new Set(["horrible", "very_horrible", "impassable"]),
+  mtb: new Set(["impassable"]),
+};
+const CLASS_BICYCLE_FLOOR: Record<Discipline, number> = { road: -2, gravel: -3, mtb: -3 };
+
 export function classifyEdge(t: WayTags, discipline: Discipline): CompromiseKind | null {
   const hw = t.highway ?? "";
   if (MAIN_ROADS.has(hw)) return "main_road";
   if (isFastRoad(t)) return "fast_road";
   const cb = parseInt(t["class:bicycle"] ?? "", 10);
-  if ((!Number.isNaN(cb) && cb <= -2) || BAD_SMOOTHNESS.has(t.smoothness ?? "") || isRestrictedForBikes(t) || t.ford === "yes") {
+  const badClass = !Number.isNaN(cb) && cb <= CLASS_BICYCLE_FLOOR[discipline];
+  if (badClass || UNSUITABLE_SMOOTHNESS[discipline].has(t.smoothness ?? "") || isRestrictedForBikes(t) || t.ford === "yes") {
     return "unsuitable";
   }
   if (discipline === "road" && isPaved(t) === false) return "unpaved";
@@ -265,7 +285,7 @@ export const EXIT_ZONE_KM = 6;
 const MIN_COMPROMISE_M = 40;   // shorter = crossing a junction, not riding the road
 const MERGE_GAP_M = 60;        // same-kind stretches this close are one stretch
 
-export function buildRoadReport(
+function buildRoadReportInner(
   coords: [number, number][],
   edgeTags: EdgeTags,
   discipline: Discipline
@@ -748,4 +768,13 @@ export async function nameCompromises(
       }
     })
   );
+}
+
+/** The road report, stamped with the rules version it was built under. */
+export function buildRoadReport(
+  coords: [number, number][],
+  edgeTags: EdgeTags,
+  discipline: Discipline
+): RoadReport {
+  return { ...buildRoadReportInner(coords, edgeTags, discipline), rules_version: ROAD_RULES_VERSION };
 }

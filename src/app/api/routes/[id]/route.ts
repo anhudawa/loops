@@ -5,6 +5,7 @@ import { apiError, handleApiError } from "@/lib/api-utils";
 import { fetchElevations } from "@/lib/elevation";
 import { rerouteWaypoints, engineTrace } from "@/lib/route-generator";
 import { traceRoadReport } from "@/lib/road-trace";
+import { ROAD_RULES_VERSION } from "@/lib/road-segments";
 
 export const maxDuration = 30;
 
@@ -119,7 +120,8 @@ const TRACE_RETRY_MS = 60 * 60 * 1000;
 const TRACE_BUDGET_MS = 20_000;
 
 function scheduleRoadTrace(route: NonNullable<Awaited<ReturnType<typeof getRoute>>>) {
-  if (route.road_report || !process.env.BROUTER_URL) return;
+  const stored = route.road_report as { rules_version?: number } | null | undefined;
+  if ((stored && stored.rules_version === ROAD_RULES_VERSION) || !process.env.BROUTER_URL) return;
   if (tracing.has(route.id)) return;
   const failed = traceFailedAt.get(route.id);
   if (failed && Date.now() - failed < TRACE_RETRY_MS) return;

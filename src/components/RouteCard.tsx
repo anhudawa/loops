@@ -91,6 +91,7 @@ export default function RouteCard({ route, showDistance }: RouteCardProps) {
   return (
     <Link
       href={`/routes/${route.id}`}
+      className="block min-w-0 max-w-full"
       aria-label={`${route.name} — ${route.distance_km} km ${route.discipline || ""} route in ${locationText}${countryText}`}
     >
       <div
@@ -158,8 +159,8 @@ export default function RouteCard({ route, showDistance }: RouteCardProps) {
           {/* Mobile: name, the "should I ride this?" stats, then meta row.
               Built to be scannable at a glance (discovery-v2, 2026-06-11). */}
           <div className="md:hidden">
-            <div className="flex items-center gap-1.5 mb-0.5 min-w-0">
-              <h3 className="text-sm font-bold truncate" style={{ color: "var(--text)" }}>
+            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 mb-0.5 min-w-0">
+              <h3 className="text-sm font-bold truncate min-w-0 max-w-full" style={{ color: "var(--text)" }}>
                 {route.name}
               </h3>
               {route.is_verified === 1 && (
@@ -212,8 +213,8 @@ export default function RouteCard({ route, showDistance }: RouteCardProps) {
           <div className="hidden md:block">
             {/* Name row: title left, rating right */}
             <div className="flex items-center justify-between gap-2 mb-1">
-              <div className="flex items-center gap-1.5 min-w-0">
-                <h3 className="font-bold tracking-tight truncate" style={{ color: "var(--text)" }}>{route.name}</h3>
+              <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 min-w-0">
+                <h3 className="font-bold tracking-tight truncate min-w-0 max-w-full" style={{ color: "var(--text)" }}>{route.name}</h3>
                 {route.is_verified === 1 && (
                   <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="var(--success)" aria-label="Verified route">
                     <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />

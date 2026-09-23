@@ -16,9 +16,10 @@ import { buildRoadReport, describeCompromise, measuredSuffix, type EdgeTags, typ
 import type { Discipline } from "./route-intent";
 import { haversine } from "./climb-detection";
 
-/** One engine call: the traced path with the engine's per-edge tags. */
+/** One engine call with a named profile: the traced path with the engine's per-edge tags. */
 export type TraceEngine = (
   waypoints: [number, number][],
+  profile: string,
 ) => Promise<{ coords: [number, number][]; edgeTags: EdgeTags | null; distance_km: number } | null>;
 
 export const TRACE_PROFILE = "trekking";
@@ -29,6 +30,20 @@ export const TRACE_PROFILE = "trekking";
  */
 export function traceProfileFor(discipline: Discipline): string {
   return discipline === "gravel" ? "gravel" : discipline === "mtb" ? "mtb" : TRACE_PROFILE;
+}
+
+/**
+ * The profile chain tried per chunk, in order: the discipline's own profile
+ * (follows its terrain), trekking, then — when the app could upload it —
+ * the permissive `loops-trace` profile that follows anything, so a track
+ * that rides a bicycle=no tunnel or an autovía is measured as ridden
+ * (and the classifier names it) instead of staying "unknown".
+ */
+export function traceProfileChain(discipline: Discipline, permissiveId?: string | null): string[] {
+  const chain = [traceProfileFor(discipline)];
+  if (chain[0] !== TRACE_PROFILE) chain.push(TRACE_PROFILE);
+  if (permissiveId) chain.push(permissiveId);
+  return chain;
 }
 const VIA_SPACING_KM = 0.8;
 const MAX_VIA = 150;          // ≤ 5 engine calls for any route
@@ -70,6 +85,7 @@ export async function traceRoadReport(
   engine: TraceEngine,
   budgetMs = 20_000,
   namer?: CompromiseNamer,
+  profiles: string[] = traceProfileChain(discipline),
 ): Promise<RoadReport | null> {
   if (coords.length < 2) return null;
   const started = Date.now();
@@ -90,21 +106,27 @@ export async function traceRoadReport(
     const end = Math.min(s + CHUNK, via.length - 1);
     const chunk = via.slice(s, end + 1);
     const chunkKm = cumKm[end] - cumKm[s];
-    let path = await engine(chunk);
-    if ((!path || !path.edgeTags) && chunk.length > 4) {
-      // A via point the engine cannot reach (an off-road GPS fix, a private
-      // lane): thin the chunk and try once more.
-      path = await engine(chunk.filter((_, i) => i === 0 || i === chunk.length - 1 || i % 2 === 0));
+    const driftOf = (p: Awaited<ReturnType<TraceEngine>>) =>
+      p && p.edgeTags && p.coords.length >= 2 ? Math.abs(p.distance_km - chunkKm) / Math.max(0.3, chunkKm) : Infinity;
+    let path: Awaited<ReturnType<TraceEngine>> = null;
+    for (const profile of profiles) {
+      if (Date.now() - started > budgetMs) break;
+      let p = await engine(chunk, profile);
+      if ((!p || !p.edgeTags) && chunk.length > 4) {
+        // A via point the engine cannot reach (an off-road GPS fix, a private
+        // lane): thin the chunk and try once more with the same profile.
+        p = await engine(chunk.filter((_, i) => i === 0 || i === chunk.length - 1 || i % 2 === 0), profile);
+      }
+      if (driftOf(p) <= MAX_CHUNK_DRIFT) { path = p; break; }
     }
-    const drift = path ? Math.abs(path.distance_km - chunkKm) / Math.max(0.3, chunkKm) : Infinity;
-    if (!path || !path.edgeTags || path.coords.length < 2 || drift > MAX_CHUNK_DRIFT) {
+    if (!path) {
       pushUnknown(chunk);
       unknownKm += chunkKm;
       continue;
     }
     if (traced.length) tags.push(null); // the join between chunks is not a road
     traced.push(...path.coords);
-    tags.push(...path.edgeTags);
+    tags.push(...(path.edgeTags ?? []));
   }
   if (traced.length < 2) return null;
   if ((1 - unknownKm / gpxKm) * 100 < MIN_KNOWN_PCT) return null;

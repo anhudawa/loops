@@ -1,0 +1,47 @@
+# LOOPS trace profile — follow whatever the stored track rides on.
+#
+# Used ONLY to measure an existing route (src/lib/road-trace.ts), never to
+# generate one: every road, path and track is passable at the same cost,
+# access tags are ignored, so the engine returns the roads as ridden and the
+# classifier (road-segments.ts) says what each metre means — main road,
+# fast road, unpaved, unsuitable. A bike profile would detour around a
+# bicycle=no tunnel or a private lane and the trace would not be the ride.
+
+---context:global
+
+assign validForBikes = true
+assign validForCars = false
+assign pass1coefficient = 1.5
+assign pass2coefficient = 0
+assign turnInstructionMode = 0
+assign considerTurnAngles = false
+
+assign downhillcost = 0
+assign downhillcutoff = 0
+assign uphillcost = 0
+assign uphillcutoff = 0
+assign elevationpenaltybuffer = 0
+assign elevationmaxbuffer = 0
+assign elevationbufferreduce = 0
+
+---context:way
+
+assign turncost = 0
+assign initialcost = 0
+assign onewaypenalty = 0
+
+# Everything with a highway tag is passable. Motorways are a last resort
+# (no ride uses them; without this the trace snaps onto a parallel
+# autovía) and main roads cost a little more than lanes, so between two
+# via points the engine keeps the track's own road unless the main road
+# is much shorter. Ferries allowed, dearly.
+assign costfactor =
+  if highway= then ( if route=ferry then 5 else 10000 )
+  else if highway=motorway|motorway_link then 100
+  else if highway=trunk|trunk_link|primary|primary_link then 1.2
+  else if highway=secondary|secondary_link then 1.1
+  else 1
+
+---context:node
+
+assign initialcost = 0

@@ -81,3 +81,35 @@ export async function syncEngineProfiles(
   }
   return out;
 }
+
+// ── Trace profile (road-trace.ts): uploaded by the app itself ─────────────
+// The permissive tracing profile (scripts/routing/profiles/loops-trace.brf)
+// is only ever used to MEASURE a stored track, so it needs no stable env id:
+// each server instance uploads it once and keeps the custom id in memory.
+let traceProfileId: string | null = null;
+let traceProfileFailedAt = 0;
+const TRACE_PROFILE_RETRY_MS = 10 * 60 * 1000;
+
+export async function ensureTraceProfile(baseUrl: string): Promise<string | null> {
+  if (traceProfileId) return traceProfileId;
+  if (Date.now() - traceProfileFailedAt < TRACE_PROFILE_RETRY_MS) return null;
+  const text = (profiles as Record<string, string>)["loops-trace"];
+  if (!text) return null;
+  try {
+    const res = await fetch(`${baseUrl.replace(/\/$/, "")}/profile`, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: text,
+      signal: AbortSignal.timeout(10_000),
+    });
+    const body = await res.text();
+    const m = body.match(/"profileid"\s*:\s*"(custom_\d+)"/);
+    if (!m || /"error"/.test(body)) throw new Error(body.slice(0, 120));
+    traceProfileId = m[1];
+    return traceProfileId;
+  } catch (err) {
+    traceProfileFailedAt = Date.now();
+    console.error("[engine-profiles] trace profile upload failed:", err instanceof Error ? err.message : err);
+    return null;
+  }
+}

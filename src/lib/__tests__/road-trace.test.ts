@@ -57,9 +57,9 @@ describe("road-trace", () => {
     for (let i = 1; i <= 300; i++) big.push([53.27 - i * 0.0009, -5.9]);
     for (let i = 1; i <= 200; i++) big.push([53, -5.9 - i * 0.0015]);
     let call = 0;
-    const flaky: TraceEngine = async (via) => {
+    const flaky: TraceEngine = async (via, profile) => {
       call++;
-      return engine("tertiary", call === 2 ? 1.5 : 1)(via);
+      return engine("tertiary", call === 2 ? 1.5 : 1)(via, profile);
     };
     const r = await traceRoadReport(big, "road", flaky);
     expect(r).not.toBeNull();
@@ -79,5 +79,23 @@ describe("traceProfileFor", () => {
     expect(traceProfileFor("road")).toBe("trekking");
     expect(traceProfileFor("gravel")).toBe("gravel");
     expect(traceProfileFor("mtb")).toBe("mtb");
+  });
+});
+
+import { traceProfileChain } from "../road-trace";
+describe("profile chain", () => {
+  it("tries the discipline profile, then trekking, then the permissive one", () => {
+    expect(traceProfileChain("road")).toEqual(["trekking"]);
+    expect(traceProfileChain("gravel")).toEqual(["gravel", "trekking"]);
+    expect(traceProfileChain("mtb", "custom_42")).toEqual(["mtb", "trekking", "custom_42"]);
+  });
+  it("falls through to the profile that follows the track", async () => {
+    // a track along a road the bike profiles refuse: they detour (1.5x), the permissive one fits
+    const byProfile: TraceEngine = async (via, profile) => engine("motorway", profile === "custom_42" ? 1 : 1.5)(via, profile);
+    const r = await traceRoadReport(track(), "road", byProfile, 20_000, undefined, ["trekking", "custom_42"]);
+    expect(r).not.toBeNull();
+    expect(r!.known_pct).toBe(100);
+    expect(r!.standard_met).toBe(false);
+    expect(r!.main_road_pct).toBeGreaterThan(90);
   });
 });

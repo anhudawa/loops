@@ -690,7 +690,7 @@ export default function RouteDetailView({ ride }: { ride?: RideInvite | null } =
 
         {/* Ride Actions */}
         <div className="mb-6">
-          <RideActions routeId={route.id} routeName={route.name} />
+          <RideActions routeId={route.id} routeName={route.name} rideLink={!!ride} />
           {/* One-tap Send to Garmin — renders nothing until Garmin keys are configured */}
           <div className="mt-2.5 flex justify-center empty:hidden">
             <SendToGarmin

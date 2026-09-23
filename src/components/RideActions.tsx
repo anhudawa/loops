@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { GPX_ACCESS } from "@/config/constants";
 import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
 
@@ -13,17 +14,22 @@ function loginHref(): string {
 }
 
 interface RideActionsProps {
+  /** Rendered on a group-ride link (/ride/<id>). */
+  rideLink?: boolean;
   routeId: string;
   routeName: string;
 }
 
-export default function RideActions({ routeId, routeName }: RideActionsProps) {
+export default function RideActions({ routeId, routeName, rideLink = false }: RideActionsProps) {
   const { user } = useAuth();
+  // GPX_ACCESS (owner switch): who may download without signing in.
+  const openAccess = GPX_ACCESS === "everyone" || (GPX_ACCESS === "ride-links" && rideLink);
+  const canDownload = !!user || openAccess;
   const [copied, setCopied] = useState(false);
   const [canShareFiles, setCanShareFiles] = useState(false);
   const downloadRef = useRef<HTMLAnchorElement>(null);
 
-  const gpxUrl = `/api/routes/${routeId}/gpx`;
+  const gpxUrl = `/api/routes/${routeId}/gpx${rideLink ? "?via=ride" : ""}`;
 
   // Detect Web Share API file sharing support (mobile)
   useEffect(() => {
@@ -98,7 +104,7 @@ export default function RideActions({ routeId, routeName }: RideActionsProps) {
       <a ref={downloadRef} href={gpxUrl} download={`${routeName}.gpx`} className="hidden" />
 
       {/* Primary: Download GPX (or sign-up CTA for non-users) */}
-      {user ? (
+      {canDownload ? (
         <a
           href={gpxUrl}
           download={`${routeName}.gpx`}
@@ -124,6 +130,13 @@ export default function RideActions({ routeId, routeName }: RideActionsProps) {
           </svg>
           Sign Up to Download GPX
         </Link>
+      )}
+
+      {!user && canDownload && (
+        <p className="text-xs text-center" style={{ color: "var(--text-muted)" }}>
+          Want to save it or plan your own loops?{" "}
+          <Link href={loginHref()} className="font-bold underline" style={{ color: "var(--accent)" }}>Join LOOPS free</Link>
+        </p>
       )}
 
       {/* Secondary actions */}

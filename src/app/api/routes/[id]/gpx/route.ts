@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRoute, getUserBySession, trackDownload, migrateDb, recordEvent, ANALYTICS_EVENTS } from "@/lib/db";
 import { apiError, handleApiError } from "@/lib/api-utils";
+import { GPX_ACCESS } from "@/config/constants";
 import { v4 as uuidv4 } from "uuid";
 
 export async function GET(
@@ -8,13 +9,12 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Require authentication to download GPX
+    // Access per GPX_ACCESS (owner switch in config/constants.ts).
     const sessionToken = request.cookies.get("session")?.value;
-    if (!sessionToken) {
-      return apiError("Sign in to download routes", "UNAUTHORIZED", 401);
-    }
-    const user = await getUserBySession(sessionToken);
-    if (!user) {
+    const user = sessionToken ? await getUserBySession(sessionToken).catch(() => undefined) : undefined;
+    const viaRide = request.nextUrl.searchParams.get("via") === "ride";
+    const open = GPX_ACCESS === "everyone" || (GPX_ACCESS === "ride-links" && viaRide);
+    if (!user && !open) {
       return apiError("Sign in to download routes", "UNAUTHORIZED", 401);
     }
 
@@ -28,15 +28,15 @@ export async function GET(
     // Track download
     try {
       await migrateDb();
-      await trackDownload(uuidv4(), id, user.id);
+      if (user) await trackDownload(uuidv4(), id, user.id);
     } catch {
       // Don't block the download if tracking fails
     }
 
     // Funnel: GPX downloaded (fire-and-forget, no PII).
     void recordEvent(ANALYTICS_EVENTS.GPX_DOWNLOADED, {
-      userId: user.id,
-      properties: { route_id: id, distance_km: route.distance_km, discipline: route.discipline },
+      userId: user?.id ?? null,
+      properties: { route_id: id, distance_km: route.distance_km, discipline: route.discipline, anonymous: !user, via: viaRide ? "ride" : "route" },
     });
 
     // Generate GPX from stored coordinates (may be [lat,lng] or [lat,lng,ele])
@@ -46,7 +46,8 @@ export async function GET(
     return new NextResponse(gpx, {
       headers: {
         "Content-Type": "application/gpx+xml",
-        "Content-Disposition": `attachment; filename="${encodeURIComponent(route.name)}.gpx"`,
+        // ASCII fallback + UTF-8 name (was "Roadman%20Group%20Spin….gpx").
+        "Content-Disposition": `attachment; filename="${(route.name.replace(/[^A-Za-z0-9 _-]+/g, "").trim().replace(/\s+/g, "-") || "loops-route")}.gpx"; filename*=UTF-8''${encodeURIComponent(route.name)}.gpx`,
       },
     });
   } catch (err) {

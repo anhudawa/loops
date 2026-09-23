@@ -71,3 +71,11 @@ export const SURFACE_LABELS: Record<string, string> = {
  * restore them post-launch — all components are kept intact.
  */
 export const SOCIAL_FEATURES_ENABLED = false;
+
+/**
+ * Who can download a route's GPX (owner decision; one-line switch).
+ *  - "signed-in"  : only signed-in riders (current — "GPX stays behind signup")
+ *  - "ride-links" : also anyone arriving on a group-ride link (/ride/<id>)
+ *  - "everyone"   : public, like Komoot's shared tours
+ */
+export const GPX_ACCESS: "signed-in" | "ride-links" | "everyone" = "signed-in";

@@ -182,8 +182,13 @@ node scripts/import-routes.mjs scripts/hub-data/girona-eat-sleep-cycle.json --dr
 - Library Road Standard tally (2026-09-23, 107 routes): rules v2 8 meet /
   86 notes / 13 unknown; rules v3 (crossings < 100 m ignored, gravel-aware)
   10 / 86 / 11; rules v5 (per-chunk trace, names, positions) 11 / 91 / 5 —
-  the compromises are real kilometres of primary road. Unknown: Coll de
-  Bracons, Turó de l'Home, Rocacorba Gravel, Timanfaya 100, Karoo (US). The iconic Canary/Balearic climbs
+  the compromises are real kilometres of primary road. Tracing (2026-09-23
+  evening) is per chunk with a profile chain — discipline profile → trekking
+  → permissive `loops-trace` (scripts/routing/profiles, uploaded by the app
+  itself once per instance) — so any track can be measured as ridden.
+  FINDING: Coll de Bracons, Turó de l'Home and Rocacorba Gravel ride the
+  AP-7/C-25 autovías for tens of km (car-routed imports, not rides) —
+  owner to delete or replace. Karoo (US) has no map data. The iconic Canary/Balearic climbs
   are OSM "primary" (TF-21 Teide 43 km, GC-60 Fataga 42 km) with no traffic
   estimate or maxspeed in the engine data, so no automatic rule separates
   them from busy N-roads. LIBRARY_ROAD_POLICY (constants.ts) is the owner

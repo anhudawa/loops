@@ -800,37 +800,72 @@ export async function nameCompromises(
 ): Promise<void> {
   const timeoutMs = opts.timeoutMs ?? NAME_TIMEOUT_MS;
   const max = opts.max ?? NAME_MAX_PER_CALL;
-  await Promise.all(
-    compromises.slice(0, max).map(async (c) => {
-      const mid = coords[Math.min(coords.length - 1, Math.floor((c.start + c.end) / 2))];
-      if (!mid) return;
-      const key = `${mid[0].toFixed(4)},${mid[1].toFixed(4)}:${c.highway}`;
-      const hit = nameCache.get(key);
-      if (hit !== undefined) { if (hit) c.name = hit; return; }
-      const q = `[out:json][timeout:2];way(around:25,${mid[0].toFixed(6)},${mid[1].toFixed(6)})["highway"="${c.highway}"];out tags 3;`;
-      try {
-        await withNameSlot(async () => {
-          const res = await fetchImpl(NAME_LOOKUP_URL, {
-            method: "POST",
-            headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "loops.ie route generator (https://www.loops.ie)" },
-            body: `data=${encodeURIComponent(q)}`,
-            // Bounded: a name is nice ("on the R755") but never worth
-            // stalling scoring. Unnamed degrades to "on a primary road".
-            signal: AbortSignal.timeout(timeoutMs),
-          });
-          if (!res.ok) return;
-          const json = (await res.json()) as { elements?: Array<{ tags?: WayTags }> };
-          for (const el of json.elements ?? []) {
-            const name = el.tags?.ref ?? el.tags?.name;
-            if (name) { c.name = name.split(";")[0].trim(); nameCache.set(key, c.name); return; }
+  type Target = { c: Compromise; mid: [number, number]; key: string };
+  const targets: Target[] = [];
+  for (const c of compromises.slice(0, max)) {
+    const mid = c.at ?? coords[Math.min(coords.length - 1, Math.floor((c.start + c.end) / 2))];
+    if (!mid) continue;
+    const key = `${mid[0].toFixed(4)},${mid[1].toFixed(4)}:${c.highway}`;
+    const hit = nameCache.get(key);
+    if (hit !== undefined) { if (hit) c.name = hit; continue; }
+    targets.push({ c, mid, key });
+  }
+  if (targets.length === 0) return;
+  // One query for every stretch (a union of small searches), geometry
+  // included so each result can be matched back to the stretch it passes.
+  const q =
+    `[out:json][timeout:${Math.max(2, Math.floor(timeoutMs / 1000))}];(` +
+    targets.map((t) => `way(around:30,${t.mid[0].toFixed(6)},${t.mid[1].toFixed(6)})["highway"="${t.c.highway}"];`).join("") +
+    `);out tags geom;`;
+  try {
+    await withNameSlot(async () => {
+      const res = await fetchImpl(NAME_LOOKUP_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "loops.ie route generator (https://www.loops.ie)" },
+        body: `data=${encodeURIComponent(q)}`,
+        // Bounded: a name is nice ("on the R755") but never worth stalling
+        // scoring. Unnamed degrades to "on a primary road".
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      if (!res.ok) return;
+      const json = (await res.json()) as { elements?: Array<{ tags?: WayTags; geometry?: Array<{ lat: number; lon: number }> }> };
+      const named = (json.elements ?? []).filter((el) => el.tags?.ref || el.tags?.name);
+      for (const t of targets) {
+        let best: { name: string; d: number } | null = null;
+        for (const el of named) {
+          const name = (el.tags?.ref ?? el.tags?.name)!.split(";")[0].trim();
+          if (!el.geometry?.length) {
+            // No geometry (older responses / tests): only usable when unambiguous.
+            if (targets.length === 1 && named.length === 1) best = { name, d: 0 };
+            continue;
           }
-          nameCache.set(key, null);
-        });
-      } catch {
-        /* fail-soft: leave unnamed */
+          const d = distToWayM(t.mid, el.geometry);
+          if (d <= 40 && (!best || d < best.d)) best = { name, d };
+        }
+        nameCache.set(t.key, best?.name ?? null);
+        if (best) t.c.name = best.name;
       }
-    })
-  );
+    });
+  } catch {
+    /* fail-soft: leave unnamed */
+  }
+}
+
+/** Metres from a point to the nearest segment of a way's geometry (equirectangular). */
+function distToWayM(p: [number, number], geom: Array<{ lat: number; lon: number }>): number {
+  const kx = 111320 * Math.cos((p[0] * Math.PI) / 180), ky = 111320;
+  const px = p[1] * kx, py = p[0] * ky;
+  let best = Infinity;
+  for (let i = 0; i < geom.length; i++) {
+    const ax = geom[i].lon * kx, ay = geom[i].lat * ky;
+    if (i === 0) { best = Math.min(best, Math.hypot(px - ax, py - ay)); continue; }
+    const bx = geom[i - 1].lon * kx, by = geom[i - 1].lat * ky;
+    const dx = ax - bx, dy = ay - by;
+    const len2 = dx * dx + dy * dy;
+    const u = len2 > 0 ? Math.max(0, Math.min(1, ((px - bx) * dx + (py - by) * dy) / len2)) : 0;
+    best = Math.min(best, Math.hypot(px - (bx + u * dx), py - (by + u * dy)));
+  }
+  return best;
 }
 
 /** The road report, stamped with the rules version it was built under. */

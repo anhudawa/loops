@@ -58,10 +58,12 @@ export default async function DestinationPage({ params }: Props) {
   // exists (Wicklow's link was the only 404 in the site crawl) and holds
   // more than one route — "Browse all" over a single route is a dead end.
   let hasRegion = false;
+  let regionRouteCount = 0;
   if (dest.routesCountry && dest.routesRegion) {
     try {
       const st = await getRegionStats(slugify(dest.routesCountry), slugify(dest.routesRegion));
-      hasRegion = !!st && Number((st as { routeCount?: number }).routeCount) > 1;
+      regionRouteCount = Number((st as { routeCount?: number } | null)?.routeCount ?? 0);
+      hasRegion = !!st && regionRouteCount > 1;
     } catch {
       hasRegion = false;
     }
@@ -111,6 +113,30 @@ export default async function DestinationPage({ params }: Props) {
           >
             {dest.tagline}
           </p>
+
+          {/* The routes, up front: on a phone the full CTAs sit ~11,000 px down. */}
+          {(hasRegion || (dest.collectionSlug && hasCollection)) && (
+            <div className="mt-5 flex flex-wrap items-center gap-2" data-testid="destination-route-strip">
+              {hasRegion && dest.routesCountry && dest.routesRegion && (
+                <Link
+                  href={`/routes/country/${slugify(dest.routesCountry)}/${slugify(dest.routesRegion)}`}
+                  className="inline-flex items-center justify-center min-h-[44px] font-bold text-sm px-4 rounded-lg"
+                  style={{ background: "var(--accent)", color: "var(--bg)" }}
+                >
+                  {regionRouteCount} {dest.name} loops →
+                </Link>
+              )}
+              {dest.collectionSlug && hasCollection && (
+                <Link
+                  href={`/collections/${dest.collectionSlug}`}
+                  className="inline-flex items-center justify-center min-h-[44px] font-bold text-sm px-4 rounded-lg"
+                  style={{ border: "1px solid var(--border)", color: "var(--text)", background: "var(--bg-card)" }}
+                >
+                  The classics
+                </Link>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Best time to ride */}
@@ -352,7 +378,7 @@ export default async function DestinationPage({ params }: Props) {
             }}
           >
             <p className="text-sm mb-3" style={{ color: "var(--text-muted)" }}>
-              Every {dest.name} route in the library — GPX downloads, elevation profiles and climb details.
+              Every {dest.name} loop in the library — Road Standard report, elevation profile and climbs for each.
             </p>
             <Link
               href={`/routes/country/${slugify(dest.routesCountry)}/${slugify(dest.routesRegion)}`}

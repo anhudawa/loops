@@ -71,7 +71,7 @@ export default function RouteCard({ route, showDistance }: RouteCardProps) {
         }}
       >
         {/* Cover image */}
-        <div className="aspect-[3/1] md:aspect-[21/9] relative overflow-hidden" style={{ background: "var(--bg-raised)" }}>
+        <div className="aspect-[640/274] relative overflow-hidden" style={{ background: "var(--bg-raised)" }}>
           {!imgError ? (
             <img
               src={`/api/thumb/${route.id}`}

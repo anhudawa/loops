@@ -229,6 +229,24 @@ out tags;
 
 // ── Main ───────────────────────────────────────────────────────────────────────
 
+// Owner decision: no public route attribution. Descriptions are public;
+// operator_name/url are private provenance. A description that names its
+// operator (or a known operator) is refused — fix the manifest. Mirrors
+// KNOWN_OPERATOR_NAMES in src/lib/public-route.ts (read-time safety net).
+const KNOWN_OPERATOR_NAMES = ["Eat Sleep Cycle", "Epic Road Rides"];
+function attributionIn(route) {
+  const desc = (route.description || "").toLowerCase();
+  if (!desc) return null;
+  const name = (route.name || "").toLowerCase();
+  for (const op of [route.operator_name, ...KNOWN_OPERATOR_NAMES]) {
+    const t = typeof op === "string" ? op.trim() : "";
+    if (t.length < 3 || t.toLowerCase() === "loops") continue;
+    if (name.includes(t.toLowerCase())) continue; // event routes: "La Traka 100"
+    if (desc.includes(t.toLowerCase())) return t;
+  }
+  return null;
+}
+
 async function main() {
   const manifest = JSON.parse(readFileSync(manifestPath, "utf-8"));
   console.log(`📦 ${DRY_RUN ? "Validating" : "Importing"} ${manifest.length} routes from ${manifestPath}\n`);
@@ -238,6 +256,13 @@ async function main() {
   for (const route of manifest) {
     const label = route.name || route.gpx_url;
     process.stdout.write(`  ${label} … `);
+
+    const credited = attributionIn(route);
+    if (credited) {
+      console.log(`FAIL (description names operator "${credited}" — no public attribution; edit the manifest)`);
+      failed++;
+      continue;
+    }
 
     // Check for duplicate by name + county
     if (!DRY_RUN) {

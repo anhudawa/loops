@@ -55,12 +55,13 @@ export default async function DestinationPage({ params }: Props) {
   }
 
   // Same for "Browse all <region> routes": only when that region listing
-  // exists (Wicklow's link was the only 404 in the site crawl).
+  // exists (Wicklow's link was the only 404 in the site crawl) and holds
+  // more than one route — "Browse all" over a single route is a dead end.
   let hasRegion = false;
   if (dest.routesCountry && dest.routesRegion) {
     try {
       const st = await getRegionStats(slugify(dest.routesCountry), slugify(dest.routesRegion));
-      hasRegion = !!st && (st as { routeCount?: number }).routeCount !== 0;
+      hasRegion = !!st && Number((st as { routeCount?: number }).routeCount) > 1;
     } catch {
       hasRegion = false;
     }

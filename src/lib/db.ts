@@ -7,7 +7,18 @@ import {
   type UsageMetrics,
 } from "@/lib/metrics";
 
+import { withPublicDescription } from "@/lib/public-route";
+
 export { ANALYTICS_EVENTS } from "@/lib/metrics";
+
+/**
+ * Every route row read for display passes through here once: descriptions
+ * lose operator attribution sentences ("Curated by Eat Sleep Cycle") —
+ * owner decision, no public route attribution. Admin listings read raw.
+ */
+function publicRows<T extends Record<string, unknown>>(rows: T[]): T[] {
+  return rows.map((r) => withPublicDescription(r));
+}
 
 // ──── Init ────
 export async function initDb() {
@@ -720,7 +731,7 @@ export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
   `;
 
   const { rows } = await sql.query(query, params);
-  return rows as Route[];
+  return publicRows(rows) as Route[];
 }
 
 export async function getRoute(id: string): Promise<(Route & { is_verified?: number; creator_name?: string | null; creator_avatar?: string | null; creator_rating?: number; creator_rating_count?: number }) | undefined> {
@@ -737,7 +748,7 @@ export async function getRoute(id: string): Promise<(Route & { is_verified?: num
     LEFT JOIN users u ON u.id = r.created_by
     WHERE r.id = ${id}
   `;
-  return rows[0] as (Route & { is_verified?: number; creator_name?: string | null; creator_avatar?: string | null; creator_rating?: number; creator_rating_count?: number }) | undefined;
+  return (rows[0] ? withPublicDescription(rows[0]) : undefined) as (Route & { is_verified?: number; creator_name?: string | null; creator_avatar?: string | null; creator_rating?: number; creator_rating_count?: number }) | undefined;
 }
 
 /** Persist a verified quality score on a route so the detail page can show it
@@ -1175,7 +1186,7 @@ export async function getUserRoutes(userId: string): Promise<Route[]> {
       SELECT route_id FROM ratings WHERE user_id = ${userId}
     ) ORDER BY name
   `;
-  return rows as Route[];
+  return publicRows(rows) as Route[];
 }
 
 export async function getUserStats(userId: string): Promise<UserStats> {
@@ -1308,7 +1319,7 @@ export async function getRoutesByCountrySlug(slug: string): Promise<Route[]> {
      ORDER BY COALESCE(AVG(rt.score), 0) DESC, r.created_at DESC`,
     [slug]
   );
-  return rows as Route[];
+  return publicRows(rows) as Route[];
 }
 
 export async function getRoutesByRegionSlug(countrySlug: string, regionSlug: string): Promise<Route[]> {
@@ -1322,7 +1333,7 @@ export async function getRoutesByRegionSlug(countrySlug: string, regionSlug: str
      ORDER BY COALESCE(AVG(rt.score), 0) DESC, r.created_at DESC`,
     [countrySlug, regionSlug]
   );
-  return rows as Route[];
+  return publicRows(rows) as Route[];
 }
 
 export async function getCountryStats(countrySlug: string): Promise<{
@@ -1419,14 +1430,14 @@ export async function getRelatedRoutes(
       `SELECT * FROM routes WHERE country = $1 AND region = $2 AND id != $3 ORDER BY created_at DESC LIMIT $4`,
       [country, region, routeId, limit]
     );
-    if (rows.length > 0) return rows as Route[];
+    if (rows.length > 0) return publicRows(rows) as Route[];
   }
   // Fall back to same country
   const { rows } = await sql.query(
     `SELECT * FROM routes WHERE country = $1 AND id != $2 ORDER BY created_at DESC LIMIT $3`,
     [country, routeId, limit]
   );
-  return rows as Route[];
+  return publicRows(rows) as Route[];
 }
 
 // ──── Downloads ────
@@ -1445,7 +1456,7 @@ export async function getUserDownloads(userId: string): Promise<Route[]> {
     WHERE d.user_id = ${userId}
     ORDER BY d.created_at DESC
   `;
-  return rows as Route[];
+  return publicRows(rows) as Route[];
 }
 
 export async function getDownloadCount(routeId: string): Promise<number> {
@@ -1476,7 +1487,7 @@ export async function getUserFavourites(userId: string): Promise<Route[]> {
     WHERE f.user_id = ${userId}
     ORDER BY f.created_at DESC
   `;
-  return rows as Route[];
+  return publicRows(rows) as Route[];
 }
 
 export async function isFavourited(routeId: string, userId: string): Promise<boolean> {
@@ -1564,7 +1575,7 @@ export async function getUserUploadedRoutes(userId: string): Promise<Route[]> {
     GROUP BY r.id
     ORDER BY r.created_at DESC
   `;
-  return rows as Route[];
+  return publicRows(rows) as Route[];
 }
 
 // ──── Messages ────
@@ -1794,7 +1805,7 @@ export async function getCollectionBySlug(slug: string): Promise<CollectionWithR
   return {
     ...collection,
     total_routes_count: routeRows.length,
-    routes: routeRows as Route[],
+    routes: publicRows(routeRows) as Route[],
   };
 }
 

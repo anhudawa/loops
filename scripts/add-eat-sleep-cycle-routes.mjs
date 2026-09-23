@@ -27,7 +27,7 @@ const ROUTES = [
   {
     file: "puerto-leon-road-advanced.gpx",
     name: "Puerto León (Road - Advanced)",
-    description: "Scenic and demanding road climb up Puerto León in Málaga province. Quiet mountain roads through Mediterranean forest with panoramic coastal views. A classic Andalucían ascent chosen by Eat Sleep Cycle.",
+    description: "Scenic and demanding road climb up Puerto León in Málaga province. Quiet mountain roads through Mediterranean forest with panoramic coastal views.",
     difficulty: "hard",
     surfaceType: "road",
     discipline: "road",
@@ -38,7 +38,7 @@ const ROUTES = [
   {
     file: "dos-kiwis-gravel-intermediate.gpx",
     name: "Dos Kiwis (Gravel - Intermediate)",
-    description: "Intermediate gravel loop through the rolling countryside near Girona. Quiet farm tracks, shaded lanes, and gentle climbs through Catalonia's rural heartland. Curated by Eat Sleep Cycle.",
+    description: "Intermediate gravel loop through the rolling countryside near Girona. Quiet farm tracks, shaded lanes, and gentle climbs through Catalonia's rural heartland.",
     difficulty: "moderate",
     surfaceType: "gravel",
     discipline: "gravel",
@@ -49,7 +49,7 @@ const ROUTES = [
   {
     file: "sant-hilari-gravel-advanced.gpx",
     name: "Sant Hilari (Gravel - Advanced)",
-    description: "Advanced gravel ride climbing through dense forest toward Sant Hilari Sacalm. Technical unpaved sections, significant elevation gain, and rewarding mountain views. A challenging gravel adventure from Eat Sleep Cycle.",
+    description: "Advanced gravel ride climbing through dense forest toward Sant Hilari Sacalm. Technical unpaved sections, significant elevation gain, and rewarding mountain views.",
     difficulty: "hard",
     surfaceType: "gravel",
     discipline: "gravel",
@@ -71,7 +71,7 @@ const ROUTES = [
   {
     file: "the-gravel-lanes-gravel-leisure.gpx",
     name: "The Gravel Lanes (Gravel - Leisure)",
-    description: "Easy-going gravel ride along quiet lanes and farm tracks near Girona. Perfect for beginners or a recovery day — flat terrain, gentle surfaces, and peaceful countryside scenery. Curated by Eat Sleep Cycle.",
+    description: "Easy-going gravel ride along quiet lanes and farm tracks near Girona. Perfect for beginners or a recovery day — flat terrain, gentle surfaces, and peaceful countryside scenery.",
     difficulty: "easy",
     surfaceType: "gravel",
     discipline: "gravel",
@@ -82,7 +82,7 @@ const ROUTES = [
   {
     file: "raid-emporda-gravel-epic.gpx",
     name: "Raid Empordà (Gravel - Epic)",
-    description: "Epic all-day gravel adventure through the Empordà region of Girona. Covers a huge variety of terrain — vineyard tracks, forest trails, coastal paths, and medieval village roads. A signature Eat Sleep Cycle route.",
+    description: "Epic all-day gravel adventure through the Empordà region of Girona. Covers a huge variety of terrain — vineyard tracks, forest trails, coastal paths, and medieval village roads.",
     difficulty: "expert",
     surfaceType: "gravel",
     discipline: "gravel",
@@ -148,7 +148,7 @@ const ROUTES = [
   {
     file: "the-rupit-loop-road-epic.gpx",
     name: "The Rupit Loop (Road - Epic)",
-    description: "Epic full-day road ride to the medieval cliff-top village of Rupit in the Catalan Pre-Pyrenees. Multiple mountain passes, dramatic volcanic landscape of La Garrotxa, and over 3,000m of climbing. One of Eat Sleep Cycle's most demanding routes.",
+    description: "Epic full-day road ride to the medieval cliff-top village of Rupit in the Catalan Pre-Pyrenees. Multiple mountain passes, dramatic volcanic landscape of La Garrotxa, and over 3,000m of climbing.",
     difficulty: "expert",
     surfaceType: "road",
     discipline: "road",
@@ -159,7 +159,7 @@ const ROUTES = [
   {
     file: "costa-brava-classic-road-advanced.gpx",
     name: "Costa Brava Classic (Road - Advanced)",
-    description: "Advanced road ride along the stunning Costa Brava coastline. Punchy coastal climbs, turquoise Mediterranean coves, and winding roads through seaside villages. A signature Eat Sleep Cycle route showcasing Girona's coastline.",
+    description: "Advanced road ride along the stunning Costa Brava coastline. Punchy coastal climbs, turquoise Mediterranean coves, and winding roads through seaside villages. A showcase of Girona's coastline.",
     difficulty: "hard",
     surfaceType: "road",
     discipline: "road",

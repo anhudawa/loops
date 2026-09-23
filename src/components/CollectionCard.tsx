@@ -1,3 +1,4 @@
+import { placeLabel, plural } from "@/lib/copy";
 import Link from "next/link";
 
 const DISCIPLINE_LABELS: Record<string, { icon: string; label: string }> = {
@@ -23,10 +24,10 @@ interface CollectionCardProps {
 
 export default function CollectionCard({ collection }: CollectionCardProps) {
   const disc = DISCIPLINE_LABELS[collection.discipline] ?? DISCIPLINE_LABELS.mixed;
-  const locationText = [collection.location, collection.country].filter(Boolean).join(", ");
+  const locationText = placeLabel(collection.location, collection.country);
 
   return (
-    <Link href={`/collections/${collection.slug}`} aria-label={`${collection.name} — ${collection.total_routes_count} routes`}>
+    <Link href={`/collections/${collection.slug}`} aria-label={`${collection.name} — ${plural(collection.total_routes_count, "route")}`}>
       <div
         className="card-hover rounded-xl overflow-hidden"
         style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
@@ -69,7 +70,7 @@ export default function CollectionCard({ collection }: CollectionCardProps) {
           )}
           <div className="flex items-center gap-3 text-xs" style={{ color: "var(--text-muted)" }}>
             <span className="font-bold" style={{ color: "var(--accent)" }}>
-              {collection.total_routes_count} route{collection.total_routes_count !== 1 ? "s" : ""}
+              {plural(collection.total_routes_count, "route")}
             </span>
             {locationText && (
               <>

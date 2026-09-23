@@ -1,3 +1,5 @@
+import { SOCIAL_FEATURES_ENABLED } from "@/config/constants";
+
 /**
  * What the public may see of a route. Owner decisions:
  *  - "No public route attribution — routes are facts; operator_name/url in
@@ -18,25 +20,103 @@ const PRIVATE_ROUTE_FIELDS = [
   "avg_rating",
   "avg_score",
   "rating_count",
+  "comment_count",
+  "is_favourited",
+  "favourite_count",
 ] as const;
 
 export function publicRoute<T extends Record<string, unknown>>(route: T): T {
-  const out: Record<string, unknown> = { ...route };
+  const out: Record<string, unknown> = withPublicDescription({ ...route });
   for (const k of PRIVATE_ROUTE_FIELDS) delete out[k];
   return out as T;
 }
+
+/**
+ * Operators whose public routes seeded the library (scripts/hub-data/*.json
+ * `operator_name`, scripts/add-eat-sleep-cycle-routes.mjs). A route's own
+ * operator_name is always checked too; this list catches rows where the
+ * column is empty or a description names a different operator.
+ * Keep it to businesses: event names ("La Traka") are route facts.
+ */
+export const KNOWN_OPERATOR_NAMES = ["Eat Sleep Cycle", "Epic Road Rides"] as const;
+
+/** Our own brand is never "attribution". */
+const NEVER_STRIP = new Set(["loops", "roadman", "roadman cycling"]);
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Remove every sentence that names a route operator ("Curated by Eat Sleep
+ * Cycle.", "A signature Eat Sleep Cycle route…") and tidy what is left.
+ * Owner decision: no public route attribution. Pure; safe on null.
+ *
+ * `routeName` guards event routes: when the operator IS the route's subject
+ * (operator "La Traka", route "La Traka 100") the sentence is a fact, not a
+ * credit, so that operator is not stripped for that route.
+ */
+export function stripOperatorAttribution(
+  description: string | null | undefined,
+  operatorName?: string | null,
+  routeName?: string | null,
+): string | null {
+  if (description == null) return null;
+  const names = new Set<string>();
+  for (const n of [operatorName, ...KNOWN_OPERATOR_NAMES]) {
+    const t = typeof n === "string" ? n.trim() : "";
+    if (t.length < 3 || NEVER_STRIP.has(t.toLowerCase())) continue;
+    if (routeName && routeName.toLowerCase().includes(t.toLowerCase())) continue;
+    names.add(t);
+  }
+  if (names.size === 0) return description;
+  const pattern = new RegExp(
+    [...names].map((n) => escapeRegExp(n).replace(/\s+/g, "\\s+")).join("|"),
+    "i",
+  );
+  if (!pattern.test(description)) return description;
+
+  // Sentences end at terminal punctuation (plus closing quotes/brackets)
+  // followed by whitespace — so "2.5 km" and "St. Feliu" stay intact.
+  const sentences = description.split(/(?<=[.!?]["'’”)\]]*)\s+/);
+  const kept = sentences.filter((s) => s.trim() && !pattern.test(s));
+  const out = kept
+    .map((s) => s.trim())
+    .join(" ")
+    .replace(/\s+([,.;:!?])/g, "$1")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  return out.length > 0 ? out : null;
+}
+
+/** Apply stripOperatorAttribution to a route row's description in place-safe copy. */
+export function withPublicDescription<T extends Record<string, unknown>>(route: T): T {
+  if (!route || typeof route.description !== "string") return route;
+  const cleaned = stripOperatorAttribution(
+    route.description,
+    typeof route.operator_name === "string" ? route.operator_name : null,
+    typeof route.name === "string" ? route.name : null,
+  );
+  if (cleaned === route.description) return route;
+  return { ...route, description: cleaned };
+}
+
+/** Ratings are a social feature: cards carry them only when it is on. */
+const CARD_SOCIAL_FIELDS = ["avg_score", "avg_rating", "rating_count"] as const;
 
 /** The fields a route card renders — nothing else crosses to the browser. */
 const CARD_FIELDS = [
   "id", "slug", "name", "description", "distance_km", "elevation_gain_m", "elevation_loss_m",
   "discipline", "surface_type", "difficulty", "county", "region", "country", "start_lat", "start_lng",
-  "is_verified", "verified", "avg_score", "avg_rating", "rating_count", "estimated_minutes",
+  "is_verified", "verified", "estimated_minutes",
   "distance_km_away", "haversine_distance", "cover_photo", "created_at",
 ] as const;
 
 export function routeCard<T extends Record<string, unknown>>(route: T): Record<string, unknown> {
+  const clean = withPublicDescription(route);
   const out: Record<string, unknown> = {};
-  for (const k of CARD_FIELDS) if (k in route) out[k] = route[k];
+  for (const k of CARD_FIELDS) if (k in clean) out[k] = clean[k];
+  if (SOCIAL_FEATURES_ENABLED) for (const k of CARD_SOCIAL_FIELDS) if (k in clean) out[k] = clean[k];
   return out;
 }
 

@@ -148,10 +148,11 @@ export default function HeroSection({ onExplore }: { onExplore: () => void }) {
         )}
       </div>
 
-      {/* Scroll indicator */}
+      {/* Scroll indicator — hidden on narrow phones, where it overlapped the
+          stats row ("Explore Loops" does the same job there) */}
       <button
         onClick={onExplore}
-        className="absolute bottom-6 left-1/2 -translate-x-1/2 hero-bounce p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center"
+        className="absolute bottom-6 left-1/2 -translate-x-1/2 hero-bounce p-2.5 min-w-[44px] min-h-[44px] hidden min-[400px]:flex items-center justify-center"
         style={{ color: "var(--text-muted)" }}
         aria-label="Scroll to routes"
       >

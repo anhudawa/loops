@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { publicRoute } from "@/lib/public-route";
+import { SOCIAL_FEATURES_ENABLED } from "@/config/constants";
 import {
   getUserById,
   getUserStats,
@@ -77,6 +78,12 @@ export async function GET(
     // user themselves (or an admin) sees them. This endpoint used to return
     // them to anyone holding a user id — and every public route carries its
     // creator's id.
+    // Ratings and community scores are social features, hidden for launch:
+    // only the user themselves (or an admin) sees them while the flag is off.
+    const showSocial = SOCIAL_FEATURES_ENABLED || isSelf;
+    const { routesRated: _routesRated, ...statsWithoutRatings } = stats;
+    void _routesRated;
+
     return NextResponse.json({
       id: user.id,
       name: user.name,
@@ -84,7 +91,7 @@ export async function GET(
       location: user.location,
       avatar_url: user.avatar_url,
       created_at: user.created_at,
-      stats,
+      stats: showSocial ? stats : statsWithoutRatings,
       routes: routes.map((r) => publicRoute(r as unknown as Record<string, unknown>)),
       totalKm,
       followers,
@@ -92,8 +99,7 @@ export async function GET(
       activity,
       viewerFollowing,
       uploadedRoutes: uploadedRoutes.map((r) => publicRoute(r as unknown as Record<string, unknown>)),
-      communityScore,
-      loopRating,
+      ...(showSocial ? { communityScore, loopRating } : {}),
       ...(isSelf
         ? {
             email: user.email,

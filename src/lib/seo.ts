@@ -1,4 +1,5 @@
 import { SOCIAL_FEATURES_ENABLED } from "@/config/constants";
+import { freeGpxPhrase, gpxIsPublic } from "@/lib/copy";
 // ============================================================
 // seo.ts — SEO utility functions: slugify, JSON-LD generators
 // ============================================================
@@ -207,7 +208,9 @@ export function buildRouteFaqs(input: RouteFaqInput): FaqItem[] {
     },
     {
       question: `How do I ride ${input.name}?`,
-      answer: `Download the free GPX file from this page and load it onto Strava, Komoot, Wahoo, or Garmin to follow the ${cap(input.discipline)} route turn by turn.`,
+      answer: gpxIsPublic()
+        ? `Download the free GPX file from this page and load it onto Strava, Komoot, Wahoo, or Garmin to follow the ${cap(input.discipline)} route turn by turn.`
+        : `Download the GPX file from this page (${freeGpxPhrase()}) and load it onto Strava, Komoot, Wahoo, or Garmin to follow the ${cap(input.discipline)} route turn by turn.`,
     },
   ];
 }

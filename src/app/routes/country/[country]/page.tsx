@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { SOCIAL_FEATURES_ENABLED as SHOW_RATINGS } from "@/config/constants";
 import { routeCard } from "@/lib/public-route";
+import { freeGpxPhrase, plural } from "@/lib/copy";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCountries, getCountryStats, getRoutesByCountrySlug } from "@/lib/db";
@@ -36,8 +37,8 @@ export async function generateMetadata({
   }
   if (!stats) return { title: "Not Found - LOOPS" };
 
-  const title = `Cycling Routes in ${stats.displayName} — ${stats.routeCount} Routes | LOOPS`;
-  const description = `Discover ${stats.routeCount} cycling routes in ${stats.displayName}. Browse ${stats.disciplines.join(", ")} routes with free GPX downloads.`;
+  const title = `Cycling Routes in ${stats.displayName} — ${plural(stats.routeCount, "Route")} | LOOPS`;
+  const description = `Discover ${plural(stats.routeCount, "cycling route")} in ${stats.displayName}. Browse ${stats.disciplines.join(", ")} routes with ${freeGpxPhrase()}.`;
 
   return {
     title,
@@ -90,23 +91,23 @@ export default async function CountryPage({
     {
       question: `What are the best cycling routes in ${stats.displayName}?`,
       answer: featuredRoutes.length > 0
-        ? `Top rated routes include: ${featuredRoutes.slice(0, 3).map((r) => `${r.name} (${r.distance_km}km)`).join(", ")}.`
-        : `Browse all ${stats.routeCount} routes on LOOPS to find the best rides.`,
+        ? `${SHOW_RATINGS ? "Top rated routes" : "Routes"} include: ${featuredRoutes.slice(0, 3).map((r) => `${r.name} (${r.distance_km}km)`).join(", ")}.`
+        : `Browse ${plural(stats.routeCount, "route")} on LOOPS to find the best rides.`,
     },
     {
       question: `How many cycling routes are in ${stats.displayName}?`,
-      answer: `There are ${stats.routeCount} cycling routes in ${stats.displayName} on LOOPS, covering ${stats.disciplines.join(", ")} disciplines.`,
+      answer: `There ${Number(stats.routeCount) === 1 ? "is" : "are"} ${plural(stats.routeCount, "cycling route")} in ${stats.displayName} on LOOPS, covering ${stats.disciplines.join(", ")} ${stats.disciplines.length === 1 ? "riding" : "disciplines"}.`,
     },
     {
       question: `Can I download GPX files for routes in ${stats.displayName}?`,
-      answer: `Yes — all ${stats.routeCount} routes in ${stats.displayName} include free GPX file downloads. Load them into Strava, Komoot, Wahoo, or Garmin.`,
+      answer: `Yes — ${Number(stats.routeCount) === 1 ? "the route" : `all ${stats.routeCount} routes`} in ${stats.displayName} ${Number(stats.routeCount) === 1 ? "comes" : "come"} with ${freeGpxPhrase()}. Load them into Strava, Komoot, Wahoo, or Garmin.`,
     },
   ];
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
       <JsonLd data={generateBreadcrumbJsonLd(breadcrumbItems)} />
-      <JsonLd data={generateItemListJsonLd(`Cycling Routes in ${stats.displayName}`, routes)} />
+      <JsonLd data={generateItemListJsonLd(`Cycling Routes in ${stats.displayName}`, routes.map((r) => ({ id: r.id, name: r.name })))} />
       <JsonLd data={generateFaqJsonLd(faqItems)} />
 
       <header className="px-4 md:px-6 py-3" style={{ background: "var(--bg-raised)", borderBottom: "1px solid var(--border)" }}>
@@ -133,16 +134,16 @@ export default async function CountryPage({
         </h1>
 
         <p className="text-sm leading-relaxed mb-8" style={{ color: "var(--text-secondary)" }}>
-          {stats.routeCount} cycling routes in {stats.displayName} on LOOPS.
-          Browse {stats.disciplines.join(", ")} routes across {stats.regions.length} regions.
-          Quiet roads, free GPX downloads.
+          {plural(stats.routeCount, "cycling route")} in {stats.displayName} on LOOPS.
+          Browse {stats.disciplines.join(", ")} routes across {plural(stats.regions.length, "region")}.
+          Quiet roads, {freeGpxPhrase()}.
         </p>
 
         {/* Stats bar */}
         <div className="flex gap-6 mb-8 flex-wrap">
           <div>
             <div className="text-2xl font-extrabold" style={{ color: "var(--accent)" }}>{stats.routeCount}</div>
-            <div className="text-xs uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>Routes</div>
+            <div className="text-xs uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>{Number(stats.routeCount) === 1 ? "Route" : "Routes"}</div>
           </div>
           <div>
             <div className="text-2xl font-extrabold" style={{ color: "var(--accent)" }}>{stats.totalDistanceKm.toLocaleString()}</div>
@@ -171,7 +172,7 @@ export default async function CountryPage({
                   style={{ background: "var(--bg-raised)", border: "1px solid var(--border)" }}
                 >
                   <div className="text-sm font-semibold" style={{ color: "var(--text)" }}>{region.name}</div>
-                  <div className="text-xs" style={{ color: "var(--text-muted)" }}>{region.routeCount} {region.routeCount === 1 ? "route" : "routes"}</div>
+                  <div className="text-xs" style={{ color: "var(--text-muted)" }}>{plural(region.routeCount, "route")}</div>
                 </Link>
               ))}
             </div>

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { LAUNCH_DESTINATION_SLUGS } from "@/content/destinations";
 import { sql } from "@vercel/postgres";
-import { handleApiError } from "@/lib/api-utils";
+import { SOCIAL_FEATURES_ENABLED } from "@/config/constants";
 
 export async function GET() {
   try {
@@ -54,14 +54,14 @@ export async function GET() {
         surface_type: r.surface_type,
         country: r.country,
         discipline: r.discipline,
-        avg_score: 0,
-        rating_count: 0,
         cover_photo: r.cover_photo,
       })),
+      // Comments and ratings are social features, hidden for launch.
       community: {
         riders: Number(community.riders),
-        comments: Number(community.comments),
-        ratings: Number(community.ratings),
+        ...(SOCIAL_FEATURES_ENABLED
+          ? { comments: Number(community.comments), ratings: Number(community.ratings) }
+          : {}),
       },
     });
   } catch {

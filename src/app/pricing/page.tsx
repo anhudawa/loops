@@ -56,7 +56,7 @@ const PRO_FEATURES = [
   "Everything in Free, forever",
 ];
 
-const CONTACT_EMAIL = "anthony@roadmancycling.com";
+const CONTACT_EMAIL = "hello@loops.ie";
 const FOUNDING_SUBJECT = "Founding Rider — I'm in";
 const FOUNDING_BODY =
   "Hi Anthony,\n\nI'd like to claim a Founding Rider spot (€49, Pro for life). Let me know how to pay.\n\nThanks!";

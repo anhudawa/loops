@@ -1,16 +1,21 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { rideVerdict, type ForecastHour } from "@/lib/ride-wind";
 
 interface WeatherData {
   temperature: number;
   humidity: number;
   precipitation: number;
+  precipitationProbability?: number | null;
   weatherCode: number;
   windSpeed: number;
+  windGusts?: number | null;
   /** Set when this is the forecast for a ride time, not current conditions. */
   forecastFor?: string | null;
   windDirection: number;
+  /** Hour-by-hour for the ride window (start hour first). */
+  hours?: ForecastHour[];
 }
 
 interface WeatherCardProps {
@@ -76,6 +81,12 @@ export default function WeatherCard({ routeId, windOverlayEnabled, onWindToggle,
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+
+  // The ride verdict: this loop against the wind for the hours you'll be out.
+  const verdict = useMemo(
+    () => (weather?.hours?.length && coordinates && coordinates.length > 1 ? rideVerdict(coordinates, weather.hours) : null),
+    [weather, coordinates]
+  );
 
   useEffect(() => {
     setLoading(true); // eslint-disable-line react-hooks/set-state-in-effect
@@ -201,6 +212,43 @@ export default function WeatherCard({ routeId, windOverlayEnabled, onWindToggle,
           <p className="text-[10px] uppercase tracking-wider font-bold mt-0.5" style={{ color: "var(--text-muted)" }}>Humidity</p>
         </div>
       </div>
+
+      {verdict && (
+        <div className="mt-4 pt-3 border-t" style={{ borderColor: "var(--border)" }} data-testid="ride-verdict">
+          <p className="text-sm font-bold leading-snug" style={{ color: "var(--text)" }}>{verdict.headline}</p>
+          {verdict.detail && (
+            <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>{verdict.detail}</p>
+          )}
+        </div>
+      )}
+
+      {weather.hours && weather.hours.length > 1 && (
+        <div className="mt-3 -mx-1 flex gap-1.5 overflow-x-auto pb-1" data-testid="hour-strip">
+          {weather.hours.map((h) => {
+            const rainy = (h.precipitationProbability ?? 0) >= 20 || h.precipitation >= 0.2;
+            return (
+              <div
+                key={h.time}
+                className="shrink-0 rounded-lg px-2 py-1.5 text-center min-w-[58px]"
+                style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
+              >
+                <p className="text-[10px] font-bold" style={{ color: "var(--text-muted)" }}>{h.time.slice(11, 16).replace(/^0/, "")}</p>
+                <p className="text-sm leading-tight" aria-hidden>{weatherIcon(h.weatherCode)}</p>
+                <p className="text-xs font-bold" style={{ color: "var(--text)" }}>{Math.round(h.temperature)}&deg;</p>
+                <p className="text-[10px] font-bold flex items-center justify-center gap-0.5" style={{ color: "var(--text-secondary)" }}>
+                  <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" style={{ transform: `rotate(${(h.windDirection + 180) % 360}deg)` }}>
+                    <line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" />
+                  </svg>
+                  {Math.round(h.windSpeed)}
+                </p>
+                <p className="text-[10px]" style={{ color: rainy ? "#4fa3ff" : "var(--text-muted)" }}>
+                  {rainy ? `${Math.round(h.precipitationProbability ?? 0)}%` : "dry"}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {windOverlayEnabled && coordinates && coordinates.length > 1 && (() => {
         const breakdown = calcWindBreakdown(coordinates, weather.windDirection);

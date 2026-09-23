@@ -107,6 +107,17 @@ the bundled Dublin set: the two Skerries loops meet the standard; the Canal
 Ride (~5 km gravel towpath) and the Wicklow 200 (~11 km primary) do not and
 are not bundled.
 
+**Crossings and disciplines (2026-09-23).** A main/fast-road stretch under
+100 m is a junction or roundabout crossing, not riding the road (Faro's
+"compromises" were 45–96 m traversals of the EN125/N2 ring every loop must
+cross) — not reported, though still counted in `main_road_pct`; surface and
+access hazards count from 40 m. "Unsuitable" by surface is discipline-aware:
+`smoothness=bad` and `class:bicycle` −2 are hazards on a road bike and the
+terrain of a gravel ride — gravel treats only horrible+ and −3 as
+unsuitable, MTB only impassable; access bans and fords stay unsuitable for
+everyone. Reports carry `rules_version` (ROAD_RULES_VERSION); older stored
+reports are re-traced on next view.
+
 **Ride verdict (2026-09-23).** The weather card says what the wind will do
 to THIS loop at THIS time (`src/lib/ride-wind.ts`), judging each stretch
 against the forecast for the hour the rider reaches it. It never suggests

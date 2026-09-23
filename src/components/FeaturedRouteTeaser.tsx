@@ -27,7 +27,7 @@ export default function FeaturedRouteTeaser({ route, onClick }: { route: Feature
     >
       <div className="aspect-[16/9] relative overflow-hidden" style={{ background: "var(--bg-raised)" }}>
         <img
-          src={route.cover_photo ? (route.cover_photo.startsWith("http") ? route.cover_photo : `/photos/${route.cover_photo}`) : `/api/thumb/${route.id}`}
+          src={route.cover_photo ? (route.cover_photo.startsWith("http") ? route.cover_photo : `/photos/${route.cover_photo}`) : `/api/thumb/${route.id}?v=2`}
           alt=""
           className="w-full h-full object-cover"
           loading="lazy"

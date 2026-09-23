@@ -36,7 +36,7 @@ export default function CollectionCard({ collection }: CollectionCardProps) {
         <div className="aspect-[16/9] relative overflow-hidden" style={{ background: "var(--bg-raised)" }}>
           {collection.cover_image_url || collection.cover_route_id ? (
             <img
-              src={collection.cover_image_url || `/api/thumb/${collection.cover_route_id}`}
+              src={collection.cover_image_url || `/api/thumb/${collection.cover_route_id}?v=2`}
               alt=""
               className="w-full h-full object-cover"
               loading="lazy"

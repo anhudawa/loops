@@ -441,6 +441,7 @@ export default function RouteDetailView({ ride }: { ride?: RideInvite | null } =
           startLabel={ride?.meet ? "Meet here" : "Start"}
           compromiseMarkers={(route?.road_report?.compromises ?? [])
             .filter((c) => Array.isArray(c.at))
+            .slice(0, 12) // the longest stretches (already sorted), same as the Where list
             .map((c) => ({ at: c.at as [number, number], label: describeCompromise(c) }))}
           hoverPosition={hoverPosition}
           highlightSection={highlightSection}

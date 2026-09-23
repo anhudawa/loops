@@ -280,7 +280,7 @@ export default function MapView({
     compromiseLayerRef.current.clearLayers();
     if (!compromiseMarkers?.length) return;
     for (const m of compromiseMarkers) {
-      L.circleMarker(m.at, { radius: 6, fillColor: "#f5a524", color: "#0a0a0a", weight: 2, fillOpacity: 1 })
+      L.circleMarker(m.at, { radius: 4.5, fillColor: "#f5a524", color: "#0a0a0a", weight: 1.5, fillOpacity: 0.95 })
         .bindTooltip(m.label, { direction: "top", offset: [0, -6], className: "compromise-label" })
         .addTo(compromiseLayerRef.current);
     }

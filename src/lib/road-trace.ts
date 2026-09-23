@@ -12,7 +12,7 @@
  * "unknown" — never a report about a different road.
  */
 
-import { buildRoadReport, type EdgeTags, type RoadReport } from "./road-segments";
+import { buildRoadReport, describeCompromise, type EdgeTags, type RoadReport } from "./road-segments";
 import type { Discipline } from "./route-intent";
 import { haversine } from "./climb-detection";
 
@@ -43,11 +43,15 @@ export function sampleVia(coords: [number, number][], spacingKm = VIA_SPACING_KM
   return via;
 }
 
+/** Resolves road refs/names for compromises ("R755", "N125") — Overpass-backed in production. */
+export type CompromiseNamer = (coords: [number, number][], compromises: RoadReport["compromises"]) => Promise<void>;
+
 export async function traceRoadReport(
   coords: [number, number][],
   discipline: Discipline,
   engine: TraceEngine,
   budgetMs = 20_000,
+  namer?: CompromiseNamer,
 ): Promise<RoadReport | null> {
   if (coords.length < 2) return null;
   const started = Date.now();
@@ -72,5 +76,22 @@ export async function traceRoadReport(
   if (traced.length < 2) return null;
   // The trace must be the same ride, not a detour the engine preferred.
   if (Math.abs(tracedKm - gpxKm) / gpxKm > MAX_LENGTH_DRIFT) return null;
-  return buildRoadReport(traced, tags, discipline);
+  const report = buildRoadReport(traced, tags, discipline);
+  // "5.0 km on the Ma-2200" beats "on a primary road": name what we can,
+  // within the budget, and never fail the report over a name lookup.
+  if (namer && !report.standard_met && Date.now() - started < budgetMs) {
+    try {
+      await namer(traced, report.compromises);
+      report.summary = summariseNamed(report);
+    } catch { /* names are a nicety */ }
+  }
+  return report;
+}
+
+/** Rebuild the one-liner after names were resolved (same shape as the builder's). */
+function summariseNamed(r: RoadReport): string {
+  if (r.standard_met) return r.summary;
+  const parts = r.compromises.slice(0, 2).map(describeCompromise);
+  const more = r.compromises.length - parts.length;
+  return `Compromise: ${parts.join("; ")}${more > 0 ? ` (+${more} more)` : ""}.`;
 }

@@ -5,7 +5,7 @@ import { apiError, handleApiError } from "@/lib/api-utils";
 import { fetchElevations } from "@/lib/elevation";
 import { rerouteWaypoints, engineTrace } from "@/lib/route-generator";
 import { traceRoadReport } from "@/lib/road-trace";
-import { ROAD_RULES_VERSION } from "@/lib/road-segments";
+import { ROAD_RULES_VERSION, nameCompromises } from "@/lib/road-segments";
 
 export const maxDuration = 30;
 
@@ -131,7 +131,7 @@ function scheduleRoadTrace(route: NonNullable<Awaited<ReturnType<typeof getRoute
     try {
       const coords: [number, number][] = JSON.parse(route.coordinates).map((c: number[]) => [c[0], c[1]]);
       const discipline = route.discipline === "gravel" || route.discipline === "mtb" ? route.discipline : "road";
-      const report = await traceRoadReport(coords, discipline, engineTrace, TRACE_BUDGET_MS);
+      const report = await traceRoadReport(coords, discipline, engineTrace, TRACE_BUDGET_MS, nameCompromises);
       if (report) {
         await storeRouteRoadReport(route.id, report);
         console.log(JSON.stringify({ evt: "route_road_traced", route_id: route.id, standard_met: report.standard_met, compromises: report.compromises.length, ms: Date.now() - started }));

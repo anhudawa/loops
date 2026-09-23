@@ -140,6 +140,8 @@ export default function WeatherCard({ routeId, windOverlayEnabled, onWindToggle,
         <div className="flex items-center gap-2">
           <button
             onClick={() => onTravelToggle(!travelOverlayEnabled)}
+            title="Show the direction of travel on the map"
+            aria-label="Show the direction of travel on the map"
             className="flex items-center gap-1.5 px-3 py-2 min-h-[40px] rounded-full text-xs font-bold transition-all"
             style={{
               color: travelOverlayEnabled ? "#c8ff00" : "var(--text-muted)",
@@ -154,6 +156,8 @@ export default function WeatherCard({ routeId, windOverlayEnabled, onWindToggle,
           </button>
           <button
             onClick={() => onWindToggle(!windOverlayEnabled)}
+            title="Show wind arrows on the map"
+            aria-label="Show wind arrows on the map"
             className="flex items-center gap-1.5 px-3 py-2 min-h-[40px] rounded-full text-xs font-bold transition-all"
             style={{
               color: windOverlayEnabled ? "var(--danger)" : "var(--text-muted)",

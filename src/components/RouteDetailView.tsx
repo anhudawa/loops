@@ -584,9 +584,9 @@ export default function RouteDetailView({ ride, initialRoute }: { ride?: RideInv
           {/* Stats row */}
           <div className="grid grid-cols-4 gap-3 pt-4 border-t" style={{ borderColor: "var(--border)" }}>
             {[
-              { label: "Distance", value: `${route.distance_km}km` },
-              { label: "Gain", value: `${route.elevation_gain_m}m` },
-              { label: "Loss", value: `${route.elevation_loss_m}m` },
+              { label: "Distance", value: `${route.distance_km} km` },
+              { label: "Gain", value: `${route.elevation_gain_m} m` },
+              { label: "Loss", value: `${route.elevation_loss_m} m` },
               { label: "Surface", value: route.surface_type },
             ].map((stat) => (
               <div key={stat.label} className="text-center">

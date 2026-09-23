@@ -9,6 +9,7 @@ import {
   buildRouteFaqs,
   slugify,
 } from "@/lib/seo";
+import { gpxIsPublic } from "@/lib/copy";
 import JsonLd from "@/components/JsonLd";
 
 export async function generateMetadata({
@@ -29,10 +30,11 @@ export async function generateMetadata({
   }
 
   const location = route.region || route.county;
-  const title = `${route.name} — ${route.distance_km}km ${route.discipline} route in ${location}, ${route.country} | LOOPS`;
+  const gpxLine = gpxIsPublic() ? "GPX for your bike computer." : "Road Standard report, ride time and GPX with a free LOOPS account.";
+  const title = `${route.name} — ${route.distance_km} km ${route.discipline} route in ${location}, ${route.country} | LOOPS`;
   const description = route.description
-    ? `${route.description.slice(0, 120).replace(/[.\s]+$/, "")}. ${route.distance_km}km ${route.discipline} route in ${location}, ${route.country}. ${route.elevation_gain_m}m climbing. GPX for your bike computer.`
-    : `${route.distance_km}km ${route.discipline} route in ${location}, ${route.country}. ${route.elevation_gain_m}m climbing. GPX for your bike computer.`;
+    ? `${route.description.slice(0, 120).replace(/[.\s]+$/, "")}. ${route.distance_km} km ${route.discipline} route in ${location}, ${route.country}. ${route.elevation_gain_m} m climbing. ${gpxLine}`
+    : `${route.distance_km} km ${route.discipline} route in ${location}, ${route.country}. ${route.elevation_gain_m} m climbing. ${gpxLine}`;
 
   return {
     title,
@@ -40,7 +42,7 @@ export async function generateMetadata({
     alternates: { canonical: `https://www.loops.ie/routes/${id}` },
     robots: { index: true, follow: true },
     openGraph: {
-      title: `${route.name} — ${route.distance_km}km ${route.discipline} route in ${location}, ${route.country}`,
+      title: `${route.name} — ${route.distance_km} km ${route.discipline} route in ${location}, ${route.country}`,
       description,
       url: `https://www.loops.ie/routes/${id}`,
       siteName: "LOOPS",

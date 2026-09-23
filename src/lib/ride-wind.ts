@@ -99,10 +99,13 @@ export function rideVerdict(
   const maxWind = Math.max(...rideHours.map((h) => h.windSpeed));
   const light = maxWind < MIN_WIND_KMH;
 
-  // Representative wind: the strongest hour's direction and the mean speed.
+  // Representative wind: the strongest hour's direction and the range over
+  // the ride ("SW 18–20 km/h"), so it agrees with the start-hour figure
+  // shown above it on the card.
   const strongest = rideHours.reduce((a, h) => (h.windSpeed > a.windSpeed ? h : a), rideHours[0]);
-  const meanSpeed = Math.round(rideHours.reduce((s, h) => s + h.windSpeed, 0) / rideHours.length);
-  const wind = `${compassPoint(strongest.windDirection)} ${meanSpeed} km/h`;
+  const lo = Math.round(Math.min(...rideHours.map((h) => h.windSpeed)));
+  const hi = Math.round(maxWind);
+  const wind = `${compassPoint(strongest.windDirection)} ${lo === hi ? lo : `${lo}–${hi}`} km/h`;
 
   // Note: riding the loop the other way round does NOT change the out/home
   // balance under a steady wind (the start point decides it), so we never

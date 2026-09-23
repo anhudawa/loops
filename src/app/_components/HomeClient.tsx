@@ -353,18 +353,22 @@ function HomeContent() {
     if (filters.sort === "distance") return "Longest";
     if (filters.sort === "rating") return "Top rated";
     if (filters.sort === "nearby") return "Nearest to you";
+    // A country/region/duration filter replaces the default ordering story.
+    const scope = [filters.city, filters.country, filters.duration ? `${filters.duration} loops` : ""].filter(Boolean).join(" · ");
+    if (scope) return scope;
     if (userLocation) return "Near you";
     return `${DEFAULT_COUNTRY} first, then the best of the rest`;
-  }, [filters.sort, filters.search, isSearching, userLocation]);
+  }, [filters.sort, filters.search, filters.city, filters.country, filters.duration, isSearching, userLocation]);
 
   // Honest sub-label: explain why this ordering when there's no location.
   const sortSubLabel = useMemo(() => {
     if (isSearching) return null;
     if (filters.sort) return null;
+    if (filters.city || filters.country || filters.duration) return null;
     if (userLocation) return "Closest rideable loops first";
     if (locationDenied) return `Location off — showing ${DEFAULT_COUNTRY} first. Turn on location for loops near you.`;
     return `${DEFAULT_COUNTRY} first — turn on location for loops near you`;
-  }, [filters.sort, isSearching, userLocation, locationDenied]);
+  }, [filters.sort, filters.city, filters.country, filters.duration, isSearching, userLocation, locationDenied]);
 
   const sortSelect = (
     <select

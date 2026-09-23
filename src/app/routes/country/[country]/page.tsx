@@ -8,6 +8,14 @@ import { getCountries, getCountryStats, getRoutesByCountrySlug } from "@/lib/db"
 import { slugify, generateItemListJsonLd, generateBreadcrumbJsonLd, generateFaqJsonLd } from "@/lib/seo";
 import JsonLd from "@/components/JsonLd";
 import Breadcrumbs from "@/components/Breadcrumbs";
+
+const DISCIPLINE_WORD: Record<string, string> = { road: "road", gravel: "gravel", mtb: "MTB" };
+const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+/** "road, gravel and MTB" */
+function disciplineList(ds: string[]): string {
+  const w = ds.map((d) => DISCIPLINE_WORD[d] ?? d);
+  return w.length <= 1 ? (w[0] ?? "") : `${w.slice(0, -1).join(", ")} and ${w[w.length - 1]}`;
+}
 import RouteCard from "@/components/RouteCard";
 
 export const revalidate = 3600;
@@ -38,7 +46,7 @@ export async function generateMetadata({
   if (!stats) return { title: "Not Found - LOOPS" };
 
   const title = `Cycling Routes in ${stats.displayName} — ${plural(stats.routeCount, "Route")} | LOOPS`;
-  const description = `Discover ${plural(stats.routeCount, "cycling route")} in ${stats.displayName}. Browse ${stats.disciplines.join(", ")} routes with ${freeGpxPhrase()}.`;
+  const description = `Discover ${plural(stats.routeCount, "cycling route")} in ${stats.displayName}. ${cap(disciplineList(stats.disciplines))} loops with ${freeGpxPhrase()}.`;
 
   return {
     title,
@@ -91,12 +99,12 @@ export default async function CountryPage({
     {
       question: `What are the best cycling routes in ${stats.displayName}?`,
       answer: featuredRoutes.length > 0
-        ? `${SHOW_RATINGS ? "Top rated routes" : "Routes"} include: ${featuredRoutes.slice(0, 3).map((r) => `${r.name} (${r.distance_km}km)`).join(", ")}.`
+        ? `${SHOW_RATINGS ? "Top rated routes" : "Routes"} include: ${featuredRoutes.slice(0, 3).map((r) => `${r.name} (${r.distance_km} km)`).join(", ")}.`
         : `Browse ${plural(stats.routeCount, "route")} on LOOPS to find the best rides.`,
     },
     {
       question: `How many cycling routes are in ${stats.displayName}?`,
-      answer: `There ${Number(stats.routeCount) === 1 ? "is" : "are"} ${plural(stats.routeCount, "cycling route")} in ${stats.displayName} on LOOPS, covering ${stats.disciplines.join(", ")} ${stats.disciplines.length === 1 ? "riding" : "disciplines"}.`,
+      answer: `There ${Number(stats.routeCount) === 1 ? "is" : "are"} ${plural(stats.routeCount, "cycling route")} in ${stats.displayName} on LOOPS, covering ${disciplineList(stats.disciplines)} ${stats.disciplines.length === 1 ? "riding" : "disciplines"}.`,
     },
     {
       question: `Can I download GPX files for routes in ${stats.displayName}?`,
@@ -135,8 +143,8 @@ export default async function CountryPage({
 
         <p className="text-sm leading-relaxed mb-8" style={{ color: "var(--text-secondary)" }}>
           {plural(stats.routeCount, "cycling route")} in {stats.displayName} on LOOPS.
-          Browse {stats.disciplines.join(", ")} routes across {plural(stats.regions.length, "region")}.
-          Quiet roads, {freeGpxPhrase()}.
+          {plural(stats.routeCount, "loop")} across {plural(stats.regions.length, "region")}: {disciplineList(stats.disciplines)}.
+          Every loop carries a Road Standard report; {freeGpxPhrase()}.
         </p>
 
         {/* Stats bar */}
@@ -181,7 +189,7 @@ export default async function CountryPage({
 
         {/* Featured routes */}
         <h2 className="text-sm font-bold uppercase tracking-wider mb-4" style={{ color: "var(--text-muted)" }}>
-          {featuredRoutes.length < routes.length ? "Featured routes" : "All routes"}
+          {plural(routes.length, "route")}
         </h2>
         <div className="grid gap-3 md:grid-cols-2 mb-10">
           {routes.map((route) => (

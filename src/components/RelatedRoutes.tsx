@@ -41,7 +41,7 @@ export default function RelatedRoutes({ routes, regionOrCountry, country, isRegi
                 {route.name}
               </div>
               <div className="text-xs" style={{ color: "var(--text-muted)" }}>
-                {route.distance_km}km · {route.elevation_gain_m}m climbing
+                {route.distance_km} km · {route.elevation_gain_m} m climbing
               </div>
             </div>
           </Link>

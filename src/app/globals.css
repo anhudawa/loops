@@ -318,3 +318,15 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 /* Planner: a pin lifted by press-and-hold (the transform is Leaflet's, so glow only) */
 .pin-lifted { filter: drop-shadow(0 0 8px #c8ff00) drop-shadow(0 0 2px #c8ff00); z-index: 1000 !important; }
 .pin-popup .leaflet-popup-content { margin: 10px 12px; }
+
+/* iOS Safari zooms the page into any field whose text is under 16px when it
+   gains focus (tapping the mic focuses the prompt box) and leaves it zoomed,
+   cutting off the right edge. 16px on touch screens stops it without
+   disabling pinch-zoom. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}

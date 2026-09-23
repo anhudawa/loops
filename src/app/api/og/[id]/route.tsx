@@ -1,6 +1,7 @@
 import { ImageResponse } from "next/og";
 import { getRoute } from "@/lib/db";
 import { formatRideWhen, cleanMeet } from "@/lib/ride-invite";
+import { getOgFonts } from "@/lib/og-fonts";
 
 export const runtime = "nodejs";
 
@@ -102,6 +103,8 @@ export async function GET(
       // ignore parse errors
     }
 
+    // Real bold weights (Inter); undefined → next/og's default font.
+    const fonts = await getOgFonts();
 
     return new ImageResponse(
       (
@@ -111,7 +114,7 @@ export async function GET(
             height: "630px",
             display: "flex",
             background: "#0a0a0a",
-            fontFamily: "system-ui, sans-serif",
+            fontFamily: "Inter, sans-serif",
           }}
         >
           {/* Left content */}
@@ -259,6 +262,7 @@ export async function GET(
       {
         width: 1200,
         height: 630,
+        ...(fonts ? { fonts } : {}),
         headers: {
           "Cache-Control": "public, max-age=86400, s-maxage=86400",
         },

@@ -55,3 +55,14 @@ describe("main-road crossings", () => {
     expect(r.compromises.some((c) => c.kind === "unpaved")).toBe(true);
   });
 });
+
+describe("compromise position", () => {
+  it("each stretch carries its midpoint for the map", () => {
+    const step = 0.0001;
+    const line: [number, number][] = Array.from({ length: 61 }, (_, i) => [53 + i * step, -6.2]);
+    const tags = Array.from({ length: 60 }, (_, i) => (i >= 30 && i < 44 ? { highway: "primary", surface: "asphalt" } : { highway: "tertiary", surface: "asphalt" }));
+    const r = buildRoadReport(line, tags, "road");
+    expect(r.compromises[0].at?.[0]).toBeCloseTo(53 + 37 * step, 5);
+    expect(r.rules_version).toBe(4);
+  });
+});

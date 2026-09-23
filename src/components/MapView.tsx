@@ -30,6 +30,7 @@ export default function MapView({
   windOverlay,
   travelOverlay,
   startLabel,
+  compromiseMarkers,
   hoverPosition,
   highlightSection,
   onPolylineClick,
@@ -42,6 +43,8 @@ export default function MapView({
   travelOverlay?: boolean;
   /** Permanent label on the selected route's start marker ("Start", "Meet here"). */
   startLabel?: string | null;
+  /** Amber dots where the route compromises the Road Standard. */
+  compromiseMarkers?: Array<{ at: [number, number]; label: string }> | null;
   hoverPosition?: { lat: number; lng: number } | null;
   highlightSection?: { coords: [number, number][]; color: string } | null;
   onPolylineClick?: (latlng: { lat: number; lng: number }) => void;
@@ -58,6 +61,7 @@ export default function MapView({
   const layersRef = useRef<L.LayerGroup | null>(null);
   const windLayerRef = useRef<L.LayerGroup | null>(null);
   const travelLayerRef = useRef<L.LayerGroup | null>(null);
+  const compromiseLayerRef = useRef<L.LayerGroup | null>(null);
   const hoverMarkerRef = useRef<L.CircleMarker | null>(null);
   const highlightLayerRef = useRef<L.Polyline | null>(null);
   const onMapClickRef = useRef(onMapClick);
@@ -93,6 +97,7 @@ export default function MapView({
     layersRef.current = L.layerGroup().addTo(mapRef.current);
     windLayerRef.current = L.layerGroup().addTo(mapRef.current);
     travelLayerRef.current = L.layerGroup().addTo(mapRef.current);
+    compromiseLayerRef.current = L.layerGroup().addTo(mapRef.current);
 
     // Map click to dismiss highlights
     mapRef.current.on("click", () => {
@@ -268,6 +273,18 @@ export default function MapView({
       L.marker([lat, lng], { icon, interactive: false }).addTo(windLayerRef.current!);
     }
   }, [windOverlay, routes, selectedRouteId]);
+
+  // Road Standard compromises: an amber dot per stretch, named on tap.
+  useEffect(() => {
+    if (!compromiseLayerRef.current) return;
+    compromiseLayerRef.current.clearLayers();
+    if (!compromiseMarkers?.length) return;
+    for (const m of compromiseMarkers) {
+      L.circleMarker(m.at, { radius: 6, fillColor: "#f5a524", color: "#0a0a0a", weight: 2, fillOpacity: 1 })
+        .bindTooltip(m.label, { direction: "top", offset: [0, -6], className: "compromise-label" })
+        .addTo(compromiseLayerRef.current);
+    }
+  }, [compromiseMarkers]);
 
   // Travel direction overlay
   useEffect(() => {

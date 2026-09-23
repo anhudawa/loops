@@ -230,6 +230,9 @@ export interface Compromise {
    * exit that meets the standard — every rider there uses it.
    */
   near_start?: boolean;
+  /** Midpoint of the stretch [lat, lng] — for the map marker (indices alone
+   *  do not map onto a stored track when the report came from a trace). */
+  at?: [number, number];
 }
 
 export interface RoadReport {
@@ -254,7 +257,7 @@ export interface RoadReport {
  * Bump when the classification rules change: stored reports with an older
  * (or missing) version are re-traced on next view (api/routes/[id]).
  */
-export const ROAD_RULES_VERSION = 3;
+export const ROAD_RULES_VERSION = 4;
 
 // "Unsuitable" by surface is discipline-aware: smoothness=bad is a hazard on
 // a road bike and the whole point of a gravel ride; class:bicycle −2 is
@@ -359,6 +362,7 @@ function buildRoadReportInner(
         start: r.start,
         end: r.end,
         meters: Math.round(r.meters),
+        at: coords[Math.min(coords.length - 1, Math.floor((r.start + r.end) / 2))],
         highway: r.tags.highway ?? "road",
         ...(r.tags.maxspeed ? { maxspeed: r.tags.maxspeed } : {}),
         ...(r.tags.surface ? { surface: r.tags.surface } : {}),

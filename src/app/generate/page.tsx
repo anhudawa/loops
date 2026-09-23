@@ -133,12 +133,16 @@ function downloadGpx(gpx: string, filename: string) {
 }
 
 async function saveGeneratedRoute(
-  candidate: GeneratedCandidate,
+  candidate: GeneratedCandidate | LibraryCandidate,
   submittedPrompt: string,
   interpreted: Interpreted | null
 ): Promise<{ ok: true; routeId: string } | { ok: false; error: string }> {
-  // Use the rider's prompt as the initial name — they can rename later.
-  const rawName = submittedPrompt.slice(0, 80).trim();
+  // A "from your start" ride built on a verified loop is a NEW loop (owner
+  // rule): saved as its own route, named after the loop it is built on.
+  // Otherwise the rider's prompt is the initial name.
+  const rawName = candidate.source === "library"
+    ? `${candidate.name} from ${interpreted?.region ?? "your start"}`.slice(0, 80)
+    : submittedPrompt.slice(0, 80).trim();
   const name = rawName.length > 0 ? rawName : `Generated ${candidate.distance_km} km route`;
 
   // Use the discipline the LLM parsed from the prompt; fall back to road
@@ -152,7 +156,7 @@ async function saveGeneratedRoute(
       name,
       description: `Generated from "${submittedPrompt}"`,
       coordinates: candidate.coordinates,
-      elevations: candidate.elevations,
+      elevations: candidate.source === "generated" ? candidate.elevations : (candidate as LibraryCandidate & { elevations?: number[] }).elevations,
       distance_km: candidate.distance_km,
       elevation_gain_m: candidate.elevation_gain_m,
       elevation_loss_m: candidate.elevation_loss_m,
@@ -160,9 +164,9 @@ async function saveGeneratedRoute(
       country: interpreted?.country,
       region: interpreted?.region,
       // The verdicts the rider saw — saved with the route, never re-guessed.
-      quality_score: candidate.quality_score,
-      quality_breakdown: candidate.quality_breakdown,
-      surface_breakdown: candidate.surface_breakdown,
+      quality_score: candidate.source === "generated" ? candidate.quality_score : undefined,
+      quality_breakdown: candidate.source === "generated" ? candidate.quality_breakdown : undefined,
+      surface_breakdown: candidate.source === "generated" ? candidate.surface_breakdown : undefined,
       road_report: candidate.road_report,
     }),
   });
@@ -955,7 +959,7 @@ function CandidateCard({
     : [];
 
   async function handleSave() {
-    if (isLibrary) return;
+    if (isLibrary && !candidate.from_home) return;
     setSaving(true);
     setSaveError(null);
     const result = await saveGeneratedRoute(candidate, submittedPrompt, interpreted);
@@ -1139,20 +1143,27 @@ function CandidateCard({
           )}
 
           <div className="flex flex-wrap gap-2 mt-3">
-            {isLibrary ? (
+            {isLibrary && candidate.from_home ? (
               <>
+                {/* A new loop from your start: save it (then share the saved
+                    route) — sharing the original library route would send
+                    friends a different ride. */}
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider disabled:opacity-50"
+                  style={{ background: "var(--accent)", color: "var(--bg)" }}
+                >
+                  {saving ? "Saving…" : "Save to share"}
+                </button>
                 <Link
                   href={`/routes/${candidate.route_id}`}
                   className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider"
-                  style={{ background: "var(--accent)", color: "var(--bg)" }}
+                  style={{ background: "transparent", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
                 >
-                  View route
+                  The verified loop
                 </Link>
-                <ShareButton
-                  routeId={candidate.route_id}
-                  title={candidate.name}
-                  distance={candidate.distance_km}
-                />
                 {candidate.from_home && candidate.gpx_data && (
                   <button
                     type="button"
@@ -1166,6 +1177,21 @@ function CandidateCard({
                     Download GPX (from your start)
                   </button>
                 )}
+              </>
+            ) : isLibrary ? (
+              <>
+                <Link
+                  href={`/routes/${candidate.route_id}`}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider"
+                  style={{ background: "var(--accent)", color: "var(--bg)" }}
+                >
+                  View route
+                </Link>
+                <ShareButton
+                  routeId={candidate.route_id}
+                  title={candidate.name}
+                  distance={candidate.distance_km}
+                />
               </>
             ) : (
               <>

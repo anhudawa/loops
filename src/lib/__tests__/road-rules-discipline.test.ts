@@ -63,7 +63,7 @@ describe("compromise position", () => {
     const tags = Array.from({ length: 60 }, (_, i) => (i >= 30 && i < 44 ? { highway: "primary", surface: "asphalt" } : { highway: "tertiary", surface: "asphalt" }));
     const r = buildRoadReport(line, tags, "road");
     expect(r.compromises[0].at?.[0]).toBeCloseTo(53 + 37 * step, 5);
-    expect(r.rules_version).toBe(4);
+    expect(r.rules_version).toBe(ROAD_RULES_VERSION);
   });
 });
 

@@ -47,6 +47,17 @@ function LoginPage() {
 
   // Arriving from a ride/route page (e.g. "Sign up to download GPX"): say
   // why they're here and offer the way back. Only same-site paths count.
+  // "Log in" (default) vs "Sign up" (mode=signup): a returning rider must
+  // land on a login page, not a marketing "Get started" page.
+  const isSignup = searchParams.get("mode") === "signup";
+  const [lastMethod, setLastMethod] = useState<"google" | "email" | null>(null);
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem("loops:lastSignIn");
+      if (v === "google" || v === "email") setLastMethod(v); // eslint-disable-line react-hooks/set-state-in-effect
+    } catch { /* private mode */ }
+  }, []);
+  const remember = (m: "google" | "email") => { try { localStorage.setItem("loops:lastSignIn", m); } catch { /* noop */ } };
   const redirectParam = searchParams.get("redirect");
   const returnTo = redirectParam && redirectParam.startsWith("/") && !redirectParam.startsWith("//") ? redirectParam : null;
   const routeMatch = returnTo?.match(/^\/(ride|routes)\/([^/?#]+)(?:[?#]|$)/);
@@ -103,6 +114,7 @@ function LoginPage() {
   }, []);
   const handleEmailLogin = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
+    try { localStorage.setItem("loops:lastSignIn", "email"); } catch { /* noop */ }
     setEmailError(null);
     const redirect = searchParams.get("redirect");
     if (redirect) document.cookie = `login_redirect=${encodeURIComponent(redirect)}; path=/; max-age=1800; SameSite=Lax`;
@@ -159,7 +171,7 @@ function LoginPage() {
       >
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <span className="logo-mark text-xl" style={{ color: "var(--text)" }}>LOOPS</span>
-          <GoogleButton size="small" onClick={() => handleGoogleLogin()} />
+          <GoogleButton size="small" onClick={() => { remember("google"); handleGoogleLogin(); }} />
         </div>
       </nav>
 
@@ -182,10 +194,10 @@ function LoginPage() {
             className="font-extrabold tracking-tight leading-[1.02] mt-4 mb-3"
             style={{ fontSize: "clamp(2rem, 6vw, 3.5rem)", color: "var(--text)" }}
           >
-            Where should I ride today?
+            {isSignup ? "Where should I ride today?" : "Welcome back"}
           </h1>
           <p className="text-base md:text-xl font-bold max-w-lg mx-auto" style={{ color: "var(--text-muted)" }}>
-            Stop riding the same loops.
+            {isSignup ? "Stop riding the same loops." : "Log in to LOOPS"}
           </p>
 
           {/* The one CTA */}
@@ -203,7 +215,12 @@ function LoginPage() {
             {error && (
               <div className="alert-error mb-3 text-sm" role="alert">{error}</div>
             )}
-            <GoogleButton onClick={() => handleGoogleLogin()} />
+            <GoogleButton onClick={() => { remember("google"); handleGoogleLogin(); }} />
+            {lastMethod && (
+              <p className="text-[11px] mt-2" style={{ color: "var(--text-muted)" }}>
+                Last time you used {lastMethod === "google" ? "Google" : "an email link"}.
+              </p>
+            )}
             {emailEnabled && (
               emailState === "sent" ? (
                 <p className="text-sm mt-4" style={{ color: "var(--text)" }} role="status">
@@ -211,7 +228,7 @@ function LoginPage() {
                 </p>
               ) : (
                 <form onSubmit={handleEmailLogin} className="mt-4">
-                  <p className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>No Google account? Get a sign-in link by email:</p>
+                  <p className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>{isSignup ? "No Google account? Get a sign-in link by email:" : "Or email me a sign-in link:"}</p>
                   <div className="flex gap-2">
                     <input
                       type="email"
@@ -236,6 +253,7 @@ function LoginPage() {
                 </form>
               )
             )}
+            {isSignup && (
             <label className="flex items-start gap-2 mt-3 text-left cursor-pointer select-none">
               <input
                 type="checkbox"
@@ -248,8 +266,15 @@ function LoginPage() {
                 Get <span style={{ color: "var(--text)" }}>the Saturday Spin</span> — the free weekly cycling newsletter.
               </span>
             </label>
+            )}
             <p className="text-[11px] text-center mt-2.5" style={{ color: "var(--text-muted)" }}>
-              Free forever. No credit card. Pro (coming) adds training intelligence.
+              {isSignup ? (
+                <>Free forever. No credit card. Pro (coming) adds training intelligence.{" "}
+                  <a href={`/login${redirectParam ? `?redirect=${encodeURIComponent(redirectParam)}` : ""}`} className="underline font-bold">Already have an account? Log in</a></>
+              ) : (
+                <>New to LOOPS? The same button creates your free account.{" "}
+                  <a href={`/login?mode=signup${redirectParam ? `&redirect=${encodeURIComponent(redirectParam)}` : ""}`} className="underline font-bold">See what it does</a></>
+              )}
             </p>
           </div>
 

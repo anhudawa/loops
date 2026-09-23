@@ -49,15 +49,19 @@ export default function AppHeader({ sticky = true }: { sticky?: boolean }) {
   // The server cannot see the query, so the markup carries the path only;
   // after mount the real href (for long-press / new tab) is set on the DOM
   // and a normal tap reads it at click time.
-  const fullLoginHref = () => `/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`;
-  // Callback ref: the links mount only after auth resolves, so an effect on
-  // mount would run before they exist. This runs whenever an anchor attaches.
+  const fullLoginHref = (signup = false) =>
+    `/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}${signup ? "&mode=signup" : ""}`;
+  // Callback refs: the links mount only after auth resolves, so an effect on
+  // mount would run before they exist. These run whenever an anchor attaches.
   const withFullHref = (el: HTMLAnchorElement | null) => { if (el) el.href = fullLoginHref(); };
-  const goToLogin = (e: React.MouseEvent) => {
+  const withSignupHref = (el: HTMLAnchorElement | null) => { if (el) el.href = fullLoginHref(true); };
+  const goTo = (signup: boolean) => (e: React.MouseEvent) => {
     if (e.metaKey || e.ctrlKey || e.shiftKey) return;
     e.preventDefault();
-    router.push(fullLoginHref());
+    router.push(fullLoginHref(signup));
   };
+  const goToLogin = goTo(false);
+  const goToSignup = goTo(true);
 
   return (
     <header
@@ -165,9 +169,9 @@ export default function AppHeader({ sticky = true }: { sticky?: boolean }) {
                   Log in
                 </Link>
                 <Link
-                  ref={withFullHref}
-                  href={loginHref}
-                  onClick={goToLogin}
+                  ref={withSignupHref}
+                  href={`${loginHref}&mode=signup`}
+                  onClick={goToSignup}
                   className="text-sm font-bold px-4 rounded-lg hover:opacity-90 min-h-[44px] inline-flex items-center"
                   style={{ background: "var(--accent)", color: "var(--bg)" }}
                 >

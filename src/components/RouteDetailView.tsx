@@ -867,7 +867,7 @@ export default function RouteDetailView({ ride, initialRoute }: { ride?: RideInv
               </p>
             </div>
             <Link
-              href={loginHrefFor(clientUrl)}
+              href={loginHrefFor(clientUrl, { signup: true })}
               className="shrink-0 px-5 min-h-[44px] inline-flex items-center rounded-xl font-bold text-sm uppercase tracking-wider transition-all hover:brightness-110"
               style={{
                 background: "var(--accent)",

@@ -147,7 +147,7 @@ test("route page: title strip, invite and GPX call to action", async ({ page }) 
 test("login keeps the ride redirect and offers Google and email", async ({ page }) => {
   const res = await open(page, `/login?redirect=${encodeURIComponent(RIDE_PATH)}`);
   expect(res.status()).toBe(200);
-  await expect(page.getByRole("button", { name: /get started with google/i }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: /continue with google/i }).first()).toBeVisible();
   await expect(page.getByPlaceholder("you@example.com")).toBeVisible();
   await expect(page.getByRole("button", { name: /email me/i })).toBeVisible();
   await expect(page.getByTestId("login-return-context")).toBeVisible();
@@ -222,5 +222,19 @@ test.describe("Road Standard (Trust Rule)", () => {
     const items = card.locator("li");
     expect(await items.count()).toBeGreaterThan(3);
     await expect(items.first()).toContainText(/km on|m on/);
+  });
+});
+
+test.describe("log in vs sign up", () => {
+  test("'Log in' lands on a login page, not a sign-up pitch", async ({ page }) => {
+    await open(page, "/login");
+    await expect(page.getByRole("heading", { level: 1, name: /welcome back/i })).toBeVisible();
+    await expect(page.getByText(/log in to loops/i)).toBeVisible();
+    await expect(page.getByRole("button", { name: /continue with google/i }).first()).toBeVisible();
+  });
+  test("'Sign up' shows the pitch and a way back to log in", async ({ page }) => {
+    await open(page, "/login?mode=signup");
+    await expect(page.getByRole("heading", { level: 1, name: /where should i ride today/i })).toBeVisible();
+    await expect(page.getByRole("link", { name: /already have an account\? log in/i })).toBeVisible();
   });
 });

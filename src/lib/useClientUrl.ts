@@ -18,8 +18,9 @@ export function useClientUrl(): string | null {
 }
 
 /** "/login?redirect=<url>" (with gpx=1 when asked), or "/login" before the URL is known. */
-export function loginHrefFor(url: string | null, opts: { gpx?: boolean } = {}): string {
-  if (!url) return "/login";
+export function loginHrefFor(url: string | null, opts: { gpx?: boolean; signup?: boolean } = {}): string {
+  const mode = opts.signup ? "&mode=signup" : "";
+  if (!url) return opts.signup ? "/login?mode=signup" : "/login";
   let target = url;
   if (opts.gpx) {
     const [path, query = ""] = url.split("?");
@@ -27,7 +28,7 @@ export function loginHrefFor(url: string | null, opts: { gpx?: boolean } = {}): 
     q.set("gpx", "1");
     target = `${path}?${q.toString()}`;
   }
-  return `/login?redirect=${encodeURIComponent(target)}`;
+  return `/login?redirect=${encodeURIComponent(target)}${mode}`;
 }
 
 /** One query param from a client URL (null when unknown). */

@@ -69,7 +69,7 @@ export default function SendToGarmin(props: SendToGarminProps) {
     }
   }
 
-  const base = "text-xs font-bold px-3 py-1.5 rounded-lg";
+  const base = "inline-flex items-center justify-center min-h-[44px] text-xs font-bold px-3 py-1.5 rounded-lg";
 
   if (status === "connect") {
     return (

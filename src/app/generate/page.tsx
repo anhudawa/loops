@@ -11,6 +11,16 @@ import AppHeader from "@/components/AppHeader";
 import RoutePreviewSvg from "@/components/RoutePreviewSvg";
 
 const RouteEditor = dynamic(() => import("@/components/RouteEditor"), { ssr: false });
+import type { EditedRoute } from "@/components/RouteEditor";
+import { useToast } from "@/components/Toast";
+import {
+  MIN_PROMPT_CHARS,
+  friendlyHttpError,
+  resultsHeading,
+  readResults,
+  writeResults,
+  clearResults,
+} from "./generate-helpers";
 import RideDisclaimer from "@/components/RideDisclaimer";
 import SendToGarmin from "@/components/SendToGarmin";
 import QualityFactors, { SurfaceSummary } from "@/components/QualityFactors";
@@ -76,7 +86,8 @@ interface GeneratedCandidate {
   distance_km: number;
   elevation_gain_m: number;
   elevation_loss_m: number;
-  quality_score: number;
+  /** Absent once the rider has edited the line (re-checked on save). */
+  quality_score?: number;
   quality_tier?: "excellent" | "good";
   quality_breakdown?: Record<string, number>;
   highlights?: string[];
@@ -151,7 +162,7 @@ async function saveGeneratedRoute(
   candidate: GeneratedCandidate | LibraryCandidate,
   submittedPrompt: string,
   interpreted: Interpreted | null
-): Promise<{ ok: true; routeId: string } | { ok: false; error: string }> {
+): Promise<{ ok: true; routeId: string } | { ok: false; error: string; needsLogin?: boolean }> {
   // A "from your start" ride built on a verified loop is a NEW loop (owner
   // rule): saved as its own route, named after the loop it is built on.
   // Otherwise the rider's prompt is the initial name.
@@ -164,30 +175,42 @@ async function saveGeneratedRoute(
   // only when we have no intent context (shouldn't happen in practice).
   const discipline = interpreted?.discipline ?? "road";
 
-  const res = await fetch("/api/routes/from-generated", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      name,
-      description: `Generated from "${submittedPrompt}"`,
-      coordinates: candidate.coordinates,
-      elevations: candidate.source === "generated" ? candidate.elevations : (candidate as LibraryCandidate & { elevations?: number[] }).elevations,
-      distance_km: candidate.distance_km,
-      elevation_gain_m: candidate.elevation_gain_m,
-      elevation_loss_m: candidate.elevation_loss_m,
-      discipline,
-      country: interpreted?.country,
-      region: interpreted?.region,
-      // The verdicts the rider saw — saved with the route, never re-guessed.
-      quality_score: candidate.source === "generated" ? candidate.quality_score : undefined,
-      quality_breakdown: candidate.source === "generated" ? candidate.quality_breakdown : undefined,
-      surface_breakdown: candidate.source === "generated" ? candidate.surface_breakdown : undefined,
-      road_report: candidate.road_report,
-    }),
-  });
+  let res: Response;
+  try {
+    res = await fetch("/api/routes/from-generated", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name,
+        description: `Generated from "${submittedPrompt}"`,
+        coordinates: candidate.coordinates,
+        elevations: candidate.source === "generated" ? candidate.elevations : (candidate as LibraryCandidate & { elevations?: number[] }).elevations,
+        distance_km: candidate.distance_km,
+        elevation_gain_m: candidate.elevation_gain_m,
+        elevation_loss_m: candidate.elevation_loss_m,
+        discipline,
+        country: interpreted?.country,
+        region: interpreted?.region,
+        // The verdicts the rider saw — saved with the route, never re-guessed.
+        quality_score: candidate.source === "generated" ? candidate.quality_score : undefined,
+        quality_breakdown: candidate.source === "generated" ? candidate.quality_breakdown : undefined,
+        surface_breakdown: candidate.source === "generated" ? candidate.surface_breakdown : undefined,
+        road_report: candidate.road_report,
+      }),
+    });
+  } catch {
+    return { ok: false, error: "Network hiccup — your route is still here. Try again." };
+  }
   const body = await res.json().catch(() => ({}));
+  if (res.status === 401) return { ok: false, error: "Your sign-in has expired — log in to save this route.", needsLogin: true };
   if (!res.ok) return { ok: false, error: body?.error ?? "Could not save route." };
   return { ok: true, routeId: body?.data?.id };
+}
+
+/** Log in, then come back to this ask (its results are kept for this tab). */
+function loginHrefFor(prompt: string): string {
+  const target = prompt ? `/generate?q=${encodeURIComponent(prompt)}` : "/generate";
+  return `/login?redirect=${encodeURIComponent(target)}`;
 }
 
 export default function GeneratePage() {
@@ -219,27 +242,45 @@ function GenerateContent() {
 
   const voice = useVoiceInput();
   const geo = useGeolocation();
+  const { toast } = useToast();
 
   useEffect(() => {
     // Only redirect a CONFIRMED logged-out rider. If auth couldn't be checked
     // (server/network error), don't eject — the retry UI below handles it.
     if (!authLoading && !user && !authError) {
-      // Keep the rider's question through the login round-trip.
+      // Keep the rider's question through the login round-trip. Replace, not
+      // push: Back from the login page must not land here and bounce again.
       const q = searchParams.get("q");
       const target = q ? `/generate?q=${encodeURIComponent(q)}` : "/generate";
-      router.push(`/login?redirect=${encodeURIComponent(target)}`);
+      router.replace(`/login?redirect=${encodeURIComponent(target)}`);
     }
   }, [user, authLoading, authError, router, searchParams]);
 
-  // Homepage answer machine hands off via /generate?q=… — prefill the
-  // prompt and, when it's substantial enough, run generation immediately.
+  // On arrival: put back the results this tab was looking at (Back from a
+  // route page, a sign-in or a Garmin round-trip), else run a
+  // homepage-handed-off ?q= prompt. Runs once — our own ?q= updates after a
+  // search must not start a second generation.
   useEffect(() => {
     if (authLoading || !user || autoRanRef.current) return;
-    const q = searchParams.get("q")?.trim() ?? "";
-    if (!q) return;
     autoRanRef.current = true;
+    const q = searchParams.get("q")?.trim() ?? "";
+    const garmin = searchParams.get("garmin");
+    if (garmin === "connected") toast("Garmin connected — tap Send to Garmin on your route.", "success");
+    else if (garmin === "error") toast("Couldn't connect Garmin — try again.", "error");
+
+    const cached = readResults<Interpreted, Candidate>();
+    if (cached && (q ? cached.prompt === q : !!garmin)) {
+      setPrompt(cached.prompt);
+      setSubmittedPrompt(cached.prompt);
+      setInterpreted(cached.interpreted);
+      setCandidates(cached.candidates);
+      if (garmin) router.replace(`/generate?q=${encodeURIComponent(cached.prompt)}`, { scroll: false });
+      return;
+    }
+    if (garmin) router.replace(q ? `/generate?q=${encodeURIComponent(q)}` : "/generate", { scroll: false });
+    if (!q) return;
     setPrompt(q);
-    if (q.length >= 10) runGeneration(q);
+    if (q.length >= MIN_PROMPT_CHARS) runGeneration(q);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, user, searchParams]);
 
@@ -273,7 +314,7 @@ function GenerateContent() {
     e?.preventDefault();
     if (voice.listening) voice.stop();
     const trimmed = prompt.trim();
-    if (trimmed.length < 10) {
+    if (trimmed.length < MIN_PROMPT_CHARS) {
       setError({ message: "Describe the route you want in a bit more detail.", code: "TOO_SHORT" });
       return;
     }
@@ -292,6 +333,10 @@ function GenerateContent() {
     setCandidates([]);
     setInterpreted(null);
     setSubmittedPrompt(trimmed);
+    // The ask lives in the URL (replace: no extra history entry), so Back
+    // from a route page lands on these results, restored from this tab.
+    clearResults();
+    router.replace(`/generate?q=${encodeURIComponent(trimmed)}`, { scroll: false });
 
     // Send current location when the rider opted in — used as the start
     // point if their prompt doesn't name a place.
@@ -309,21 +354,24 @@ function GenerateContent() {
         body: JSON.stringify({ prompt: trimmed, ...(origin ? { origin } : {}) }),
         signal: controller.signal,
       });
-      const body = await res.json();
-      if (!res.ok) {
-        setError({ message: body?.error ?? "Could not generate a route.", code: body?.code });
+      // A platform error page (HTML) is not JSON — never show a parser
+      // message to a rider.
+      const body = await res.json().catch(() => null);
+      if (!res.ok || !body) {
+        const fallback = friendlyHttpError(res.ok ? 502 : res.status);
+        setError({ message: body?.error ?? fallback.message, code: body?.code ?? fallback.code });
       } else {
         const data = body.data as GenerateResponse | Candidate[] | undefined;
         // Tolerate both the new { interpreted, candidates } shape and the
         // old array shape in case of a stale worker.
-        if (data && !Array.isArray(data)) {
-          setInterpreted(data.interpreted ?? null);
-          setCandidates(data.candidates ?? []);
-        } else {
-          setCandidates(data ?? []);
-        }
+        const next = data && !Array.isArray(data)
+          ? { interpreted: data.interpreted ?? null, candidates: data.candidates ?? [] }
+          : { interpreted: null, candidates: data ?? [] };
+        setInterpreted(next.interpreted);
+        setCandidates(next.candidates);
+        if (next.candidates.length > 0) writeResults({ prompt: trimmed, ...next });
       }
-    } catch (err) {
+    } catch {
       if (controller.signal.aborted) {
         setError({
           message: "This one took longer than a minute — busy roads can do that.",
@@ -331,7 +379,7 @@ function GenerateContent() {
         });
       } else {
         setError({
-          message: err instanceof Error ? err.message : "Network error. Please try again.",
+          message: "We couldn't reach LOOPS just now.",
           code: "NETWORK",
         });
       }
@@ -383,9 +431,9 @@ function GenerateContent() {
             Plan a ride
           </h1>
           <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-            Type or talk. Ask for distance or duration, terrain, or a structured
-            workout — tap the mic to dictate, and turn on your location to start
-            from where you are.
+            {voice.supported
+              ? "Type or talk. Ask for distance or duration, terrain, or a structured workout — tap the mic to dictate, and turn on your location to start from where you are."
+              : "Ask for distance or duration, terrain, or a structured workout — and turn on your location to start from where you are."}
           </p>
         </div>
 
@@ -397,7 +445,10 @@ function GenerateContent() {
             <textarea
               id="plan-prompt"
               value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
+              onChange={(e) => {
+                setPrompt(e.target.value);
+                if (error?.code === "TOO_SHORT") setError(null);
+              }}
               onKeyDown={(e) => {
                 // Enter submits (Shift+Enter keeps the newline) — matches the
                 // mobile keyboard's Go/Search affordance so a tap actually does
@@ -427,7 +478,7 @@ function GenerateContent() {
                 disabled={loading}
                 aria-label={voice.listening ? "Stop voice input" : "Start voice input"}
                 aria-pressed={voice.listening}
-                className="absolute top-3 right-3 w-9 h-9 rounded-full flex items-center justify-center transition-all"
+                className="absolute top-2 right-2 w-11 h-11 rounded-full flex items-center justify-center transition-all"
                 style={{
                   background: voice.listening ? "var(--accent)" : "var(--bg-raised)",
                   color: voice.listening ? "var(--bg)" : "var(--text-muted)",
@@ -437,7 +488,7 @@ function GenerateContent() {
                 {voice.listening ? (
                   <span className="relative flex items-center justify-center">
                     <span
-                      className="absolute w-9 h-9 rounded-full animate-ping"
+                      className="absolute w-11 h-11 rounded-full animate-ping"
                       style={{ background: "var(--accent)", opacity: 0.3 }}
                       aria-hidden="true"
                     />
@@ -454,8 +505,13 @@ function GenerateContent() {
             )}
           </div>
           <p id="plan-prompt-hint" className="sr-only">
-            Describe distance or duration, terrain, starting point, and optionally a structured interval workout. You can also dictate with the microphone. Press Enter to search.
+            Describe distance or duration, terrain, starting point, and optionally a structured interval workout.{voice.supported ? " You can also dictate with the microphone." : ""} Press Enter to search.
           </p>
+          {prompt.trim().length > 0 && prompt.trim().length < MIN_PROMPT_CHARS && !loading && (
+            <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>
+              Add a little more — how long, where from, what terrain (e.g. &ldquo;50 km loop from Skerries&rdquo;).
+            </p>
+          )}
 
           {voice.listening && (
             <p className="text-xs mt-2" style={{ color: "var(--accent)" }}>
@@ -475,7 +531,7 @@ function GenerateContent() {
           <div className="sticky bottom-3 z-10 mt-3">
             <button
               type="submit"
-              disabled={loading || prompt.trim().length < 10}
+              disabled={loading || prompt.trim().length === 0}
               aria-busy={loading}
               className="w-full min-h-[52px] py-3.5 rounded-xl text-sm font-bold uppercase tracking-wider transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg"
               style={{
@@ -523,9 +579,12 @@ function GenerateContent() {
               <button
                 key={ex}
                 type="button"
-                onClick={() => setPrompt(ex)}
+                onClick={() => {
+                  setPrompt(ex);
+                  if (error?.code === "TOO_SHORT") setError(null);
+                }}
                 disabled={loading}
-                className="text-xs px-3 py-1.5 rounded-full"
+                className="inline-flex items-center min-h-[44px] text-xs px-3 py-1.5 rounded-full text-left"
                 style={{
                   background: "var(--bg-card)",
                   border: "1px solid var(--border)",
@@ -539,7 +598,7 @@ function GenerateContent() {
 
           <p className="text-xs mt-3" style={{ color: "var(--text-muted)" }}>
             Prefer to draw it?{" "}
-            <Link href="/plan" className="font-bold hover:opacity-80" style={{ color: "var(--accent)" }}>
+            <Link href="/plan" className="inline-flex items-center min-h-[44px] font-bold hover:opacity-80" style={{ color: "var(--accent)" }}>
               Open the map planner →
             </Link>
           </p>
@@ -548,7 +607,8 @@ function GenerateContent() {
         {error && (
           <ErrorPanel
             error={error}
-            onRetry={submittedPrompt && error.code !== "TOO_SHORT" ? retryLast : undefined}
+            onRetry={submittedPrompt && error.code !== "TOO_SHORT" && error.code !== "UNAUTHORIZED" ? retryLast : undefined}
+            loginHref={loginHrefFor(submittedPrompt)}
           />
         )}
         {error?.code === "PARSE_FAILED" && (
@@ -573,16 +633,17 @@ function GenerateContent() {
           </div>
         )}
 
+        {/* The scroll target includes "Here's what we understood", so a
+            rider on a phone lands on the confirmation, then the loops. */}
+        <div ref={resultsRef} style={{ scrollMarginTop: 16 }}>
         {!loading && interpreted && (
           <InterpretedPanel interpreted={interpreted} />
         )}
 
         {!loading && candidates.length > 0 && (
-          <div ref={resultsRef} style={{ scrollMarginTop: 16 }}>
+          <div>
             <h2 className="text-sm font-bold uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>
-              {candidates.some((c) => c.source === "library")
-                ? "Matched from our verified library"
-                : "Freshly built for you"}
+              {resultsHeading(candidates.map((c) => c.source))}
             </h2>
             <div className="grid gap-4">
               {candidates.map((c, i) => (
@@ -597,6 +658,7 @@ function GenerateContent() {
             <RideDisclaimer />
           </div>
         )}
+        </div>
 
         {!loading && !error && candidates.length === 0 && submittedPrompt && (
           <div
@@ -701,9 +763,11 @@ function formatDuration(minutes: number): string {
 function ErrorPanel({
   error,
   onRetry,
+  loginHref,
 }: {
   error: { message: string; code?: string };
   onRetry?: () => void;
+  loginHref: string;
 }) {
   const hint = (() => {
     switch (error.code) {
@@ -721,6 +785,8 @@ function ErrorPanel({
         return "Check your connection and try again — your request is still here.";
       case "RATE_LIMITED":
         return "You've asked a few times in a row — give it a minute and try again.";
+      case "SERVER":
+        return "Nothing wrong with your request — try again in a moment.";
       default:
         return null;
     }
@@ -760,6 +826,15 @@ function ErrorPanel({
         <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
           {hint}
         </p>
+      )}
+      {error.code === "UNAUTHORIZED" && (
+        <Link
+          href={loginHref}
+          className="mt-3 inline-flex items-center justify-center gap-2 min-h-[44px] px-5 rounded-xl text-sm font-bold uppercase tracking-wider"
+          style={{ background: "var(--accent)", color: "var(--bg)" }}
+        >
+          Log in
+        </Link>
       )}
       {onRetry && (
         <button
@@ -845,7 +920,7 @@ function FallbackForm({ onSubmit }: { onSubmit: (text: string) => void }) {
       </div>
       <button
         type="submit"
-        className="justify-self-start font-bold text-sm px-4 py-2 rounded-lg"
+        className="justify-self-start min-h-[44px] font-bold text-sm px-4 py-2 rounded-lg"
         style={{ background: "var(--accent)", color: "var(--bg)" }}
       >
         Find me a route
@@ -858,6 +933,13 @@ function FallbackForm({ onSubmit }: { onSubmit: (text: string) => void }) {
 
 const RouteViewerMap = dynamic(() => import("@/components/RouteViewerMap"), { ssr: false });
 
+/** Close the full-screen map by stepping back over its history entry (the
+ * popstate listener then closes it), or directly if it has none. */
+function closeViewer(onClose: () => void) {
+  if ((window.history.state as { loopsViewer?: boolean } | null)?.loopsViewer) window.history.back();
+  else onClose();
+}
+
 function RouteViewerModal({
   coordinates,
   title,
@@ -869,6 +951,24 @@ function RouteViewerModal({
   stats: string;
   onClose: () => void;
 }) {
+  // The full-screen map is its own history entry: phone Back (or swipe)
+  // closes it and leaves the rider on their results, as does Escape.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+  useEffect(() => {
+    if (!(window.history.state as { loopsViewer?: boolean } | null)?.loopsViewer) {
+      window.history.pushState({ loopsViewer: true }, "");
+    }
+    const onPop = () => onCloseRef.current();
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") closeViewer(() => onCloseRef.current()); };
+    window.addEventListener("popstate", onPop);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("popstate", onPop);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, []);
+
   return (
     <div
       className="fixed inset-0 z-[1000] flex flex-col"
@@ -879,7 +979,7 @@ function RouteViewerModal({
     >
       <div className="flex items-center gap-3 px-4 py-3" style={{ background: "var(--bg-raised)", borderBottom: "1px solid var(--border)" }}>
         <button
-          onClick={onClose}
+          onClick={() => closeViewer(onClose)}
           className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg font-bold"
           style={{ color: "var(--text)" }}
           aria-label="Close map"
@@ -953,8 +1053,36 @@ function LoadingStages() {
 
 // ── Candidate card ────────────────────────────────────────────────────────────
 
+/** Card action buttons: a full 44 px tap target on a phone. */
+const ACTION_CLASS =
+  "inline-flex items-center justify-center min-h-[44px] px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider";
+
+/**
+ * The card's route once the rider has edited it: the engine's new line,
+ * profile, GPX and road report. The generator's quality verdicts described
+ * the old line, so they are dropped (re-checked when the route is saved).
+ */
+function applyEdit(c: GeneratedCandidate, e: EditedRoute): GeneratedCandidate {
+  return {
+    ...c,
+    coordinates: e.coordinates,
+    elevations: e.elevations,
+    distance_km: e.distance_km,
+    elevation_gain_m: e.elevation_gain_m,
+    elevation_loss_m: e.elevation_loss_m,
+    gpx_data: e.gpx_data,
+    road_report: e.road_report,
+    waypoints_used: e.waypoints,
+    quality_score: undefined,
+    quality_tier: undefined,
+    quality_breakdown: undefined,
+    surface_breakdown: e.road_report?.surface,
+    highlights: undefined,
+  };
+}
+
 function CandidateCard({
-  candidate,
+  candidate: served,
   submittedPrompt,
   interpreted,
 }: {
@@ -963,13 +1091,17 @@ function CandidateCard({
   interpreted: Interpreted | null;
 }) {
   const router = useRouter();
+  // "Use this route" in the editor replaces the card's route everywhere:
+  // stats, map, Save, Download GPX and Send to Garmin.
+  const [edit, setEdit] = useState<EditedRoute | null>(null);
+  const candidate: Candidate = edit && served.source === "generated" ? applyEdit(served, edit) : served;
   const isLibrary = candidate.source === "library";
   const title = isLibrary
     ? candidate.name
     : candidate.title ?? `Generated ${candidate.distance_km} km route`;
 
   const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<{ message: string; needsLogin?: boolean } | null>(null);
   const [editing, setEditing] = useState(false);
   const [viewing, setViewing] = useState(false);
 
@@ -986,12 +1118,17 @@ function CandidateCard({
     if (isLibrary && !candidate.from_home) return;
     setSaving(true);
     setSaveError(null);
-    const result = await saveGeneratedRoute(candidate, submittedPrompt, interpreted);
-    setSaving(false);
-    if (result.ok && result.routeId) {
-      router.push(`/routes/${result.routeId}`);
-    } else if (!result.ok) {
-      setSaveError(result.error);
+    try {
+      const result = await saveGeneratedRoute(candidate, submittedPrompt, interpreted);
+      if (result.ok && result.routeId) {
+        router.push(`/routes/${result.routeId}`);
+      } else if (!result.ok) {
+        setSaveError({ message: result.error, needsLogin: result.needsLogin });
+      }
+    } catch {
+      setSaveError({ message: "Something went wrong saving — try again." });
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -1042,9 +1179,19 @@ function CandidateCard({
                   ? candidate.from_home
                     ? `${candidate.county} · new loop from your start, built on this verified route`
                     : `${candidate.county} · verified`
+                  : edit
+                  ? "Your edit · quality re-checked when you save"
                   : candidate.ride_note ?? "Freshly generated"}
               </p>
             </div>
+            {edit ? (
+              <div
+                className="shrink-0 px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider"
+                style={{ background: "var(--bg)", color: "var(--text-muted)", border: "1px solid var(--border)" }}
+              >
+                Edited
+              </div>
+            ) : (
             <SourceBadge
               source={candidate.source}
               // Show the QUALITY score next to the quality tier so the badge and
@@ -1054,6 +1201,7 @@ function CandidateCard({
               score={!isLibrary && candidate.quality_score !== undefined ? candidate.quality_score : candidate.match_score}
               qualityTier={!isLibrary ? candidate.quality_tier : undefined}
             />
+            )}
           </div>
 
           <dl className="flex flex-wrap gap-x-4 gap-y-1 text-xs mt-1" style={{ color: "var(--text-muted)" }}>
@@ -1123,7 +1271,7 @@ function CandidateCard({
           )}
           {!!candidate.road_report?.compromises?.length && (
             <details className="mt-1 ml-5">
-              <summary className="text-[11px] font-bold cursor-pointer select-none" style={{ color: "var(--text-secondary)" }}>
+              <summary className="inline-flex items-center min-h-[44px] text-[11px] font-bold cursor-pointer select-none" style={{ color: "var(--text-secondary)" }}>
                 Where ({candidate.road_report.compromises.length})
               </summary>
               <ul className="mt-1 space-y-0.5 text-[11px]" style={{ color: "var(--text-secondary)" }}>
@@ -1177,19 +1325,35 @@ function CandidateCard({
           {!isLibrary && candidate.waypoints_used && candidate.waypoints_used.length >= 3 && !workoutFit?.fits && (
             <div className="mt-2">
               {!editing ? (
-                <button
-                  onClick={() => setEditing(true)}
-                  className="text-xs font-bold px-3 py-1.5 rounded-lg"
-                  style={{ border: "1px solid var(--border)", color: "var(--text)" }}
-                >
-                  ✎ Edit route
-                </button>
+                <span className="inline-flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => setEditing(true)}
+                    className="inline-flex items-center min-h-[44px] text-xs font-bold px-3 py-1.5 rounded-lg"
+                    style={{ border: "1px solid var(--border)", color: "var(--text)" }}
+                  >
+                    ✎ Edit route
+                  </button>
+                  {edit && (
+                    <button
+                      onClick={() => setEdit(null)}
+                      className="inline-flex items-center min-h-[44px] text-xs font-bold px-3 py-1.5 rounded-lg underline"
+                      style={{ color: "var(--text-secondary)" }}
+                    >
+                      Back to the original
+                    </button>
+                  )}
+                </span>
               ) : (
                 <RouteEditor
                   initialCoordinates={candidate.coordinates}
                   initialWaypoints={candidate.waypoints_used}
                   discipline={interpreted?.discipline ?? "road"}
                   onClose={() => setEditing(false)}
+                  onApply={(route) => {
+                    setEdit(route);
+                    setEditing(false);
+                    setSaveError(null);
+                  }}
                 />
               )}
             </div>
@@ -1205,14 +1369,14 @@ function CandidateCard({
                   type="button"
                   onClick={handleSave}
                   disabled={saving}
-                  className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider disabled:opacity-50"
+                  className={`${ACTION_CLASS} disabled:opacity-50`}
                   style={{ background: "var(--accent)", color: "var(--bg)" }}
                 >
-                  {saving ? "Saving…" : "Save to share"}
+                  {saving ? "Saving…" : "Save to my routes"}
                 </button>
                 <Link
                   href={`/routes/${candidate.route_id}`}
-                  className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider"
+                  className={ACTION_CLASS}
                   style={{ background: "transparent", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
                 >
                   The verified loop
@@ -1224,7 +1388,7 @@ function CandidateCard({
                       const filename = `loops-${candidate.name.slice(0, 30).replace(/[^a-z0-9]+/gi, "-")}-from-start.gpx`;
                       downloadGpx(candidate.gpx_data!, filename);
                     }}
-                    className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider"
+                    className={ACTION_CLASS}
                     style={{ background: "transparent", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
                   >
                     Download GPX (from your start)
@@ -1235,7 +1399,7 @@ function CandidateCard({
               <>
                 <Link
                   href={`/routes/${candidate.route_id}`}
-                  className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider"
+                  className={ACTION_CLASS}
                   style={{ background: "var(--accent)", color: "var(--bg)" }}
                 >
                   View route
@@ -1252,7 +1416,7 @@ function CandidateCard({
                   type="button"
                   onClick={handleSave}
                   disabled={saving}
-                  className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider disabled:opacity-50"
+                  className={`${ACTION_CLASS} disabled:opacity-50`}
                   style={{ background: "var(--accent)", color: "var(--bg)" }}
                 >
                   {saving ? "Saving…" : "Save to my routes"}
@@ -1260,10 +1424,10 @@ function CandidateCard({
                 <button
                   type="button"
                   onClick={() => {
-                    const filename = `loops-${submittedPrompt.slice(0, 30).replace(/[^a-z0-9]+/gi, "-")}.gpx`;
+                    const filename = `loops-${submittedPrompt.slice(0, 30).replace(/[^a-z0-9]+/gi, "-")}${edit ? "-edited" : ""}.gpx`;
                     downloadGpx(candidate.gpx_data, filename);
                   }}
-                  className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider"
+                  className={ACTION_CLASS}
                   style={{
                     background: "transparent",
                     border: "1px solid var(--border)",
@@ -1297,8 +1461,20 @@ function CandidateCard({
             )}
           </div>
           {saveError && (
-            <p className="text-xs mt-2" style={{ color: "#ff6b6b" }}>
-              {saveError}
+            <p className="text-xs mt-2" style={{ color: "#ff6b6b" }} role="alert">
+              {saveError.message}
+              {saveError.needsLogin && (
+                <>
+                  {" "}
+                  <Link
+                    href={loginHrefFor(submittedPrompt)}
+                    className="inline-flex items-center min-h-[44px] font-bold underline"
+                    style={{ color: "var(--accent)" }}
+                  >
+                    Log in →
+                  </Link>
+                </>
+              )}
             </p>
           )}
         </div>

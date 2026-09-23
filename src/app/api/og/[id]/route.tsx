@@ -176,6 +176,23 @@ export async function GET(
                     Verified route
                   </span>
                 ) : null}
+                {/* Road Standard badge — the Trust Rule, visible in the chat preview */}
+                {route.road_report && typeof route.road_report.standard_met === "boolean" ? (
+                  <span
+                    style={{
+                      fontSize: "16px",
+                      fontWeight: 700,
+                      color: route.road_report.standard_met ? "#c8ff00" : "#f5a524",
+                      textTransform: "uppercase" as const,
+                      letterSpacing: "0.08em",
+                      padding: "5px 12px",
+                      borderRadius: "6px",
+                      background: route.road_report.standard_met ? "rgba(200, 255, 0, 0.12)" : "rgba(245, 165, 36, 0.14)",
+                    }}
+                  >
+                    {route.road_report.standard_met ? "Road Standard: met" : "Road notes on route"}
+                  </span>
+                ) : null}
               </div>
 
               <h1

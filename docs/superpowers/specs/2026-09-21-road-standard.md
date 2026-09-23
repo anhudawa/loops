@@ -93,6 +93,27 @@ ride back is served as a NEW loop from your start, built on the verified
 one, and sized to the ask: when the full loop would overshoot, only part
 of it is ridden before turning for home.
 
+**Library routes are measured too (2026-09-23).** Uploads, imports and
+library loops carried no road report, so the Trust Rule only covered fresh
+generation. Now the first view of a route without one traces its track
+through the engine after the response (`src/lib/road-trace.ts`: via points
+every ~0.8 km on the neutral `trekking` profile — the Road Standard profile
+would dodge exactly what we want to find — then the same `buildRoadReport`)
+and stores it. Unknown beats wrong: a trace whose length is > 8 % off the
+track, a failed chunk, or > 20 s stores nothing and is retried an hour
+later. The report reads exactly like a generated route's ("Meets the Loops
+road standard…" / "Compromise: 4.3 km on a primary road…"). Measured on
+the bundled Dublin set: the two Skerries loops meet the standard; the Canal
+Ride (~5 km gravel towpath) and the Wicklow 200 (~11 km primary) do not and
+are not bundled.
+
+**Ride verdict (2026-09-23).** The weather card says what the wind will do
+to THIS loop at THIS time (`src/lib/ride-wind.ts`), judging each stretch
+against the forecast for the hour the rider reaches it. It never suggests
+riding the loop the other way round: under a steady wind that does not
+change the out/home balance — the start point decides it (if you start at
+the south end you go north first either way).
+
 **Access retrace.** A shared out/back stretch within the first and last
 6 km (a causeway, a peninsula, the one quiet road out of a city) is allowed
 and reported as `ACCESS_RETRACE`. A mid-route out-and-back over 400 m is a

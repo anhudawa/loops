@@ -11,6 +11,8 @@ import { SOCIAL_FEATURES_ENABLED } from "@/config/constants";
 const PRIVATE_ROUTE_FIELDS = [
   "operator_name",
   "operator_url",
+  // The uploader's user id: attribution, and a user identifier.
+  "created_by",
   "creator_name",
   "creator_avatar",
   "creator_rating",

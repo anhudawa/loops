@@ -70,6 +70,7 @@ describe("public route payloads", () => {
     description: "Coastal climbs. A signature Eat Sleep Cycle route.",
     operator_name: "Eat Sleep Cycle",
     operator_url: "https://example.com",
+    created_by: "87b3f503-0000-4000-8000-000000000000",
     avg_score: 4.8,
     rating_count: 20,
   };
@@ -83,7 +84,7 @@ describe("public route payloads", () => {
   it("strips provenance and ratings", () => {
     const pr = publicRoute(row) as Record<string, unknown>;
     const card = routeCard(row);
-    for (const k of ["operator_name", "operator_url", "avg_score", "rating_count"]) {
+    for (const k of ["operator_name", "operator_url", "created_by", "avg_score", "rating_count"]) {
       expect(pr).not.toHaveProperty(k);
       expect(card).not.toHaveProperty(k);
     }

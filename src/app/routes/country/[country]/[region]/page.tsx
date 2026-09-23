@@ -170,7 +170,7 @@ export default async function RegionPage({
         <h2 className="text-sm font-bold uppercase tracking-wider mb-4" style={{ color: "var(--text-muted)" }}>
           {routes.length === 1 ? "The route" : "All Routes"}
         </h2>
-        <div className="grid gap-3 md:grid-cols-2 mb-10">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 mb-10">
           {routes.map((route) => (
             <RouteCard key={route.id} route={routeCard(route as unknown as Record<string, unknown>) as never} />
           ))}

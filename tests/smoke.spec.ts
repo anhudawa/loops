@@ -1,4 +1,4 @@
-import { test as base, expect, type APIResponse, type Page, type Response as PageResponse, type Route } from "@playwright/test";
+import { test as base, expect, type Page, type Response as PageResponse, type Route } from "@playwright/test";
 
 /**
  * Production smoke suite — READ-ONLY.
@@ -20,42 +20,9 @@ const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 /** Same-origin POSTs a route page makes by itself (scoring is idempotent). */
 const ALLOWED_POSTS = [/^\/api\/routes\/quality$/];
 
-/**
- * Claude Code sandbox (PW_SANDBOX, see playwright.config.ts): Chromium's own
- * tunnels through the egress proxy drop about one request in six, so allowed
- * requests are fetched by Playwright's request context (reliable through
- * that proxy) with a few retries, and the browser is handed the result.
- * Elsewhere the request simply continues in the browser.
- */
-const SANDBOX = !!process.env.PW_SANDBOX;
-
-async function fetchWithRetries(route: Route): Promise<APIResponse | null> {
-  for (let attempt = 1; attempt <= 4; attempt++) {
-    try {
-      return await route.fetch({ maxRedirects: 0, timeout: 45_000 });
-    } catch {
-      await new Promise((resolve) => setTimeout(resolve, 300 * attempt));
-    }
-  }
-  return null;
-}
-
-async function serve(route: Route): Promise<void> {
-  try {
-    if (!SANDBOX) return await route.continue();
-    const response = await fetchWithRetries(route);
-    if (response) await route.fulfill({ response });
-    else await route.abort("failed");
-  } catch {
-    // The page moved on (or the test ended) while this request was in
-    // flight and its fetched response was disposed: nothing left to serve.
-  }
-}
-
-/** Block a request; ignore it if the page already gave up on it. */
-async function block(route: Route): Promise<void> {
-  await route.abort("blockedbyclient").catch(() => {});
-}
+/** Let a request through, or block it — either is a no-op once the page has moved on. */
+const serve = (route: Route) => route.continue().catch(() => {});
+const block = (route: Route) => route.abort("blockedbyclient").catch(() => {});
 
 const test = base.extend<{ readOnly: void }>({
   readOnly: [

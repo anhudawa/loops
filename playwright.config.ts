@@ -9,12 +9,10 @@ import { defineConfig, devices } from "@playwright/test";
  *
  * PW_SANDBOX uses the sandbox's own Chromium through the egress proxy
  * (HTTPS_PROXY, which re-terminates TLS — hence ignoreHTTPSErrors). It must
- * be Playwright's `proxy` option, not a bare --proxy-server arg, and the
- * flags below keep Chromium's own tunnels off HTTP/2, QUIC and background
- * probes; even so those tunnels drop about one request in six
- * (net::ERR_TOO_MANY_RETRIES), so the suite additionally serves every
- * request through Playwright's request context — same proxy, reliable —
- * (see the `readOnly` fixture in the spec). CI and laptops use the browser
+ * be Playwright's `proxy` option — a bare --proxy-server arg leaves Chromium
+ * dropping about one request in six with net::ERR_TOO_MANY_RETRIES — and
+ * the flags below keep its tunnels off HTTP/2, QUIC and background probes
+ * (verified: 0 failed requests in 209). CI and laptops use the browser
  * Playwright installed (`npx playwright install chromium`) and talk to the
  * site directly.
  */

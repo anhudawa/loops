@@ -103,6 +103,17 @@ export function middleware(request: NextRequest) {
     return res;
   };
 
+  // Static app assets must never hit the login wall (PWA manifest, icons,
+  // link-unfurler touch icons).
+  if (
+    pathname === "/manifest.json" ||
+    pathname === "/manifest.webmanifest" ||
+    pathname.startsWith("/icons/") ||
+    /\.(png|svg|ico|jpg|jpeg|webp|txt|xml)$/.test(pathname)
+  ) {
+    return NextResponse.next();
+  }
+
   // Public pages — homepage, info pages, login, route pages, photos
   const publicExactPaths = ["/", "/about", "/privacy", "/terms", "/feedback", "/switch", "/pricing"];
   if (
@@ -134,7 +145,7 @@ export function middleware(request: NextRequest) {
   if (!session) {
     // Preserve intent: come back to where the user was heading
     const login = new URL("/login", request.url);
-    login.searchParams.set("redirect", pathname);
+    login.searchParams.set("redirect", pathname + request.nextUrl.search);
     return applyAttribution(NextResponse.redirect(login));
   }
 

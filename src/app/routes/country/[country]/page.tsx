@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { SOCIAL_FEATURES_ENABLED as SHOW_RATINGS } from "@/config/constants";
 import { routeCard } from "@/lib/public-route";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -36,7 +37,7 @@ export async function generateMetadata({
   if (!stats) return { title: "Not Found - LOOPS" };
 
   const title = `Cycling Routes in ${stats.displayName} — ${stats.routeCount} Routes | LOOPS`;
-  const description = `Discover ${stats.routeCount} cycling routes in ${stats.displayName}. Browse ${stats.disciplines.join(", ")} routes with free GPX downloads. Community rated.`;
+  const description = `Discover ${stats.routeCount} cycling routes in ${stats.displayName}. Browse ${stats.disciplines.join(", ")} routes with free GPX downloads.`;
 
   return {
     title,
@@ -134,7 +135,7 @@ export default async function CountryPage({
         <p className="text-sm leading-relaxed mb-8" style={{ color: "var(--text-secondary)" }}>
           {stats.routeCount} cycling routes in {stats.displayName} on LOOPS.
           Browse {stats.disciplines.join(", ")} routes across {stats.regions.length} regions.
-          Free GPX downloads, community ratings.
+          Quiet roads, free GPX downloads.
         </p>
 
         {/* Stats bar */}
@@ -147,7 +148,7 @@ export default async function CountryPage({
             <div className="text-2xl font-extrabold" style={{ color: "var(--accent)" }}>{stats.totalDistanceKm.toLocaleString()}</div>
             <div className="text-xs uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>Total km</div>
           </div>
-          {stats.avgRating > 0 && (
+          {SHOW_RATINGS && stats.avgRating > 0 && (
             <div>
               <div className="text-2xl font-extrabold" style={{ color: "var(--accent)" }}>{stats.avgRating}</div>
               <div className="text-xs uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>Avg rating</div>
@@ -170,7 +171,7 @@ export default async function CountryPage({
                   style={{ background: "var(--bg-raised)", border: "1px solid var(--border)" }}
                 >
                   <div className="text-sm font-semibold" style={{ color: "var(--text)" }}>{region.name}</div>
-                  <div className="text-xs" style={{ color: "var(--text-muted)" }}>{region.routeCount} routes</div>
+                  <div className="text-xs" style={{ color: "var(--text-muted)" }}>{region.routeCount} {region.routeCount === 1 ? "route" : "routes"}</div>
                 </Link>
               ))}
             </div>
@@ -179,7 +180,7 @@ export default async function CountryPage({
 
         {/* Featured routes */}
         <h2 className="text-sm font-bold uppercase tracking-wider mb-4" style={{ color: "var(--text-muted)" }}>
-          {featuredRoutes.length < routes.length ? "Top Rated Routes" : "All Routes"}
+          {featuredRoutes.length < routes.length ? "Featured routes" : "All routes"}
         </h2>
         <div className="grid gap-3 md:grid-cols-2 mb-10">
           {routes.map((route) => (

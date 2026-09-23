@@ -14,7 +14,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "LOOPS — Routes Worth Riding",
     description:
-      "Real routes from real riders. Free GPX downloads, community ratings, no paywall, no lock-in. Works with Strava, Komoot, Wahoo & Garmin.",
+      "Real routes from real riders. Free GPX downloads, no paywall, no lock-in. Works with Strava, Komoot, Wahoo & Garmin.",
     siteName: "LOOPS",
     type: "website",
     images: [
@@ -30,7 +30,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "LOOPS — Routes Worth Riding",
     description:
-      "Real routes from real riders. Free GPX downloads, community ratings, no paywall. Works with Strava, Komoot, Wahoo & Garmin.",
+      "Real routes from real riders. Free GPX downloads, no paywall. Works with Strava, Komoot, Wahoo & Garmin.",
     images: ["/api/og"],
   },
 };

@@ -252,7 +252,7 @@ function LoginPage() {
               {[
                 { value: stats.routes, label: "Routes" },
                 { value: stats.totalKm, label: "Km Mapped" },
-                { value: stats.countries, label: "Countries" },
+                { value: stats.countries, label: "Destinations" },
               ].map((s) => (
                 <div key={s.label} className="text-center">
                   <p className="text-2xl md:text-3xl font-extrabold" style={{ color: "var(--accent)" }}>
@@ -285,7 +285,7 @@ function LoginPage() {
               ))}
             </div>
 
-            {stats.community && (
+            {SHOW_RIDER_COUNT && stats.community && (
               <div className="flex items-center justify-center gap-6 mt-8">
                 <div className="text-center">
                   <p className="text-sm font-extrabold" style={{ color: "var(--text-secondary)" }}>
@@ -344,6 +344,9 @@ function LoginPage() {
     </div>
   );
 }
+
+/** Rider counter hidden until the number is a boast. */
+const SHOW_RIDER_COUNT = false;
 
 export default function LoginPageWrapper() {
   return (

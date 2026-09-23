@@ -127,7 +127,7 @@ export default function HeroSection({ onExplore }: { onExplore: () => void }) {
             {[
               { value: stats.routes, label: "Loops" },
               { value: stats.totalKm, label: "Km Mapped" },
-              { value: stats.countries, label: "Countries" },
+              { value: stats.countries, label: "Destinations" },
             ].map((stat) => (
               <div key={stat.label} className="text-center">
                 <p

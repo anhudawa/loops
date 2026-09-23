@@ -14,6 +14,10 @@ const PRIVATE_ROUTE_FIELDS = [
   "creator_rating",
   "creator_rating_count",
   "strava_activity_id",
+  // Ratings are a social feature, hidden for launch.
+  "avg_rating",
+  "avg_score",
+  "rating_count",
 ] as const;
 
 export function publicRoute<T extends Record<string, unknown>>(route: T): T {

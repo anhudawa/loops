@@ -141,14 +141,14 @@ export default function AppHeader({ sticky = true }: { sticky?: boolean }) {
             ) : (
               <>
                 <Link
-                  href="/login"
+                  href={`/login?redirect=${encodeURIComponent(pathname ?? "/")}`}
                   className="text-sm font-semibold hover:opacity-80 px-2.5 min-h-[44px] inline-flex items-center"
                   style={{ color: "var(--text)" }}
                 >
                   Log in
                 </Link>
                 <Link
-                  href="/login"
+                  href={`/login?redirect=${encodeURIComponent(pathname ?? "/")}`}
                   className="text-sm font-bold px-4 rounded-lg hover:opacity-90 min-h-[44px] inline-flex items-center"
                   style={{ background: "var(--accent)", color: "var(--bg)" }}
                 >

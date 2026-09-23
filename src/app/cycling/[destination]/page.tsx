@@ -4,7 +4,7 @@ import AppHeader from "@/components/AppHeader";
 import JsonLd from "@/components/JsonLd";
 import { generateBreadcrumbJsonLd, generateFaqJsonLd, slugify } from "@/lib/seo";
 import { getDestinationBySlug, type Destination } from "@/content/destinations";
-import { getCollectionBySlug } from "@/lib/db";
+import { getCollectionBySlug, getRegionStats } from "@/lib/db";
 
 interface Props {
   params: Promise<{ destination: string }>;
@@ -51,6 +51,18 @@ export default async function DestinationPage({ params }: Props) {
       hasCollection = (await getCollectionBySlug(dest.collectionSlug)) != null;
     } catch {
       hasCollection = false;
+    }
+  }
+
+  // Same for "Browse all <region> routes": only when that region listing
+  // exists (Wicklow's link was the only 404 in the site crawl).
+  let hasRegion = false;
+  if (dest.routesCountry && dest.routesRegion) {
+    try {
+      const st = await getRegionStats(slugify(dest.routesCountry), slugify(dest.routesRegion));
+      hasRegion = !!st && (st as { routeCount?: number }).routeCount !== 0;
+    } catch {
+      hasRegion = false;
     }
   }
 
@@ -330,7 +342,7 @@ export default async function DestinationPage({ params }: Props) {
         </section>
 
         {/* Route library link */}
-        {dest.routesCountry && dest.routesRegion && (
+        {hasRegion && dest.routesCountry && dest.routesRegion && (
           <div
             className="mb-6 rounded-xl p-5 text-center"
             style={{

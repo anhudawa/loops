@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/admin";
 
 /**
  * GET /api/engine/status — which routing engine THIS deployment is wired to.
@@ -29,6 +30,9 @@ async function probeProfile(base: string, profile: string): Promise<{ ok: boolea
 }
 
 export async function GET(request: NextRequest) {
+  // Infrastructure detail (engine host/IP, key presence) is for admins only;
+  // anonymous callers get a health summary.
+  const isAdmin = await requireAdmin(request).then((r) => !(r instanceof NextResponse)).catch(() => false);
   const raw = process.env.BROUTER_URL?.replace(/\/$/, "") ?? null;
   let host: string | null = null;
   try { host = raw ? new URL(raw).host : null; } catch { host = "invalid-url"; }
@@ -46,6 +50,14 @@ export async function GET(request: NextRequest) {
     };
   }
 
+  if (!isAdmin) {
+    return NextResponse.json({
+      data: {
+        own_engine: ownEngine,
+        ...(probe ? { healthy: Object.values(probe).every((p) => p.ok), server_version: probe[relaxedProfile]?.ok ? "v3" : "v2" } : {}),
+      },
+    });
+  }
   return NextResponse.json({
     data: {
       engine: host ?? "brouter.de (public demo — BROUTER_URL not set)",

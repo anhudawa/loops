@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { LAUNCH_DESTINATION_SLUGS } from "@/content/destinations";
 import { sql } from "@vercel/postgres";
 import { handleApiError } from "@/lib/api-utils";
 
@@ -10,17 +11,21 @@ export async function GET() {
           COUNT(DISTINCT region) as regions, COUNT(DISTINCT country) as countries
         FROM routes
       `,
+      // Showcase: verified road loops from our launch countries with a
+      // sensible ride length — not whatever was rated first (that surfaced
+      // raw test uploads like "Karoo-Drift_Creek_Trailhead_out_&_back").
       sql`
-        SELECT r.id, r.name, r.distance_km, r.surface_type, r.country,
-          r.discipline, r.coordinates,
-          COALESCE(AVG(rt.score), 0) as avg_score,
-          COUNT(rt.id) as rating_count,
+        SELECT r.id, TRIM(r.name) as name, r.distance_km, r.surface_type, r.country,
+          r.discipline,
           (SELECT p.filename FROM photos p WHERE p.route_id = r.id ORDER BY p.created_at LIMIT 1) as cover_photo
         FROM routes r
-        LEFT JOIN ratings rt ON rt.route_id = r.id
-        GROUP BY r.id
-        HAVING COUNT(rt.id) >= 1
-        ORDER BY COALESCE(AVG(rt.score), 0) DESC, COUNT(rt.id) DESC
+        WHERE r.verified = true
+          AND r.country IN ('Spain', 'Portugal', 'Italy', 'France', 'Ireland')
+          AND r.discipline = 'road'
+          AND r.distance_km BETWEEN 50 AND 140
+          AND r.name !~ '_'
+          AND (r.quality_status = 'approved' OR r.quality_status IS NULL)
+        ORDER BY r.quality_score DESC NULLS LAST, r.created_at DESC
         LIMIT 3
       `,
       sql`
@@ -38,7 +43,9 @@ export async function GET() {
       routes: Number(row.count),
       totalKm: Math.round(Number(row.total_km)),
       regions: Number(row.regions),
-      countries: Number(row.countries),
+      // Launch destinations, not "distinct countries in the table" (which
+      // counted a single USA test upload as a country).
+      countries: LAUNCH_DESTINATION_SLUGS.length,
       counties: Number(row.regions),
       featuredRoutes: featuredResult.rows.map((r) => ({
         id: r.id,
@@ -47,8 +54,8 @@ export async function GET() {
         surface_type: r.surface_type,
         country: r.country,
         discipline: r.discipline,
-        avg_score: Math.round(Number(r.avg_score) * 10) / 10,
-        rating_count: Number(r.rating_count),
+        avg_score: 0,
+        rating_count: 0,
         cover_photo: r.cover_photo,
       })),
       community: {

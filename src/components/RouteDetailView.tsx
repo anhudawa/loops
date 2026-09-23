@@ -404,6 +404,17 @@ export default function RouteDetailView({ ride }: { ride?: RideInvite | null } =
         </div>
       )}
 
+      {/* Plain route page: name + key stats above the map, so a phone's
+          first screen says what this is (the title card sits below). */}
+      {!(ride && (ride.when || ride.meet)) && (
+        <div className="px-4 py-2.5 border-b md:hidden" style={{ background: "var(--bg-raised)", borderColor: "var(--border)" }}>
+          <p className="text-base font-extrabold leading-tight truncate" style={{ color: "var(--text)" }}>{route.name}</p>
+          <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+            {route.distance_km} km · +{route.elevation_gain_m} m · {route.region || route.county}
+          </p>
+        </div>
+      )}
+
       {/* Hero: Map full-bleed */}
       <div className="h-[42vh] min-h-[260px] md:h-[400px] relative">
         <MapView

@@ -4,7 +4,7 @@ import path from "path";
 export default defineConfig({
   test: {
     globals: true,
-    exclude: ["tests/**", "node_modules/**"],
+    exclude: ["tests/**", "node_modules/**", ".claude/**"],
   },
   resolve: {
     alias: {

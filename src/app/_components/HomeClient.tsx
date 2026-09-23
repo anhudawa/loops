@@ -303,7 +303,7 @@ function HomeContent() {
 
       // If no routes found with default sort and user has location, fall back to top rated
       if (newRoutes.length === 0 && pageNum === 1 && !append && !fallbackSort && !filters.sort && userLocation) {
-        fetchRoutes(1, false, "rating");
+        fetchRoutes(1, false, "newest");
         return;
       }
 
@@ -354,7 +354,7 @@ function HomeContent() {
     if (filters.sort === "rating") return "Top rated";
     if (filters.sort === "nearby") return "Nearest to you";
     if (userLocation) return "Near you";
-    return `Routes in ${DEFAULT_COUNTRY}`;
+    return `${DEFAULT_COUNTRY} first, then the best of the rest`;
   }, [filters.sort, filters.search, isSearching, userLocation]);
 
   // Honest sub-label: explain why this ordering when there's no location.
@@ -375,7 +375,6 @@ function HomeContent() {
     >
       <option value="">Default</option>
       {userLocation && <option value="nearby">Nearest</option>}
-      <option value="rating">Top Rated</option>
       <option value="distance">Longest</option>
       <option value="newest">Newest</option>
     </select>

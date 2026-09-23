@@ -1854,6 +1854,17 @@ export async function updateRouteElevation(
   `;
 }
 
+/** Persist a repaired track (gap healing): coordinates + recomputed distance.
+ *  The stored quality score is cleared so it is re-scored on the new track. */
+export async function updateRouteGeometry(id: string, coordinates: string, distanceKm: number): Promise<void> {
+  await sql`
+    UPDATE routes
+    SET coordinates = ${coordinates}, distance_km = ${distanceKm},
+        quality_score = NULL, quality_breakdown = NULL, quality_surface = NULL, quality_scored_at = NULL
+    WHERE id = ${id}
+  `;
+}
+
 // ── Scenery cache ─────────────────────────────────────────────────────────────
 
 const SCENERY_CACHE_TTL_DAYS = 45;

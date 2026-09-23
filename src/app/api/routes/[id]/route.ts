@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { publicRoute } from "@/lib/public-route";
-import { getRoute, updateRouteElevation, recordEvent, ANALYTICS_EVENTS } from "@/lib/db";
+import { getRoute, updateRouteElevation, updateRouteGeometry, recordEvent, ANALYTICS_EVENTS } from "@/lib/db";
 import { apiError, handleApiError } from "@/lib/api-utils";
 import { fetchElevations } from "@/lib/elevation";
+import { rerouteWaypoints } from "@/lib/route-generator";
 
 export const maxDuration = 30;
 
@@ -54,6 +55,59 @@ async function repairElevationIfFlat(route: NonNullable<Awaited<ReturnType<typeo
   }
 }
 
+function hav(a: number[], b: number[]): number {
+  const R = 6371, r = Math.PI / 180;
+  const dl = (b[0] - a[0]) * r, dn = (b[1] - a[1]) * r;
+  const h = Math.sin(dl / 2) ** 2 + Math.cos(a[0] * r) * Math.cos(b[0] * r) * Math.sin(dn / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+/**
+ * Self-healing track gaps: a GPS dropout leaves consecutive points
+ * kilometres apart (the Roadman spin had 4.3 km between Oldtown and
+ * Rowlestown). The GPX then draws a straight line across fields and the
+ * quality check scores the route 0. On first view each gap of 1–20 km is
+ * filled with a real road route from our engine and the repaired track is
+ * stored permanently. Fail-soft: any problem → serve as-is.
+ */
+async function repairGapsIfAny(route: NonNullable<Awaited<ReturnType<typeof getRoute>>>) {
+  try {
+    const coords: number[][] = JSON.parse(route.coordinates);
+    const gaps: number[] = [];
+    for (let i = 0; i + 1 < coords.length; i++) {
+      const d = hav(coords[i], coords[i + 1]);
+      if (d > 1 && d < 20) gaps.push(i);
+    }
+    if (gaps.length === 0 || gaps.length > 5) return route;
+    const out: number[][] = [];
+    let last = 0;
+    for (const i of gaps) {
+      out.push(...coords.slice(last, i + 1));
+      const leg = await rerouteWaypoints(
+        [[coords[i][0], coords[i][1]], [coords[i + 1][0], coords[i + 1][1]]],
+        route.discipline as "road" | "gravel" | "mtb"
+      );
+      if (!leg || leg.coordinates.length < 2) return route; // can't heal honestly → leave it
+      const inner = leg.coordinates.slice(1, -1).map((c, k) => {
+        const e = leg.elevations[k + 1];
+        return typeof e === "number" && !Number.isNaN(e) ? [c[0], c[1], Math.round(e * 10) / 10] : [c[0], c[1]];
+      });
+      out.push(...inner);
+      last = i + 1;
+    }
+    out.push(...coords.slice(last));
+    let dist = 0;
+    for (let i = 1; i < out.length; i++) dist += hav(out[i - 1], out[i]);
+    const coordStr = JSON.stringify(out);
+    await updateRouteGeometry(route.id, coordStr, Math.round(dist * 10) / 10);
+    console.log(JSON.stringify({ evt: "route_gap_healed", route_id: route.id, gaps: gaps.length, km: Math.round(dist * 10) / 10 }));
+    return { ...route, coordinates: coordStr, distance_km: Math.round(dist * 10) / 10 };
+  } catch (err) {
+    console.error("[routes] gap repair failed:", err);
+    return route;
+  }
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -67,6 +121,7 @@ export async function GET(
     }
 
     route = await repairElevationIfFlat(route);
+    route = await repairGapsIfAny(route);
 
     // Funnel: route detail viewed (fire-and-forget, no PII).
     void recordEvent(ANALYTICS_EVENTS.ROUTE_VIEWED, {

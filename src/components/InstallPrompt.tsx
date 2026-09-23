@@ -8,11 +8,46 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 const DISMISSED_KEY = "loops-install-dismissed";
+/** Number of browsing sessions seen (localStorage), counted once per tab
+ *  session via SESSION_KEY (sessionStorage). */
+const VISITS_KEY = "loops-visit-count";
+const SESSION_KEY = "loops-visit-counted";
 
 function isIosSafari(): boolean {
   if (typeof navigator === "undefined") return false;
   const ua = navigator.userAgent;
   return /iP(hone|od|ad)/.test(ua) && /WebKit/.test(ua) && !/(CriOS|FxiOS|OPiOS|EdgiOS)/.test(ua);
+}
+
+/** WhatsApp / Instagram / Facebook / Line in-app browsers can't add to the
+ *  home screen, so the hint would be a dead end there. */
+function isInAppBrowser(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return /WhatsApp|Instagram|FBAN|FBAV|FB_IAB|\bLine\//i.test(navigator.userAgent);
+}
+
+/** Count this browsing session once and return the total (0 if storage is
+ *  unavailable — then we never nag). */
+function countVisit(): number {
+  try {
+    let visits = parseInt(localStorage.getItem(VISITS_KEY) ?? "0", 10) || 0;
+    if (sessionStorage.getItem(SESSION_KEY) !== "1") {
+      visits += 1;
+      localStorage.setItem(VISITS_KEY, String(visits));
+      sessionStorage.setItem(SESSION_KEY, "1");
+    }
+    return visits;
+  } catch {
+    return 0;
+  }
+}
+
+function wasDismissed(): boolean {
+  try {
+    return localStorage.getItem(DISMISSED_KEY) === "1";
+  } catch {
+    return true;
+  }
 }
 
 function isStandalone(): boolean {
@@ -28,32 +63,49 @@ export default function InstallPrompt() {
   const [showIosHint, setShowIosHint] = useState(false);
   const [dismissed, setDismissed] = useState(true); // default true to avoid flash
 
-  // Check localStorage on mount
-  useEffect(() => {
-    if (isStandalone()) return; // already installed
-    // Riders arriving from a shared link (WhatsApp) came for one ride: no
-    // "add to home screen" bar over it. (WhatsApp's in-app browser can't
-    // add to home screen anyway.)
-    if (/^\/(ride|routes|share)\//.test(window.location.pathname)) return;
-    const wasDismissed = localStorage.getItem(DISMISSED_KEY) === "1";
-    if (wasDismissed) return;
-
-    setDismissed(false);
-
-    if (isIosSafari()) {
-      setShowIosHint(true);
+  const dismiss = useCallback(() => {
+    try {
+      localStorage.setItem(DISMISSED_KEY, "1");
+    } catch {
+      // storage blocked: hide for this page view anyway
     }
+    setDismissed(true);
+    setDeferredPrompt(null);
+    setShowIosHint(false);
   }, []);
 
-  // Listen for beforeinstallprompt (Chrome/Edge/Samsung)
   useEffect(() => {
+    const visits = countVisit();
+    // Eligible only from a visitor's second session on, never when already
+    // installed, never inside an in-app browser, never once dismissed, and
+    // never on a shared ride/route link (they came for one ride).
+    const eligible =
+      visits >= 2 &&
+      !isStandalone() &&
+      !isInAppBrowser() &&
+      !/^\/(ride|routes|share)\//.test(window.location.pathname) &&
+      !wasDismissed();
+    if (!eligible) return;
+
+    // Listen for beforeinstallprompt (Chrome/Edge/Samsung)
     function handler(e: Event) {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
       setDismissed(false);
     }
     window.addEventListener("beforeinstallprompt", handler);
-    return () => window.removeEventListener("beforeinstallprompt", handler);
+
+    // iOS has no install event: show the hint shortly after load.
+    const iosTimer = isIosSafari()
+      ? setTimeout(() => {
+          setDismissed(false);
+          setShowIosHint(true);
+        }, 800)
+      : undefined;
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handler);
+      if (iosTimer) clearTimeout(iosTimer);
+    };
   }, []);
 
   const handleInstall = useCallback(async () => {
@@ -64,14 +116,7 @@ export default function InstallPrompt() {
       setDeferredPrompt(null);
     }
     dismiss();
-  }, [deferredPrompt]);
-
-  function dismiss() {
-    localStorage.setItem(DISMISSED_KEY, "1");
-    setDismissed(true);
-    setDeferredPrompt(null);
-    setShowIosHint(false);
-  }
+  }, [deferredPrompt, dismiss]);
 
   const visible = !dismissed && (deferredPrompt || showIosHint);
   if (!visible) return null;

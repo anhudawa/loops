@@ -8,9 +8,27 @@ import { useAuth } from "@/components/AuthProvider";
 
 /** Current page (path + query) as a login redirect target — keeps a ride
  *  invite's day/time/meeting point through sign-in. */
-function loginHref(): string {
+function loginHref(opts: { gpx?: boolean } = {}): string {
   if (typeof window === "undefined") return "/login";
-  return `/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+  let search = window.location.search;
+  if (opts.gpx) {
+    // Ask for the GPX on return: RideActions downloads it once when a
+    // signed-in rider lands with gpx=1. t & m stay untouched.
+    const q = new URLSearchParams(search);
+    q.set("gpx", "1");
+    search = `?${q.toString()}`;
+  }
+  return `/login?redirect=${encodeURIComponent(window.location.pathname + search)}`;
+}
+
+/** Read one query param on the client (null during SSR / on error). */
+function queryParam(name: string): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return new URLSearchParams(window.location.search).get(name);
+  } catch {
+    return null;
+  }
 }
 
 interface RideActionsProps {
@@ -29,7 +47,26 @@ export default function RideActions({ routeId, routeName, rideLink = false }: Ri
   const [canShareFiles, setCanShareFiles] = useState(false);
   const downloadRef = useRef<HTMLAnchorElement>(null);
 
-  const gpxUrl = `/api/routes/${routeId}/gpx${rideLink ? "?via=ride" : ""}`;
+  // On a ride link the meeting point (?m=) names the GPX start waypoint.
+  const [meet] = useState(() => (rideLink ? queryParam("m") : null));
+  const gpxUrl = `/api/routes/${routeId}/gpx${rideLink ? `?via=ride${meet ? `&m=${encodeURIComponent(meet)}` : ""}` : ""}`;
+
+  // Back from "Sign up to download GPX" (redirect carried gpx=1): download
+  // once for the now signed-in rider, then drop gpx=1 from the URL so a
+  // reload or re-share doesn't repeat it.
+  const autoDownloaded = useRef(false);
+  useEffect(() => {
+    if (!user || autoDownloaded.current || queryParam("gpx") !== "1") return;
+    autoDownloaded.current = true;
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("gpx");
+      window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+    } catch {
+      // URL cleanup is cosmetic
+    }
+    downloadRef.current?.click();
+  }, [user]);
 
   // Detect Web Share API file sharing support (mobile)
   useEffect(() => {
@@ -117,7 +154,7 @@ export default function RideActions({ routeId, routeName, rideLink = false }: Ri
         </a>
       ) : (
         <Link
-          href={loginHref()}
+          href={loginHref({ gpx: true })}
           className="w-full flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-bold text-sm uppercase tracking-wider transition-all hover:brightness-110"
           style={{
             background: "linear-gradient(135deg, var(--accent), #7acc00)",

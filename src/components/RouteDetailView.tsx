@@ -405,14 +405,16 @@ export default function RouteDetailView({ ride }: { ride?: RideInvite | null } =
             {route.distance_km} km · +{route.elevation_gain_m} m
             {ride.meet ? <> · Meet: <strong>{ride.meet}</strong></> : null}
           </p>
+          {/* Always the route's first point: a typed meeting point can't be
+              geocoded reliably, so the label says what the button does. */}
           <a
-            href={`https://www.google.com/maps/search/?api=1&query=${route.start_lat},${route.start_lng}`}
+            href={`https://www.google.com/maps/dir/?api=1&destination=${route.start_lat},${route.start_lng}`}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 mt-2 px-3 py-2 min-h-[40px] rounded-lg text-xs font-bold"
             style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
           >
-            Directions to the start ↗
+            Directions to the route start ↗
           </a>
         </div>
       )}

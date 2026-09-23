@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getRoute, getUserBySession, trackDownload, migrateDb, recordEvent, ANALYTICS_EVENTS } from "@/lib/db";
 import { apiError, handleApiError } from "@/lib/api-utils";
 import { GPX_ACCESS } from "@/config/constants";
+import { buildRouteGpx } from "@/lib/gpx";
 import { v4 as uuidv4 } from "uuid";
 
 export async function GET(
@@ -41,7 +42,10 @@ export async function GET(
 
     // Generate GPX from stored coordinates (may be [lat,lng] or [lat,lng,ele])
     const coordinates: number[][] = JSON.parse(route.coordinates);
-    const gpx = generateGpx(route.name, route.description, coordinates);
+    // A ride link's meeting point (?m=) names the start waypoint.
+    const gpx = buildRouteGpx(route.name, route.description, coordinates, {
+      meetingPoint: request.nextUrl.searchParams.get("m"),
+    });
 
     return new NextResponse(gpx, {
       headers: {
@@ -53,46 +57,4 @@ export async function GET(
   } catch (err) {
     return handleApiError(err);
   }
-}
-
-function generateGpx(
-  name: string,
-  description: string | null,
-  coordinates: number[][]
-): string {
-  const trkpts = coordinates
-    .map((coord) => {
-      const [lat, lng, ele] = coord;
-      const eleTag = ele != null ? `<ele>${ele}</ele>` : "";
-      return `      <trkpt lat="${lat}" lon="${lng}">${eleTag}</trkpt>`;
-    })
-    .join("\n");
-
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="LOOPS"
-  xmlns="http://www.topografix.com/GPX/1/1"
-  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">
-  <metadata>
-    <name>${escapeXml(name)}</name>
-${description ? `    <desc>${escapeXml(description)}</desc>\n` : ""}    <link href="https://www.loops.ie">
-      <text>LOOPS</text>
-    </link>
-  </metadata>
-  <trk>
-    <name>${escapeXml(name)}</name>
-    <trkseg>
-${trkpts}
-    </trkseg>
-  </trk>
-</gpx>`;
-}
-
-function escapeXml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
 }

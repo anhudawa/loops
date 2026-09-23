@@ -1,5 +1,7 @@
 "use client";
 
+import { ENABLED_DISCIPLINES } from "@/config/constants";
+
 /**
  * Map-first route planner — Strava-standard incremental legs.
  *
@@ -831,7 +833,7 @@ export default function MapPlanner() {
             role="group"
             aria-label="Discipline"
           >
-            {(["road", "gravel", "mtb"] as Discipline[]).map((d) => (
+            {(ENABLED_DISCIPLINES as readonly Discipline[]).map((d) => (
               <button
                 key={d}
                 type="button"

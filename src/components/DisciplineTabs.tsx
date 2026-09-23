@@ -1,5 +1,7 @@
 "use client";
 
+import { ENABLED_DISCIPLINES } from "@/config/constants";
+
 interface DisciplineTabsProps {
   selected: string;
   onSelect: (discipline: string) => void;
@@ -16,9 +18,11 @@ export default function DisciplineTabs({
   selected,
   onSelect,
 }: DisciplineTabsProps) {
+  const tabs = TABS.filter((t) => t.value === "" || (ENABLED_DISCIPLINES as readonly string[]).includes(t.value));
+  if (tabs.length <= 2) return null; // road only (v1): nothing to choose
   return (
     <div style={{ display: "flex", width: "100%" }}>
-      {TABS.map(({ label, value }) => {
+      {tabs.map(({ label, value }) => {
         const isActive = selected === value;
 
         return (

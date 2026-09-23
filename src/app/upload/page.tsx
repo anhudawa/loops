@@ -1,5 +1,7 @@
 "use client";
 
+import { ENABLED_DISCIPLINES } from "@/config/constants";
+
 import { useState, useRef, useEffect, DragEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
@@ -12,10 +14,10 @@ import { DEFAULT_COUNTRY } from "@/config/constants";
 const COUNTRIES = ["Ireland", "UK", "USA", "Spain"];
 
 const DISCIPLINE_OPTIONS = [
-  { value: "gravel", label: "Gravel", icon: "🪨" },
   { value: "road", label: "Road", icon: "🚲" },
+  { value: "gravel", label: "Gravel", icon: "🪨" },
   { value: "mtb", label: "MTB", icon: "🏔️" },
-];
+].filter((d) => (ENABLED_DISCIPLINES as readonly string[]).includes(d.value));
 
 const SUPPORTED_EXTENSIONS = [".gpx", ".fit", ".tcx"];
 
@@ -65,10 +67,10 @@ export default function UploadPage() {
   const [form, setForm] = useState({
     name: "",
     description: "",
-    surface_type: "gravel",
+    surface_type: "road",
     country: DEFAULT_COUNTRY,
     region: "",
-    discipline: "gravel",
+    discipline: "road",
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");

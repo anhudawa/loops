@@ -9,6 +9,7 @@ import JsonLd from "@/components/JsonLd";
 import { generateCollectionJsonLd, generateBreadcrumbJsonLd } from "@/lib/seo";
 import Link from "next/link";
 import AppHeader from "@/components/AppHeader";
+import { disciplineEnabled } from "@/config/constants";
 
 // Collections change rarely: cache for an hour (was rendered per request).
 export const revalidate = 3600;
@@ -92,6 +93,9 @@ export default async function CollectionPage({ params }: Props) {
     { name: collection.name },
   ]);
 
+  // v1 plans road only: the list shows the disciplines LOOPS plans.
+  const routes = collection.routes.filter((r) => disciplineEnabled((r as { discipline?: string }).discipline));
+
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
       <JsonLd data={generateCollectionJsonLd(collection)} />
@@ -141,7 +145,7 @@ export default async function CollectionPage({ params }: Props) {
 
           <div className="flex items-center gap-3 text-sm mb-4" style={{ color: "var(--text-muted)" }}>
             <span className="font-bold" style={{ color: "var(--accent)" }}>
-              {plural(collection.total_routes_count, "route")}
+              {plural(routes.length, "route")}
             </span>
             {locationText && (
               <>
@@ -172,11 +176,11 @@ export default async function CollectionPage({ params }: Props) {
         </div>
 
         {/* Route list */}
-        {collection.routes.length === 0 ? (
+        {routes.length === 0 ? (
           <p className="text-sm" style={{ color: "var(--text-muted)" }}>No routes in this collection yet.</p>
         ) : (
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            {collection.routes.map((route, index) => (
+            {routes.map((route, index) => (
               <div key={route.id} className="flex items-start gap-3 min-w-0">
                 <span
                   className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-black mt-3"

@@ -20,7 +20,7 @@
 import type { RouteSpec, Discipline, WorkoutSpec } from "./route-intent";
 import { estimateRideMinutes } from "./ride-time";
 import { mergeLoopReport } from "./library-road-report";
-import { parseRouteIntent } from "./route-intent";
+import { parseRouteIntent, durationToDistanceKm } from "./route-intent";
 import {
   generateWaypointSets,
   DIRECTIONS_WIDE,
@@ -73,6 +73,7 @@ import {
 } from "./wind";
 import { findEffortCorridors, type EffortCorridor } from "./session-assembly";
 import { isClosedLoop, nearestIndex, rotateLoop } from "./loop-geometry";
+import { disciplineEnabled, DISCIPLINE_NOTICE } from "@/config/constants";
 import { ZONES } from "./intensity";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -143,6 +144,8 @@ export interface InterpretedIntent {
   parser?: "llm" | "basic";
   start_source?: "known_place" | "geocoded" | "origin";
   start_point?: [number, number];
+  /** Said to the rider when the ask was adjusted (e.g. gravel → road in v1). */
+  notice?: string;
 }
 
 export interface GenerateResult {
@@ -1178,8 +1181,18 @@ export async function generateRouteCandidates(
     userSpeedKmh: options.userSpeedKmh,
     origin: options.origin,
   });
+  // v1 plans road rides only: say so and plan a road loop (a duration ask is
+  // re-sized at road speed).
+  let notice: string | undefined;
+  if (!disciplineEnabled(spec.discipline)) {
+    notice = DISCIPLINE_NOTICE;
+    spec.discipline = "road";
+    if (spec.duration_minutes) {
+      spec.distance_km = durationToDistanceKm(spec.duration_minutes, "road", spec.elevation_preference, options.userSpeedKmh);
+    }
+  }
   markPhase("intent");
-  const interpreted = await summariseIntent(spec, options.userSpeedKmh);
+  const interpreted = { ...(await summariseIntent(spec, options.userSpeedKmh)), ...(notice ? { notice } : {}) };
   markPhase("summarise");
   const candidates = await candidatesFromSpec(spec, { userSpeedKmh: options.userSpeedKmh });
   markPhase("total");

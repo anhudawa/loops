@@ -205,6 +205,16 @@ node scripts/import-routes.mjs scripts/hub-data/girona-eat-sleep-cycle.json --dr
 - Smoke suite (tests/smoke.spec.ts, `PW_SANDBOX=1 npm run smoke` here) is
   the live-site check; sweep (`npm run sweep`) is the generation check
   (14/14 on 2026-09-23 13:08).
+- v1 is ROAD ONLY (owner, 2026-09-23): ENABLED_DISCIPLINES = ["road"] in
+  constants.ts. Gravel/MTB asks are planned as road with a notice ("LOOPS
+  plans road rides for now…"); pickers hidden; lists, collections, sitemap
+  and library matching show road only (db.ts gates spell 'road'). Gravel/MTB
+  data stays in the DB for later.
+- Track integrity (src/lib/track-shape.ts): every stored track is measured
+  (loop / lollipop / out-and-back, retrace %, gaps). "Loop" > 50 % ridden
+  twice or a > 2 km gap = broken: banner, hidden from lists, never offered.
+  Verified redesigns (src/data/hub-bundles/girona-rebuild.json) replace the
+  stored track on first view (src/lib/bundle-corrections.ts).
 - No CSRF tokens; cookie-only sessions; locale hardcoded en-IE
 
 ## Conventions

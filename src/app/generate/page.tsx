@@ -1,5 +1,7 @@
 "use client";
 
+import { ENABLED_DISCIPLINES } from "@/config/constants";
+
 import { useEffect, useRef, useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -98,6 +100,8 @@ interface GeneratedCandidate {
 type Candidate = LibraryCandidate | GeneratedCandidate;
 
 interface Interpreted {
+  /** The ask was adjusted (gravel/MTB → road in v1). */
+  notice?: string;
   distance_km: number;
   duration_minutes?: number;
   /** The rider's own avg_speed_kmh when the server used it. */
@@ -122,7 +126,7 @@ const EXAMPLES = [
   "90 min Zone 2 endurance ride, flat and steady",
   "2 x 20 min threshold intervals, somewhere safe",
   "5 x 5 min VO2 max efforts on a steady climb",
-  "60km gravel ride, scenic, rolling hills",
+  "60 km scenic loop with rolling hills",
 ];
 
 function downloadGpx(gpx: string, filename: string) {
@@ -656,6 +660,9 @@ function InterpretedPanel({ interpreted }: { interpreted: Interpreted }) {
       <p className="text-base font-bold" style={{ color: "var(--text)" }}>
         {bits.join(" · ")}
       </p>
+      {interpreted.notice && (
+        <p className="text-sm mt-1 font-bold" style={{ color: "#f5a524" }} role="status">{interpreted.notice}</p>
+      )}
       {interpreted.is_workout && interpreted.workout_summary && (
         <p className="text-sm mt-1 font-bold" style={{ color: "var(--accent)" }}>
           Workout: {interpreted.workout_summary}
@@ -805,9 +812,9 @@ function FallbackForm({ onSubmit }: { onSubmit: (text: string) => void }) {
         <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
           Bike
           <select value={discipline} onChange={(e) => setDiscipline(e.target.value)} className="w-full mt-1 rounded-lg px-2 py-2 text-sm" style={selectStyle}>
-            <option value="road">Road</option>
-            <option value="gravel">Gravel</option>
-            <option value="mtb">MTB</option>
+            {(ENABLED_DISCIPLINES as readonly string[]).map((d) => (
+              <option key={d} value={d}>{d === "mtb" ? "MTB" : d.charAt(0).toUpperCase() + d.slice(1)}</option>
+            ))}
           </select>
         </label>
         <label className="text-xs" style={{ color: "var(--text-secondary)" }}>

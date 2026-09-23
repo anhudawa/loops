@@ -1,11 +1,13 @@
 "use client";
 
+import { ENABLED_DISCIPLINES } from "@/config/constants";
+
 const DISCIPLINES = [
   { value: "", label: "All" },
   { value: "road", label: "Road", icon: "🚲" },
   { value: "gravel", label: "Gravel", icon: "🪨" },
   { value: "mtb", label: "MTB", icon: "🏔️" },
-];
+].filter((d) => d.value === "" || (ENABLED_DISCIPLINES as readonly string[]).includes(d.value));
 
 interface FilterSidebarProps {
   filters: {

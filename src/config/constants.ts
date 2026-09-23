@@ -20,6 +20,20 @@ export const CONDITIONS_PER_PAGE = 10;
 
 // ──── Valid enums ────
 export const DISCIPLINES = ["road", "gravel", "mtb"] as const;
+
+/**
+ * v1 is road only (owner, 2026-09-23): the Road Standard, quality scoring,
+ * ride verdict and every test are road; gravel/MTB planning is not validated
+ * (no trail-quality, difficulty or access checks). Add "gravel"/"mtb" back
+ * here when they are — the pickers, lists and generator follow this list
+ * (the country/region/sitemap SQL gates in db.ts spell out 'road' — update
+ * them together).
+ */
+export const ENABLED_DISCIPLINES: readonly (typeof DISCIPLINES)[number][] = ["road"];
+export const disciplineEnabled = (d: string | null | undefined): boolean =>
+  ENABLED_DISCIPLINES.includes((d ?? "road") as (typeof DISCIPLINES)[number]);
+/** Said when a rider asks for a discipline v1 does not plan. */
+export const DISCIPLINE_NOTICE = "LOOPS plans road rides for now — gravel and MTB are coming. Here are road loops instead.";
 export const CONDITION_STATUSES = ["good", "fair", "poor", "closed"] as const;
 export const VALID_ROUTE_EXTENSIONS = [".gpx", ".fit", ".tcx"] as const;
 

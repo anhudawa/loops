@@ -51,3 +51,4 @@ qa*/
 
 # Hetzner API token — local only, never commit
 .hcloud_token
+.claude/worktrees/

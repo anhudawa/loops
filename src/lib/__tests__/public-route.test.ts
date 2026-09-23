@@ -103,3 +103,15 @@ describe("public route payloads", () => {
     }
   });
 });
+
+import { roadStandardStatus, routeCard as rc } from "../public-route";
+describe("road standard on cards", () => {
+  it("derives a card-sized verdict and ships no full report", () => {
+    expect(roadStandardStatus({ standard_met: true })).toBe("met");
+    expect(roadStandardStatus({ standard_met: false })).toBe("notes");
+    expect(roadStandardStatus(null)).toBeNull();
+    const card = rc({ id: "x", name: "Loop", road_report: { standard_met: false, summary: "…", compromises: [] } });
+    expect(card.road_standard).toBe("notes");
+    expect(card.road_report).toBeUndefined();
+  });
+});

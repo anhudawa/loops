@@ -18,6 +18,9 @@ interface RouteCardProps {
     discipline?: string;
     cover_photo?: string | null;
     is_verified?: number;
+    /** Road Standard verdict: from routeCard() lists, or the full report on route objects. */
+    road_standard?: "met" | "notes" | null;
+    road_report?: { standard_met?: boolean } | null;
     distance_km_away?: number;
     estimated_minutes?: number;
     avg_score?: number;
@@ -50,9 +53,32 @@ const DISCIPLINE_LABELS: Record<string, { icon: string; label: string }> = {
   mtb: { icon: "\uD83C\uDFD4\uFE0F", label: "MTB" },
 };
 
+/** Small Road Standard chip: ✓ met / ⚠ notes; nothing when unmeasured. */
+function RoadStandardChip({ status, small }: { status: "met" | "notes" | null; small?: boolean }) {
+  if (!status) return null;
+  const met = status === "met";
+  return (
+    <span
+      className={`shrink-0 inline-flex items-center gap-0.5 rounded-full font-bold ${small ? "text-[9px] px-1.5 py-px" : "text-[10px] px-2 py-0.5"}`}
+      style={{
+        color: met ? "var(--accent)" : "#f5a524",
+        background: met ? "rgba(200,255,0,0.12)" : "rgba(245,165,36,0.14)",
+        border: `1px solid ${met ? "rgba(200,255,0,0.35)" : "rgba(245,165,36,0.45)"}`,
+      }}
+      title={met ? "Meets the Loops road standard" : "Has named road-standard compromises"}
+      aria-label={met ? "Meets the road standard" : "Road notes on this route"}
+    >
+      <span aria-hidden="true">{met ? "✓" : "⚠"}</span>
+      <span>{met ? "Road Standard" : "Road notes"}</span>
+    </span>
+  );
+}
+
 export default function RouteCard({ route, showDistance }: RouteCardProps) {
   const [imgError, setImgError] = useState(false);
   const discipline = route.discipline ? DISCIPLINE_LABELS[route.discipline] : null;
+  const roadStatus: "met" | "notes" | null =
+    route.road_standard ?? (route.road_report?.standard_met === true ? "met" : route.road_report?.standard_met === false ? "notes" : null);
   const locationText = route.region || route.county;
   const countryText = route.country ? `, ${route.country}` : "";
   // Ratings are a social feature — hidden for launch.
@@ -137,6 +163,7 @@ export default function RouteCard({ route, showDistance }: RouteCardProps) {
                   <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                 </svg>
               )}
+              <RoadStandardChip status={roadStatus} small />
             </div>
             {/* Primary stats: distance, climbing, surface, discipline */}
             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] mb-1">
@@ -188,6 +215,7 @@ export default function RouteCard({ route, showDistance }: RouteCardProps) {
                     <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                   </svg>
                 )}
+                <RoadStandardChip status={roadStatus} />
               </div>
               {hasRating && (
                 <span className="flex items-center gap-1 shrink-0 text-sm">

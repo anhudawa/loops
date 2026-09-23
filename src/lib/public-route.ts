@@ -119,7 +119,16 @@ export function routeCard<T extends Record<string, unknown>>(route: T): Record<s
   const out: Record<string, unknown> = {};
   for (const k of CARD_FIELDS) if (k in clean) out[k] = clean[k];
   if (SOCIAL_FEATURES_ENABLED) for (const k of CARD_SOCIAL_FIELDS) if (k in clean) out[k] = clean[k];
+  const rs = roadStandardStatus(clean.road_report);
+  if (rs) out.road_standard = rs;
   return out;
+}
+
+/** The card-sized verdict of a road report: "met", "notes" (named compromises), or null when unknown. */
+export function roadStandardStatus(report: unknown): "met" | "notes" | null {
+  if (!report || typeof report !== "object") return null;
+  const sm = (report as { standard_met?: unknown }).standard_met;
+  return sm === true ? "met" : sm === false ? "notes" : null;
 }
 
 /**

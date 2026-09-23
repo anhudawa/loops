@@ -605,6 +605,36 @@ export default function RouteDetailView({ ride }: { ride?: RideInvite | null } =
           </Link>
         </div>
 
+        {/* Road Standard — the Trust Rule: every served route names its
+            compromises. Shown whenever a report exists, whether or not the
+            optional quality score arrives. */}
+        {route?.road_report && (
+          <div
+            className="rounded-2xl px-4 py-3 md:px-6 mb-4 flex items-start gap-2.5"
+            style={{
+              background: "var(--bg-card)",
+              border: `1px solid ${route.road_report.standard_met ? "var(--border)" : "rgba(245,165,36,0.5)"}`,
+            }}
+            data-testid="road-standard"
+          >
+            <span
+              className="text-base leading-5 shrink-0"
+              aria-hidden="true"
+              style={{ color: route.road_report.standard_met ? "var(--accent)" : "#f5a524" }}
+            >
+              {route.road_report.standard_met ? "✓" : "⚠"}
+            </span>
+            <div>
+              <p className="text-[10px] font-extrabold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                Road Standard
+              </p>
+              <p className="text-sm leading-snug" style={{ color: route.road_report.standard_met ? "var(--text)" : "#f5a524" }}>
+                {route.road_report.summary}
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Route quality — same scoring engine as /generate; renders only
             when the score arrives, degrades silently otherwise */}
         {quality && (
@@ -617,16 +647,6 @@ export default function RouteDetailView({ ride }: { ride?: RideInvite | null } =
                 {quality.total}/100
               </span>
             </div>
-            {route?.road_report && (
-              <p
-                className="text-xs mt-2 flex items-start gap-1.5"
-                style={{ color: route.road_report.standard_met ? "var(--text-muted)" : "#f5a524" }}
-                data-testid="road-standard"
-              >
-                <span aria-hidden="true">{route.road_report.standard_met ? "✓" : "⚠"}</span>
-                <span>{route.road_report.summary}</span>
-              </p>
-            )}
             {quality.surface_breakdown && <SurfaceSummary breakdown={quality.surface_breakdown} />}
             <QualityFactors breakdown={quality.breakdown} />
           </div>

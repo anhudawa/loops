@@ -98,6 +98,17 @@ export default function RouteDetailView({ ride }: { ride?: RideInvite | null } =
   const [isFavourited, setIsFavourited] = useState(false);
   const [favCount, setFavCount] = useState(0);
   const [favLoading, setFavLoading] = useState(false);
+  // On a /ride link the first screen is banner + map + forecast; the sticky
+  // "Join LOOPS" bar waits until the rider scrolls past ~60% of the viewport
+  // so it never covers the forecast on arrival.
+  const [pastRideFold, setPastRideFold] = useState(false);
+  useEffect(() => {
+    if (!ride) return;
+    const onScroll = () => setPastRideFold(window.scrollY > window.innerHeight * 0.6);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [ride]);
   const [fetchError, setFetchError] = useState(false);
   const [mutationError, setMutationError] = useState("");
   // Quality/surface scoring (parity with /generate) — fetched fire-and-forget
@@ -480,7 +491,12 @@ export default function RouteDetailView({ ride }: { ride?: RideInvite | null } =
                 <span>{route.country || "Ireland"}</span>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-lg md:text-2xl font-extrabold tracking-tight" style={{ color: "var(--text)" }}>{route.name}</h1>
+                {/* One h1 per page: the ride banner owns it on /ride links */}
+                {ride && (ride.when || ride.meet) ? (
+                  <h2 className="text-lg md:text-2xl font-extrabold tracking-tight" style={{ color: "var(--text)" }}>{route.name}</h2>
+                ) : (
+                  <h1 className="text-lg md:text-2xl font-extrabold tracking-tight" style={{ color: "var(--text)" }}>{route.name}</h1>
+                )}
                 {route.is_verified === 1 && (
                   <span className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-lg shrink-0" style={{ color: "var(--success)", background: "rgba(0, 255, 136, 0.1)" }}>
                     <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
@@ -776,8 +792,8 @@ export default function RouteDetailView({ ride }: { ride?: RideInvite | null } =
       {/* Spacer so the sticky CTA never covers the footer/content */}
       {!user && !authLoading && <div className="h-24" aria-hidden="true" />}
 
-      {/* Sticky bottom CTA for unauthenticated users */}
-      {!user && !authLoading && (
+      {/* Sticky bottom CTA for unauthenticated users (on /ride: after scrolling) */}
+      {!user && !authLoading && (!ride || pastRideFold) && (
         <div
           className="fixed bottom-0 left-0 right-0 z-50 px-4 py-3 md:py-4"
           style={{

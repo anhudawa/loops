@@ -165,6 +165,12 @@ node scripts/import-routes.mjs scripts/hub-data/girona-eat-sleep-cycle.json --dr
   page), ✓/⚠ chip on cards, badge on the OG image, "Road note" GPX
   waypoints, "Where" list on Generate results. Trace is per chunk with a
   60 % measured floor; names batched via Overpass and lazily back-filled.
+- Ride time (src/lib/ride-time.ts, 2026-09-23, owner-anchored: Roadman spin
+  ≈ 3½ h): minutes = 60 × (km + climb_m/100) / cruise, cruise = 25/19/13
+  (road/gravel/mtb) scaled by the rider's profile speed; display rounds to
+  ¼ h under 3 h and ½ h above ("~3½h", "Allow around 3½ hours of riding…");
+  db.ts builds its SQL twin from the same constants (rideMinutesSql). Never
+  add a second formula. The rider's own typed ask is echoed exactly.
 - Ride verdict (src/lib/ride-wind.ts): weather card says what wind/rain do
   to THIS loop for the hours of the ride; never suggests reversing a loop
   (start point decides out/home balance under steady wind).

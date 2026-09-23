@@ -7,16 +7,20 @@ import { defineConfig, devices } from "@playwright/test";
  *   BASE_URL=https://loops-git-x.vercel.app npm run smoke   # any deployment
  *   PW_SANDBOX=1 npm run smoke                      # Claude Code sandbox
  *
- * PW_SANDBOX uses the sandbox's own Chromium, launched with
- * --proxy-server=$HTTPS_PROXY (the egress proxy re-terminates TLS, hence
- * ignoreHTTPSErrors). Chromium's own tunnels through that proxy are slow and
- * drop about one request in six (net::ERR_TOO_MANY_RETRIES), so the suite
- * serves every request through Playwright's request context instead (see the
- * `readOnly` fixture) — `proxy` here points that context at the same proxy.
- * CI and laptops use the browser Playwright installed
- * (`npx playwright install chromium`) and talk to the site directly.
+ * PW_SANDBOX uses the sandbox's own Chromium through the egress proxy
+ * (HTTPS_PROXY, which re-terminates TLS — hence ignoreHTTPSErrors). It must
+ * be Playwright's `proxy` option, not a bare --proxy-server arg, and the
+ * flags below keep Chromium's own tunnels off HTTP/2, QUIC and background
+ * probes; even so those tunnels drop about one request in six
+ * (net::ERR_TOO_MANY_RETRIES), so the suite additionally serves every
+ * request through Playwright's request context — same proxy, reliable —
+ * (see the `readOnly` fixture in the spec). CI and laptops use the browser
+ * Playwright installed (`npx playwright install chromium`) and talk to the
+ * site directly.
  */
 const sandbox = !!process.env.PW_SANDBOX;
+
+const SANDBOX_CHROMIUM_ARGS = ["--disable-background-networking", "--disable-http2", "--ssl-version-max=tls1.2", "--disable-quic"];
 
 export default defineConfig({
   testDir: "./tests",
@@ -33,6 +37,9 @@ export default defineConfig({
     baseURL: process.env.BASE_URL || "https://www.loops.ie",
     trace: "on-first-retry",
     navigationTimeout: 60_000,
+    // The product's home turf: dates and times render the same on every run.
+    locale: "en-IE",
+    timezoneId: "Europe/Dublin",
     // Requests from a service worker bypass page routing; the read-only
     // guard in the suite must see every request.
     serviceWorkers: "block",
@@ -40,7 +47,7 @@ export default defineConfig({
       ? {
           ignoreHTTPSErrors: true,
           ...(process.env.HTTPS_PROXY ? { proxy: { server: process.env.HTTPS_PROXY } } : {}),
-          launchOptions: { executablePath: "/opt/pw-browsers/chromium" },
+          launchOptions: { executablePath: "/opt/pw-browsers/chromium", args: SANDBOX_CHROMIUM_ARGS },
         }
       : {}),
   },

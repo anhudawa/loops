@@ -14,6 +14,7 @@ import SendToGarmin from "@/components/SendToGarmin";
 import QualityFactors, { SurfaceSummary } from "@/components/QualityFactors";
 import ShareButton from "@/components/ShareButton";
 import { useVoiceInput } from "@/lib/useVoiceInput";
+import { describeCompromise, type Compromise } from "@/lib/road-segments";
 import { useGeolocation } from "@/lib/useGeolocation";
 import { track } from "@/lib/track";
 import { ANALYTICS_EVENTS } from "@/lib/metrics";
@@ -61,7 +62,7 @@ interface LibraryCandidate {
   approach_km?: number;
   loop_km?: number;
   gpx_data?: string;
-  road_report?: { standard_met: boolean; summary: string };
+  road_report?: { standard_met: boolean; summary: string; compromises?: Compromise[] };
 }
 
 interface GeneratedCandidate {
@@ -86,7 +87,7 @@ interface GeneratedCandidate {
   road_report?: {
     standard_met: boolean;
     summary: string;
-    compromises: Array<{ kind: string; meters: number; highway: string; name?: string }>;
+    compromises: Compromise[];
     surface: { paved_pct: number; unpaved_pct: number; unknown_pct: number };
     main_road_pct: number;
   };
@@ -1082,6 +1083,21 @@ function CandidateCard({
               <span aria-hidden="true">{candidate.road_report.standard_met ? "✓" : "⚠"}</span>
               <span>{candidate.road_report.summary}</span>
             </p>
+          )}
+          {!!candidate.road_report?.compromises?.length && (
+            <details className="mt-1 ml-5">
+              <summary className="text-[11px] font-bold cursor-pointer select-none" style={{ color: "var(--text-secondary)" }}>
+                Where ({candidate.road_report.compromises.length})
+              </summary>
+              <ul className="mt-1 space-y-0.5 text-[11px]" style={{ color: "var(--text-secondary)" }}>
+                {candidate.road_report.compromises.slice(0, 10).map((c, i) => (
+                  <li key={i}>· {describeCompromise(c)}</li>
+                ))}
+                {candidate.road_report.compromises.length > 10 && (
+                  <li style={{ color: "var(--text-muted)" }}>+{candidate.road_report.compromises.length - 10} more</li>
+                )}
+              </ul>
+            </details>
           )}
 
           {!isLibrary && candidate.surface_breakdown && (

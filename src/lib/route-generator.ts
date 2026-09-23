@@ -18,6 +18,7 @@
  */
 
 import type { RouteSpec, Discipline, WorkoutSpec } from "./route-intent";
+import { mergeLoopReport } from "./library-road-report";
 import { parseRouteIntent } from "./route-intent";
 import {
   generateWaypointSets,
@@ -1262,9 +1263,9 @@ async function rideFromHome(match: LibraryMatch, spec: RouteSpec): Promise<Libra
   if (!report.standard_met) await nameCompromises(coords, report.compromises);
   const partial = loopUsedKm < loopLen - 0.5;
   const built = `New loop from your start: ${Math.round(approach.distance_km)} km out, ${partial ? `${Math.round(loopUsedKm)} km of the ${Math.round(loopLen)} km verified loop` : "the full verified loop"}, ${Math.round(back.distance_km)} km home.`;
-  report.summary = report.standard_met
-    ? `${built} Out and home meet the Loops road standard.`
-    : `${built} Compromise: ${report.compromises.slice(0, 2).map(describeCompromise).join("; ")}.`;
+  // The verified loop's own measured report (traced on first view) is
+  // folded in: its compromises are named, never hidden behind "verified".
+  const merged = mergeLoopReport(report, match.road_report, loopUsedKm, totalKm, built);
 
   const approachGain = (approach.elevation_gain_m ?? elevationGainFromSeries(approach.elevations)) || 0;
   const backGain = (back.elevation_gain_m ?? elevationGainFromSeries(back.elevations)) || 0;
@@ -1296,7 +1297,7 @@ async function rideFromHome(match: LibraryMatch, spec: RouteSpec): Promise<Libra
     approach_km: Math.round(approach.distance_km * 10) / 10,
     loop_km: loopUsedKm,
     match_score: computeMatchScore(distanceKm, gain, spec, 90),
-    road_report: report,
+    road_report: merged,
     gpx_data: buildGpx(coords, hasAllEle ? elevations : null, `New loop from your start via ${match.name}`, spec.discipline),
   };
 }

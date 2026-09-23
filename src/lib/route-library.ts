@@ -10,6 +10,7 @@
  */
 
 import type { RouteSpec, WorkoutSpec } from "./route-intent";
+import { validRoadReport } from "./library-road-report";
 import { getRoutes, type Route } from "./db";
 import {
   detectIntervalSegments,
@@ -146,6 +147,7 @@ function toLibraryMatch(
   const coordinates: [number, number][] = raw.map(([lat, lng]) => [lat, lng]);
   const hasEle = raw.length > 0 && raw.every((c) => typeof c[2] === "number");
   const elevations = hasEle ? raw.map((c) => c[2]) : undefined;
+  const report = validRoadReport(route.road_report);
 
   return {
     route_id: route.id,
@@ -161,6 +163,8 @@ function toLibraryMatch(
     match_score: score,
     distance_from_start_km: Math.round(distanceFromStartKm * 10) / 10,
     ...(elevations ? { elevations } : {}),
+    // The loop's measured road report travels with it (Trust Rule).
+    ...(report ? { road_report: report } : {}),
   };
 }
 

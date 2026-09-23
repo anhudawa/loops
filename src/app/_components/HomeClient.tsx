@@ -11,7 +11,7 @@ import AppHeader from "@/components/AppHeader";
 import { useAuth } from "@/components/AuthProvider";
 import Link from "next/link";
 import { DEFAULT_SPEED_KMH, DEFAULT_COUNTRY } from "@/config/constants";
-import { locationIfAllowed, requestLocation, lastLocationBlocked } from "@/lib/location";
+import { locationIfAllowed, requestLocation } from "@/lib/location";
 import LocationHelp from "@/components/LocationHelp";
 import FeaturedCollections from "./FeaturedCollections";
 import RouteSearchBox from "@/components/RouteSearchBox";
@@ -229,10 +229,14 @@ function HomeContent() {
     return () => { cancelled = true; };
   }, []);
   const [locationBlocked, setLocationBlocked] = useState(false);
+  const [locating, setLocating] = useState(false);
   const askLocation = async () => {
-    const p = await requestLocation();
+    const pending = requestLocation(); // straight from the tap (iOS)
+    setLocating(true);
+    const p = await pending;
+    setLocating(false);
     if (p) { setUserLocation(p); setLocationBlocked(false); }
-    else { setLocationDenied(true); setLocationBlocked(lastLocationBlocked); }
+    else { setLocationDenied(true); setLocationBlocked(true); }
   };
 
   // Persist filters to localStorage and URL
@@ -580,10 +584,11 @@ function HomeContent() {
           {!userLocation && !isSearching && !filters.sort && !filters.city && !filters.country && !filters.duration && (
             <button
               onClick={askLocation}
-              className="text-xs font-bold underline min-h-[44px] px-1"
+              disabled={locating}
+              className="text-xs font-bold underline min-h-[44px] px-1 disabled:opacity-60"
               style={{ color: "var(--accent)" }}
             >
-              Use my location
+              {locating ? "Locating…" : "Use my location"}
             </button>
           )}
         </div>

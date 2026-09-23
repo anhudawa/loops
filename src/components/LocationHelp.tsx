@@ -4,21 +4,21 @@ import { useState, useSyncExternalStore } from "react";
 import { locationHelpFor } from "@/lib/location-help";
 
 const noop = () => () => {};
+// useSyncExternalStore needs a stable snapshot: compute once per page.
+let cachedHelp: ReturnType<typeof locationHelpFor> | null = null;
+const helpSnapshot = () =>
+  (cachedHelp ??= locationHelpFor(navigator.userAgent, !!(navigator as Navigator & { brave?: unknown }).brave));
 
 /** Shown when location is blocked: the exact steps for this phone + a Try again. */
 export default function LocationHelp({ onRetry, onDismiss }: { onRetry: () => void; onDismiss?: () => void }) {
   const [open, setOpen] = useState(true);
-  const help = useSyncExternalStore(
-    noop,
-    () => locationHelpFor(navigator.userAgent, !!(navigator as Navigator & { brave?: unknown }).brave),
-    () => null,
-  );
+  const help = useSyncExternalStore(noop, helpSnapshot, () => null);
   if (!help) return null;
   return (
     <div className="mt-2 rounded-xl p-3 text-xs" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }} role="status">
       <div className="flex items-start justify-between gap-2">
         <p className="font-bold" style={{ color: "var(--text)" }}>
-          Location is off for LOOPS in {help.where}.
+          We couldn&apos;t get your location in {help.where}.
         </p>
         {onDismiss && (
           <button onClick={onDismiss} aria-label="Close" className="min-w-[44px] min-h-[44px] -m-3 flex items-center justify-center" style={{ color: "var(--text-muted)" }}>✕</button>

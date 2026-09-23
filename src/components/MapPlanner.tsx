@@ -51,7 +51,7 @@ import {
 } from "@/lib/plan-legs";
 import { track } from "@/lib/track";
 import { ANALYTICS_EVENTS } from "@/lib/metrics";
-import { locationIfAllowed, requestLocation, lastLocationBlocked } from "@/lib/location";
+import { locationIfAllowed, requestLocation } from "@/lib/location";
 import LocationHelp from "@/components/LocationHelp";
 import { describeCompromise, type Compromise } from "@/lib/road-segments";
 
@@ -130,6 +130,7 @@ export default function MapPlanner() {
   const [resnapNote, setResnapNote] = useState<string | null>(null);
   const [geoCenter, setGeoCenter] = useState<LatLng | null>(null);
   const [locBlocked, setLocBlocked] = useState(false);
+  const [locating, setLocating] = useState(false);
   // On a phone the elevation panel + controls left the map as a thin strip
   // mid-draw, so it starts collapsed there (one tap to open) and is shorter.
   const compact = typeof window !== "undefined" && window.innerWidth < 768;
@@ -716,14 +717,18 @@ export default function MapPlanner() {
         </MapContainer>
         <button
           onClick={async () => {
-            const p = await requestLocation();
-            if (p) { setGeoCenter([p.lat, p.lng]); setLocBlocked(false); } else setLocBlocked(lastLocationBlocked);
+            const pending = requestLocation(); // straight from the tap (iOS)
+            setLocating(true);
+            const p = await pending;
+            setLocating(false);
+            if (p) { setGeoCenter([p.lat, p.lng]); setLocBlocked(false); } else setLocBlocked(true);
           }}
+          disabled={locating}
           className="absolute bottom-3 right-3 z-[500] min-h-[44px] px-3 rounded-lg text-xs font-bold shadow"
           style={{ background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
           aria-label="Centre the map on my location"
         >
-          Use my location
+          {locating ? "Locating…" : "Use my location"}
         </button>
         {locBlocked && (
           <div className="absolute bottom-16 right-3 left-3 z-[500] sm:left-auto sm:w-96">

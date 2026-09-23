@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { locationIfAllowed, rememberLocation } from "@/lib/location";
+import { requestLocation, lastLocationBlocked } from "@/lib/location";
 
 /**
  * On-demand browser geolocation. The rider taps "use my location" (or
@@ -36,37 +36,18 @@ export function useGeolocation(): GeolocationState {
     setError(null);
     setBlocked(false);
 
-    // Already allowed or recently known: no prompt at all.
-    const known = await locationIfAllowed();
-    if (known) {
-      const c: [number, number] = [known.lat, known.lng];
+    // Straight from the tap: no await before the browser call (iOS).
+    const c0 = await requestLocation();
+    if (c0) {
+      const c: [number, number] = [c0.lat, c0.lng];
       setCoords(c);
       setLoading(false);
       return c;
     }
-
-    return new Promise((resolve) => {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const c: [number, number] = [pos.coords.latitude, pos.coords.longitude];
-          rememberLocation({ lat: c[0], lng: c[1] });
-          setCoords(c);
-          setLoading(false);
-          resolve(c);
-        },
-        (err) => {
-          setBlocked(err.code === err.PERMISSION_DENIED);
-          setError(
-            err.code === err.PERMISSION_DENIED
-              ? "Location access was blocked. Name a starting point instead."
-              : "Couldn't get your location. Name a starting point instead."
-          );
-          setLoading(false);
-          resolve(null);
-        },
-        { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
-      );
-    });
+    setBlocked(lastLocationBlocked);
+    setError("Couldn't get your location. Turn it on, or name a starting point instead.");
+    setLoading(false);
+    return null;
   }, []);
 
   return { coords, loading, error, blocked, request };

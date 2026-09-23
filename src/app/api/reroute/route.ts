@@ -29,9 +29,19 @@ export async function POST(request: NextRequest) {
 
   let waypoints: [number, number][];
   let discipline: "road" | "gravel" | "mtb";
+  let avoid: [number, number][][] = [];
   try {
     const body = await request.json();
     waypoints = body?.waypoints;
+    // Roads the rest of the drawn route uses (bounded; malformed → ignored).
+    if (Array.isArray(body?.avoid)) {
+      avoid = (body.avoid as unknown[])
+        .slice(0, 12)
+        .filter((p): p is [number, number][] => Array.isArray(p))
+        .map((p) => p.slice(0, 20000).filter((q): q is [number, number] =>
+          Array.isArray(q) && typeof q[0] === "number" && typeof q[1] === "number" && Math.abs(q[0]) <= 90 && Math.abs(q[1]) <= 180))
+        .filter((p) => p.length >= 2);
+    }
     discipline = ["road", "gravel", "mtb"].includes(body?.discipline) ? body.discipline : "road";
     if (
       !Array.isArray(waypoints) ||
@@ -54,7 +64,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const result = await rerouteWaypoints(waypoints, discipline);
+    const result = await rerouteWaypoints(waypoints, discipline, { avoid });
     if (!result) {
       return NextResponse.json(
         { error: "Couldn't route between those points — try moving the pin to a road.", code: "REROUTE_FAILED" },

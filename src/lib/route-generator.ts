@@ -999,13 +999,83 @@ export interface RerouteResult {
  * re-scoring is skipped for speed — the editor shows a "re-checked
  * surfaces on export" note instead.
  */
+/**
+ * Weighted no-go polylines for the roads a drawn route already uses, minus
+ * the stretch within `clearKm` of this leg's own endpoints (legs must be
+ * able to meet at the pins). Thinned to keep the engine URL bounded.
+ */
+export function avoidPolylines(avoid: [number, number][][], legFrom: [number, number], legTo: [number, number], clearKm = 1.5, maxPoints = 240): string {
+  const near = (p: [number, number]) =>
+    haversineKm(p[0], p[1], legFrom[0], legFrom[1]) < clearKm || haversineKm(p[0], p[1], legTo[0], legTo[1]) < clearKm;
+  const lines: [number, number][][] = [];
+  let total = 0;
+  for (const path of avoid) {
+    let run: [number, number][] = [];
+    let lastKept: [number, number] | null = null;
+    for (const p of path) {
+      if (near(p)) { if (run.length >= 2) lines.push(run); run = []; lastKept = null; continue; }
+      if (lastKept && haversineKm(p[0], p[1], lastKept[0], lastKept[1]) < 0.25) continue;
+      run.push(p); lastKept = p;
+    }
+    if (run.length >= 2) lines.push(run);
+  }
+  for (const l of lines) total += l.length;
+  const step = Math.max(1, Math.ceil(total / maxPoints));
+  const parts = lines
+    .map((l) => l.filter((_, i) => i % step === 0 || i === l.length - 1))
+    .filter((l) => l.length >= 2)
+    .map((l) => `${l.map(([lat, lng]) => `${lng.toFixed(5)},${lat.toFixed(5)}`).join(",")},${PLANNER_AVOID_WEIGHT}`);
+  return parts.length ? `&polylines=${parts.join("|")}` : "";
+}
+
+/** Share of `coords` (by length) within 30 m of any of `paths` — the roads ridden twice. */
+function sharedShare(coords: [number, number][], paths: [number, number][][]): number {
+  const pts = paths.flat();
+  if (!pts.length || coords.length < 2) return 0;
+  const cell = (p: [number, number]) => `${Math.round(p[0] / 0.0005)},${Math.round(p[1] / 0.0007)}`;
+  const grid = new Map<string, [number, number][]>();
+  for (const p of pts) { const k = cell(p); (grid.get(k) ?? grid.set(k, []).get(k)!).push(p); }
+  let shared = 0, total = 0;
+  for (let i = 1; i < coords.length; i++) {
+    const a = coords[i - 1], b = coords[i];
+    const len = haversineKm(a[0], a[1], b[0], b[1]);
+    total += len;
+    const [cy, cx] = cell(b).split(",").map(Number);
+    let hit = false;
+    for (let dy = -1; dy <= 1 && !hit; dy++) for (let dx = -1; dx <= 1 && !hit; dx++) {
+      for (const q of grid.get(`${cy + dy},${cx + dx}`) ?? []) if (haversineKm(b[0], b[1], q[0], q[1]) < 0.03) { hit = true; break; }
+    }
+    if (hit) shared += len;
+  }
+  return total > 0 ? shared / total : 0;
+}
+
+/** Penalty on roads the drawn route already uses (50 left a Wicklow leg on
+ *  the same road; 200 finds the parallel road; higher changes nothing). */
+const PLANNER_AVOID_WEIGHT = 200;
+/** A detour is worth it when it is at most this much longer than the direct leg. */
+const AVOID_MAX_STRETCH = 1.35;
+
 export async function rerouteWaypoints(
   waypoints: [number, number][],
-  discipline: Discipline
+  discipline: Discipline,
+  opts: { avoid?: [number, number][][] } = {}
 ): Promise<RerouteResult | null> {
   if (waypoints.length < 2 || waypoints.length > 10) return null;
   const profile = DISCIPLINE_PROFILE[discipline];
-  const path = await routeViaBRouter(waypoints, profile);
+  const avoid = (opts.avoid ?? []).filter((p) => p.length >= 2);
+  const nogo = avoid.length ? avoidPolylines(avoid, waypoints[0], waypoints[waypoints.length - 1]) : "";
+  // Route directly and — when the rest of the route is known — avoiding the
+  // roads it already uses; take the avoiding one unless it is an absurd
+  // detour or it does not actually reduce the shared road.
+  const [direct, avoiding] = await Promise.all([
+    routeViaBRouter(waypoints, profile),
+    nogo ? routeViaBRouter(waypoints, profile, false, nogo) : Promise.resolve(null),
+  ]);
+  let path = direct;
+  if (avoiding && avoiding.coords.length >= 2 && (!direct || avoiding.distance_km <= direct.distance_km * AVOID_MAX_STRETCH)) {
+    if (!direct || sharedShare(avoiding.coords, avoid) < sharedShare(direct.coords, avoid) - 0.05) path = avoiding;
+  }
   if (!path || path.coords.length < 2) return null;
 
   let elevations = path.elevations;

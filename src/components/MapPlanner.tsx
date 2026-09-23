@@ -148,6 +148,26 @@ export default function MapPlanner() {
   legsRef.current = legs;
   const loopLegRef = useRef(loopLeg);
   loopLegRef.current = loopLeg;
+  // Snapped geometry per leg, written synchronously when a snap lands, so a
+  // leg routed right after another can avoid its roads before React renders.
+  const snappedCoordsRef = useRef(new Map<number, LatLng[]>());
+  const recentLegIdsRef = useRef(new Map<number, number>()); // id → created at
+  const snapDoneRef = useRef(new Map<number, Promise<void>>());
+
+  /** Roads the rest of the route already uses (other legs' snapped geometry). */
+  function roadsInUse(exceptId: number): LatLng[][] {
+    const live = new Set<number>([...legsRef.current.map((l) => l.id), ...(loopLegRef.current ? [loopLegRef.current.id] : [])]);
+    const now = Date.now();
+    for (const [id, at] of recentLegIdsRef.current) {
+      if (now - at < 15_000) live.add(id); else recentLegIdsRef.current.delete(id);
+    }
+    const out: LatLng[][] = [];
+    for (const [id, c] of snappedCoordsRef.current) {
+      if (!live.has(id)) { snappedCoordsRef.current.delete(id); continue; }
+      if (id !== exceptId && c.length > 2) out.push(c);
+    }
+    return out;
+  }
 
   // Centre on the rider only if location is already allowed (or cached) —
   // never prompt on load; silently fall back to Dublin.
@@ -164,6 +184,8 @@ export default function MapPlanner() {
 
   /** Apply a result to the leg with this id, only if seq is still current. */
   function applyLegResult(id: number, seq: number, patch: Partial<PlanLeg>) {
+    if (patch.status === "snapped" && patch.coords) snappedCoordsRef.current.set(id, patch.coords as LatLng[]);
+    else if (patch.status && patch.status !== "pending") snappedCoordsRef.current.delete(id);
     setLegs((prev) =>
       prev.map((l) => (l.id === id && l.seq === seq ? { ...l, ...patch } : l))
     );
@@ -194,7 +216,9 @@ export default function MapPlanner() {
       const res = await fetch("/api/reroute", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ waypoints: [from, to], discipline: disc }),
+        // Avoid the roads the rest of the route already uses, so a stop
+        // like Blessington becomes part of a loop, not an out-and-back.
+        body: JSON.stringify({ waypoints: [from, to], discipline: disc, avoid: roadsInUse(id) }),
       });
       const body = await res.json().catch(() => null);
       if (res.status === 401) {
@@ -234,9 +258,10 @@ export default function MapPlanner() {
   }
 
   /** Build a new leg and kick off its snap (or keep it straight if anonymous). */
-  function makeLeg(from: LatLng, to: LatLng, disc: Discipline): PlanLeg {
+  function makeLeg(from: LatLng, to: LatLng, disc: Discipline, after?: Promise<void>): PlanLeg {
     const id = ++legIdRef.current;
     const seq = ++seqRef.current;
+    recentLegIdsRef.current.set(id, Date.now());
     const anonymous = needsAuthRef.current;
     const newLeg: PlanLeg = {
       id,
@@ -246,12 +271,15 @@ export default function MapPlanner() {
       ...straightPatch(from, to),
       status: anonymous ? "straight" : "pending",
     } as PlanLeg;
-    if (!anonymous) void performSnap(id, seq, from, to, disc);
+    if (!anonymous) {
+      const run = () => performSnap(id, seq, from, to, disc);
+      snapDoneRef.current.set(id, after ? after.then(run, run) : run());
+    }
     return newLeg;
   }
 
   /** Re-snap an existing leg in place (drag / retry / discipline change). */
-  function resnapLeg(legToSnap: PlanLeg, from: LatLng, to: LatLng, disc: Discipline): Promise<void> {
+  function resnapLeg(legToSnap: PlanLeg, from: LatLng, to: LatLng, disc: Discipline, after?: Promise<void>): Promise<void> {
     const seq = ++seqRef.current;
     const anonymous = needsAuthRef.current;
     const patch: Partial<PlanLeg> = {
@@ -265,7 +293,10 @@ export default function MapPlanner() {
     setLegs((prev) => prev.map((l) => (l.id === legToSnap.id ? { ...l, ...patch } : l)));
     setLoopLeg((prev) => (prev && prev.id === legToSnap.id ? { ...prev, ...patch } : prev));
     if (anonymous) return Promise.resolve();
-    return performSnap(legToSnap.id, seq, from, to, disc);
+    const run = () => performSnap(legToSnap.id, seq, from, to, disc);
+    const p = after ? after.then(run, run) : run();
+    snapDoneRef.current.set(legToSnap.id, p);
+    return p;
   }
 
   // ── Anchor operations (all incremental — never re-route the whole set) ────
@@ -286,12 +317,14 @@ export default function MapPlanner() {
     setLegs((ls) => [...ls, newLeg]);
     // The closing leg now starts from the new last anchor.
     if (loopBack) {
+      // The way home waits for the new leg, so it can avoid that road.
       const first = current[0];
       const existing = loopLegRef.current;
+      const newDone = snapDoneRef.current.get(newLeg.id);
       if (existing) {
-        void resnapLeg(existing, latlng, first, discipline);
+        void resnapLeg(existing, latlng, first, discipline, newDone);
       } else {
-        setLoopLeg(makeLeg(latlng, first, discipline));
+        setLoopLeg(makeLeg(latlng, first, discipline, newDone));
       }
     }
   }
@@ -435,6 +468,8 @@ export default function MapPlanner() {
   }
 
   function clearAll() {
+    snappedCoordsRef.current.clear();
+    recentLegIdsRef.current.clear();
     if (anchorsRef.current.length > 0 && !window.confirm("Clear the whole route?")) return;
     seqRef.current++;
     setAnchors([]);

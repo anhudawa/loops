@@ -3,6 +3,7 @@ import { getRoute, getUserBySession, trackDownload, migrateDb, recordEvent, ANAL
 import { apiError, handleApiError } from "@/lib/api-utils";
 import { GPX_ACCESS } from "@/config/constants";
 import { buildRouteGpx } from "@/lib/gpx";
+import { describeCompromise, type Compromise } from "@/lib/road-segments";
 import { v4 as uuidv4 } from "uuid";
 
 export async function GET(
@@ -43,7 +44,12 @@ export async function GET(
     // Generate GPX from stored coordinates (may be [lat,lng] or [lat,lng,ele])
     const coordinates: number[][] = JSON.parse(route.coordinates);
     // A ride link's meeting point (?m=) names the start waypoint.
+    const comps = ((route.road_report as { compromises?: Compromise[] } | null)?.compromises ?? [])
+      .filter((c) => Array.isArray(c.at))
+      .slice(0, 12)
+      .map((c) => ({ at: c.at as [number, number], label: describeCompromise(c) }));
     const gpx = buildRouteGpx(route.name, route.description, coordinates, {
+      warnings: comps,
       meetingPoint: request.nextUrl.searchParams.get("m"),
     });
 

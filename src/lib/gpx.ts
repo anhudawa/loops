@@ -93,7 +93,7 @@ export function buildRouteGpx(
   name: string,
   description: string | null,
   coordinates: number[][],
-  opts: { meetingPoint?: string | null } = {},
+  opts: { meetingPoint?: string | null; warnings?: Array<{ at: [number, number]; label: string }> } = {},
 ): string {
   const trkpts = coordinates
     .map((coord) => {
@@ -110,6 +110,13 @@ export function buildRouteGpx(
       ? `  <wpt lat="${first[0]}" lon="${first[1]}">${first[2] != null ? `<ele>${first[2]}</ele>` : ""}<name>${escapeXml(meet ? `Start: ${meet}` : "Start")}</name>${meet ? `<desc>${escapeXml(`Meeting point: ${meet}`)}</desc>` : ""}<sym>Flag, Green</sym></wpt>\n`
       : "";
 
+  // Road Standard compromises as waypoints: a head unit shows them as POIs
+  // on approach — "Road note: 1.6 km on the Ma-11 (main road)".
+  const warnWpts = (opts.warnings ?? [])
+    .filter((w) => Array.isArray(w.at) && Number.isFinite(w.at[0]) && Number.isFinite(w.at[1]))
+    .map((w) => `  <wpt lat="${w.at[0]}" lon="${w.at[1]}"><name>${escapeXml(`Road note: ${w.label}`)}</name><sym>Danger Area</sym></wpt>\n`)
+    .join("");
+
   return `<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="LOOPS"
   xmlns="http://www.topografix.com/GPX/1/1"
@@ -121,7 +128,7 @@ ${description ? `    <desc>${escapeXml(description)}</desc>\n` : ""}    <link hr
       <text>LOOPS</text>
     </link>
   </metadata>
-${startWpt}  <trk>
+${startWpt}${warnWpts}  <trk>
     <name>${escapeXml(name)}</name>
     <trkseg>
 ${trkpts}

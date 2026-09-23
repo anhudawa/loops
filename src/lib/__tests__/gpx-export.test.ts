@@ -35,3 +35,15 @@ describe("sanitizeMeetingPoint", () => {
     expect(sanitizeMeetingPoint("x".repeat(200))!.length).toBe(80);
   });
 });
+
+import { buildRouteGpx as build2 } from "../gpx";
+describe("road-note waypoints", () => {
+  it("adds a waypoint per compromise stretch, after the start", () => {
+    const gpx = build2("Loop", null, [[53, -6.2, 10], [53.01, -6.2, 12]], {
+      warnings: [{ at: [53.005, -6.2], label: "1.6 km on the Ma-11 (main road)" }],
+    });
+    expect(gpx).toContain('<wpt lat="53.005" lon="-6.2"><name>Road note: 1.6 km on the Ma-11 (main road)</name><sym>Danger Area</sym></wpt>');
+    expect(gpx.indexOf("<name>Start</name>")).toBeLessThan(gpx.indexOf("Road note:"));
+    expect(gpx.indexOf("Road note:")).toBeLessThan(gpx.indexOf("<trk>"));
+  });
+});

@@ -35,7 +35,7 @@ import { ENABLED_DISCIPLINES } from "@/config/constants";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap, useMapEvents } from "react-leaflet";
+import { MapContainer, TileLayer, Polyline, Marker, Popup, CircleMarker, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import ElevationProfile from "@/components/ElevationProfile";
@@ -56,6 +56,9 @@ import { ANALYTICS_EVENTS } from "@/lib/metrics";
 import { locationIfAllowed, requestLocation } from "@/lib/location";
 import LocationHelp from "@/components/LocationHelp";
 import { describeCompromise, type Compromise } from "@/lib/road-segments";
+import { useAuth } from "@/components/AuthProvider";
+import { KNOWN_PLACES, lookupKnownPlace } from "@/lib/places-known";
+import { readDraft, writeDraft, clearDraft } from "@/app/plan/plan-draft";
 
 interface RerouteResult {
   coordinates: [number, number][];
@@ -77,28 +80,39 @@ const DEFAULT_ZOOM = 10;
  * no longer limits the route — this is purely a sanity ceiling. */
 const MAX_POINTS = 50;
 
-const anchorIcon = L.divIcon({
-  className: "",
-  html: `<div style="width:14px;height:14px;border-radius:50%;background:#c8ff00;border:2.5px solid #0a0a0c;box-shadow:0 0 0 2px #c8ff00;cursor:grab"></div>`,
-  iconSize: [14, 14],
-  iconAnchor: [7, 7],
-});
+/** A small visible dot inside a transparent 44 × 44 px grab area — a thumb
+ * that lands near the dot still gets the pin, not the map. */
+function hitIcon(dot: string): L.DivIcon {
+  return L.divIcon({
+    className: "",
+    html: `<div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;cursor:grab">${dot}</div>`,
+    iconSize: [44, 44],
+    iconAnchor: [22, 22],
+  });
+}
 
-const startIcon = L.divIcon({
-  className: "",
-  html: `<div style="width:16px;height:16px;border-radius:50%;background:#0a0a0c;border:3px solid #c8ff00;box-shadow:0 0 0 2px #0a0a0c;cursor:grab"></div>`,
-  iconSize: [16, 16],
-  iconAnchor: [8, 8],
-});
+const anchorIcon = hitIcon(
+  `<div style="width:14px;height:14px;border-radius:50%;background:#c8ff00;border:2.5px solid #0a0a0c;box-shadow:0 0 0 2px #c8ff00"></div>`
+);
+
+const startIcon = hitIcon(
+  `<div style="width:16px;height:16px;border-radius:50%;background:#0a0a0c;border:3px solid #c8ff00;box-shadow:0 0 0 2px #0a0a0c"></div>`
+);
 
 /** Small hollow handle on the middle of a snapped leg — grab and drag it to
  * insert a via-point there (Strava's signature mid-leg reshape). */
-const handleIcon = L.divIcon({
-  className: "",
-  html: `<div style="width:11px;height:11px;border-radius:50%;background:#0a0a0c;border:2px solid #c8ff00;opacity:0.85;cursor:grab"></div>`,
-  iconSize: [11, 11],
-  iconAnchor: [5.5, 5.5],
-});
+const handleIcon = hitIcon(
+  `<div style="width:11px;height:11px;border-radius:50%;background:#0a0a0c;border:2px solid #c8ff00;opacity:0.85"></div>`
+);
+
+/** The drawing as it stood before an edit — what Undo puts back. */
+interface Snapshot {
+  anchors: LatLng[];
+  legs: PlanLeg[];
+  loopLeg: PlanLeg | null;
+  loopBack: boolean;
+}
+const MAX_UNDO = 50;
 
 function ClickToAdd({ onAdd }: { onAdd: (latlng: LatLng) => void }) {
   useMapEvents({
@@ -183,6 +197,8 @@ function AnchorMarker({ position, icon, onMove, onRemove }: {
       position={position}
       draggable={!coarse}
       icon={icon}
+      // Pins sit above the mid-leg handles, whose grab areas can overlap.
+      zIndexOffset={1000}
       eventHandlers={{
         dragend: (e) => {
           const ll = (e.target as L.Marker).getLatLng();
@@ -224,17 +240,28 @@ async function snapQueue<T>(run: () => Promise<T>): Promise<T> {
 }
 
 export default function MapPlanner() {
-  const [anchors, setAnchors] = useState<LatLng[]>([]);
+  // A drawing left in this tab (nav tap, Back, reload, sign-in) comes back.
+  const [draft] = useState(() => readDraft());
+  const [anchors, setAnchors] = useState<LatLng[]>(draft?.anchors ?? []);
   /** legs[i] connects anchors[i] → anchors[i+1]. */
-  const [legs, setLegs] = useState<PlanLeg[]>([]);
+  const [legs, setLegs] = useState<PlanLeg[]>(draft?.legs ?? []);
   /** Closing leg (last anchor → first anchor) when loop is on. */
-  const [loopLeg, setLoopLeg] = useState<PlanLeg | null>(null);
-  const [discipline, setDiscipline] = useState<Discipline>("road");
-  const [loopBack, setLoopBack] = useState(true);
+  const [loopLeg, setLoopLeg] = useState<PlanLeg | null>(draft?.loopLeg ?? null);
+  const [discipline, setDiscipline] = useState<Discipline>(
+    (ENABLED_DISCIPLINES as readonly string[]).includes(draft?.discipline ?? "") ? (draft!.discipline as Discipline) : "road"
+  );
+  const [loopBack, setLoopBack] = useState(draft?.loopBack ?? true);
+  const [undoStack, setUndoStack] = useState<Snapshot[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [needsAuth, setNeedsAuth] = useState(false);
   const [resnapNote, setResnapNote] = useState<string | null>(null);
   const [geoCenter, setGeoCenter] = useState<LatLng | null>(null);
+  /** Where the rider is (shown as a dot once they share it). */
+  const [here, setHere] = useState<LatLng | null>(null);
+  const [placeQuery, setPlaceQuery] = useState("");
+  const [placeMiss, setPlaceMiss] = useState<string | null>(null);
+  /** Save asks for a name first (prefilled); null = not naming. */
+  const [naming, setNaming] = useState<string | null>(null);
   const [locBlocked, setLocBlocked] = useState(false);
   const [locating, setLocating] = useState(false);
   // On a phone the elevation panel + controls left the map as a thin strip
@@ -245,6 +272,8 @@ export default function MapPlanner() {
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const router = useRouter();
+  const { user, loading: authLoading, authError } = useAuth();
+  const signedOut = !authLoading && !user && !authError;
 
   const legIdRef = useRef(0);
   const seqRef = useRef(0);
@@ -255,6 +284,9 @@ export default function MapPlanner() {
   legsRef.current = legs;
   const loopLegRef = useRef(loopLeg);
   loopLegRef.current = loopLeg;
+  const loopBackRef = useRef(loopBack);
+  loopBackRef.current = loopBack;
+  const savedRef = useRef(false);
   // Snapped geometry per leg, written synchronously when a snap lands, so a
   // leg routed right after another can avoid its roads before React renders.
   const snappedCoordsRef = useRef(new Map<number, LatLng[]>());
@@ -281,11 +313,56 @@ export default function MapPlanner() {
   useEffect(() => {
     let cancelled = false;
     locationIfAllowed().then((p) => {
+      if (cancelled || !p) return;
+      setHere([p.lat, p.lng]);
       // Don't yank the map away if they've already started drawing.
-      if (!cancelled && p && anchorsRef.current.length === 0) setGeoCenter([p.lat, p.lng]);
+      if (anchorsRef.current.length === 0) setGeoCenter([p.lat, p.lng]);
     });
     return () => { cancelled = true; };
   }, []);
+
+  // Signed out: say so before the first tap (legs stay straight lines until
+  // sign-in), instead of promising snapped legs and then drawing straight.
+  useEffect(() => {
+    if (signedOut) {
+      needsAuthRef.current = true;
+      setNeedsAuth(true);
+    }
+  }, [signedOut]);
+
+  // A kept drawing: its snapped legs are back as they were; anything that
+  // was mid-snap (or straight because signed out) is snapped now.
+  useEffect(() => {
+    if (!draft) return;
+    const all = [...draft.legs, ...(draft.loopLeg ? [draft.loopLeg] : [])];
+    legIdRef.current = Math.max(legIdRef.current, ...all.map((l) => l.id));
+    seqRef.current = Math.max(seqRef.current, ...all.map((l) => l.seq));
+    for (const l of all) {
+      if (l.status === "snapped") snappedCoordsRef.current.set(l.id, l.coords);
+      else if (l.status === "pending" || l.status === "straight") void resnapLeg(l, l.from, l.to, discipline);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Keep the drawing for this tab while it changes.
+  useEffect(() => {
+    if (savedRef.current) return;
+    if (anchors.length === 0) clearDraft();
+    else writeDraft({ anchors, legs, loopLeg, loopBack, discipline });
+  }, [anchors, legs, loopLeg, loopBack, discipline]);
+
+  // Closing the tab with an unsaved drawing asks first.
+  const hasDrawing = anchors.length > 0;
+  useEffect(() => {
+    if (!hasDrawing) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      if (savedRef.current) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [hasDrawing]);
 
   // ── Per-leg snapping ───────────────────────────────────────────────────────
 
@@ -416,6 +493,41 @@ export default function MapPlanner() {
     return p;
   }
 
+  // ── Undo: every edit is a step back ────────────────────────────────────────
+
+  /** Remember the drawing as it is now, before an edit changes it. */
+  function remember() {
+    const snap: Snapshot = {
+      anchors: anchorsRef.current,
+      legs: legsRef.current,
+      loopLeg: loopLegRef.current,
+      loopBack: loopBackRef.current,
+    };
+    setUndoStack((st) => [...st.slice(-(MAX_UNDO - 1)), snap]);
+  }
+
+  /** Put back the drawing before the last edit — pins, legs, loop and all. */
+  function undo() {
+    const snap = undoStack[undoStack.length - 1];
+    if (!snap) return;
+    setUndoStack((st) => st.slice(0, -1));
+    setAnchors(snap.anchors);
+    setLegs(snap.legs);
+    setLoopLeg(snap.loopLeg);
+    setLoopBack(snap.loopBack);
+    setError(null);
+    setSaveError(null);
+    // Snapped legs come back as they were; a leg that was still snapping
+    // when the snapshot was taken is snapped again.
+    for (const l of [...snap.legs, ...(snap.loopLeg ? [snap.loopLeg] : [])]) {
+      recentLegIdsRef.current.set(l.id, Date.now());
+      if (l.status === "snapped") snappedCoordsRef.current.set(l.id, l.coords);
+      else if (l.status === "pending" || (l.status === "straight" && !needsAuthRef.current)) {
+        void resnapLeg(l, l.from, l.to, discipline);
+      }
+    }
+  }
+
   // ── Anchor operations (all incremental — never re-route the whole set) ────
 
   function addAnchor(latlng: LatLng) {
@@ -424,6 +536,7 @@ export default function MapPlanner() {
       setError(`Maximum of ${MAX_POINTS} points — drag a pin to fine-tune instead.`);
       return;
     }
+    remember();
     setError(null);
     const prev = current[current.length - 1];
     setAnchors([...current, latlng]);
@@ -447,6 +560,7 @@ export default function MapPlanner() {
   }
 
   function moveAnchor(idx: number, latlng: LatLng) {
+    remember();
     const current = anchorsRef.current;
     const next = current.map((p, i) => (i === idx ? latlng : p)) as LatLng[];
     setAnchors(next);
@@ -482,6 +596,9 @@ export default function MapPlanner() {
       setError(`Maximum of ${MAX_POINTS} points — drag a pin to fine-tune instead.`);
       return;
     }
+    const closing = legIndex === currentLegs.length && !!loopLegRef.current;
+    if (legIndex < 0 || (legIndex >= currentLegs.length && !closing)) return;
+    remember();
     setError(null);
 
     const loop = loopLegRef.current;
@@ -512,6 +629,7 @@ export default function MapPlanner() {
   }
 
   function removeAnchor(idx: number) {
+    remember();
     const current = anchorsRef.current;
     const next = current.filter((_, i) => i !== idx);
     setAnchors(next);
@@ -539,14 +657,8 @@ export default function MapPlanner() {
     }
   }
 
-  /** Most-used control: remove the last anchor and its leg. */
-  function undo() {
-    const current = anchorsRef.current;
-    if (current.length === 0) return;
-    removeAnchor(current.length - 1);
-  }
-
   function toggleLoop() {
+    remember();
     const next = !loopBack;
     setLoopBack(next);
     const current = anchorsRef.current;
@@ -585,9 +697,10 @@ export default function MapPlanner() {
   }
 
   function clearAll() {
+    if (anchorsRef.current.length > 0 && !window.confirm("Clear the whole route?")) return;
+    remember(); // Undo brings it back
     snappedCoordsRef.current.clear();
     recentLegIdsRef.current.clear();
-    if (anchorsRef.current.length > 0 && !window.confirm("Clear the whole route?")) return;
     seqRef.current++;
     setAnchors([]);
     setLegs([]);
@@ -595,6 +708,7 @@ export default function MapPlanner() {
     setError(null);
     setResnapNote(null);
     setSaveError(null);
+    setNaming(null);
   }
 
   // ── Derived state ──────────────────────────────────────────────────────────
@@ -640,6 +754,8 @@ export default function MapPlanner() {
     track(ANALYTICS_EVENTS.PLAN_DRAWN, { via: "download", distance_km: totals.distance_km });
   }
 
+  const suggestedName = `Planned ${discipline} route — ${totals.distance_km} km`;
+
   /** Save the drawn route to the rider's library, then open its detail page.
    * Same payload shape /generate posts; sign-in is gated by the 401 the
    * endpoint returns (we surface the existing sign-in banner, never lie). */
@@ -649,7 +765,7 @@ export default function MapPlanner() {
     setSaveError(null);
     const { coords, elevations } = concatLegGeometry(allLegs);
     const cleanElevations = elevations.map((e) => (Number.isNaN(e) ? 0 : e));
-    const name = `Planned ${discipline} route — ${totals.distance_km} km`;
+    const name = (naming ?? "").trim().slice(0, 80) || suggestedName;
     try {
       const res = await fetch("/api/routes/from-generated", {
         method: "POST",
@@ -681,6 +797,10 @@ export default function MapPlanner() {
       // Funnel: drawn route saved (server records ROUTE_SAVED; this marks the
       // draw milestone specifically). Pass source so ROUTE_SAVED is separable.
       track(ANALYTICS_EVENTS.PLAN_DRAWN, { via: "save", distance_km: totals.distance_km });
+      // Saved: the kept drawing has done its job.
+      savedRef.current = true;
+      clearDraft();
+      setNaming(null);
       if (id) router.push(`/routes/${id}`);
       else setSaveError("Saved, but couldn't open the route page.");
     } catch {
@@ -689,6 +809,29 @@ export default function MapPlanner() {
       setSaving(false);
     }
   }
+
+  /** "Go to a place": the launch destinations and home towns we know. */
+  function goToPlace(e: { preventDefault: () => void }) {
+    e.preventDefault();
+    const q = placeQuery.trim();
+    if (!q) return;
+    const hit = lookupKnownPlace(q);
+    if (hit) {
+      setGeoCenter([hit.point[0], hit.point[1]]);
+      setPlaceQuery("");
+      setPlaceMiss(null);
+    } else {
+      setPlaceMiss(`We don't know "${q}" yet — pan the map there, or pick a place from the list.`);
+    }
+  }
+
+  const coarsePointer = typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
+  // A kept drawing opens framed on its pins; otherwise Dublin until located.
+  const [initialView] = useState(() =>
+    draft && draft.anchors.length >= 2
+      ? { bounds: L.latLngBounds(draft.anchors).pad(0.15) }
+      : { center: draft?.anchors[0] ?? DUBLIN, zoom: draft ? 12 : DEFAULT_ZOOM }
+  );
 
   return (
     <div className="flex flex-col" style={{ height: "100%", background: "var(--bg)" }}>
@@ -710,7 +853,8 @@ export default function MapPlanner() {
         <button
           type="button"
           onClick={undo}
-          disabled={anchors.length === 0}
+          disabled={undoStack.length === 0}
+          aria-label="Undo the last change"
           className="px-4 rounded-xl text-xs font-bold uppercase tracking-wider disabled:opacity-40"
           style={{
             minHeight: 44,
@@ -728,9 +872,14 @@ export default function MapPlanner() {
         <p className="px-4 py-2 text-xs z-20" style={{ background: "rgba(200,255,0,0.08)", color: "var(--text-secondary)" }}>
           <span className="font-bold" style={{ color: "var(--accent)" }}>Sign in to snap to roads.</span>{" "}
           You can keep drawing — distances are straight-line until then.{" "}
-          <Link href="/login?redirect=/plan" className="font-bold underline" style={{ color: "var(--accent)" }}>
+          <Link
+            href="/login?redirect=/plan"
+            className="inline-flex items-center min-h-[44px] px-1 font-bold underline"
+            style={{ color: "var(--accent)" }}
+          >
             Log in →
           </Link>
+          <span className="block" style={{ color: "var(--text-muted)" }}>Your drawing is kept while you sign in.</span>
         </p>
       )}
       {failedCount > 0 && (
@@ -741,7 +890,7 @@ export default function MapPlanner() {
           <button
             type="button"
             onClick={retryFailedLegs}
-            className="px-2 py-1 rounded-lg font-bold underline"
+            className="min-h-[44px] px-3 rounded-lg font-bold underline shrink-0"
             style={{ color: "#ff6b6b" }}
           >
             Retry
@@ -762,8 +911,7 @@ export default function MapPlanner() {
       {/* Map */}
       <div className="relative flex-1 min-h-0">
         <MapContainer
-          center={DUBLIN}
-          zoom={DEFAULT_ZOOM}
+          {...initialView}
           style={{ height: "100%", width: "100%" }}
           scrollWheelZoom
         >
@@ -772,6 +920,15 @@ export default function MapPlanner() {
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
           <RecenterOnce target={geoCenter} />
+          {/* You are here — not interactive, so a tap on it drops a point there. */}
+          {here && (
+            <CircleMarker
+              center={here}
+              radius={8}
+              interactive={false}
+              pathOptions={{ color: "#ffffff", weight: 3, fillColor: "#3b82f6", fillOpacity: 1 }}
+            />
+          )}
           <ClickToAdd onAdd={addAnchor} />
           {/* Each leg renders itself: solid = genuine snapped geometry,
               dashed = pending / failed / anonymous straight line. */}
@@ -831,7 +988,7 @@ export default function MapPlanner() {
             setLocating(true);
             const p = await pending;
             setLocating(false);
-            if (p) { setGeoCenter([p.lat, p.lng]); setLocBlocked(false); } else setLocBlocked(true);
+            if (p) { setGeoCenter([p.lat, p.lng]); setHere([p.lat, p.lng]); setLocBlocked(false); } else setLocBlocked(true);
           }}
           disabled={locating}
           className="absolute bottom-3 right-3 z-[500] min-h-[44px] px-3 rounded-lg text-xs font-bold shadow"
@@ -842,31 +999,75 @@ export default function MapPlanner() {
         </button>
         {locBlocked && (
           <div className="absolute bottom-16 right-3 left-3 z-[500] sm:left-auto sm:w-96">
-            <LocationHelp onRetry={async () => { const p = await requestLocation(); if (p) { setGeoCenter([p.lat, p.lng]); setLocBlocked(false); } }} onDismiss={() => setLocBlocked(false)} />
+            <LocationHelp onRetry={async () => { const p = await requestLocation(); if (p) { setGeoCenter([p.lat, p.lng]); setHere([p.lat, p.lng]); setLocBlocked(false); } }} onDismiss={() => setLocBlocked(false)} />
           </div>
         )}
 
-        {/* Honest empty state */}
+        {/* Go to a place — riders abroad need not pan from Dublin. */}
         {anchors.length === 0 && (
-          <div className="absolute inset-x-0 bottom-6 flex justify-center pointer-events-none" style={{ zIndex: 1000 }}>
+          <form
+            onSubmit={goToPlace}
+            className="absolute top-3 right-3 z-[500] flex flex-col items-end gap-1"
+            style={{ width: "min(16rem, calc(100% - 4.5rem))" }}
+            role="search"
+          >
+            <div className="flex w-full rounded-lg overflow-hidden shadow" style={{ border: "1px solid var(--border)" }}>
+              <label htmlFor="plan-place" className="sr-only">Go to a place</label>
+              <input
+                id="plan-place"
+                list="plan-places"
+                value={placeQuery}
+                onChange={(e) => { setPlaceQuery(e.target.value); setPlaceMiss(null); }}
+                placeholder="Go to a place…"
+                autoComplete="off"
+                className="min-w-0 flex-1 min-h-[44px] px-3 text-base sm:text-xs"
+                style={{ background: "var(--bg-card)", color: "var(--text)", outline: "none" }}
+              />
+              <button
+                type="submit"
+                className="min-h-[44px] px-3 text-xs font-bold"
+                style={{ background: "var(--bg-raised)", color: "var(--accent)" }}
+              >
+                Go
+              </button>
+            </div>
+            <datalist id="plan-places">
+              {KNOWN_PLACES.map((p) => <option key={p.name} value={p.name} />)}
+            </datalist>
+            {placeMiss && (
+              <p className="text-[11px] px-2 py-1 rounded-lg" style={{ background: "var(--bg-raised)", color: "var(--text-secondary)" }} role="status">
+                {placeMiss}
+              </p>
+            )}
+          </form>
+        )}
+
+        {/* Honest empty state — sits above the location button, and makes
+            way for the location help when that is open. */}
+        {anchors.length === 0 && !locBlocked && (
+          <div className="absolute inset-x-0 bottom-16 flex justify-center pointer-events-none" style={{ zIndex: 1000 }}>
             <div
               className="px-4 py-3 rounded-xl text-sm font-semibold text-center mx-4"
               style={{ background: "var(--bg-raised)", border: "1px solid var(--border)", color: "var(--text)" }}
             >
               Tap the map to drop your first point.
               <span className="block text-xs font-normal mt-0.5" style={{ color: "var(--text-muted)" }}>
-                Every point after that snaps a new leg to the road, instantly.
+                {needsAuth
+                  ? "Legs are straight lines until you sign in — then they snap to the road."
+                  : "Every point after that snaps a new leg to the road, instantly."}
               </span>
             </div>
           </div>
         )}
-        {anchors.length === 1 && (
-          <div className="absolute inset-x-0 bottom-6 flex justify-center pointer-events-none" style={{ zIndex: 1000 }}>
+        {anchors.length === 1 && !locBlocked && (
+          <div className="absolute inset-x-0 bottom-16 flex justify-center pointer-events-none" style={{ zIndex: 1000 }}>
             <div
               className="px-4 py-2 rounded-xl text-xs mx-4"
               style={{ background: "var(--bg-raised)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
             >
-              Drop your next point — we&apos;ll snap that leg to the road.
+              {needsAuth
+                ? "Drop your next point — a straight line until you sign in."
+                : "Drop your next point — we\u2019ll snap that leg to the road."}
             </div>
           </div>
         )}
@@ -883,7 +1084,7 @@ export default function MapPlanner() {
           <button
             type="button"
             onClick={() => setShowProfile((v) => !v)}
-            className="w-full flex items-center justify-between px-3 py-1.5"
+            className="w-full min-h-[44px] flex items-center justify-between px-3 py-1.5"
             aria-expanded={showProfile}
           >
             <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
@@ -931,10 +1132,47 @@ export default function MapPlanner() {
             map space on a phone. */}
         {allLegs.length === 0 && (
           <p className="text-[11px] pb-2" style={{ color: "var(--text-muted)" }}>
-            tap the map to add · drag a pin to move · drag the middle of a leg to reshape · tap a pin to remove
+            {coarsePointer
+              ? "tap the map to add · press and hold a pin to move · tap a pin to remove"
+              : "click the map to add · drag a pin to move · drag the middle of a leg to reshape · click a pin to remove"}
           </p>
         )}
+        {naming !== null && (
+          <form
+            onSubmit={(e) => { e.preventDefault(); void saveRoute(); }}
+            className="flex items-center gap-2 pb-2"
+          >
+            <label htmlFor="plan-name" className="sr-only">Route name</label>
+            <input
+              id="plan-name"
+              value={naming}
+              onChange={(e) => setNaming(e.target.value)}
+              maxLength={80}
+              autoFocus
+              className="min-w-0 flex-1 min-h-[44px] px-3 rounded-xl text-base sm:text-sm"
+              style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)", outline: "none" }}
+            />
+            <button
+              type="submit"
+              disabled={saving || !allSnapped}
+              className="min-h-[44px] px-4 rounded-xl text-xs font-bold uppercase tracking-wider disabled:opacity-40"
+              style={{ background: "var(--accent)", color: "var(--bg)" }}
+            >
+              {saving ? "Saving…" : "Save"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setNaming(null)}
+              className="min-h-[44px] px-3 rounded-xl text-xs font-bold"
+              style={{ border: "1px solid var(--border)", color: "var(--text)" }}
+            >
+              Cancel
+            </button>
+          </form>
+        )}
         <div className="flex flex-wrap items-center gap-2">
+          {/* One discipline in v1 — a one-button "choice" is not a choice. */}
+          {ENABLED_DISCIPLINES.length > 1 && (
           <div
             className="flex rounded-xl overflow-hidden"
             style={{ border: "1px solid var(--border)" }}
@@ -959,6 +1197,7 @@ export default function MapPlanner() {
               </button>
             ))}
           </div>
+          )}
 
           <button
             type="button"
@@ -972,7 +1211,8 @@ export default function MapPlanner() {
               color: loopBack ? "var(--accent)" : "var(--text-muted)",
             }}
           >
-            Loop back to start {loopBack ? "✓" : ""}
+            <span className="sm:hidden">Loop back</span>
+            <span className="hidden sm:inline">Loop back to start</span> {loopBack ? "✓" : ""}
           </button>
 
           <span className="flex-1" />
@@ -984,29 +1224,32 @@ export default function MapPlanner() {
             className="px-3 rounded-xl text-xs font-bold disabled:opacity-40"
             style={{ minHeight: 44, border: "1px solid var(--border)", color: "var(--text)" }}
           >
-            Clear all
+            Clear<span className="hidden sm:inline"> all</span>
           </button>
 
+          {naming === null && (
           <button
             type="button"
-            onClick={saveRoute}
+            onClick={() => setNaming(suggestedName)}
             disabled={!allSnapped || saving}
             title={allSnapped ? undefined : "Every leg must be snapped to a road before saving"}
-            className="px-4 rounded-xl text-xs font-bold uppercase tracking-wider disabled:opacity-40"
+            className="px-3 sm:px-4 rounded-xl text-xs font-bold uppercase tracking-wider disabled:opacity-40"
             style={{ minHeight: 44, border: "1px solid var(--accent)", background: "var(--bg-card)", color: "var(--accent)" }}
           >
-            {saving ? "Saving…" : "Save route"}
+            Save<span className="hidden sm:inline"> route</span>
           </button>
+          )}
 
           <button
             type="button"
             onClick={downloadGpx}
             disabled={!allSnapped}
             title={allSnapped ? undefined : "Every leg must be snapped to a road before export"}
-            className="px-4 rounded-xl text-xs font-bold uppercase tracking-wider disabled:opacity-40"
+            className="px-3 sm:px-4 rounded-xl text-xs font-bold uppercase tracking-wider disabled:opacity-40"
             style={{ minHeight: 44, background: "var(--accent)", color: "var(--bg)" }}
+            aria-label="Download GPX"
           >
-            Download GPX
+            <span className="hidden sm:inline">Download </span>GPX
           </button>
         </div>
       </div>

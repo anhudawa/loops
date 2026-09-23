@@ -40,7 +40,9 @@ function LoginPage() {
       ? "Could not sign in with Google. Please try again."
       : paramErr === "account_suspended"
         ? "This account has been suspended."
-        : "";
+        : paramErr === "link_expired"
+          ? "That sign-in link has expired or was already used — request a new one."
+          : "";
   const error = manualError || urlError;
 
   useEffect(() => {
@@ -64,6 +66,32 @@ function LoginPage() {
     const id = setInterval(() => setDemoIndex((i) => (i + 1) % DEMO_PROMPTS.length), 3500);
     return () => clearInterval(id);
   }, []);
+
+  // Email (magic link) sign-in — shown only when the server can send mail.
+  const [emailEnabled, setEmailEnabled] = useState(false);
+  const [email, setEmail] = useState("");
+  const [emailState, setEmailState] = useState<"idle" | "sending" | "sent">("idle");
+  const [emailError, setEmailError] = useState<string | null>(null);
+  useEffect(() => {
+    fetch("/api/auth/magic").then((r) => r.json()).then((d) => setEmailEnabled(!!d?.data?.enabled)).catch(() => {});
+  }, []);
+  const handleEmailLogin = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    setEmailError(null);
+    const redirect = searchParams.get("redirect");
+    if (redirect) document.cookie = `login_redirect=${encodeURIComponent(redirect)}; path=/; max-age=1800; SameSite=Lax`;
+    if (newsletterOptInRef.current) document.cookie = `newsletter_optin=1; path=/; max-age=1800; SameSite=Lax`;
+    setEmailState("sending");
+    try {
+      const res = await fetch("/api/auth/magic", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }) });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) { setEmailError(body?.error ?? "Couldn't send the email."); setEmailState("idle"); return; }
+      setEmailState("sent");
+    } catch {
+      setEmailError("Network hiccup — try again.");
+      setEmailState("idle");
+    }
+  }, [email, searchParams]);
 
   const handleGoogleLogin = useCallback(async (redirectOverride?: string) => {
     try {
@@ -140,6 +168,38 @@ function LoginPage() {
               <div className="alert-error mb-3 text-sm" role="alert">{error}</div>
             )}
             <GoogleButton onClick={() => handleGoogleLogin()} />
+            {emailEnabled && (
+              emailState === "sent" ? (
+                <p className="text-sm mt-4" style={{ color: "var(--text)" }} role="status">
+                  Check your email — we sent a sign-in link to <strong>{email}</strong>. It works for 15 minutes.
+                </p>
+              ) : (
+                <form onSubmit={handleEmailLogin} className="mt-4">
+                  <p className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>No Google account? Get a sign-in link by email:</p>
+                  <div className="flex gap-2">
+                    <input
+                      type="email"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      autoComplete="email"
+                      className="flex-1 min-w-0 px-3 py-2.5 rounded-xl text-sm"
+                      style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+                    />
+                    <button
+                      type="submit"
+                      disabled={emailState === "sending"}
+                      className="px-4 py-2.5 rounded-xl text-sm font-bold disabled:opacity-50"
+                      style={{ background: "var(--bg-raised)", border: "1px solid var(--border)", color: "var(--text)" }}
+                    >
+                      {emailState === "sending" ? "Sending…" : "Email me"}
+                    </button>
+                  </div>
+                  {emailError && <p className="text-xs mt-2" style={{ color: "#f5a524" }}>{emailError}</p>}
+                </form>
+              )
+            )}
             <label className="flex items-start gap-2 mt-3 text-left cursor-pointer select-none">
               <input
                 type="checkbox"

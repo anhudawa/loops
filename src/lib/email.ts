@@ -6,8 +6,11 @@ function getResend() {
 
 export async function sendMagicLink(email: string, token: string) {
   const resend = getResend();
+  // The public domain in production (VERCEL_URL is the per-deployment host,
+  // which would put a *.vercel.app link in the rider's inbox).
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
-    || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+    || (process.env.VERCEL_ENV === "production" ? "https://www.loops.ie"
+      : process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
 
   const link = `${baseUrl}/api/auth/verify?token=${token}`;
 

@@ -58,6 +58,7 @@ export async function GET(request: NextRequest) {
       // Trust diagnostics: without the model key the basic parser runs
       // (plain rides only, no workouts) — surfaced here so it is never a guess.
       anthropic_key_set: !!process.env.ANTHROPIC_API_KEY,
+      email_signin_enabled: !!process.env.RESEND_API_KEY,
       ...(probe ? { probe, server_version: probe[relaxedProfile]?.ok ? "v3 (relaxed profile present)" : "v2 (relaxed profile missing — rebuild pending)" } : {}),
     },
   });

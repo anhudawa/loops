@@ -773,6 +773,30 @@ export async function getUserByEmail(email: string): Promise<User | undefined> {
   return rows[0] as User | undefined;
 }
 
+/** Email (magic-link) sign-in: existing account by email gets a new
+ *  session; otherwise a new rider is created with first-touch attribution. */
+export async function upsertEmailUser(
+  id: string,
+  email: string,
+  sessionToken: string,
+  attribution?: { source: string; raw_source: string | null; medium: string | null; campaign: string | null } | null
+): Promise<{ user: User; isNew: boolean }> {
+  const existing = await getUserByEmail(email);
+  if (existing) {
+    await sql`UPDATE users SET session_token = ${sessionToken} WHERE id = ${existing.id}`;
+    return { user: (await getUserByEmail(email))!, isNew: false };
+  }
+  const name = email.split("@")[0].replace(/[._-]+/g, " ").slice(0, 40) || "Rider";
+  await sql`
+    INSERT INTO users (id, email, name, session_token,
+                       signup_source, signup_raw_source, signup_medium, signup_campaign)
+    VALUES (${id}, ${email}, ${name}, ${sessionToken},
+            ${attribution?.source ?? null}, ${attribution?.raw_source ?? null},
+            ${attribution?.medium ?? null}, ${attribution?.campaign ?? null})
+  `;
+  return { user: (await getUserByEmail(email))!, isNew: true };
+}
+
 export async function getUserBySession(token: string): Promise<User | undefined> {
   const { rows } = await sql`SELECT * FROM users WHERE session_token = ${token} AND role != 'banned'`;
   return rows[0] as User | undefined;

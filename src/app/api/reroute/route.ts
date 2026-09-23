@@ -7,7 +7,7 @@ export const maxDuration = 30;
 
 /** Drag-to-edit reroutes are cheap (one BRouter call) but rate-limited
  * to keep the public routing endpoint healthy. */
-const RATE_LIMIT_PER_MIN = 30;
+const RATE_LIMIT_PER_MIN = 90; // a rider tapping out a loop fires two legs per tap
 
 export async function POST(request: NextRequest) {
   const sessionToken = request.cookies.get("session")?.value;

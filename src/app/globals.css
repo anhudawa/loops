@@ -312,3 +312,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   .animate-pulse { animation: none; opacity: 0.5; }
   .card-hover:hover { transform: none; }
 }
+
+/* Planner: a pin lifted by press-and-hold (the transform is Leaflet's, so glow only) */
+.pin-lifted { filter: drop-shadow(0 0 8px #c8ff00) drop-shadow(0 0 2px #c8ff00); z-index: 1000 !important; }
+.pin-popup .leaflet-popup-content { margin: 10px 12px; }

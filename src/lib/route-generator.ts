@@ -1068,16 +1068,16 @@ export async function rerouteWaypoints(
   const profile = DISCIPLINE_PROFILE[discipline];
   const avoid = (opts.avoid ?? []).filter((p) => p.length >= 2);
   const nogo = avoid.length ? avoidPolylines(avoid, waypoints[0], waypoints[waypoints.length - 1]) : "";
-  // Route directly and — when the rest of the route is known — avoiding the
-  // roads it already uses; take the avoiding one unless it is an absurd
-  // detour or it does not actually reduce the shared road.
-  const [direct, avoiding] = await Promise.all([
-    routeViaBRouter(waypoints, profile),
-    nogo ? routeViaBRouter(waypoints, profile, false, nogo) : Promise.resolve(null),
-  ]);
+  // Route directly first; only when that reuses road the rest of the route
+  // already rides (> 15 %) try again avoiding it — most legs cost one engine
+  // call. Take the avoiding one unless it is an absurd detour or does not
+  // actually reduce the shared road.
+  const direct = await routeViaBRouter(waypoints, profile);
+  const directShared = direct && nogo ? sharedShare(direct.coords, avoid) : 0;
+  const avoiding = nogo && (!direct || directShared > 0.15) ? await routeViaBRouter(waypoints, profile, false, nogo) : null;
   let path = direct;
   if (avoiding && avoiding.coords.length >= 2 && (!direct || avoiding.distance_km <= direct.distance_km * AVOID_MAX_STRETCH)) {
-    if (!direct || sharedShare(avoiding.coords, avoid) < sharedShare(direct.coords, avoid) - 0.05) path = avoiding;
+    if (!direct || sharedShare(avoiding.coords, avoid) < directShared - 0.05) path = avoiding;
   }
   if (!path || path.coords.length < 2) return null;
 

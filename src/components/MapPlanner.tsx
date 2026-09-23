@@ -35,7 +35,7 @@ import { ENABLED_DISCIPLINES } from "@/config/constants";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { MapContainer, TileLayer, Polyline, Marker, useMap, useMapEvents } from "react-leaflet";
+import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import ElevationProfile from "@/components/ElevationProfile";
@@ -110,6 +110,101 @@ function ClickToAdd({ onAdd }: { onAdd: (latlng: LatLng) => void }) {
 }
 
 /** Pans to the rider's location once, if it arrives before they start drawing. */
+/**
+ * A route pin. Desktop: drag it. Phone: press and hold ~0.35 s — the pin
+ * lifts (glow + buzz), the map stops panning, and it follows the finger
+ * until released. A quick tap opens "Remove this point" (it used to delete
+ * the pin outright, so a missed drag lost it).
+ */
+function AnchorMarker({ position, icon, onMove, onRemove }: {
+  position: LatLng;
+  icon: L.DivIcon | L.Icon;
+  onMove: (p: LatLng) => void;
+  onRemove: () => void;
+}) {
+  const map = useMap();
+  const markerRef = useRef<L.Marker | null>(null);
+  const onMoveRef = useRef(onMove);
+  useEffect(() => { onMoveRef.current = onMove; }, [onMove]);
+  const coarse = typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
+
+  useEffect(() => {
+    if (!coarse) return;
+    const m = markerRef.current;
+    const el = m?.getElement();
+    if (!m || !el) return;
+    let timer: number | null = null;
+    let lifted = false, moved = false, sx = 0, sy = 0;
+    const point = (e: TouchEvent) => e.touches[0] ?? e.changedTouches[0];
+    const start = (e: TouchEvent) => {
+      const p = point(e); sx = p.clientX; sy = p.clientY; moved = false; lifted = false;
+      timer = window.setTimeout(() => {
+        lifted = true;
+        map.dragging.disable();
+        el.classList.add("pin-lifted");
+        navigator.vibrate?.(15);
+      }, 350);
+    };
+    const move = (e: TouchEvent) => {
+      const p = point(e);
+      if (!lifted) {
+        if (timer && Math.hypot(p.clientX - sx, p.clientY - sy) > 8) { clearTimeout(timer); timer = null; }
+        return;
+      }
+      e.preventDefault();
+      moved = true;
+      const r = map.getContainer().getBoundingClientRect();
+      m.setLatLng(map.containerPointToLatLng([p.clientX - r.left, p.clientY - r.top]));
+    };
+    const end = () => {
+      if (timer) { clearTimeout(timer); timer = null; }
+      if (!lifted) return;
+      lifted = false;
+      el.classList.remove("pin-lifted");
+      map.dragging.enable();
+      setTimeout(() => m.closePopup(), 0); // the release is not a tap
+      if (moved) { const ll = m.getLatLng(); onMoveRef.current([ll.lat, ll.lng]); }
+    };
+    el.addEventListener("touchstart", start, { passive: true });
+    document.addEventListener("touchmove", move, { passive: false });
+    document.addEventListener("touchend", end);
+    document.addEventListener("touchcancel", end);
+    return () => {
+      el.removeEventListener("touchstart", start);
+      document.removeEventListener("touchmove", move);
+      document.removeEventListener("touchend", end);
+      document.removeEventListener("touchcancel", end);
+    };
+  }, [map, coarse]);
+
+  return (
+    <Marker
+      ref={markerRef}
+      position={position}
+      draggable={!coarse}
+      icon={icon}
+      eventHandlers={{
+        dragend: (e) => {
+          const ll = (e.target as L.Marker).getLatLng();
+          onMoveRef.current([ll.lat, ll.lng]);
+        },
+      }}
+    >
+      <Popup closeButton={false} className="pin-popup">
+        <button
+          type="button"
+          onClick={() => { markerRef.current?.closePopup(); onRemove(); }}
+          className="min-h-[44px] px-3 rounded-lg text-xs font-bold"
+          style={{ background: "#f5a524", color: "#0a0a0a" }}
+        >
+          Remove this point
+        </button>
+        <p className="text-[11px] mt-1.5" style={{ color: "#b9bdb0" }}>{coarse ? "Press and hold a pin to move it." : "Drag a pin to move it."}</p>
+      </Popup>
+    </Marker>
+  );
+}
+
 /** Centres the map each time a new target is set (on load if allowed, or on "Use my location"). */
 function RecenterOnce({ target }: { target: LatLng | null }) {
   const map = useMap();
@@ -117,6 +212,15 @@ function RecenterOnce({ target }: { target: LatLng | null }) {
     if (target) map.setView(target, 12);
   }, [target, map]);
   return null;
+}
+
+/** At most two leg snaps in flight; the rest wait their turn. */
+let snapsInFlight = 0;
+const snapWaiters: Array<() => void> = [];
+async function snapQueue<T>(run: () => Promise<T>): Promise<T> {
+  while (snapsInFlight >= 2) await new Promise<void>((ok) => snapWaiters.push(ok));
+  snapsInFlight++;
+  try { return await run(); } finally { snapsInFlight--; snapWaiters.shift()?.(); }
 }
 
 export default function MapPlanner() {
@@ -216,12 +320,22 @@ export default function MapPlanner() {
     disc: Discipline
   ): Promise<void> {
     try {
-      const res = await fetch("/api/reroute", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        // Avoid the roads the rest of the route already uses, so a stop
-        // like Blessington becomes part of a loop, not an out-and-back.
-        body: JSON.stringify({ waypoints: [from, to], discipline: disc, avoid: roadsInUse(id) }),
+      // Queued (two legs at a time) and retried quietly on a busy/rate-limited
+      // answer, so tapping out a loop quickly never leaves dashed legs.
+      const res = await snapQueue(async () => {
+        let r: Response | null = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          if (attempt) await new Promise((ok) => setTimeout(ok, attempt === 1 ? 1500 : 4000));
+          r = await fetch("/api/reroute", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            // Avoid the roads the rest of the route already uses, so a stop
+            // like Blessington becomes part of a loop, not an out-and-back.
+            body: JSON.stringify({ waypoints: [from, to], discipline: disc, avoid: roadsInUse(id) }),
+          }).catch(() => null);
+          if (r && (r.ok || r.status === 401 || r.status === 400 || r.status === 422)) break;
+        }
+        return r ?? new Response(null, { status: 503 });
       });
       const body = await res.json().catch(() => null);
       if (res.status === 401) {
@@ -702,18 +816,12 @@ export default function MapPlanner() {
             ) : null
           )}
           {anchors.map((p, i) => (
-            <Marker
+            <AnchorMarker
               key={`${i}-${p[0]}-${p[1]}`}
               position={p}
-              draggable
               icon={i === 0 ? startIcon : anchorIcon}
-              eventHandlers={{
-                dragend: (e) => {
-                  const ll = (e.target as L.Marker).getLatLng();
-                  moveAnchor(i, [ll.lat, ll.lng]);
-                },
-                click: () => removeAnchor(i),
-              }}
+              onMove={(ll) => moveAnchor(i, ll)}
+              onRemove={() => removeAnchor(i)}
             />
           ))}
         </MapContainer>

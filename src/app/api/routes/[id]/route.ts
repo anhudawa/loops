@@ -7,6 +7,7 @@ import { rerouteWaypoints, engineTrace } from "@/lib/route-generator";
 import { traceRoadReport, traceProfileChain, summariseReport } from "@/lib/road-trace";
 import { ensureTraceProfile } from "@/lib/engine-profiles";
 import { withBundleCorrection } from "@/lib/bundle-corrections";
+import { checkTrack } from "@/lib/track-shape";
 import { ROAD_RULES_VERSION, nameCompromises, type RoadReport } from "@/lib/road-segments";
 
 export const maxDuration = 30;
@@ -202,7 +203,12 @@ export async function GET(
       properties: { route_id: route.id, distance_km: route.distance_km, discipline: route.discipline, country: route.country },
     });
 
-    return NextResponse.json(publicRoute(route as unknown as Record<string, unknown>));
+    const pub = publicRoute(route as unknown as Record<string, unknown>) as Record<string, unknown>;
+    try {
+      const raw = JSON.parse(route.coordinates);
+      pub.track_check = checkTrack(raw.map((c: number[]) => [Number(c[0]), Number(c[1])] as [number, number]), route.name);
+    } catch { /* client measures */ }
+    return NextResponse.json(pub);
   } catch (err) {
     return handleApiError(err);
   }

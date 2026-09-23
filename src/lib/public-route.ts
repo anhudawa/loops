@@ -157,6 +157,11 @@ export function thinCoordinates(coordinates: unknown, max = 150): string | unkno
  */
 export function initialRouteForPage(route: Record<string, unknown>, max = 1200): Record<string, unknown> {
   const out = publicRoute(route) as Record<string, unknown>;
+  // Measure the shape on the FULL track (thinning under-counts doubling back).
+  try {
+    const raw = typeof route.coordinates === "string" ? JSON.parse(route.coordinates as string) : route.coordinates;
+    if (Array.isArray(raw)) out.track_check = checkTrack(raw.map((c: number[]) => [Number(c[0]), Number(c[1])] as [number, number]), String(route.name ?? ""));
+  } catch { /* measured on the client instead */ }
   try {
     const raw = typeof out.coordinates === "string" ? JSON.parse(out.coordinates as string) : out.coordinates;
     if (Array.isArray(raw) && raw.length > max) {

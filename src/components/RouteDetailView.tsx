@@ -365,7 +365,8 @@ export default function RouteDetailView({ ride, initialRoute }: { ride?: RideInv
   const coordinates: [number, number][] = rawCoords.map((c) => [c[0], c[1]]);
   const elevations: number[] = rawCoords.map((c) => c[2] ?? 0);
   const climbs = detectClimbs(fullCoordinates);
-  const track = cachedTrackCheck(route.id, coordinates, route.name);
+  // Measured on the full track by the server; the client measures only as a fallback.
+  const track = (route as Route & { track_check?: TrackCheck | null }).track_check ?? cachedTrackCheck(route.id, coordinates, route.name);
 
   const handlePositionChange = (index: number | null) => {
     setHoverIndex(index);

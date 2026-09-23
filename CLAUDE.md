@@ -141,13 +141,27 @@ node scripts/import-routes.mjs scripts/hub-data/girona-eat-sleep-cycle.json --dr
 - Golden route suite: harness + 30 cases at `npm run golden` (needs
   ANTHROPIC_API_KEY + network); expand to 100 cases and wire into CI
 - BRouter public demo is rate-limited — set BROUTER_URL before launch
-- Gran Canaria manifest has 7 routes (bar is 8)
+- Gran Canaria manifest has 8 routes (bar met, 2026-09-23)
 - Dublin library: /admin → Routes → "Import Dublin routes" inserts the bundled
   src/data/hub-bundles/dublin.json (2 Skerries loops, road report measured on the
   engine, approved but not VERIFIED). Of dublin.json, the Canal Ride (~5 km gravel
   towpath) and Wicklow 200 (~11 km primary) FAIL the Road Standard — not bundled.
   Note: import-routes.mjs inserts self-sourced routes as quality_status 'pending'
   (hidden publicly).
+- Road reports for library routes (2026-09-23): GET /api/routes/[id] traces
+  a route without one through the engine after the response
+  (src/lib/road-trace.ts, `trekking` profile, via points every ~0.8 km) and
+  stores it; unknown beats wrong (length drift > 8 % → nothing stored, retry
+  in 1 h). Shown as the "Road Standard" card on the route page and as a
+  badge on the OG preview. Roadman spin: meets the standard.
+- Ride verdict (src/lib/ride-wind.ts): weather card says what wind/rain do
+  to THIS loop for the hours of the ride; never suggests reversing a loop
+  (start point decides out/home balance under steady wind).
+- Group-ride links: /ride/<id>?t=YYYY-MM-DDTHH:MM&m=<meet>; share sheet
+  forwards the same ride; email sign-in stores the return path with the
+  token (works from Gmail/Outlook in-app browsers).
+- GPX access is one switch: GPX_ACCESS in src/config/constants.ts
+  ("signed-in" default | "ride-links" | "everyone"); copy derives from it.
 - No CSRF tokens; cookie-only sessions; locale hardcoded en-IE
 
 ## Conventions

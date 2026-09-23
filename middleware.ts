@@ -118,7 +118,9 @@ export function middleware(request: NextRequest) {
     pathname === "/blog" ||
     pathname.startsWith("/blog/") ||
     pathname === "/share" ||
-    pathname.startsWith("/share/")
+    pathname.startsWith("/share/") ||
+    // Group-ride invite links (WhatsApp) — public like route pages
+    pathname.startsWith("/ride/")
   ) {
     return applyAttribution(NextResponse.next());
   }

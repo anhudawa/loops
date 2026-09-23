@@ -1,5 +1,6 @@
 import { ImageResponse } from "next/og";
-import { getRoute, getRouteRating } from "@/lib/db";
+import { getRoute } from "@/lib/db";
+import { formatRideWhen, cleanMeet } from "@/lib/ride-invite";
 
 export const runtime = "nodejs";
 
@@ -44,7 +45,7 @@ function fallbackImage(message: string) {
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -55,13 +56,10 @@ export async function GET(
       return fallbackImage("Route not found");
     }
 
-    let rating = { average: 0, count: 0 };
-    try {
-      rating = await getRouteRating(id);
-    } catch {
-      // continue without rating
-    }
-
+    // Group-ride invite details (from /ride/<id>?t=…&m=…).
+    const sp = new URL(request.url).searchParams;
+    const when = formatRideWhen(sp.get("t"));
+    const meet = cleanMeet(sp.get("m"));
     const isVerified = route.is_verified === 1;
 
     // Parse coordinates and normalize for SVG path
@@ -82,14 +80,20 @@ export async function GET(
           if (c[1] < minLng) minLng = c[1];
           if (c[1] > maxLng) maxLng = c[1];
         }
-        const rangeX = maxLng - minLng || 0.01;
-        const rangeY = maxLat - minLat || 0.01;
-        const padding = 40;
+        // True proportions: one scale for both axes, longitude shrunk by
+        // cos(latitude) (it was stretched to a square before).
+        const kx = Math.cos((((minLat + maxLat) / 2) * Math.PI) / 180);
+        const spanX = (maxLng - minLng) * kx || 0.001;
+        const spanY = maxLat - minLat || 0.001;
+        const padding = 30;
         const size = 320;
+        const scale = (size - padding * 2) / Math.max(spanX, spanY);
+        const offX = (size - spanX * scale) / 2;
+        const offY = (size - spanY * scale) / 2;
 
         const points = coords.map((c) => {
-          const x = padding + ((c[1] - minLng) / rangeX) * (size - padding * 2);
-          const y = padding + ((maxLat - c[0]) / rangeY) * (size - padding * 2);
+          const x = offX + (c[1] - minLng) * kx * scale;
+          const y = offY + (maxLat - c[0]) * scale;
           return `${x.toFixed(1)},${y.toFixed(1)}`;
         });
         svgPath = `M${points.join("L")}`;
@@ -98,7 +102,6 @@ export async function GET(
       // ignore parse errors
     }
 
-    const stars = rating.count > 0 ? `${rating.average}/5` : null;
 
     return new ImageResponse(
       (
@@ -139,15 +142,25 @@ export async function GET(
             {/* Middle: Route info */}
             <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                {stars && (
-                  <span style={{ fontSize: "14px", color: "#ffbb00", fontWeight: 700 }}>
-                    ★ {stars}
-                  </span>
-                )}
-                {isVerified && (
+                {when ? (
                   <span
                     style={{
-                      fontSize: "14px",
+                      fontSize: "22px",
+                      fontWeight: 800,
+                      color: "#0a0a0a",
+                      background: "#c8ff00",
+                      padding: "6px 14px",
+                      borderRadius: "8px",
+                      textTransform: "uppercase" as const,
+                      letterSpacing: "0.04em",
+                    }}
+                  >
+                    {`Group ride · ${when}`}
+                  </span>
+                ) : isVerified ? (
+                  <span
+                    style={{
+                      fontSize: "16px",
                       fontWeight: 700,
                       color: "#00ff88",
                       textTransform: "uppercase" as const,
@@ -157,9 +170,9 @@ export async function GET(
                       background: "rgba(0, 255, 136, 0.12)",
                     }}
                   >
-                    ✓ Verified
+                    Verified route
                   </span>
-                )}
+                ) : null}
               </div>
 
               <h1
@@ -175,12 +188,12 @@ export async function GET(
                 {route.name}
               </h1>
 
-              <div style={{ display: "flex", gap: "24px", fontSize: "18px" }}>
+              <div style={{ display: "flex", gap: "24px", fontSize: "26px" }}>
                 <span style={{ color: "#c8ff00", fontWeight: 700 }}>
                   {route.distance_km} km
                 </span>
                 <span style={{ color: "#a0a0a0" }}>
-                  ↑ {route.elevation_gain_m}m
+                  {`${route.elevation_gain_m} m climbing`}
                 </span>
                 <span style={{ color: "#a0a0a0", textTransform: "capitalize" as const }}>
                   {route.surface_type}
@@ -188,10 +201,10 @@ export async function GET(
               </div>
             </div>
 
-            {/* Bottom: County */}
+            {/* Bottom: meeting point (ride invite) or place */}
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <span style={{ fontSize: "16px", color: "#666666" }}>
-                {route.region || route.county}, {route.country || "Ireland"}
+              <span style={{ fontSize: meet ? "26px" : "20px", color: meet ? "#f5f5f5" : "#888888", fontWeight: meet ? 700 : 400 }}>
+                {meet ? `Meet: ${meet}` : `${route.region || route.county}, ${route.country || "Ireland"}`}
               </span>
             </div>
           </div>

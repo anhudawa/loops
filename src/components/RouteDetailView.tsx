@@ -1,0 +1,779 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
+import Link from "next/link";
+import ElevationProfile from "@/components/ElevationProfile";
+import ClimbCards from "@/components/ClimbCards";
+import StarRating from "@/components/StarRating";
+import Comments from "@/components/Comments";
+import PhotoGallery from "@/components/PhotoGallery";
+import ConditionReports from "@/components/ConditionReports";
+import RideActions from "@/components/RideActions";
+import RideDisclaimer from "@/components/RideDisclaimer";
+import ShareRide from "@/components/ShareRide";
+import WeatherCard from "@/components/WeatherCard";
+import { useAuth } from "@/components/AuthProvider";
+import { useToast } from "@/components/Toast";
+import Breadcrumbs from "@/components/Breadcrumbs";
+import AppHeader from "@/components/AppHeader";
+import SendToGarmin from "@/components/SendToGarmin";
+import QualityFactors, { SurfaceSummary, type SurfaceBreakdown } from "@/components/QualityFactors";
+import RouteFaq from "@/components/RouteFaq";
+import RelatedRoutes from "@/components/RelatedRoutes";
+import { slugify } from "@/lib/seo";
+import { SOCIAL_FEATURES_ENABLED } from "@/config/constants";
+import { detectClimbs, haversine, CATEGORY_COLORS, type Climb } from "@/lib/climb-detection";
+
+const MapView = dynamic(() => import("@/components/MapView"), { ssr: false });
+
+interface Route {
+  id: string;
+  name: string;
+  description: string | null;
+  distance_km: number;
+  elevation_gain_m: number;
+  elevation_loss_m: number;
+  surface_type: string;
+  county: string;
+  country: string;
+  region: string | null;
+  discipline: string;
+  start_lat: number;
+  start_lng: number;
+  gpx_filename: string | null;
+  coordinates: string;
+  created_by: string | null;
+  created_at: string;
+  is_verified?: number;
+  creator_name?: string | null;
+  creator_avatar?: string | null;
+  creator_rating?: number;
+  creator_rating_count?: number;
+  operator_name?: string | null;
+  operator_url?: string | null;
+  quality_score?: number | null;
+  quality_breakdown?: Record<string, number> | null;
+  quality_surface?: SurfaceBreakdown | null;
+  road_report?: { standard_met: boolean; summary: string } | null;
+}
+
+interface RouteQualityData {
+  total: number;
+  breakdown: Record<string, number>;
+  surface_breakdown?: SurfaceBreakdown;
+  confidence?: number;
+  confidence_level?: "high" | "medium" | "low";
+}
+
+export interface RideInvite {
+  /** Human "Sat 26 Sep · 9:00" (already formatted, wall-clock). */
+  when: string | null;
+  meet: string | null;
+}
+
+export default function RouteDetailView({ ride }: { ride?: RideInvite | null } = {}) {
+  const params = useParams();
+  const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
+  const { toast } = useToast();
+  const [route, setRoute] = useState<Route | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [windData, setWindData] = useState<{ direction: number; speed: number } | null>(null);
+  const [windOverlayEnabled, setWindOverlayEnabled] = useState(false);
+  const [travelOverlayEnabled, setTravelOverlayEnabled] = useState(false);
+  const [isFollowingCreator, setIsFollowingCreator] = useState(false);
+  const [followLoading, setFollowLoading] = useState(false);
+  const [isFavourited, setIsFavourited] = useState(false);
+  const [favCount, setFavCount] = useState(0);
+  const [favLoading, setFavLoading] = useState(false);
+  const [fetchError, setFetchError] = useState(false);
+  const [mutationError, setMutationError] = useState("");
+  // Quality/surface scoring (parity with /generate) — fetched fire-and-forget
+  const [quality, setQuality] = useState<RouteQualityData | null>(null);
+  // Profile hover → map marker (set by profile, drives map)
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  // Map click → profile crosshair (set by map click, drives profile)
+  const [highlightIndex, setHighlightIndex] = useState<number | null>(null);
+  // Climb card → map highlight section
+  const [highlightSection, setHighlightSection] = useState<{
+    coords: [number, number][];
+    color: string;
+  } | null>(null);
+
+  const fetchRoute = async () => {
+    if (!params.id) return;
+    setFetchError(false);
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/routes/${params.id}`);
+      // A 5xx returns { error, code } — treat it as a transient failure
+      // ("Try again"), NOT as "this route doesn't exist". Only a real 404
+      // (or a payload with no coordinates) is a genuine missing route.
+      if (res.status >= 500) {
+        setFetchError(true);
+        return;
+      }
+      const data = await res.json();
+      setRoute(data);
+      // Instant quality: if the route already has a persisted score, show it
+      // immediately (no waiting on live Overpass). The live effect below still
+      // runs and refreshes/persists a fresher score when it can.
+      if (data && typeof data.quality_score === "number" && data.quality_score > 0) {
+        setQuality({
+          total: data.quality_score,
+          breakdown: data.quality_breakdown ?? {},
+          surface_breakdown: data.quality_surface ?? undefined,
+        });
+      }
+    } catch {
+      setFetchError(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRoute();
+  }, [params.id]);
+
+
+  const [relatedRoutes, setRelatedRoutes] = useState<Route[]>([]);
+  // Whether the related rail is actually showing same-region routes (true) or
+  // fell back to country-wide (false) — so we never label Dublin routes as
+  // "More routes in Wicklow".
+  const [relatedIsRegion, setRelatedIsRegion] = useState(false);
+
+  useEffect(() => {
+    if (!route) return;
+    fetch(`/api/routes?country=${encodeURIComponent(route.country)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        const all = data.data || data;
+        const sameRegion = route.region
+          ? all.filter((r: Route) => r.id !== route.id && r.region === route.region)
+          : [];
+        if (sameRegion.length > 0) {
+          setRelatedRoutes(sameRegion.slice(0, 4));
+          setRelatedIsRegion(true);
+        } else {
+          setRelatedRoutes(all.filter((r: Route) => r.id !== route.id).slice(0, 4));
+          setRelatedIsRegion(false);
+        }
+      })
+      .catch(() => {});
+  }, [route?.id, route?.country, route?.region]);
+
+  // Check favourite status
+  useEffect(() => {
+    if (!params.id) return;
+    fetch(`/api/routes/${params.id}/favourite`)
+      .then((r) => r.json())
+      .then((data) => {
+        setIsFavourited(data.favourited);
+        setFavCount(data.count);
+      })
+      .catch(() => {});
+  }, [params.id]);
+
+  // Quality + surface scoring — same engine the generator uses, surfaced
+  // here for parity. Fire-and-forget: degrade silently if Overpass/the
+  // API is down, the page works without it.
+  useEffect(() => {
+    if (!route?.id || !route.coordinates) return;
+    let cancelled = false;
+    fetch("/api/routes/quality", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ routeId: route.id }),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body) => {
+        // Only surface a score we could actually STAND OVER. A total of 0 with
+        // zero confidence means "couldn't verify" (Overpass down/rate-limited
+        // or the route failed a hard rule) — showing that as a damning "0/100"
+        // on every route is worse than showing nothing. Require a real,
+        // confidently-verified score before rendering the module.
+        const d = body?.data as RouteQualityData | undefined;
+        const verified =
+          d &&
+          typeof d.total === "number" &&
+          d.total > 0 &&
+          (d.confidence === undefined || d.confidence > 0.3);
+        if (!cancelled && verified) {
+          setQuality(d);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [route?.id, route?.coordinates]);
+
+  // Check if viewer follows the route creator
+  useEffect(() => {
+    if (!route?.created_by || !user || user.id === route.created_by) return;
+    fetch(`/api/users/${route.created_by}/follow`)
+      .then((r) => r.json())
+      .then((data) => setIsFollowingCreator(data.following))
+      .catch(() => {});
+  }, [route?.created_by, user]);
+
+  const handleFollowCreator = async () => {
+    if (!route?.created_by || followLoading) return;
+    // Optimistic: toggle immediately
+    const wasFollowing = isFollowingCreator;
+    setIsFollowingCreator(!wasFollowing);
+    setFollowLoading(true);
+    try {
+      const method = wasFollowing ? "DELETE" : "POST";
+      const res = await fetch(`/api/users/${route.created_by}/follow`, { method });
+      if (!res.ok) {
+        setIsFollowingCreator(wasFollowing);
+        setMutationError("Action failed. Please try again.");
+        setTimeout(() => setMutationError(""), 3000);
+      }
+    } catch {
+      setIsFollowingCreator(wasFollowing);
+      setMutationError("Action failed. Please try again.");
+      setTimeout(() => setMutationError(""), 3000);
+    }
+    setFollowLoading(false);
+  };
+
+  const handleFavourite = async () => {
+    if (favLoading || !user) return;
+    // Optimistic: toggle immediately
+    const wasFavourited = isFavourited;
+    const prevCount = favCount;
+    setIsFavourited(!wasFavourited);
+    setFavCount(wasFavourited ? prevCount - 1 : prevCount + 1);
+    setFavLoading(true);
+    try {
+      const res = await fetch(`/api/routes/${params.id}/favourite`, { method: "POST" });
+      if (res.ok) {
+        const data = await res.json();
+        setIsFavourited(data.favourited);
+        setFavCount(data.count);
+      } else {
+        setIsFavourited(wasFavourited);
+        setFavCount(prevCount);
+        setMutationError("Action failed. Please try again.");
+        setTimeout(() => setMutationError(""), 3000);
+      }
+    } catch {
+      setIsFavourited(wasFavourited);
+      setFavCount(prevCount);
+      setMutationError("Action failed. Please try again.");
+      setTimeout(() => setMutationError(""), 3000);
+    }
+    setFavLoading(false);
+  };
+
+  if (fetchError) {
+    return (
+      <div className="min-h-screen" style={{ background: "var(--bg)" }}>
+        <AppHeader />
+        <div className="flex flex-col items-center justify-center gap-4 py-32">
+          <p className="text-sm" style={{ color: "var(--text-muted)" }}>Something went wrong loading this route.</p>
+          <button
+            onClick={() => fetchRoute()}
+            className="btn-accent px-4 py-2 rounded-lg text-sm font-bold"
+          >
+            Try again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen" style={{ background: "var(--bg)" }}>
+        <AppHeader />
+        <div className="flex items-center justify-center py-32">
+          <div className="animate-pulse flex flex-col items-center gap-3">
+            <div className="w-10 h-10 rounded-full" style={{ background: "var(--border)" }} />
+            <div className="h-3 rounded w-24" style={{ background: "var(--border)" }} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!route || !route.coordinates) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-4" style={{ background: "var(--bg)" }}>
+        <span className="logo-mark text-gradient text-5xl mb-6">LOOPS</span>
+        <h1 className="text-6xl font-extrabold mb-2" style={{ color: "var(--text)" }}>Route not found</h1>
+        <p className="text-lg mb-8" style={{ color: "var(--text-muted)" }}>
+          This loop doesn&apos;t exist — yet.
+        </p>
+        <Link
+          href="/"
+          className="btn-accent px-8 py-3 rounded-xl font-bold text-sm uppercase tracking-wider"
+        >
+          Back to exploring
+        </Link>
+      </div>
+    );
+  }
+
+  // Guard the parse: malformed/truncated coordinates must degrade to an
+  // empty route, never crash the page in the render path.
+  let rawCoords: number[][] = [];
+  try {
+    const parsed = JSON.parse(route.coordinates);
+    if (Array.isArray(parsed)) rawCoords = parsed;
+  } catch {
+    rawCoords = [];
+  }
+  const fullCoordinates: [number, number, number][] = rawCoords.map((c) => [c[0], c[1], c[2] ?? 0]);
+  const coordinates: [number, number][] = rawCoords.map((c) => [c[0], c[1]]);
+  const elevations: number[] = rawCoords.map((c) => c[2] ?? 0);
+  const climbs = detectClimbs(fullCoordinates);
+
+  const handlePositionChange = (index: number | null) => {
+    setHoverIndex(index);
+    // Clear map-to-profile crosshair when user starts hovering profile
+    if (index != null) setHighlightIndex(null);
+  };
+
+  const handleClimbSelect = (climb: Climb) => {
+    const sectionCoords = fullCoordinates
+      .slice(climb.startIndex, climb.endIndex + 1)
+      .map((c): [number, number] => [c[0], c[1]]);
+    const color = climb.category ? CATEGORY_COLORS[climb.category] ?? "#c8ff00" : "#c8ff00";
+    setHighlightSection({ coords: sectionCoords, color });
+  };
+
+  const handlePolylineClick = (latlng: { lat: number; lng: number }) => {
+    // Find nearest coordinate index — drives profile crosshair
+    let minDist = Infinity;
+    let nearestIdx = 0;
+    for (let i = 0; i < fullCoordinates.length; i++) {
+      const d = haversine([fullCoordinates[i][0], fullCoordinates[i][1]], [latlng.lat, latlng.lng]);
+      if (d < minDist) {
+        minDist = d;
+        nearestIdx = i;
+      }
+    }
+    setHighlightIndex(nearestIdx);
+  };
+
+  // Compute hover position for map marker (from profile hover only)
+  const hoverPosition = hoverIndex != null && hoverIndex < fullCoordinates.length
+    ? { lat: fullCoordinates[hoverIndex][0], lng: fullCoordinates[hoverIndex][1] }
+    : null;
+
+  return (
+    <div className="min-h-screen" style={{ background: "var(--bg)" }}>
+      <AppHeader />
+
+      {/* Group-ride invite banner (the /ride/<id> link from WhatsApp) */}
+      {ride && (ride.when || ride.meet) && (
+        <div className="px-4 py-3 border-b" style={{ background: "var(--accent-glow)", borderColor: "var(--accent)" }} data-testid="ride-banner">
+          <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--accent)" }}>Group ride</p>
+          <p className="text-base font-extrabold" style={{ color: "var(--text)" }}>
+            {[ride.when, ride.meet && `Meet: ${ride.meet}`].filter(Boolean).join(" · ")}
+          </p>
+          <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+            {route.distance_km} km · +{route.elevation_gain_m} m · GPX for your bike computer below
+          </p>
+        </div>
+      )}
+
+      {/* Hero: Map full-bleed */}
+      <div className="h-[200px] md:h-[360px] relative">
+        <MapView
+          routes={[route]}
+          selectedRouteId={route.id}
+          windOverlay={windOverlayEnabled && windData ? windData : null}
+          travelOverlay={travelOverlayEnabled}
+          hoverPosition={hoverPosition}
+          highlightSection={highlightSection}
+          onPolylineClick={handlePolylineClick}
+          onMapClick={() => setHighlightSection(null)}
+        />
+        <div className="absolute bottom-0 left-0 right-0 h-20 pointer-events-none z-[1]" style={{ background: "linear-gradient(to top, var(--bg), transparent)" }} />
+      </div>
+
+      <div className="max-w-4xl mx-auto px-4 md:px-6 -mt-8 relative z-[2]">
+        {/* Weather */}
+        <div className="mb-4">
+          <WeatherCard
+            routeId={route.id}
+            windOverlayEnabled={windOverlayEnabled}
+            onWindToggle={setWindOverlayEnabled}
+            travelOverlayEnabled={travelOverlayEnabled}
+            onTravelToggle={setTravelOverlayEnabled}
+            onWeatherLoaded={(wind) => setWindData(wind)}
+            coordinates={coordinates}
+          />
+        </div>
+
+        {/* Back + Breadcrumbs */}
+        <div className="mb-3 flex items-center gap-1">
+          <button
+            onClick={() => (window.history.length > 1 ? router.back() : router.push("/"))}
+            aria-label="Go back"
+            className="min-w-[44px] min-h-[44px] -ml-3 shrink-0 flex items-center justify-center hover:opacity-80 transition-opacity"
+            style={{ color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer" }}
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <Breadcrumbs
+            items={[
+              { label: "LOOPS", href: "/" },
+              { label: route.country, href: `/routes/country/${slugify(route.country)}` },
+              ...(route.region
+                ? [{ label: route.region, href: `/routes/country/${slugify(route.country)}/${slugify(route.region)}` }]
+                : []),
+              { label: route.name },
+            ]}
+          />
+        </div>
+
+        {/* Title card */}
+        <div className="rounded-2xl p-4 md:p-7 mb-4 md:mb-6" style={{ background: "var(--bg-card)", border: "1px solid var(--border)", boxShadow: "0 8px 30px rgba(0,0,0,0.3)" }}>
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div>
+              <div className="flex items-center gap-2 mb-1 text-[10px] uppercase tracking-wider font-bold" style={{ color: "var(--text-muted)" }}>
+                <span>{route.region || route.county}</span>
+                <span>·</span>
+                <span>{route.country || "Ireland"}</span>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-lg md:text-2xl font-extrabold tracking-tight" style={{ color: "var(--text)" }}>{route.name}</h1>
+                {route.is_verified === 1 && (
+                  <span className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-lg shrink-0" style={{ color: "var(--success)", background: "rgba(0, 255, 136, 0.1)" }}>
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                    Verified
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {user ? (
+              <button
+                onClick={handleFavourite}
+                disabled={favLoading}
+                className="flex items-center gap-1 px-2.5 py-2 min-h-[44px] rounded-lg transition-all"
+                style={{
+                  background: isFavourited ? "rgba(255, 51, 85, 0.15)" : "rgba(255,255,255,0.05)",
+                  border: `1px solid ${isFavourited ? "rgba(255, 51, 85, 0.3)" : "var(--border)"}`,
+                  opacity: favLoading ? 0.5 : 1,
+                }}
+                title={isFavourited ? "Remove from favourites" : "Add to favourites"}
+              >
+                <svg
+                  className="w-4 h-4 transition-transform"
+                  viewBox="0 0 24 24"
+                  fill={isFavourited ? "var(--danger)" : "none"}
+                  stroke={isFavourited ? "var(--danger)" : "var(--text-muted)"}
+                  strokeWidth={2}
+                  style={{ transform: isFavourited ? "scale(1.1)" : "scale(1)" }}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                </svg>
+                {favCount > 0 && (
+                  <span className="text-[11px] font-bold" style={{ color: isFavourited ? "var(--danger)" : "var(--text-muted)" }}>
+                    {favCount}
+                  </span>
+                )}
+              </button>
+              ) : (
+              <Link
+                href={`/login?redirect=/routes/${route.id}`}
+                className="flex items-center gap-1 px-2.5 py-2 min-h-[44px] rounded-lg transition-all hover:opacity-80"
+                style={{
+                  background: "rgba(255,255,255,0.05)",
+                  border: "1px solid var(--border)",
+                }}
+                title="Sign in to favourite"
+              >
+                <svg
+                  className="w-4 h-4"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="var(--text-muted)"
+                  strokeWidth={2}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                </svg>
+                {favCount > 0 && (
+                  <span className="text-[11px] font-bold" style={{ color: "var(--text-muted)" }}>
+                    {favCount}
+                  </span>
+                )}
+              </Link>
+              )}
+            </div>
+          </div>
+          {mutationError && <p className="text-xs mt-1" style={{ color: "var(--danger)" }}>{mutationError}</p>}
+
+          {SOCIAL_FEATURES_ENABLED && (
+            <div className="mb-4">
+              <StarRating routeId={route.id} />
+            </div>
+          )}
+
+          {/* Stats row */}
+          <div className="grid grid-cols-4 gap-3 pt-4 border-t" style={{ borderColor: "var(--border)" }}>
+            {[
+              { label: "Distance", value: `${route.distance_km}km` },
+              { label: "Gain", value: `${route.elevation_gain_m}m` },
+              { label: "Loss", value: `${route.elevation_loss_m}m` },
+              { label: "Surface", value: route.surface_type },
+            ].map((stat) => (
+              <div key={stat.label} className="text-center">
+                <p className="text-base md:text-xl font-extrabold capitalize" style={{ color: "var(--accent)" }}>{stat.value}</p>
+                <p className="text-[9px] md:text-[10px] uppercase tracking-wider font-bold mt-0.5" style={{ color: "var(--text-muted)" }}>{stat.label}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Ride something like this — hand the route's shape to the generator */}
+          <Link
+            href={`/generate?q=${encodeURIComponent(`${route.distance_km}km ${route.discipline} loop from ${route.region || route.county}`)}`}
+            className="mt-4 w-full min-h-[44px] flex items-center justify-center gap-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all hover:brightness-110"
+            style={{ background: "var(--accent-glow)", color: "var(--accent)", border: "1px solid rgba(200,255,0,0.3)" }}
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            Ride something like this
+          </Link>
+        </div>
+
+        {/* Route quality — same scoring engine as /generate; renders only
+            when the score arrives, degrades silently otherwise */}
+        {quality && (
+          <div className="rounded-2xl p-4 md:p-6 mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-xs font-extrabold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+                Route Quality
+              </h2>
+              <span className="text-sm font-extrabold" style={{ color: "var(--accent)" }}>
+                {quality.total}/100
+              </span>
+            </div>
+            {route?.road_report && (
+              <p
+                className="text-xs mt-2 flex items-start gap-1.5"
+                style={{ color: route.road_report.standard_met ? "var(--text-muted)" : "#f5a524" }}
+                data-testid="road-standard"
+              >
+                <span aria-hidden="true">{route.road_report.standard_met ? "✓" : "⚠"}</span>
+                <span>{route.road_report.summary}</span>
+              </p>
+            )}
+            {quality.surface_breakdown && <SurfaceSummary breakdown={quality.surface_breakdown} />}
+            <QualityFactors breakdown={quality.breakdown} />
+          </div>
+        )}
+
+        {/* Uploaded by — social + attribution: hidden for launch. Routes are
+            facts (no public attribution); the persona/rating/follow only shows
+            when social features are switched on. */}
+        {SOCIAL_FEATURES_ENABLED && route.created_by && route.creator_name && (
+          <div
+            className="flex items-center gap-3 rounded-xl px-4 py-3 mb-4"
+            style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+          >
+            <Link href={`/profile/${route.created_by}`} className="shrink-0">
+              {route.creator_avatar ? (
+                <img
+                  src={route.creator_avatar}
+                  alt=""
+                  className="w-9 h-9 rounded-full object-cover"
+                  style={{ border: "2px solid var(--border)" }}
+                />
+              ) : (
+                <div
+                  className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold"
+                  style={{ background: "var(--bg-raised)", color: "var(--text-muted)", border: "2px solid var(--border)" }}
+                >
+                  {route.creator_name.charAt(0).toUpperCase()}
+                </div>
+              )}
+            </Link>
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] uppercase tracking-wider font-bold" style={{ color: "var(--text-muted)" }}>
+                Uploaded by
+              </p>
+              <div className="flex items-center gap-2">
+                <Link
+                  href={`/profile/${route.created_by}`}
+                  className="text-sm font-bold hover:opacity-80 transition-opacity truncate"
+                  style={{ color: "var(--text)" }}
+                >
+                  {route.creator_name}
+                </Link>
+                {route.creator_rating !== undefined && Number(route.creator_rating) > 0 && (
+                  <span className="flex items-center gap-1 text-xs shrink-0" style={{ color: "var(--text-muted)" }}>
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="var(--warning)" aria-hidden="true">
+                      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                    </svg>
+                    <span className="font-bold">{(Math.round(Number(route.creator_rating) * 10) / 10).toFixed(1)}</span>
+                    <span style={{ opacity: 0.5 }}>({route.creator_rating_count})</span>
+                  </span>
+                )}
+              </div>
+            </div>
+            {user && user.id !== route.created_by && (
+              <button
+                onClick={handleFollowCreator}
+                disabled={followLoading}
+                className="shrink-0 text-xs font-bold uppercase tracking-wider px-4 py-2.5 min-h-[44px] rounded-lg transition-all hover:scale-[1.03]"
+                style={
+                  isFollowingCreator
+                    ? { background: "rgba(200, 255, 0, 0.1)", color: "var(--accent)", border: "1px solid rgba(200, 255, 0, 0.3)" }
+                    : { background: "var(--accent)", color: "var(--bg)", border: "1px solid var(--accent)" }
+                }
+              >
+                {isFollowingCreator ? "Following" : "Follow"}
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Photos — social feature, hidden for launch */}
+        {SOCIAL_FEATURES_ENABLED && (
+          <div className="rounded-2xl p-4 md:p-6 mb-3 md:mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+            <PhotoGallery routeId={route.id} />
+          </div>
+        )}
+
+        {/* Share Ride — prominent CTA */}
+        <div className="mb-4">
+          <ShareRide route={route} />
+        </div>
+
+        {/* Ride Actions */}
+        <div className="mb-6">
+          <RideActions routeId={route.id} routeName={route.name} />
+          {/* One-tap Send to Garmin — renders nothing until Garmin keys are configured */}
+          <div className="mt-2.5 flex justify-center empty:hidden">
+            <SendToGarmin
+              name={route.name}
+              coordinates={coordinates}
+              elevations={elevations}
+              distance_km={route.distance_km}
+              elevation_gain_m={route.elevation_gain_m}
+              discipline={route.discipline}
+            />
+          </div>
+          <RideDisclaimer />
+        </div>
+
+        {/* Elevation Profile — full width */}
+        <div className="rounded-2xl p-4 md:p-6 mb-3 md:mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+          <h2 className="text-xs font-extrabold uppercase tracking-wider mb-3" style={{ color: "var(--text-secondary)" }}>
+            Elevation Profile
+          </h2>
+          <ElevationProfile
+            coordinates={fullCoordinates}
+            distanceKm={route.distance_km}
+            onPositionChange={handlePositionChange}
+            highlightIndex={highlightIndex}
+          />
+        </div>
+
+        {/* Climb Cards */}
+        {climbs.length > 0 && (
+          <div className="rounded-2xl p-4 md:p-6 mb-3 md:mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+            <ClimbCards climbs={climbs} onClimbSelect={handleClimbSelect} />
+          </div>
+        )}
+
+        {/* About this route — full width */}
+        <div className="rounded-2xl p-4 md:p-6 mb-3 md:mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+          <h2 className="text-xs font-extrabold uppercase tracking-wider mb-3" style={{ color: "var(--text-secondary)" }}>
+            About this route
+          </h2>
+          {route.description ? (
+            <p className="text-sm leading-relaxed" style={{ color: "var(--text-muted)" }}>{route.description}</p>
+          ) : (
+            <p className="text-sm italic" style={{ color: "var(--text-muted)" }}>No description provided</p>
+          )}
+        </div>
+
+        {/* FAQ */}
+        <div className="rounded-2xl p-4 md:p-6 mb-3 md:mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+          <RouteFaq
+            routeName={route.name}
+            distanceKm={route.distance_km}
+            elevationGainM={route.elevation_gain_m}
+            surfaceType={route.surface_type}
+            discipline={route.discipline}
+          />
+        </div>
+
+        {/* Related Routes */}
+        <div className="rounded-2xl p-4 md:p-6 mb-3 md:mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+          <RelatedRoutes
+            routes={relatedRoutes}
+            regionOrCountry={relatedIsRegion && route.region ? route.region : route.country}
+            country={route.country}
+            isRegion={relatedIsRegion && !!route.region}
+          />
+        </div>
+
+        {/* Trail Conditions */}
+        {SOCIAL_FEATURES_ENABLED && (
+          <div className="rounded-2xl p-4 md:p-6 mb-3 md:mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+            <ConditionReports routeId={route.id} />
+          </div>
+        )}
+
+        {/* Comments */}
+        {SOCIAL_FEATURES_ENABLED && (
+          <div className="rounded-2xl p-4 md:p-6 mb-6 md:mb-8" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+            <Comments routeId={route.id} />
+          </div>
+        )}
+      </div>
+
+      {/* Spacer so the sticky CTA never covers the footer/content */}
+      {!user && !authLoading && <div className="h-24" aria-hidden="true" />}
+
+      {/* Sticky bottom CTA for unauthenticated users */}
+      {!user && !authLoading && (
+        <div
+          className="fixed bottom-0 left-0 right-0 z-50 px-4 py-3 md:py-4"
+          style={{
+            background: "linear-gradient(to top, var(--bg) 60%, transparent)",
+            backdropFilter: "blur(12px)",
+          }}
+        >
+          <div className="max-w-4xl mx-auto flex items-center gap-3">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold" style={{ color: "var(--text)" }}>
+                Join LOOPS
+              </p>
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                Download routes, rate rides, join the community
+              </p>
+            </div>
+            <Link
+              href={`/login?redirect=/routes/${route.id}`}
+              className="shrink-0 px-5 py-2.5 rounded-xl font-bold text-sm uppercase tracking-wider transition-all hover:brightness-110"
+              style={{
+                background: "var(--accent)",
+                color: "var(--bg)",
+              }}
+            >
+              Sign Up Free
+            </Link>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

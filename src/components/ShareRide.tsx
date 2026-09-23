@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { formatRideWhen, cleanMeet, rideUrl } from "@/lib/ride-invite";
 
 interface ShareRideProps {
   route: {
@@ -51,20 +52,24 @@ export default function ShareRide({ route }: ShareRideProps) {
 
   const surface = route.surface_type.charAt(0).toUpperCase() + route.surface_type.slice(1);
 
+  const when = formatRideWhen(startTime);
   const handleShare = () => {
-    const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
-    const routeUrl = `${baseUrl}/routes/${route.id}`;
+    if (!when) return; // guarded in the UI too — never send "Invalid Date"
+    // Always the public site, even inside the mobile app (whose origin is
+    // not a shareable URL).
+    const origin =
+      typeof window !== "undefined" && /^https:\/\/(www\.)?loops\.ie$/.test(window.location.origin)
+        ? window.location.origin
+        : "https://www.loops.ie";
+    const link = rideUrl(origin, route.id, startTime, meetingPoint);
 
     const message = [
-      `🚴 *Ride Invite — ${route.name}*`,
+      `🚴 *${route.name}*`,
+      `🕐 ${when}`,
+      `📍 ${cleanMeet(meetingPoint) ?? "Meeting point TBC"}`,
+      `📊 ${route.distance_km} km · ${route.elevation_gain_m} m climbing · ${surface}`,
       "",
-      `📍 *Meeting point:* ${meetingPoint || "TBC"}`,
-      `🕐 *Start time:* ${formatTime(startTime)}`,
-      "",
-      `📊 ${route.distance_km} km · ${route.elevation_gain_m}m elev · ${surface}`,
-      `📌 ${route.region || route.county}, ${route.country || "Ireland"}`,
-      "",
-      `🔗 ${routeUrl}`,
+      link, // last line → WhatsApp shows the ride preview card
     ].join("\n");
 
     const waUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
@@ -176,8 +181,12 @@ export default function ShareRide({ route }: ShareRideProps) {
               </div>
 
               {/* Send button */}
+              {!when && (
+                <p className="text-xs mt-3" style={{ color: "#f5a524" }}>Pick a day and start time first.</p>
+              )}
               <button
                 onClick={handleShare}
+                disabled={!when}
                 className="w-full mt-5 py-3.5 rounded-xl font-bold text-sm uppercase tracking-wider flex items-center justify-center gap-2.5 transition-all hover:brightness-110"
                 style={{
                   background: "linear-gradient(135deg, #25D366, #128C7E)",

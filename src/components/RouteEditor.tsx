@@ -6,13 +6,16 @@
  * Shows the route on a real map with draggable via-point markers. On
  * drop, the routing engine rebuilds the line between anchors with the
  * same discipline profile and guardrails as generation. Click the line
- * to add a via point; click a marker to remove it.
+ * to add a via point; click a marker to remove it. "Use this route" hands
+ * the edited route back to the card (its Save / Download / Garmin then use
+ * it); "Discard edits" closes without changing anything.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MapContainer, TileLayer, Polyline, Marker, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import type { Compromise } from "@/lib/road-segments";
 
 interface RerouteResult {
   coordinates: [number, number][];
@@ -22,13 +25,29 @@ interface RerouteResult {
   elevation_loss_m: number;
   gpx_data: string;
   warnings: string[];
+  road_report?: {
+    standard_met: boolean;
+    summary: string;
+    compromises: Compromise[];
+    surface: { paved_pct: number; unpaved_pct: number; unknown_pct: number };
+    main_road_pct: number;
+  };
+}
+
+/** The edited route, as handed back by "Use this route". */
+export interface EditedRoute extends RerouteResult {
+  /** The via points it was built from (closing point repeated), for editing again. */
+  waypoints: [number, number][];
 }
 
 interface RouteEditorProps {
   initialCoordinates: [number, number][];
   initialWaypoints: [number, number][];
   discipline: "road" | "gravel" | "mtb";
+  /** Close without changing the card's route. */
   onClose: () => void;
+  /** Keep the edits: the card uses this route from now on. */
+  onApply: (route: EditedRoute) => void;
 }
 
 const anchorIcon = L.divIcon({
@@ -62,6 +81,7 @@ export default function RouteEditor({
   initialWaypoints,
   discipline,
   onClose,
+  onApply,
 }: RouteEditorProps) {
   // Strip the duplicated closing point if start === end (loops)
   const startAnchors = useMemo(() => {
@@ -153,17 +173,6 @@ export default function RouteEditor({
     reroute(next);
   }
 
-  function downloadGpx() {
-    if (!route) return;
-    const blob = new Blob([route.gpx_data], { type: "application/gpx+xml" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `loops-edited-${route.distance_km}km.gpx`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
   // Fit map to the route once
   const bounds = useMemo(() => L.latLngBounds(coords.map(([lat, lng]) => [lat, lng])), []);
 
@@ -188,14 +197,25 @@ export default function RouteEditor({
           </span>
         )}
         <span className="flex-1" />
+        <button
+          type="button"
+          onClick={onClose}
+          className="inline-flex items-center min-h-[44px] font-bold px-3 rounded-lg"
+          style={{ border: "1px solid var(--border)", color: "var(--text)" }}
+        >
+          {route ? "Discard edits" : "Close"}
+        </button>
         {route && (
-          <button onClick={downloadGpx} className="font-bold px-2.5 py-1 rounded-lg" style={{ background: "var(--accent)", color: "var(--bg)" }}>
-            Download GPX
+          <button
+            type="button"
+            onClick={() => onApply({ ...route, waypoints: [...anchors, anchors[0]] })}
+            disabled={busy}
+            className="inline-flex items-center min-h-[44px] font-bold px-3 rounded-lg disabled:opacity-50"
+            style={{ background: "var(--accent)", color: "var(--bg)" }}
+          >
+            Use this route
           </button>
         )}
-        <button onClick={onClose} className="font-bold px-2.5 py-1 rounded-lg" style={{ border: "1px solid var(--border)", color: "var(--text)" }}>
-          Done
-        </button>
       </div>
 
       {error && (
@@ -238,7 +258,7 @@ export default function RouteEditor({
 
       <p className="px-3 py-1.5 text-[10px]" style={{ background: "var(--bg-raised)", color: "var(--text-muted)" }}>
         Edits keep the same {discipline} routing rules (no motorways, paved-only for road).
-        Surface and quality scores refresh when you save or export.
+        Tap Use this route to keep your changes; the quality score is re-checked when you save.
       </p>
     </div>
   );

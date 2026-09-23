@@ -18,9 +18,11 @@ const MapPlanner = dynamic(() => import("@/components/MapPlanner"), {
 
 export default function PlanClient() {
   // Shared header on top, planner toolbar + map filling the rest of the
-  // viewport. Non-sticky header — the map owns its own scroll.
+  // viewport. Non-sticky header — the map owns its own scroll. Fixed to the
+  // viewport so the site footer (rendered by the root layout) sits under it
+  // instead of adding a page scroll below a full-screen planner.
   return (
-    <div className="flex flex-col" style={{ height: "100dvh", background: "var(--bg)" }}>
+    <div className="fixed inset-x-0 top-0 z-30 flex flex-col" style={{ height: "100dvh", background: "var(--bg)" }}>
       <AppHeader sticky={false} />
       <div className="flex-1 min-h-0">
         <MapPlanner />

@@ -1,3 +1,4 @@
+import { SOCIAL_FEATURES_ENABLED } from "@/config/constants";
 // ============================================================
 // seo.ts — SEO utility functions: slugify, JSON-LD generators
 // ============================================================
@@ -67,7 +68,7 @@ export function generateRouteJsonLd(route: RouteJsonLdInput) {
     ],
   };
 
-  if (route.rating && route.rating.count > 0) {
+  if (SOCIAL_FEATURES_ENABLED && route.rating && route.rating.count > 0) {
     jsonLd.aggregateRating = {
       "@type": "AggregateRating",
       ratingValue: route.rating.average,
@@ -127,7 +128,7 @@ export function generateSportsActivityLocationJsonLd(route: SportsActivityLocati
     ],
   };
 
-  if (route.rating && route.rating.count > 0) {
+  if (SOCIAL_FEATURES_ENABLED && route.rating && route.rating.count > 0) {
     jsonLd.aggregateRating = {
       "@type": "AggregateRating",
       ratingValue: route.rating.average,

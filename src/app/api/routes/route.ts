@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { publicRoute } from "@/lib/public-route";
+import { publicRoute, thinCoordinates } from "@/lib/public-route";
 import { getRoutes, insertRoute, getCounties, getRegions, getCountries, getUserBySession, recordEvent, ANALYTICS_EVENTS } from "@/lib/db";
 import { parseRouteFile } from "@/lib/route-parser";
 import { fetchRideWithGPS } from "@/lib/ridewithgps";
@@ -62,7 +62,14 @@ export async function GET(request: NextRequest) {
     const rows = await getRoutes(filters);
     const hasMore = rows.length > pageSize;
     const routes = hasMore ? rows.slice(0, pageSize) : rows;
-    return NextResponse.json({ data: routes.map((r) => publicRoute(r as unknown as Record<string, unknown>)), hasMore, page, avgSpeedKmh: userSpeed });
+    return NextResponse.json({
+      data: routes.map((r) => {
+        const pr = publicRoute(r as unknown as Record<string, unknown>);
+        // List view: map-sized track, no stored GPX (the route page has both).
+        return { ...pr, coordinates: thinCoordinates(pr.coordinates), gpx_data: undefined };
+      }),
+      hasMore, page, avgSpeedKmh: userSpeed,
+    });
   } catch (err) {
     return handleApiError(err);
   }

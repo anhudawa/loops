@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { routeCard } from "@/lib/public-route";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCountries, getCountryStats, getRoutesByCountrySlug } from "@/lib/db";
@@ -182,7 +183,7 @@ export default async function CountryPage({
         </h2>
         <div className="grid gap-3 md:grid-cols-2 mb-10">
           {routes.map((route) => (
-            <RouteCard key={route.id} route={route} />
+            <RouteCard key={route.id} route={routeCard(route as unknown as Record<string, unknown>) as never} />
           ))}
         </div>
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { SOCIAL_FEATURES_ENABLED } from "@/config/constants";
 import Link from "next/link";
 
 interface RouteCardProps {
@@ -54,7 +55,8 @@ export default function RouteCard({ route, showDistance }: RouteCardProps) {
   const discipline = route.discipline ? DISCIPLINE_LABELS[route.discipline] : null;
   const locationText = route.region || route.county;
   const countryText = route.country ? `, ${route.country}` : "";
-  const hasRating = route.avg_score !== undefined && Number(route.avg_score) > 0;
+  // Ratings are a social feature — hidden for launch.
+  const hasRating = SOCIAL_FEATURES_ENABLED && route.avg_score !== undefined && Number(route.avg_score) > 0;
 
   return (
     <Link

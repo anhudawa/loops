@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { routeCard } from "@/lib/public-route";
 import { notFound } from "next/navigation";
 import { getCollectionBySlug } from "@/lib/db";
 import RouteCard from "@/components/RouteCard";
@@ -168,7 +169,7 @@ export default async function CollectionPage({ params }: Props) {
                   {index + 1}
                 </span>
                 <div className="flex-1 min-w-0">
-                  <RouteCard route={route} />
+                  <RouteCard route={routeCard(route as unknown as Record<string, unknown>) as never} />
                 </div>
               </div>
             ))}

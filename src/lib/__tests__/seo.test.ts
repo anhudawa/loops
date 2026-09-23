@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { SOCIAL_FEATURES_ENABLED } from "@/config/constants";
 import { slugify, generateRouteJsonLd, generateBreadcrumbJsonLd, generateFaqJsonLd, generateItemListJsonLd } from "@/lib/seo";
 
 describe("slugify", () => {
@@ -53,9 +54,11 @@ describe("generateRouteJsonLd", () => {
     expect(result.exerciseType).toBe("Gravel");
   });
 
-  it("includes aggregateRating only when count > 0", () => {
+  it("includes aggregateRating only when ratings are live (social on) and count > 0", () => {
     const withRating = generateRouteJsonLd({ ...baseRoute, rating: { average: 4.2, count: 8 } });
-    expect(withRating.aggregateRating).toBeDefined();
+    // Ratings are a social feature, hidden for launch.
+    if (SOCIAL_FEATURES_ENABLED) expect(withRating.aggregateRating).toBeDefined();
+    else expect(withRating.aggregateRating).toBeUndefined();
 
     const withoutRating = generateRouteJsonLd(baseRoute);
     expect(withoutRating.aggregateRating).toBeUndefined();

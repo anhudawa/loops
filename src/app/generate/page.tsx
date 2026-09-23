@@ -669,8 +669,14 @@ function InterpretedPanel({ interpreted }: { interpreted: Interpreted }) {
 }
 
 /** The rider's asked-for duration, rounded like every other ride time (ride-time.ts). */
+/** The rider's OWN asked duration, echoed back exactly ("2h 20m") — estimate
+ *  rounding (formatRideTime) applies to estimates, never to what they typed. */
 function formatDuration(minutes: number): string {
-  return formatRideTime(minutes, { style: "card", approx: false });
+  const h = Math.floor(minutes / 60);
+  const m = Math.round(minutes % 60);
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m.toString().padStart(2, "0")}m`;
 }
 
 // ── Error panel ───────────────────────────────────────────────────────────────

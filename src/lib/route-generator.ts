@@ -74,7 +74,7 @@ import {
   type WindStrategy,
 } from "./wind";
 import { findEffortCorridors, type EffortCorridor } from "./session-assembly";
-import { findEffortStretch, spliceRepeats, lengthPlan, clearOfStops, totalReps, isHillSession, repKm, hardestRep, type EffortStretch } from "./effort-repeats";
+import { findEffortStretch, spliceRepeats, lengthPlan, clearOfStops, lightTraffic, totalReps, isHillSession, repKm, hardestRep, type EffortStretch } from "./effort-repeats";
 import { placeNear, placesNear } from "./map-labels";
 import { findHills, loopsOverHill, type Hill } from "./hill-finder";
 import { isClosedLoop, nearestIndex, rotateLoop } from "./loop-geometry";
@@ -1902,7 +1902,9 @@ async function generateRepeatWorkoutRoutes(spec: RouteSpec, workout: WorkoutSpec
       });
     }
   }
-  if (!loops.length) {
+  // Hill sessions whose hill loops all failed go straight to "out to the
+  // climb and home" below; the generator's own loops rarely hold a climb.
+  if (!loops.length && !(hill && hillTops.length)) {
     loops = await generateFreshRoutes(loopSpec, null).catch((e) => {
       genDebug(`repeat efforts: no loops — ${e instanceof Error ? e.message : e}`);
       return [] as GeneratedRoute[];
@@ -1946,6 +1948,10 @@ async function generateRepeatWorkoutRoutes(spec: RouteSpec, workout: WorkoutSpec
     ))).flat().filter((r) => !r.road_report || compromiseAcceptable(r.road_report, r.distance_km));
     markPhase("hill out-and-back");
     found.push(...searchStretches(rides));
+    // Still nothing and time left: the generator's own loops after all.
+    if (found.length === 0 && !loops.length && Date.now() - (currentTimingsStart || Date.now()) < 25_000) {
+      found.push(...searchStretches(await generateFreshRoutes(loopSpec, null).catch(() => [] as GeneratedRoute[])));
+    }
   }
   // Best stretch, then the ride closest to the length asked for (repeats included).
   const lengthsOf = (st: EffortStretch) => lengthPlan(reps, st.passes).length - 1; // beyond the loop's own pass
@@ -2007,11 +2013,15 @@ async function generateRepeatWorkoutRoutes(spec: RouteSpec, workout: WorkoutSpec
     const lenText = stretch.length_km < 10 ? `${stretch.length_km.toFixed(1)} km` : `${Math.round(stretch.length_km)} km`;
     const shape = stretch.kind === "climb" ? `${lenText} at ${stretch.avg_gradient_pct} %` : `${lenText}, steady`;
     const allEfforts = reps === 2 ? "Both efforts" : `All ${reps} efforts`;
+    // What makes it a good place for efforts, said plainly.
+    const traffic = stretch.traffic_class != null && stretch.traffic_class <= 2 ? "Very light traffic" : "Light traffic";
+    const junctions = stretch.side_roads === 0 ? "no junctions" : `no junctions bar ${stretch.side_roads === 1 ? "one quiet side lane" : `${stretch.side_roads} quiet side lanes`}`;
+    const clean = `${traffic}, no traffic lights or stop signs, ${junctions}.`;
     const note = stretch.kind === "laps"
-      ? `${reps > 1 ? allEfforts : "Your effort"} on ${where} (${lenText}, flat): ride it back and forth — ${stretch.passes} lengths per effort${reps > 1 ? ", one easy length between efforts" : ""} — then ride on home. No lights, stop signs or junction turns on it.`
+      ? `${reps > 1 ? allEfforts : "Your effort"} on ${where} (${lenText}, flat): ride it back and forth — ${stretch.passes} lengths per effort${reps > 1 ? ", one easy length between efforts" : ""} — then ride on home. ${clean}`
       : reps > 1
-      ? `${allEfforts} on ${where} (${shape}): go hard ${stretch.kind === "climb" ? "up" : "along it"}, spin back ${stretch.kind === "climb" ? "down" : "easy"}, repeat — then ride on home. No lights, stop signs or junction turns on it.`
-      : `Your effort goes on ${where} (${shape}) — no lights, stop signs or junction turns on it.`;
+      ? `${allEfforts} on ${where} (${shape}): go hard ${stretch.kind === "climb" ? "up" : "along it"}, spin back ${stretch.kind === "climb" ? "down" : "easy"}, repeat — then ride on home. ${clean}`
+      : `Your effort goes on ${where} (${shape}). ${clean}`;
 
     out.push({
       ...loop,
@@ -2427,7 +2437,9 @@ async function generateFreshWorkoutRoutes(
     // Stops, lights and junction turns from the engine's own route data;
     // the map-service check only when the engine sent none.
     const cleanSegments = data?.edgeTags
-      ? rawSegments.filter((seg) => clearOfStops(loop.coordinates, seg.start_index, seg.end_index, data.stops, { ignoreCalming: hill }))
+      ? rawSegments.filter((seg) =>
+          clearOfStops(loop.coordinates, seg.start_index, seg.end_index, data.stops, { ignoreCalming: hill }) &&
+          data.edgeTags!.slice(seg.start_index, seg.end_index).every((t) => !!t && lightTraffic(t)))
       : filterCleanSegments(await validateSegments(rawSegments, loop.coordinates));
     const fit = assignWorkoutToSegments(cleanSegments, workout);
     genDebug(`spread efforts: ${loop.distance_km} km loop — ${rawSegments.length} segments, ${cleanSegments.length} clear → ${fit.fits ? "fits" : "no fit"}`);
@@ -2439,7 +2451,7 @@ async function generateFreshWorkoutRoutes(
       workout_fit: fit,
       gpx_data: buildGpx(loop.coordinates, loop.elevations, `${label} — LOOPS`, spec.discipline, workoutCoursePoints(loop.coordinates, fit, workout)),
       title: `${label}, spread along the ride`,
-      ride_note: `${fit.interval_segments.length} efforts on ${new Set(fit.interval_segments.map((a) => a.segment.start_index)).size} different stretches — each one clear of lights, stop signs and junction turns. The course points on the GPX mark every start and finish.`,
+      ride_note: `${fit.interval_segments.length} efforts on ${new Set(fit.interval_segments.map((a) => a.segment.start_index)).size} different stretches — each one light on traffic and clear of traffic lights, stop signs and junctions. The course points on the GPX mark every start and finish.`,
     });
   }
   candidates.sort((a, b) => b.match_score - a.match_score);

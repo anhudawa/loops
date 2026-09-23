@@ -543,7 +543,7 @@ function GenerateContent() {
                 OK to repeat your efforts on the same stretch?
               </p>
               <p className="text-xs mt-0.5 mb-2" style={{ color: "var(--text-muted)" }}>
-                We&apos;ll find the best place for them — a steady climb for VO2 work, a quiet flat road for threshold.
+                We&apos;ll find the best place for them — light traffic, no traffic lights, no junctions: a steady climb for VO2 work, a quiet flat road for threshold.
               </p>
               <div className="flex flex-wrap gap-2" role="radiogroup">
                 {[

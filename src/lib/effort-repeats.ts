@@ -28,6 +28,10 @@ export interface EffortStretch {
   /** Metres climbed over the stretch (smoothed). */
   climb_m: number;
   kind: "climb" | "steady" | "laps";
+  /** Quiet side lanes joining the stretch (real junctions are never allowed). */
+  side_roads: number;
+  /** Busiest traffic estimate on the stretch (1–7; null = none, a quiet lane). */
+  traffic_class: number | null;
   /** Laps: lengths of the stretch one effort takes (back and forth). 1 otherwise. */
   passes: number;
   score: number;
@@ -50,6 +54,21 @@ const STOP_NEAR_KM = 0.02;
 const START_GRACE_KM = 0.05;
 /** Candidate effort starts are tried this far apart. */
 const START_STEP_KM = 0.05;
+
+/**
+ * Light traffic for an effort: the engine's estimate (1–7) at 3 or below.
+ * Lanes and residential streets it has no estimate for are quiet by nature;
+ * a secondary road with no estimate is not assumed to be.
+ */
+export function lightTraffic(t: Record<string, string>): boolean {
+  const etc = parseInt(t.estimated_traffic_class ?? "", 10);
+  if (Number.isFinite(etc)) return etc <= MAX_EFFORT_TRAFFIC_CLASS;
+  return t.highway !== "secondary" && t.highway !== "secondary_link";
+}
+export const MAX_EFFORT_TRAFFIC_CLASS = 3;
+
+/** Quiet side lanes allowed per km of effort (farm lanes, boreens); real junctions are never allowed. */
+const SIDE_ROADS_PER_KM = 2;
 
 export function isHillSession(workout: WorkoutSpec): boolean {
   return workout.intervals.some((iv) => HILL_ZONES.has(iv.zone));
@@ -137,6 +156,7 @@ export function findEffortStretch(
 
   // Stops → the coordinate index they sit on (nearest point within 20 m).
   const stopAt = new Set<number>();
+  const sideAt = new Set<number>();
   for (const st of stops) {
     // A speed hump slows a flat effort; on a climb the rider is going slowly anyway.
     if (hill && st.kind === "traffic_calming") continue;
@@ -147,12 +167,12 @@ export function findEffortStretch(
       const d = haversine(coords[i], [st.lat, st.lng]);
       if (d < bestD) { bestD = d; best = i; }
     }
-    if (best >= 0 && bestD <= STOP_NEAR_KM) stopAt.add(best);
+    if (best >= 0 && bestD <= STOP_NEAR_KM) (st.kind === "side_road" ? sideAt : stopAt).add(best);
   }
   const avoided = (i: number) => (opts.avoid ?? []).some(([a, b]) => i >= a && i <= b);
   const roadOk = (e: number) => {
     const t = edgeTags[e];
-    return !!t && EFFORT_ROADS.has(t.highway ?? "");
+    return !!t && EFFORT_ROADS.has(t.highway ?? "") && lightTraffic(t);
   };
 
   let best: EffortStretch | null = null;
@@ -191,6 +211,9 @@ export function findEffortStretch(
     if (j >= n) continue;
     if (cum[j] > total - skipEnd) break; // later starts only get later
     const len = cum[j] - cum[i];
+    let sides = 0;
+    for (let k = i + 1; k < j; k++) if (sideAt.has(k) && cum[k] - cum[i] > START_GRACE_KM) sides++;
+    if (sides > Math.max(1, Math.floor(len * SIDE_ROADS_PER_KM))) { opts.debug?.(`${cum[i].toFixed(2)}: side roads ${sides}`); continue; }
     const avg = ((elev[j] - elev[i]) / (len * 1000)) * 100;
     // Cheap gradient checks before the steadiness scan.
     if (opts.laps ? Math.abs(avg) > LAP_MAX_ABS_PCT : hill ? avg < HILL_MIN_PCT || avg > HILL_MAX_PCT : avg < terrain.min_gradient_pct || avg > terrain.max_gradient_pct) {
@@ -224,6 +247,7 @@ export function findEffortStretch(
       if (sd > terrain.max_gradient_variance + 1) continue;
       score = 10 - sd - Math.abs(avg - 1) * 0.3;
     }
+    score -= sides * 0.5; // fewer side lanes, better place
     if (!best || score > best.score) {
       let climb = 0;
       for (let k = i + 1; k <= j; k++) climb += Math.max(0, elev[k] - elev[k - 1]);
@@ -235,6 +259,12 @@ export function findEffortStretch(
         max_gradient_pct: Math.round(Math.max(avg, Math.min(maxG, avg + 6)) * 10) / 10,
         climb_m: Math.round(climb),
         kind: opts.laps ? "laps" : hill ? "climb" : "steady",
+        side_roads: sides,
+        traffic_class: (() => {
+          let m: number | null = null;
+          for (let k = i; k < j; k++) { const c = parseInt(edgeTags[k]?.estimated_traffic_class ?? "", 10); if (Number.isFinite(c)) m = Math.max(m ?? 0, c); }
+          return m;
+        })(),
         passes,
         score,
       };
@@ -324,6 +354,7 @@ export function clearOfStops(
   if (!after.length) return true;
   for (const st of stops) {
     if (opts.ignoreCalming && st.kind === "traffic_calming") continue;
+    if (st.kind === "side_road") continue;
     for (const i of after) {
       if (haversine(coords[i], [st.lat, st.lng]) <= STOP_NEAR_KM) return false;
     }

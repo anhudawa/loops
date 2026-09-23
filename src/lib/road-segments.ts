@@ -88,8 +88,16 @@ export function parseBRouterMessages(
 export interface RoadStop {
   lat: number;
   lng: number;
-  kind: "traffic_signals" | "stop" | "give_way" | "roundabout" | "barrier" | "traffic_calming" | "turn";
+  kind: "traffic_signals" | "stop" | "give_way" | "roundabout" | "barrier" | "traffic_calming" | "turn" | "junction" | "side_road";
 }
+
+/**
+ * The engine marks where another road meets the route with that road's
+ * traffic estimate (estimated_crossing_class, same 1–7 scale as
+ * estimated_traffic_class). From light traffic up it is a junction a rider
+ * must watch; below, a quiet side lane or a farm entrance.
+ */
+const JUNCTION_CROSSING_CLASS = 3;
 
 /** Engine turn cost at or above this is a turn at a junction, not a bend. */
 const JUNCTION_TURN_COST = 40;
@@ -133,6 +141,8 @@ export function parseBRouterStops(messages: unknown[] | undefined): RoadStop[] {
     else if (hw === "mini_roundabout") kind = "roundabout";
     else if (node.barrier) kind = "barrier";
     else if (node.traffic_calming && !/rumble|painted|island|choker/.test(node.traffic_calming)) kind = "traffic_calming";
+    else if (Number(node.estimated_crossing_class) >= JUNCTION_CROSSING_CLASS) kind = "junction";
+    else if (Number(node.estimated_crossing_class) >= 1) kind = "side_road";
     else if (turnIdx >= 0 && Number(row[turnIdx]) >= JUNCTION_TURN_COST) {
       // A bend at a side road is not a turn: only count it when the rider
       // leaves the road they were on (the way tags change at this node).

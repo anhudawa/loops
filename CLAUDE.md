@@ -236,8 +236,10 @@ node scripts/import-routes.mjs scripts/hub-data/girona-eat-sleep-cycle.json --dr
   hills.json = GeoNames + OSM peaks, scripts/anchors/build-hills.mjs; summit
   ROAD found via a trekking route), loops aimed at it / via a same-side town,
   else out to the climb and home; effort-repeats.ts finds the best stretch
-  (gradient, steadiness, effort-grade roads, no lights/stop/give-way/junction
-  turn — from the engine's NodeTags/TurnCost, direction-aware) and splices
+  (gradient, steadiness, effort-grade roads, light traffic = engine
+  estimated_traffic_class ≤ 3, no junction with a road of class ≥ 3
+  (estimated_crossing_class), ≤ 2 quiet side lanes per km, no lights/stop/
+  give-way/junction turn — engine NodeTags/TurnCost, direction-aware) and splices
   the reps in; long flat efforts may be laps of a quiet flat stretch.
   No → one different stretch per rep on the loop pipeline's loops.
 - No CSRF tokens; cookie-only sessions; locale hardcoded en-IE

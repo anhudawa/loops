@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseBasicIntent, parseBasicWorkout } from "@/lib/route-intent";
-import { findEffortStretch, lengthPlan, spliceRepeats, repKm, clearOfStops } from "@/lib/effort-repeats";
+import { findEffortStretch, lengthPlan, spliceRepeats, repKm, clearOfStops, lightTraffic } from "@/lib/effort-repeats";
 import { parseBRouterStops } from "@/lib/road-segments";
 import { findHills } from "@/lib/hill-finder";
 import type { WorkoutSpec } from "@/lib/route-intent";
@@ -67,6 +67,29 @@ describe("findEffortStretch", () => {
     const stops = [8.8, 9.4].map((k) => ({ lat: at(k)[0], lng: at(k)[1], kind: "stop" as const }));
     expect(findEffortStretch(t.coords, t.ele, t.tags, stops, vo2)).toBeNull();
   });
+  it("busy roads don't hold efforts (light traffic only)", () => {
+    const t = track(8, 2, 6);
+    expect(findEffortStretch(t.coords, t.ele, t.tags.map(() => ({ highway: "tertiary", estimated_traffic_class: "5" })), [], vo2)).toBeNull();
+    expect(findEffortStretch(t.coords, t.ele, t.tags.map(() => ({ highway: "tertiary", estimated_traffic_class: "2" })), [], vo2)?.traffic_class).toBe(2);
+  });
+  it("a junction with a real road rules the stretch out; quiet side lanes are counted", () => {
+    const t = track(8, 2, 6);
+    const at = (km: number) => t.coords[Math.round(km / 0.05)];
+    const junctions = [8.8, 9.4].map((k) => ({ lat: at(k)[0], lng: at(k)[1], kind: "junction" as const }));
+    expect(findEffortStretch(t.coords, t.ele, t.tags, junctions, vo2)).toBeNull();
+    // A lane every 400 m: every rep-length window has two, which is allowed (≤ 2 per km).
+    const lanes = [8.2, 8.6, 9.0, 9.4, 9.8].map((k) => ({ lat: at(k)[0], lng: at(k)[1], kind: "side_road" as const }));
+    expect(findEffortStretch(t.coords, t.ele, t.tags, lanes, vo2)?.side_roads).toBe(2);
+    // Every 150 m is too many.
+    const busy = Array.from({ length: 14 }, (_, i) => 8 + i * 0.15).map((k) => ({ lat: at(k)[0], lng: at(k)[1], kind: "side_road" as const }));
+    expect(findEffortStretch(t.coords, t.ele, t.tags, busy, vo2)).toBeNull();
+  });
+  it("lightTraffic: no estimate is quiet on a lane, unknown on a secondary road", () => {
+    expect(lightTraffic({ highway: "unclassified" })).toBe(true);
+    expect(lightTraffic({ highway: "secondary" })).toBe(false);
+    expect(lightTraffic({ highway: "secondary", estimated_traffic_class: "3" })).toBe(true);
+    expect(lightTraffic({ highway: "tertiary", estimated_traffic_class: "4" })).toBe(false);
+  });
   it("shared paths don't hold efforts", () => {
     const t = track(8, 2, 6);
     const tags = t.tags.map(() => ({ highway: "cycleway" }));
@@ -116,6 +139,10 @@ describe("engine stops", () => {
   it("a bend at a side road is not a turn; leaving the road is", () => {
     expect(parseBRouterStops([header, row(60, "highway=tertiary", ""), row(0, "highway=tertiary surface=asphalt", "")])).toHaveLength(0);
     expect(parseBRouterStops([header, row(60, "highway=tertiary", ""), row(0, "highway=residential", "")])).toHaveLength(1);
+  });
+  it("junctions come from the engine's crossing estimate", () => {
+    expect(parseBRouterStops([header, row(0, "highway=tertiary", "estimated_crossing_class=4")])[0].kind).toBe("junction");
+    expect(parseBRouterStops([header, row(0, "highway=tertiary", "estimated_crossing_class=2")])[0].kind).toBe("side_road");
   });
   it("clearOfStops ignores the first metres (efforts start at junctions)", () => {
     const coords: [number, number][] = [[53, -6], [53.0003, -6], [53.001, -6], [53.002, -6]];

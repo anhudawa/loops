@@ -165,6 +165,17 @@ node scripts/import-routes.mjs scripts/hub-data/girona-eat-sleep-cycle.json --dr
   token (works from Gmail/Outlook in-app browsers).
 - GPX access is one switch: GPX_ACCESS in src/config/constants.ts
   ("signed-in" default | "ride-links" | "everyone"); copy derives from it.
+- Library Road Standard tally (2026-09-23, rules v2, 107 routes): 8 meet,
+  86 carry named compromises, 13 unknown. The iconic Canary/Balearic climbs
+  are OSM "primary" (TF-21 Teide 43 km, GC-60 Fataga 42 km) with no traffic
+  estimate or maxspeed in the engine data, so no automatic rule separates
+  them from busy N-roads. LIBRARY_ROAD_POLICY (constants.ts) is the owner
+  switch: "name" (default: offer in Generate with the compromise named,
+  clean loops rank first) | "enforce" (drop from Generate). Recommendation
+  on record: keep "name". Traces re-run when ROAD_RULES_VERSION changes.
+- Smoke suite (tests/smoke.spec.ts, `PW_SANDBOX=1 npm run smoke` here) is
+  the live-site check; sweep (`npm run sweep`) is the generation check
+  (14/14 on 2026-09-23 13:08).
 - No CSRF tokens; cookie-only sessions; locale hardcoded en-IE
 
 ## Conventions

@@ -136,3 +136,14 @@ in 4 named stretches; 93.9 km with ~0.5 km); Calpe "263 m on the CV-734";
 Mallorca from Port de Pollença 2 loops (~1.1 km of named regional/primary
 links each). Production shows the same only after the routing server is
 rebuilt with cloud-init v3 (owner action: Hetzner token).
+
+**Library measured (2026-09-23, rules v2, 107 routes):** 8 meet the
+standard, 86 carry named compromises, 13 unknown. Algarve 0/8 clean,
+Tenerife 0/8, Mallorca 1/21, Girona/Cataluña 2/32, Gran Canaria 2/7. The
+iconic climbs are OSM "primary" (TF-21, GC-60, Ma-10 links) and the engine
+data carries no traffic estimate or maxspeed for them, so rule 1 cannot be
+made traffic-aware there without letting busy roads through. Serving policy
+for library loops in Generate is the owner switch `LIBRARY_ROAD_POLICY`
+("name" default — offered with the compromise named, clean loops first;
+"enforce" — dropped). Recommendation on record: keep "name": routes are
+facts, and the rider sees exactly which metres are on which road.

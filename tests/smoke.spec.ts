@@ -199,3 +199,24 @@ for (const path of ["/ride/not-a-real-id", "/routes/not-a-real-id"]) {
     await expect(page.getByRole("heading", { level: 1 })).toContainText(/404|not found/i);
   });
 }
+
+test.describe("Road Standard (Trust Rule)", () => {
+  test("the ride page carries a Road Standard card", async ({ page }) => {
+    await openRoute(page, RIDE_PATH);
+    const card = page.getByTestId("road-standard");
+    await expect(card).toBeVisible({ timeout: 30000 });
+    await expect(card).toContainText(/Meets the Loops road standard|Compromise:/);
+  });
+
+  test("a route with compromises lists every stretch under Where", async ({ page }) => {
+    // Loop of Mallorca: an operator route with many named main-road stretches.
+    await openRoute(page, "/routes/02aa7733-1765-4bbc-9427-2aa081c06da2");
+    const card = page.getByTestId("road-standard");
+    await expect(card).toBeVisible({ timeout: 30000 });
+    await expect(card).toContainText("Compromise:");
+    await card.locator("summary").click();
+    const items = card.locator("li");
+    expect(await items.count()).toBeGreaterThan(3);
+    await expect(items.first()).toContainText(/km on|m on/);
+  });
+});

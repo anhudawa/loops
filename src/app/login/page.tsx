@@ -45,6 +45,27 @@ function LoginPage() {
           : "";
   const error = manualError || urlError;
 
+  // Arriving from a ride/route page (e.g. "Sign up to download GPX"): say
+  // why they're here and offer the way back. Only same-site paths count.
+  const redirectParam = searchParams.get("redirect");
+  const returnTo = redirectParam && redirectParam.startsWith("/") && !redirectParam.startsWith("//") ? redirectParam : null;
+  const routeMatch = returnTo?.match(/^\/(ride|routes)\/([^/?#]+)(?:[?#]|$)/);
+  const returnKind = routeMatch ? (routeMatch[1] === "ride" ? "ride" : "route") : null;
+  const returnRouteId = routeMatch && routeMatch[2] !== "country" ? routeMatch[2] : null;
+  const [returnRouteName, setReturnRouteName] = useState<string | null>(null);
+  useEffect(() => {
+    if (!returnRouteId) return;
+    let cancelled = false;
+    fetch(`/api/routes/${encodeURIComponent(returnRouteId)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const name = d?.data?.name ?? d?.name;
+        if (!cancelled && typeof name === "string" && name.trim()) setReturnRouteName(name.trim());
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [returnRouteId]);
+
   useEffect(() => {
     fetch("/api/stats")
       .then((r) => (r.ok ? r.json() : null))
@@ -164,6 +185,16 @@ function LoginPage() {
 
           {/* The one CTA */}
           <div className="mt-8 max-w-xs mx-auto">
+            {returnRouteId && returnTo && (
+              <div className="mb-4 text-sm" data-testid="login-return-context">
+                <p className="font-bold" style={{ color: "var(--text)" }}>
+                  Sign in to get the GPX {returnRouteName ? <>for <span style={{ color: "var(--accent)" }}>{returnRouteName}</span></> : `for this ${returnKind}`}
+                </p>
+                <a href={returnTo} className="inline-block mt-1.5 text-xs font-bold underline" style={{ color: "var(--text-muted)" }}>
+                  ← Back to the {returnKind}
+                </a>
+              </div>
+            )}
             {error && (
               <div className="alert-error mb-3 text-sm" role="alert">{error}</div>
             )}

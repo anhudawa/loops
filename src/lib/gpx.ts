@@ -65,3 +65,67 @@ export function suggestDifficulty(distance_km: number, elevation_gain_m: number)
   if (score < 30) return "hard";
   return "expert";
 }
+
+function escapeXml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+/** A typed meeting point (from a ride link's `?m=`) made safe for a GPX
+ *  waypoint name: control characters stripped, whitespace collapsed,
+ *  capped at 80 chars. Empty → null. XML escaping happens at render. */
+export function sanitizeMeetingPoint(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const clean = raw.replace(/[\u0000-\u001f\u007f-\u009f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80).trim();
+  return clean || null;
+}
+
+/**
+ * GPX 1.1 for a stored route (coordinates [lat,lng] or [lat,lng,ele]).
+ * Carries a <wpt> at the first point so head units show a named start:
+ * "Start", or "Start: <meeting point>" when a ride link passed one.
+ */
+export function buildRouteGpx(
+  name: string,
+  description: string | null,
+  coordinates: number[][],
+  opts: { meetingPoint?: string | null } = {},
+): string {
+  const trkpts = coordinates
+    .map((coord) => {
+      const [lat, lng, ele] = coord;
+      const eleTag = ele != null ? `<ele>${ele}</ele>` : "";
+      return `      <trkpt lat="${lat}" lon="${lng}">${eleTag}</trkpt>`;
+    })
+    .join("\n");
+
+  const meet = sanitizeMeetingPoint(opts.meetingPoint);
+  const first = coordinates[0];
+  const startWpt =
+    first && Number.isFinite(first[0]) && Number.isFinite(first[1])
+      ? `  <wpt lat="${first[0]}" lon="${first[1]}">${first[2] != null ? `<ele>${first[2]}</ele>` : ""}<name>${escapeXml(meet ? `Start: ${meet}` : "Start")}</name>${meet ? `<desc>${escapeXml(`Meeting point: ${meet}`)}</desc>` : ""}<sym>Flag, Green</sym></wpt>\n`
+      : "";
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="LOOPS"
+  xmlns="http://www.topografix.com/GPX/1/1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">
+  <metadata>
+    <name>${escapeXml(name)}</name>
+${description ? `    <desc>${escapeXml(description)}</desc>\n` : ""}    <link href="https://www.loops.ie">
+      <text>LOOPS</text>
+    </link>
+  </metadata>
+${startWpt}  <trk>
+    <name>${escapeXml(name)}</name>
+    <trkseg>
+${trkpts}
+    </trkseg>
+  </trk>
+</gpx>`;
+}

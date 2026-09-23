@@ -1884,47 +1884,18 @@ async function generateFreshWorkoutRoutes(
   return candidates.slice(0, 3);
 }
 
-/** Irish calibration baked into the waypoint radius (roads add ~30%). */
-const CALIBRATED_ROAD_FACTOR = 1.3;
-
-/**
- * How much longer roads are than straight lines around this start. Two
- * probe legs (opposite bearings, ~70% of the loop radius) on the strict
- * profile; a leg into the sea or an island simply drops out. Mediterranean
- * hill country runs 1.6–1.8 against Ireland's 1.3, which is why Banyoles
- * loops came back 104 km for an 80 km ask before this.
- */
-async function measureRoadFactor(start: [number, number], radiusKm: number, profile: string): Promise<number> {
-  // Probe on the relaxed profile where there is one: a single strict leg
-  // detours far more than a whole loop does (2.2× measured at Banyoles
-  // against ~1.3× for the loops themselves), which over-corrected.
-  const probeProfile = RELAXED_PROFILE[profile] ?? profile;
-  const legs = await Promise.all(
-    [45, 225].map(async (bearing) => {
-      const target = destination(start, bearing, radiusKm * 0.7);
-      const straight = haversineKm(start[0], start[1], target[0], target[1]);
-      const leg = await routeViaBRouter([start, target], probeProfile);
-      return leg && leg.coords.length >= 2 && straight > 1 ? leg.distance_km / straight : null;
-    })
-  );
-  const factors = legs.filter((f): f is number => f !== null);
-  if (factors.length === 0) return CALIBRATED_ROAD_FACTOR;
-  const mean = factors.reduce((a, b) => a + b, 0) / factors.length;
-  return Math.max(1.15, Math.min(2.0, mean));
-}
-
 async function generateFreshRoutes(
   spec: RouteSpec,
   windForecast: WindForecast | null = null
 ): Promise<GeneratedRoute[]> {
   const profile = DISCIPLINE_PROFILE[spec.discipline];
 
-  // Size the loop for THIS road network before placing waypoints.
-  const baseRadiusKm = spec.distance_km / 3.0;
-  const roadFactor = await measureRoadFactor(spec.start_point, baseRadiusKm, profile);
-  // Only ever shrink: the Irish calibration is the ceiling.
-  const radiusScale = Math.max(0.7, Math.min(1.0, CALIBRATED_ROAD_FACTOR / roadFactor));
-  genDebug(`road factor ${roadFactor.toFixed(2)} → radius ×${radiusScale.toFixed(2)}`);
+  // Loop size starts from the Irish calibration; the first pass then MEASURES
+  // how long this network's loops really come out and a second pass corrects
+  // (a two-leg probe was too crude: at Enniskerry one leg hit the mountains,
+  // one the coast, and every loop came out 30 % short).
+  const radiusScale = 1;
+  const servedKm: number[] = []; // served (post-repair) distance of every routed candidate
   const waypointSets = await generateWaypointSets(spec, { radiusScale });
   markPhase("waypoints");
 
@@ -2029,6 +2000,7 @@ async function generateFreshRoutes(
       }
 
       routed.push({ waypoints, path, elevations, elevGain: elevGain ?? 0, elevLoss, edgeTags });
+      servedKm.push(path.distance_km);
     })
   );
 
@@ -2192,7 +2164,24 @@ async function generateFreshRoutes(
   };
 
   let candidates = await runPass(waypointSets, "pass 1");
-  if (candidates.length < 2 && Date.now() - t0 < 22_000) {
+
+  // Calibrated second pass: the network made loops consistently long or
+  // short → re-place the same directions with the radius corrected.
+  const sorted = [...servedKm].sort((a, b) => a - b);
+  const medianRatio = sorted.length > 0 ? sorted[Math.floor(sorted.length / 2)] / spec.distance_km : 1;
+  let recalibrated = false;
+  // Also when loops were served but sized badly (Faro: 55–61 km for 80), if
+  // there is time — the final ranking keeps the best three overall.
+  const offKm = (c: GeneratedRoute) => Math.abs(c.distance_km - spec.distance_km);
+  const servedWell = candidates.filter((c) => offKm(c) <= Math.max(5, spec.distance_km * 0.15)).length;
+  if (servedWell < 2 && Date.now() - t0 < 20_000 && sorted.length >= 2 && Math.abs(medianRatio - 1) > 0.2) {
+    const corrected = Math.max(0.5, Math.min(1.5, radiusScale / medianRatio));
+    genDebug(`first pass loops ran ×${medianRatio.toFixed(2)} of the ask — re-placing with radius ×${corrected.toFixed(2)}`);
+    const again = await generateWaypointSets(spec, { radiusScale: corrected });
+    candidates = candidates.concat(await runPass(again, "pass 2 (recalibrated)"));
+    recalibrated = true;
+  }
+  if (!recalibrated && candidates.length < 2 && Date.now() - t0 < 22_000) {
     const start = spec.start_point;
     const usedBearings = waypointSets.map((ws) => {
       let far = ws[1], farD = -1;

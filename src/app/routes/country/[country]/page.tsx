@@ -42,7 +42,7 @@ export async function generateMetadata({
   return {
     title,
     description,
-    alternates: { canonical: `https://loops.ie/routes/country/${countrySlug}` },
+    alternates: { canonical: `https://www.loops.ie/routes/country/${countrySlug}` },
     robots: { index: true, follow: true },
     openGraph: {
       title,
@@ -82,7 +82,7 @@ export default async function CountryPage({
   const featuredRoutes = routes.slice(0, 6);
 
   const breadcrumbItems = [
-    { name: "LOOPS", url: "https://loops.ie" },
+    { name: "LOOPS", url: "https://www.loops.ie" },
     { name: stats.displayName },
   ];
 

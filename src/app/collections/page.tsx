@@ -1,17 +1,18 @@
 import type { Metadata } from "next";
+import { pageOpenGraph, siteUrl } from "@/lib/site-meta";
 import { getCollections } from "@/lib/db";
 import AppHeader from "@/components/AppHeader";
 import CollectionCard from "@/components/CollectionCard";
 
 export const metadata: Metadata = {
   title: "Collections — LOOPS | Curated Cycling Route Packs",
-  description: "Curated cycling route collections from around the world. Girona, Mallorca, Wild Atlantic Way and more — hand-picked routes for every discipline.",
-  alternates: { canonical: "/collections" },
-  openGraph: {
+  description: "Curated cycling route collections: Girona, Mallorca, Calpe and Dublin & Wicklow — hand-picked routes for every discipline.",
+  alternates: { canonical: siteUrl("/collections") },
+  openGraph: pageOpenGraph({
+    path: "/collections",
     title: "Collections — Curated Cycling Route Packs",
     description: "Hand-picked route packs from the best cycling destinations worldwide.",
-    url: "https://www.loops.ie/collections",
-  },
+  }),
 };
 
 export default async function CollectionsPage() {

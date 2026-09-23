@@ -1,8 +1,11 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+import { pageMeta } from "@/lib/site-meta";
 
-export const metadata = {
+export const metadata: Metadata = {
   title: "Terms of Service | LOOPS",
   description: "LOOPS terms of service.",
+  ...pageMeta({ path: "/terms", title: "Terms of Service | LOOPS", description: "LOOPS terms of service." }),
 };
 
 export default function TermsPage() {
@@ -28,7 +31,9 @@ export default function TermsPage() {
           <section>
             <h2 className="text-base font-bold mb-2" style={{ color: "var(--text)" }}>Use of service</h2>
             <p>
-              LOOPS is provided free of charge. By using LOOPS you agree to use it responsibly,
+              Routes and GPX are free forever. Pro (coming) adds training intelligence; if and
+              when it launches, its price will be shown clearly before you pay anything.
+              By using LOOPS you agree to use it responsibly,
               not upload harmful content, and not attempt to disrupt the service. We reserve the
               right to suspend accounts that violate these terms.
             </p>
@@ -62,7 +67,7 @@ export default function TermsPage() {
             </p>
           </section>
 
-          <p className="text-xs" style={{ color: "var(--text-muted)" }}>Last updated: March 2026</p>
+          <p className="text-xs" style={{ color: "var(--text-muted)" }}>Last updated: 23 September 2026</p>
         </div>
       </div>
     </div>

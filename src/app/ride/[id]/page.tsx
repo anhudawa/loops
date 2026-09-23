@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { getRoute } from "@/lib/db";
 import { formatRideWhen, cleanMeet } from "@/lib/ride-invite";
 import RouteDetailView from "@/components/RouteDetailView";
@@ -58,7 +59,18 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   };
 }
 
-export default async function RidePage({ searchParams }: Props) {
+export default async function RidePage({ params, searchParams }: Props) {
+  // A route that definitively does not exist is a real 404. A DB error is
+  // not: the client view keeps its own fail-soft retry UI.
+  const { id } = await params;
+  let missing = false;
+  try {
+    missing = (await getRoute(id)) === undefined;
+  } catch {
+    missing = false;
+  }
+  if (missing) notFound();
+
   const sp = await searchParams;
   const t = one(sp.t);
   const when = formatRideWhen(t);

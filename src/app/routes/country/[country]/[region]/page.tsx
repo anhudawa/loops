@@ -48,7 +48,7 @@ export async function generateMetadata({
   return {
     title,
     description,
-    alternates: { canonical: `https://loops.ie/routes/country/${countrySlug}/${regionSlug}` },
+    alternates: { canonical: `https://www.loops.ie/routes/country/${countrySlug}/${regionSlug}` },
     robots: { index: true, follow: true },
     openGraph: {
       title,
@@ -87,8 +87,8 @@ export default async function RegionPage({
   if (!stats) notFound();
 
   const breadcrumbItems = [
-    { name: "LOOPS", url: "https://loops.ie" },
-    { name: stats.countryDisplayName, url: `https://loops.ie/routes/country/${countrySlug}` },
+    { name: "LOOPS", url: "https://www.loops.ie" },
+    { name: stats.countryDisplayName, url: `https://www.loops.ie/routes/country/${countrySlug}` },
     { name: stats.displayName },
   ];
 

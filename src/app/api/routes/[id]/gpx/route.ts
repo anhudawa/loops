@@ -74,7 +74,7 @@ function generateGpx(
   xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">
   <metadata>
     <name>${escapeXml(name)}</name>
-${description ? `    <desc>${escapeXml(description)}</desc>\n` : ""}    <link href="https://loops.ie">
+${description ? `    <desc>${escapeXml(description)}</desc>\n` : ""}    <link href="https://www.loops.ie">
       <text>LOOPS</text>
     </link>
   </metadata>

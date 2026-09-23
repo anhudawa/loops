@@ -1,8 +1,11 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+import { pageMeta } from "@/lib/site-meta";
 
-export const metadata = {
+export const metadata: Metadata = {
   title: "Feedback | LOOPS",
   description: "Send feedback about LOOPS.",
+  ...pageMeta({ path: "/feedback", title: "Feedback | LOOPS", description: "Send feedback about LOOPS." }),
 };
 
 export default function FeedbackPage() {

@@ -41,11 +41,12 @@ export async function generateMetadata({
   return {
     title,
     description,
-    alternates: { canonical: `https://loops.ie/share/${id}` },
+    alternates: { canonical: `https://www.loops.ie/share/${id}` },
     robots: { index: true, follow: true },
     openGraph: {
       title,
       description,
+      url: `https://www.loops.ie/share/${id}`,
       siteName: "LOOPS",
       type: "article",
       locale: "en_IE",

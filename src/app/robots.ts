@@ -25,6 +25,6 @@ export default function robots(): MetadataRoute.Robots {
         allow: "/",
       },
     ],
-    sitemap: "https://loops.ie/sitemap.xml",
+    sitemap: "https://www.loops.ie/sitemap.xml",
   };
 }

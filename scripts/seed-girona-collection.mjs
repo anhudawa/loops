@@ -29,7 +29,7 @@ const GIRONA_COLLECTION = {
   seo_title: "Cycling in Girona | The Loops Collection",
   seo_description:
     "Hand-picked road and gravel routes from Girona, Catalonia — the city that became European cycling's unofficial second home. Classics like Rocacorba, Els Àngels, and the Costa Brava coast road.",
-  description: `Girona didn't become the preferred winter base for WorldTour professionals by accident. The medieval city sits at the intersection of everything that makes cycling here exceptional: warm light from October through April, roads that empty of traffic within ten minutes of the old town, and a density of quality climbs that no comparably sized city in Europe can match.
+  description: `Girona didn't become the year-round home of WorldTour professionals by accident. The medieval city sits at the intersection of everything that makes cycling here exceptional: mild riding weather at its best from March to June and September to November, roads that empty of traffic within ten minutes of the old town, and a density of quality climbs that no comparably sized city in Europe can match.
 
 The geography does most of the work. To the east, the Gavarres — rounded hills of cork oak and maquis, criss-crossed by quiet back roads where you can string together 100km without touching a main road. To the north, the Pyrenean foothills rise sharply: the notoriously relentless grind to Mare de Déu del Mont, the long slog up to Sant Hilari Sacalm with its twisting forest descent to the Susqueda reservoir. Directly above the city, Rocacorba — a 10km climb averaging 5.9% that professionals use as a benchmark test and most visitors discover at slightly higher perceived exertion than anticipated.
 

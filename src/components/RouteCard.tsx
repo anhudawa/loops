@@ -143,13 +143,13 @@ export default function RouteCard({ route, showDistance }: RouteCardProps) {
               <span className="font-bold" style={{ color: "var(--accent)" }}>{route.distance_km} km</span>
               <span aria-hidden="true" style={{ color: "var(--border-light)" }}>·</span>
               <span style={{ color: "var(--text-secondary)" }}>{route.elevation_gain_m} m climb</span>
+              {/* One surface chip: the discipline when known, else the raw surface
+                  (never "Road · Road" or "Mixed · Gravel" side by side). */}
               <span aria-hidden="true" style={{ color: "var(--border-light)" }}>·</span>
-              <span className="capitalize" style={{ color: "var(--text-secondary)" }}>{route.surface_type}</span>
-              {discipline && (
-                <>
-                  <span aria-hidden="true" style={{ color: "var(--border-light)" }}>·</span>
-                  <span style={{ color: "var(--text-secondary)" }}>{discipline.icon} {discipline.label}</span>
-                </>
+              {discipline ? (
+                <span style={{ color: "var(--text-secondary)" }}>{discipline.icon} {discipline.label}</span>
+              ) : (
+                <span className="capitalize" style={{ color: "var(--text-secondary)" }}>{route.surface_type}</span>
               )}
             </div>
             {/* Meta row: location + distance-away, rating */}
@@ -226,8 +226,14 @@ export default function RouteCard({ route, showDistance }: RouteCardProps) {
                 </svg>
                 {route.elevation_gain_m}m
               </span>
-              <span style={{ color: "var(--border-light)" }} aria-hidden="true">·</span>
-              <span className="capitalize">{route.surface_type}</span>
+              {/* The discipline badge on the cover is the surface chip on desktop;
+                  fall back to the raw surface only when there's no discipline. */}
+              {!discipline && (
+                <>
+                  <span style={{ color: "var(--border-light)" }} aria-hidden="true">·</span>
+                  <span className="capitalize">{route.surface_type}</span>
+                </>
+              )}
               <span style={{ color: "var(--border-light)" }} aria-hidden="true">·</span>
               <span>{locationText}{countryText}</span>
               {showDistance && route.distance_km_away !== undefined && (

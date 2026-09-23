@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageOpenGraph, siteUrl } from "@/lib/site-meta";
 import Link from "next/link";
 import JsonLd from "@/components/JsonLd";
 import { getAllPosts, getPostsGroupedByCategory, type BlogPost } from "@/lib/blog";
@@ -7,7 +8,7 @@ export const metadata: Metadata = {
   title: "Cycling Guides & Training Blog — LOOPS",
   description:
     "Expert cycling destination guides and training advice: Girona, Mallorca, Wicklow, winter camps, Zone 2, threshold & VO2 max intervals, and AI route planning.",
-  alternates: { canonical: "/blog" },
+  alternates: { canonical: siteUrl("/blog") },
   keywords: [
     "cycling blog",
     "cycling destinations",
@@ -17,13 +18,12 @@ export const metadata: Metadata = {
     "VO2 max intervals",
     "cycling guides",
   ],
-  openGraph: {
+  openGraph: pageOpenGraph({
+    path: "/blog",
     title: "Cycling Guides & Training Blog — LOOPS",
     description:
       "Destination guides and training science for road, gravel and endurance cyclists. Plus how to plan routes with AI.",
-    url: "https://www.loops.ie/blog",
-    type: "website",
-  },
+  }),
 };
 
 const CATEGORY_BLURB: Record<string, string> = {

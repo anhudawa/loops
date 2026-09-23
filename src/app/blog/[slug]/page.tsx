@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { DEFAULT_OG_IMAGE, pageOpenGraph, siteUrl } from "@/lib/site-meta";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import JsonLd from "@/components/JsonLd";
@@ -23,24 +24,26 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     title: `${post.title} — LOOPS`,
     description: post.description,
     keywords: post.keywords,
-    alternates: { canonical: `/blog/${slug}` },
+    alternates: { canonical: siteUrl(`/blog/${slug}`) },
     openGraph: {
-      title: post.title,
-      description: post.description,
-      url: `https://www.loops.ie/blog/${slug}`,
+      ...pageOpenGraph({
+        path: `/blog/${slug}`,
+        title: post.title,
+        description: post.description,
+        images: post.coverImage
+          ? [{ url: post.coverImage, width: 1200, height: 630, alt: post.title }]
+          : undefined,
+      }),
       type: "article",
       publishedTime: post.date,
       modifiedTime: post.updated ?? post.date,
       authors: [post.author],
-      ...(post.coverImage && {
-        images: [{ url: post.coverImage, width: 1200, height: 630, alt: post.title }],
-      }),
     },
     twitter: {
       card: "summary_large_image",
       title: post.title,
       description: post.description,
-      ...(post.coverImage && { images: [post.coverImage] }),
+      images: [post.coverImage ?? DEFAULT_OG_IMAGE.url],
     },
   };
 }

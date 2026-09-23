@@ -50,7 +50,7 @@ describe("generateRouteJsonLd", () => {
   it("generates valid ExerciseAction schema", () => {
     const result = generateRouteJsonLd(baseRoute);
     expect(result["@type"]).toBe("ExerciseAction");
-    expect(result.url).toBe("https://loops.ie/routes/abc123");
+    expect(result.url).toBe("https://www.loops.ie/routes/abc123");
     expect(result.exerciseType).toBe("Gravel");
   });
 
@@ -77,8 +77,8 @@ describe("generateRouteJsonLd", () => {
 describe("generateBreadcrumbJsonLd", () => {
   it("generates correct positions and omits item for last entry", () => {
     const result = generateBreadcrumbJsonLd([
-      { name: "LOOPS", url: "https://loops.ie" },
-      { name: "Ireland", url: "https://loops.ie/routes/country/ireland" },
+      { name: "LOOPS", url: "https://www.loops.ie" },
+      { name: "Ireland", url: "https://www.loops.ie/routes/country/ireland" },
       { name: "Route Name" },
     ]);
     expect(result.itemListElement).toHaveLength(3);
@@ -105,6 +105,6 @@ describe("generateItemListJsonLd", () => {
       { name: "Route 2", id: "r2" },
     ]);
     expect(result.numberOfItems).toBe(2);
-    expect(result.itemListElement[0].url).toBe("https://loops.ie/routes/r1");
+    expect(result.itemListElement[0].url).toBe("https://www.loops.ie/routes/r1");
   });
 });

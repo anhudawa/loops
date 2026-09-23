@@ -213,7 +213,7 @@ function LoginPage() {
               </span>
             </label>
             <p className="text-[11px] text-center mt-2.5" style={{ color: "var(--text-muted)" }}>
-              Free forever. No credit card. No subscription.
+              Free forever. No credit card. Pro (coming) adds training intelligence.
             </p>
           </div>
 

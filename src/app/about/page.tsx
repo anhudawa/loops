@@ -1,8 +1,14 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+import { pageMeta } from "@/lib/site-meta";
 
-export const metadata = {
+const DESCRIPTION =
+  "LOOPS is cycling route discovery built by riders, for riders. Routes and GPX are free forever. Pro (coming) adds training intelligence.";
+
+export const metadata: Metadata = {
   title: "About | LOOPS",
-  description: "LOOPS is a free cycling route discovery platform built by riders, for riders.",
+  description: DESCRIPTION,
+  ...pageMeta({ path: "/about", title: "About LOOPS", description: DESCRIPTION }),
 };
 
 export default function AboutPage() {
@@ -26,8 +32,9 @@ export default function AboutPage() {
 
         <div className="space-y-4 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
           <p>
-            LOOPS is a free cycling route discovery platform. We believe great routes shouldn&apos;t
-            be locked behind paywalls. Our library routes follow the roads local riders actually use,
+            LOOPS is a cycling route discovery platform. We believe great routes shouldn&apos;t
+            be locked behind paywalls: routes and GPX are free forever. Pro (coming) adds training
+            intelligence. Our library routes follow the roads local riders actually use,
             and every generated route is scored against real road data with hard safety guardrails.
           </p>
           <p>

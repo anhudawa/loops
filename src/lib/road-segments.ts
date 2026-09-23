@@ -770,6 +770,23 @@ const NAME_LOOKUP_URL = "https://overpass-api.de/api/interpreter";
  * stretch, 1.5 s budget, never throws — a missing name degrades to
  * "on a primary road".
  */
+// At most this many name lookups in flight per server instance: five
+// candidates × three stretches used to fire 15 at once, which the public
+// map service answered with 429s — every name on production came back
+// null. A 2.5 s budget fits its usual 1–3 s answer; names are cached by
+// spot so the same road is looked up once.
+const NAME_MAX_INFLIGHT = 3;
+const NAME_TIMEOUT_MS = 2500;
+let nameInflight = 0;
+const nameQueue: Array<() => void> = [];
+const nameCache = new Map<string, string | null>();
+
+async function withNameSlot<T>(run: () => Promise<T>): Promise<T> {
+  while (nameInflight >= NAME_MAX_INFLIGHT) await new Promise<void>((r) => nameQueue.push(r));
+  nameInflight++;
+  try { return await run(); } finally { nameInflight--; nameQueue.shift()?.(); }
+}
+
 export async function nameCompromises(
   coords: [number, number][],
   compromises: Compromise[],
@@ -779,24 +796,28 @@ export async function nameCompromises(
     compromises.slice(0, 3).map(async (c) => {
       const mid = coords[Math.min(coords.length - 1, Math.floor((c.start + c.end) / 2))];
       if (!mid) return;
+      const key = `${mid[0].toFixed(4)},${mid[1].toFixed(4)}:${c.highway}`;
+      const hit = nameCache.get(key);
+      if (hit !== undefined) { if (hit) c.name = hit; return; }
       const q = `[out:json][timeout:2];way(around:25,${mid[0].toFixed(6)},${mid[1].toFixed(6)})["highway"="${c.highway}"];out tags 3;`;
       try {
-        const res = await fetchImpl(NAME_LOOKUP_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "loops.ie route generator (https://www.loops.ie)" },
-          body: `data=${encodeURIComponent(q)}`,
-          // Hard 1.5 s budget: a name is nice ("on the R755"), but the
-          // lookup blocked the whole scoring phase for its full timeout
-          // whenever the public map service was slow. Unnamed degrades to
-          // "on a primary road" — still honest.
-          signal: AbortSignal.timeout(1500),
+        await withNameSlot(async () => {
+          const res = await fetchImpl(NAME_LOOKUP_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "loops.ie route generator (https://www.loops.ie)" },
+            body: `data=${encodeURIComponent(q)}`,
+            // Bounded: a name is nice ("on the R755") but never worth
+            // stalling scoring. Unnamed degrades to "on a primary road".
+            signal: AbortSignal.timeout(NAME_TIMEOUT_MS),
+          });
+          if (!res.ok) return;
+          const json = (await res.json()) as { elements?: Array<{ tags?: WayTags }> };
+          for (const el of json.elements ?? []) {
+            const name = el.tags?.ref ?? el.tags?.name;
+            if (name) { c.name = name.split(";")[0].trim(); nameCache.set(key, c.name); return; }
+          }
+          nameCache.set(key, null);
         });
-        if (!res.ok) return;
-        const json = (await res.json()) as { elements?: Array<{ tags?: WayTags }> };
-        for (const el of json.elements ?? []) {
-          const name = el.tags?.ref ?? el.tags?.name;
-          if (name) { c.name = name.split(";")[0].trim(); return; }
-        }
       } catch {
         /* fail-soft: leave unnamed */
       }

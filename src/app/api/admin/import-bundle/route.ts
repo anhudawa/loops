@@ -25,8 +25,8 @@ const BUNDLES: Record<string, Bundle> = {
   // autovías; these are the same rides rebuilt on our engine with the Road
   // Standard profile (relaxed for the three long ones), reports included.
   // Redesigned 2026-09-23 (the old tracks were car-routed and never rides):
-  // real landmarks reached, true loops, routed on our engine; 8 of the 10
-  // (Empordà Plain and La Traka 100 keep their tracks for now).
+  // real landmarks reached, true loops, routed on our engine. Empordà Plain
+  // starts at Flaçà station: no Road-Standard way across the Ter from Girona.
   "girona-rebuild": { mode: "replace", label: "Rebuild Girona tracks", country: "Spain", routes: gironaRebuild as ReplaceRoute[] },
 };
 

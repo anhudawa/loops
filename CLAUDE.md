@@ -190,8 +190,10 @@ node scripts/import-routes.mjs scripts/hub-data/girona-eat-sleep-cycle.json --dr
   car-routed (OSRM demo /cycling = car profile; autovías). Eight were
   redesigned from researched landmarks (sanctuary/col/summit elevations
   confirmed on the engine) → src/data/hub-bundles/girona-rebuild.json;
-  /admin → Routes → "Rebuild Girona tracks (8)" (replaceRouteTrack by name
-  within Spain). Empordà Plain and La Traka 100 still await a redesign.
+  /admin → Routes → "Rebuild Girona tracks (10)" (replaceRouteTrack by name
+  within Spain; also rewrites the description where the ride changed).
+  Empordà Plain starts at Flaçà station — every Ter crossing out of Girona
+  to the plain is a main road under loops-road.
   Mare de Déu del Mont is a declared summit out-and-back (47 % retrace).
   Karoo (US) has no map data. The iconic Canary/Balearic climbs
   are OSM "primary" (TF-21 Teide 43 km, GC-60 Fataga 42 km) with no traffic

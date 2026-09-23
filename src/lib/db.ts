@@ -836,8 +836,13 @@ export async function insertCuratedRoute(r: {
 export async function replaceRouteTrack(r: {
   name: string; country: string; coordinates: number[][]; distance_km: number;
   elevation_gain_m: number; elevation_loss_m: number; road_report: unknown;
+  /** Replaces the description when the redesigned ride differs from it. */
+  description?: string | null;
 }): Promise<number> {
   await migrateDb();
+  if (r.description) {
+    await sql`UPDATE routes SET description = ${r.description} WHERE name = ${r.name} AND country = ${r.country}`;
+  }
   const { rowCount } = await sql`
     UPDATE routes
     SET coordinates = ${JSON.stringify(r.coordinates)}, distance_km = ${r.distance_km},

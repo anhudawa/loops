@@ -13,6 +13,7 @@ import ConditionReports from "@/components/ConditionReports";
 import RideActions from "@/components/RideActions";
 import RideDisclaimer from "@/components/RideDisclaimer";
 import ShareRide from "@/components/ShareRide";
+import { describeCompromise, type Compromise } from "@/lib/road-segments";
 import WeatherCard from "@/components/WeatherCard";
 import { useAuth } from "@/components/AuthProvider";
 import { useToast } from "@/components/Toast";
@@ -64,7 +65,7 @@ interface Route {
   quality_score?: number | null;
   quality_breakdown?: Record<string, number> | null;
   quality_surface?: SurfaceBreakdown | null;
-  road_report?: { standard_met: boolean; summary: string } | null;
+  road_report?: { standard_met: boolean; summary: string; compromises?: Compromise[] } | null;
 }
 
 interface RouteQualityData {
@@ -631,6 +632,25 @@ export default function RouteDetailView({ ride }: { ride?: RideInvite | null } =
               <p className="text-sm leading-snug" style={{ color: route.road_report.standard_met ? "var(--text)" : "#f5a524" }}>
                 {route.road_report.summary}
               </p>
+              {/* Every stretch, named where we could: the rider decides. */}
+              {!!route.road_report.compromises?.length && (
+                <details className="mt-2">
+                  <summary className="text-xs font-bold cursor-pointer select-none" style={{ color: "var(--text-secondary)" }}>
+                    Where ({route.road_report.compromises.length} {route.road_report.compromises.length === 1 ? "stretch" : "stretches"})
+                  </summary>
+                  <ul className="mt-1.5 space-y-1 text-xs" style={{ color: "var(--text-secondary)" }}>
+                    {route.road_report.compromises.slice(0, 12).map((c, i) => (
+                      <li key={i} className="flex gap-1.5">
+                        <span aria-hidden="true" style={{ color: "#f5a524" }}>·</span>
+                        <span>{describeCompromise(c)}</span>
+                      </li>
+                    ))}
+                    {route.road_report.compromises.length > 12 && (
+                      <li style={{ color: "var(--text-muted)" }}>+{route.road_report.compromises.length - 12} more</li>
+                    )}
+                  </ul>
+                </details>
+              )}
             </div>
           </div>
         )}

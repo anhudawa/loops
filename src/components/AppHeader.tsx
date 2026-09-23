@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef } from "react";
 import { useAuth } from "@/components/AuthProvider";
 
 /**
@@ -51,13 +50,9 @@ export default function AppHeader({ sticky = true }: { sticky?: boolean }) {
   // after mount the real href (for long-press / new tab) is set on the DOM
   // and a normal tap reads it at click time.
   const fullLoginHref = () => `/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`;
-  const loginRef = useRef<HTMLAnchorElement>(null);
-  const signupRef = useRef<HTMLAnchorElement>(null);
-  useEffect(() => {
-    const href = fullLoginHref();
-    if (loginRef.current) loginRef.current.href = href;
-    if (signupRef.current) signupRef.current.href = href;
-  }, [pathname]);
+  // Callback ref: the links mount only after auth resolves, so an effect on
+  // mount would run before they exist. This runs whenever an anchor attaches.
+  const withFullHref = (el: HTMLAnchorElement | null) => { if (el) el.href = fullLoginHref(); };
   const goToLogin = (e: React.MouseEvent) => {
     if (e.metaKey || e.ctrlKey || e.shiftKey) return;
     e.preventDefault();
@@ -161,7 +156,7 @@ export default function AppHeader({ sticky = true }: { sticky?: boolean }) {
             ) : (
               <>
                 <Link
-                  ref={loginRef}
+                  ref={withFullHref}
                   href={loginHref}
                   onClick={goToLogin}
                   className="text-sm font-semibold hover:opacity-80 px-2.5 min-h-[44px] inline-flex items-center"
@@ -170,7 +165,7 @@ export default function AppHeader({ sticky = true }: { sticky?: boolean }) {
                   Log in
                 </Link>
                 <Link
-                  ref={signupRef}
+                  ref={withFullHref}
                   href={loginHref}
                   onClick={goToLogin}
                   className="text-sm font-bold px-4 rounded-lg hover:opacity-90 min-h-[44px] inline-flex items-center"

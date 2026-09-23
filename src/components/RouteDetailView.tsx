@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useSyncExternalStore } from "react";
 import { useParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -26,6 +26,7 @@ import QualityFactors, { SurfaceSummary, type SurfaceBreakdown } from "@/compone
 import RouteFaq from "@/components/RouteFaq";
 import RelatedRoutes from "@/components/RelatedRoutes";
 import { slugify } from "@/lib/seo";
+import { parseRideTime } from "@/lib/ride-invite";
 import { SOCIAL_FEATURES_ENABLED } from "@/config/constants";
 import { detectClimbs, haversine, CATEGORY_COLORS, type Climb } from "@/lib/climb-detection";
 
@@ -40,6 +41,17 @@ function cachedTrackCheck(id: string, coords: [number, number][], name: string):
 }
 
 const MapView = dynamic(() => import("@/components/MapView"), { ssr: false });
+
+/** True once the ride's day is over (client only; the server says false). */
+function rideDayPassed(t: string | null | undefined): boolean {
+  const p = parseRideTime(t);
+  if (!p) return false;
+  return new Date(p.y, p.mo - 1, p.d + 1).getTime() <= Date.now();
+}
+const noSubscribe = () => () => {};
+
+/** "Where" list: the longest stretches first; the rest behind "+N more". */
+const WHERE_LIST_SHOWN = 12;
 
 interface Route {
   id: string;
@@ -92,8 +104,14 @@ export default function RouteDetailView({ ride, initialRoute }: { ride?: RideInv
   const params = useParams();
   const clientUrl = useClientUrl();
   const router = useRouter();
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, authError } = useAuth();
+  // Sign-in state not known yet (first paint, or /api/auth failed).
+  const authUnknown = !user && (authLoading || authError);
   const { toast } = useToast();
+  // An old ride link (last week's invite): say the ride has been.
+  const ridePassed = useSyncExternalStore(noSubscribe, () => rideDayPassed(ride?.t), () => false);
+  const mapWrapRef = useRef<HTMLDivElement>(null);
+  const [showAllStretches, setShowAllStretches] = useState(false);
   // The server passes the route it already fetched, so the banner, title and
   // Road Standard card paint with the HTML instead of after a second fetch.
   const [route, setRoute] = useState<Route | null>(initialRoute ?? null);
@@ -336,18 +354,20 @@ export default function RouteDetailView({ ride, initialRoute }: { ride?: RideInv
 
   if (!route || !route.coordinates) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center px-4" style={{ background: "var(--bg)" }}>
-        <span className="logo-mark text-gradient text-5xl mb-6">LOOPS</span>
-        <h1 className="text-6xl font-extrabold mb-2" style={{ color: "var(--text)" }}>Route not found</h1>
-        <p className="text-lg mb-8" style={{ color: "var(--text-muted)" }}>
-          This loop doesn&apos;t exist — yet.
-        </p>
-        <Link
-          href="/"
-          className="btn-accent px-8 py-3 rounded-xl font-bold text-sm uppercase tracking-wider"
-        >
-          Back to exploring
-        </Link>
+      <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)" }}>
+        <AppHeader />
+        <div className="flex-1 flex flex-col items-center justify-center px-4 py-16 text-center">
+          <h1 className="text-4xl md:text-6xl font-extrabold mb-2" style={{ color: "var(--text)" }}>Route not found</h1>
+          <p className="text-lg mb-8" style={{ color: "var(--text-muted)" }}>
+            This loop doesn&apos;t exist — yet.
+          </p>
+          <Link
+            href="/"
+            className="btn-accent px-8 py-3 rounded-xl font-bold text-sm uppercase tracking-wider"
+          >
+            Back to exploring
+          </Link>
+        </div>
       </div>
     );
   }
@@ -380,7 +400,34 @@ export default function RouteDetailView({ ride, initialRoute }: { ride?: RideInv
       .map((c): [number, number] => [c[0], c[1]]);
     const color = climb.category ? CATEGORY_COLORS[climb.category] ?? "#c8ff00" : "#c8ff00";
     setHighlightSection({ coords: sectionCoords, color });
+    // The map sits well above the climb list: bring it into view so the tap
+    // visibly does something.
+    mapWrapRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   };
+
+  // Up a level within LOOPS: back only when we came from a LOOPS page,
+  // otherwise the region (or country) listing — never back out to Google,
+  // WhatsApp or a blank tab.
+  const listingHref = route.region
+    ? `/routes/country/${slugify(route.country)}/${slugify(route.region)}`
+    : `/routes/country/${slugify(route.country)}`;
+  const goBack = () => {
+    let sameOrigin = false;
+    try {
+      sameOrigin = !!document.referrer && new URL(document.referrer).origin === window.location.origin;
+    } catch {
+      sameOrigin = false;
+    }
+    if (sameOrigin && window.history.length > 1) router.back();
+    else router.push(listingHref);
+  };
+
+  // "Ride something like this": the generator needs an account, so a
+  // signed-out rider goes to sign-up carrying the ask (no prefetch: a cached
+  // /generate redirect would drop the query).
+  const likeThisHref = `/generate?q=${encodeURIComponent(`${route.distance_km}km ${route.discipline} loop from ${route.region || route.county}`)}`;
+  const likeThisLink = !user && !authUnknown ? loginHrefFor(likeThisHref, { signup: true }) : likeThisHref;
+  const compromiseCount = route.road_report?.compromises?.length ?? 0;
 
   const handlePolylineClick = (latlng: { lat: number; lng: number }) => {
     // Find nearest coordinate index — drives profile crosshair
@@ -411,6 +458,11 @@ export default function RouteDetailView({ ride, initialRoute }: { ride?: RideInv
           <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--accent)" }}>
             Group ride{ride.when ? ` · ${ride.when}` : ""}
           </p>
+          {ridePassed && ride.when && (
+            <p className="text-xs font-bold mt-1" style={{ color: "#f5a524" }} data-testid="ride-passed">
+              This ride was on {ride.when}. Plan the next one with “Forward this ride”.
+            </p>
+          )}
           <h1 className="text-lg font-extrabold leading-tight mt-0.5" style={{ color: "var(--text)" }}>{route.name}</h1>
           <p className="text-sm mt-1" style={{ color: "var(--text)" }}>
             {route.distance_km} km · +{route.elevation_gain_m} m{track ? ` · ${shapeLabel(track)}` : ""}
@@ -450,16 +502,18 @@ export default function RouteDetailView({ ride, initialRoute }: { ride?: RideInv
       )}
 
       {/* Hero: Map full-bleed */}
-      <div className="h-[42vh] min-h-[260px] md:h-[400px] relative">
+      <div ref={mapWrapRef} className="h-[42vh] min-h-[260px] md:h-[400px] relative">
         <MapView
           routes={[route]}
           selectedRouteId={route.id}
+          detailsLink={false}
+          attributionPosition="topright"
           windOverlay={windOverlayEnabled && windData ? windData : null}
           travelOverlay={travelOverlayEnabled}
           startLabel={ride?.meet ? "Meet here" : "Start"}
           compromiseMarkers={(route?.road_report?.compromises ?? [])
             .filter((c) => Array.isArray(c.at))
-            .slice(0, 12) // the longest stretches (already sorted), same as the Where list
+            .slice(0, WHERE_LIST_SHOWN) // the longest stretches (already sorted), same as the Where list
             .map((c) => ({ at: c.at as [number, number], label: describeCompromise(c) }))}
           hoverPosition={hoverPosition}
           highlightSection={highlightSection}
@@ -488,7 +542,7 @@ export default function RouteDetailView({ ride, initialRoute }: { ride?: RideInv
         {/* Back + Breadcrumbs */}
         <div className="mb-3 flex items-center gap-1">
           <button
-            onClick={() => (window.history.length > 1 ? router.back() : router.push("/"))}
+            onClick={goBack}
             aria-label="Go back"
             className="min-w-[44px] min-h-[44px] -ml-3 shrink-0 flex items-center justify-center hover:opacity-80 transition-opacity"
             style={{ color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer" }}
@@ -540,7 +594,9 @@ export default function RouteDetailView({ ride, initialRoute }: { ride?: RideInv
               <button
                 onClick={handleFavourite}
                 disabled={favLoading}
-                className="flex items-center gap-1 px-2.5 py-2 min-h-[44px] rounded-lg transition-all"
+                aria-label={isFavourited ? "Remove from favourites" : "Add to favourites"}
+                aria-pressed={isFavourited}
+                className="flex items-center justify-center gap-1 px-2.5 py-2 min-h-[44px] min-w-[44px] rounded-lg transition-all"
                 style={{
                   background: isFavourited ? "rgba(255, 51, 85, 0.15)" : "rgba(255,255,255,0.05)",
                   border: `1px solid ${isFavourited ? "rgba(255, 51, 85, 0.3)" : "var(--border)"}`,
@@ -564,15 +620,28 @@ export default function RouteDetailView({ ride, initialRoute }: { ride?: RideInv
                   </span>
                 )}
               </button>
+              ) : authUnknown ? (
+              // Sign-in state not known yet: a quiet placeholder, never a
+              // login link in front of a signed-in rider.
+              <span
+                aria-hidden="true"
+                className="flex items-center justify-center min-h-[44px] min-w-[44px] rounded-lg"
+                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid var(--border)", opacity: 0.5 }}
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                </svg>
+              </span>
               ) : (
               <Link
                 href={loginHrefFor(clientUrl)}
-                className="flex items-center gap-1 px-2.5 py-2 min-h-[44px] rounded-lg transition-all hover:opacity-80"
+                aria-label="Log in to save this route"
+                className="flex items-center justify-center gap-1 px-2.5 py-2 min-h-[44px] min-w-[44px] rounded-lg transition-all hover:opacity-80"
                 style={{
                   background: "rgba(255,255,255,0.05)",
                   border: "1px solid var(--border)",
                 }}
-                title="Sign in to favourite"
+                title="Log in to save this route"
               >
                 <svg
                   className="w-4 h-4"
@@ -609,7 +678,7 @@ export default function RouteDetailView({ ride, initialRoute }: { ride?: RideInv
               { label: "Surface", value: route.surface_type },
             ].map((stat) => (
               <div key={stat.label} className="text-center">
-                <p className="text-base md:text-xl font-extrabold capitalize" style={{ color: "var(--accent)" }}>{stat.value}</p>
+                <p className={`text-base md:text-xl font-extrabold${stat.label === "Surface" ? " capitalize" : ""}`} style={{ color: "var(--accent)" }}>{stat.value}</p>
                 <p className="text-[9px] md:text-[10px] uppercase tracking-wider font-bold mt-0.5" style={{ color: "var(--text-muted)" }}>{stat.label}</p>
               </div>
             ))}
@@ -617,7 +686,8 @@ export default function RouteDetailView({ ride, initialRoute }: { ride?: RideInv
 
           {/* Ride something like this — hand the route's shape to the generator */}
           <Link
-            href={`/generate?q=${encodeURIComponent(`${route.distance_km}km ${route.discipline} loop from ${route.region || route.county}`)}`}
+            href={likeThisLink}
+            prefetch={false}
             className="mt-4 w-full min-h-[44px] flex items-center justify-center gap-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all hover:brightness-110"
             style={{ background: "var(--accent-glow)", color: "var(--accent)", border: "1px solid rgba(200,255,0,0.3)" }}
           >
@@ -657,18 +727,27 @@ export default function RouteDetailView({ ride, initialRoute }: { ride?: RideInv
               {/* Every stretch, named where we could: the rider decides. */}
               {!!route.road_report.compromises?.length && (
                 <details className="mt-2">
-                  <summary className="text-xs font-bold cursor-pointer select-none py-3 -my-2" style={{ color: "var(--text-secondary)" }}>
-                    Where ({route.road_report.compromises.length} {route.road_report.compromises.length === 1 ? "stretch" : "stretches"})
+                  <summary className="text-xs font-bold cursor-pointer select-none py-3.5 -my-2.5" style={{ color: "var(--text-secondary)" }}>
+                    Where ({compromiseCount} {compromiseCount === 1 ? "stretch" : "stretches"})
                   </summary>
                   <ul className="mt-1.5 space-y-1 text-xs" style={{ color: "var(--text-secondary)" }}>
-                    {route.road_report.compromises.slice(0, 12).map((c, i) => (
+                    {route.road_report.compromises.slice(0, showAllStretches ? undefined : WHERE_LIST_SHOWN).map((c, i) => (
                       <li key={i} className="flex gap-1.5">
                         <span aria-hidden="true" style={{ color: "#f5a524" }}>·</span>
                         <span>{describeCompromise(c)}</span>
                       </li>
                     ))}
-                    {route.road_report.compromises.length > 12 && (
-                      <li style={{ color: "var(--text-muted)" }}>+{route.road_report.compromises.length - 12} more</li>
+                    {!showAllStretches && compromiseCount > WHERE_LIST_SHOWN && (
+                      <li>
+                        <button
+                          type="button"
+                          onClick={() => setShowAllStretches(true)}
+                          className="min-h-[44px] -my-2 text-xs font-bold underline"
+                          style={{ color: "var(--text-secondary)" }}
+                        >
+                          Show {compromiseCount - WHERE_LIST_SHOWN} more
+                        </button>
+                      </li>
                     )}
                   </ul>
                 </details>
@@ -865,10 +944,10 @@ export default function RouteDetailView({ ride, initialRoute }: { ride?: RideInv
       </div>
 
       {/* Spacer so the sticky CTA never covers the footer/content */}
-      {!user && !authLoading && <div className="h-24" aria-hidden="true" />}
+      {!user && !authUnknown && <div className="h-24" aria-hidden="true" />}
 
       {/* Sticky bottom CTA for unauthenticated users (on /ride: after scrolling) */}
-      {!user && !authLoading && pastRideFold && (
+      {!user && !authUnknown && pastRideFold && (
         <div
           className="fixed bottom-0 left-0 right-0 z-50 px-4 py-3 md:py-4"
           style={{

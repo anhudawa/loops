@@ -25,10 +25,13 @@ interface RideActionsProps {
 }
 
 export default function RideActions({ routeId, routeName, rideLink = false }: RideActionsProps) {
-  const { user } = useAuth();
+  const { user, loading: authLoading, authError } = useAuth();
   // GPX_ACCESS (owner switch): who may download without signing in.
   const openAccess = GPX_ACCESS === "everyone" || (GPX_ACCESS === "ride-links" && rideLink);
   const canDownload = !!user || openAccess;
+  // Sign-in state not known yet (first paint, or /api/auth failed): never
+  // show a signed-in rider the sign-up CTA — hold its place instead.
+  const authUnknown = !user && (authLoading || authError);
   const [copied, setCopied] = useState(false);
   const [canShareFiles, setCanShareFiles] = useState(false);
   const downloadRef = useRef<HTMLAnchorElement>(null);
@@ -124,9 +127,24 @@ export default function RideActions({ routeId, routeName, rideLink = false }: Ri
     } catch {
       // Fall through to clipboard copy
     }
-    await navigator.clipboard.writeText(shareableUrl());
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    const url = shareableUrl();
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // In-app browsers (WhatsApp, Instagram) often block the clipboard:
+      // offer the phone's share sheet, or the link to copy by hand.
+      if (typeof navigator.share === "function") {
+        try {
+          await navigator.share({ title: routeName, url });
+          return;
+        } catch (e) {
+          if ((e as Error)?.name === "AbortError") return; // rider cancelled
+        }
+      }
+      window.prompt("Copy this link:", url);
+    }
   };
 
   return (
@@ -146,9 +164,15 @@ export default function RideActions({ routeId, routeName, rideLink = false }: Ri
           </svg>
           Download GPX File
         </a>
+      ) : authUnknown ? (
+        <div
+          aria-hidden="true"
+          className="w-full min-h-[48px] rounded-xl animate-pulse"
+          style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+        />
       ) : (
         <Link
-          href={loginHrefFor(clientUrl, { gpx: true })}
+          href={loginHrefFor(clientUrl, { gpx: true, signup: true })}
           className="w-full flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-bold text-sm uppercase tracking-wider transition-all hover:brightness-110"
           style={{
             background: "linear-gradient(135deg, var(--accent), #7acc00)",
@@ -163,10 +187,10 @@ export default function RideActions({ routeId, routeName, rideLink = false }: Ri
         </Link>
       )}
 
-      {!user && canDownload && (
+      {!user && !authUnknown && canDownload && (
         <p className="text-xs text-center" style={{ color: "var(--text-muted)" }}>
           Want to save it or plan your own loops?{" "}
-          <Link href={loginHrefFor(clientUrl)} className="font-bold underline" style={{ color: "var(--accent)" }}>Join LOOPS free</Link>
+          <Link href={loginHrefFor(clientUrl, { signup: true })} className="font-bold underline" style={{ color: "var(--accent)" }}>Join LOOPS free</Link>
         </p>
       )}
 

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { rideVerdict, type ForecastHour } from "@/lib/ride-wind";
+import { parseRideTime } from "@/lib/ride-invite";
 
 interface WeatherData {
   temperature: number;
@@ -82,10 +83,38 @@ export default function WeatherCard({ routeId, windOverlayEnabled, onWindToggle,
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
+  // A ride time with no forecast back (it has been, or it is more than 16
+  // days out): the service answered with the weather NOW, which says
+  // nothing about that ride — so no verdict and no hour strip for it.
+  const noRideForecast = !!rideTime && !!weather && !weather.forecastFor;
+  // Whether that ride's day is over (set when the weather arrives).
+  const [rideOver, setRideOver] = useState(false);
+
   // The ride verdict: this loop against the wind for the hours you'll be out.
   const verdict = useMemo(
-    () => (weather?.hours?.length && coordinates && coordinates.length > 1 ? rideVerdict(coordinates, weather.hours) : null),
-    [weather, coordinates]
+    () => (!noRideForecast && weather?.hours?.length && coordinates && coordinates.length > 1 ? rideVerdict(coordinates, weather.hours) : null),
+    [weather, coordinates, noRideForecast]
+  );
+
+  // Direction of travel needs no weather: always offered.
+  const directionToggle = (
+    <button
+      onClick={() => onTravelToggle(!travelOverlayEnabled)}
+      title="Show the direction of travel on the map"
+      aria-label="Show the direction of travel on the map"
+      aria-pressed={travelOverlayEnabled}
+      className="flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded-full text-xs font-bold transition-all"
+      style={{
+        color: travelOverlayEnabled ? "#c8ff00" : "var(--text-muted)",
+        background: travelOverlayEnabled ? "rgba(200, 255, 0, 0.15)" : "var(--bg)",
+        border: travelOverlayEnabled ? "1px solid rgba(200, 255, 0, 0.4)" : "1px solid var(--border)",
+      }}
+    >
+      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+      </svg>
+      Direction
+    </button>
   );
 
   const [attempt, setAttempt] = useState(0);
@@ -100,6 +129,8 @@ export default function WeatherCard({ routeId, windOverlayEnabled, onWindToggle,
       .catch(() => new Promise((res) => setTimeout(res, 1500)).then(get))
       .then((data: WeatherData) => {
         if (cancelled) return;
+        const p = parseRideTime(rideTime);
+        setRideOver(!!p && new Date(p.y, p.mo - 1, p.d + 1).getTime() <= Date.now());
         setWeather(data);
         setLoading(false);
         onWeatherLoaded({ direction: data.windDirection, speed: data.windSpeed });
@@ -114,9 +145,12 @@ export default function WeatherCard({ routeId, windOverlayEnabled, onWindToggle,
 
   if (loading) {
     return (
-      <div className="rounded-2xl p-5 md:p-6 animate-pulse" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-        <div className="h-3 rounded w-32 mb-4" style={{ background: "var(--border)" }} />
-        <div className="grid grid-cols-4 gap-3">
+      <div className="rounded-2xl p-5 md:p-6" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+        <div className="flex items-center justify-between gap-2 mb-4">
+          <div className="h-3 rounded w-32 animate-pulse" style={{ background: "var(--border)" }} />
+          {directionToggle}
+        </div>
+        <div className="grid grid-cols-4 gap-3 animate-pulse">
           {[...Array(4)].map((_, i) => (
             <div key={i} className="text-center">
               <div className="h-5 rounded w-12 mx-auto mb-1" style={{ background: "var(--border)" }} />
@@ -131,17 +165,20 @@ export default function WeatherCard({ routeId, windOverlayEnabled, onWindToggle,
   if (error || !weather) {
     return (
       <div className="rounded-2xl p-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs" style={{ color: "var(--text-muted)" }}>
             {rideWhen ? `The forecast for ${rideWhen} isn't available right now.` : "The weather isn't available right now."}
           </p>
-          <button
-            onClick={() => setAttempt((a) => a + 1)}
-            className="shrink-0 min-h-[44px] px-4 rounded-lg text-xs font-bold"
-            style={{ background: "var(--bg)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
-          >
-            Try again
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setAttempt((a) => a + 1)}
+              className="shrink-0 min-h-[44px] px-4 rounded-lg text-xs font-bold"
+              style={{ background: "var(--bg)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
+            >
+              Try again
+            </button>
+            {directionToggle}
+          </div>
         </div>
       </div>
     );
@@ -154,26 +191,12 @@ export default function WeatherCard({ routeId, windOverlayEnabled, onWindToggle,
           {weather.forecastFor && rideWhen ? `Forecast · ${rideWhen}` : "Weather now"}
         </h2>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => onTravelToggle(!travelOverlayEnabled)}
-            title="Show the direction of travel on the map"
-            aria-label="Show the direction of travel on the map"
-            className="flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded-full text-xs font-bold transition-all"
-            style={{
-              color: travelOverlayEnabled ? "#c8ff00" : "var(--text-muted)",
-              background: travelOverlayEnabled ? "rgba(200, 255, 0, 0.15)" : "var(--bg)",
-              border: travelOverlayEnabled ? "1px solid rgba(200, 255, 0, 0.4)" : "1px solid var(--border)",
-            }}
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-            </svg>
-            Direction
-          </button>
+          {directionToggle}
           <button
             onClick={() => onWindToggle(!windOverlayEnabled)}
             title="Show wind arrows on the map"
             aria-label="Show wind arrows on the map"
+            aria-pressed={windOverlayEnabled}
             className="flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded-full text-xs font-bold transition-all"
             style={{
               color: windOverlayEnabled ? "var(--danger)" : "var(--text-muted)",
@@ -188,6 +211,14 @@ export default function WeatherCard({ routeId, windOverlayEnabled, onWindToggle,
           </button>
         </div>
       </div>
+
+      {noRideForecast && rideWhen && (
+        <p className="text-xs font-bold mb-3 -mt-2" style={{ color: "#f5a524" }} data-testid="no-ride-forecast">
+          {rideOver
+            ? `This ride was on ${rideWhen}. Below is the weather now.`
+            : `The forecast for ${rideWhen} isn't out yet (it goes up to 16 days ahead). Below is the weather now.`}
+        </p>
+      )}
 
       <div className="grid grid-cols-4 gap-3">
         <div className="text-center">
@@ -242,7 +273,7 @@ export default function WeatherCard({ routeId, windOverlayEnabled, onWindToggle,
         </div>
       )}
 
-      {weather.hours && weather.hours.length > 1 && (
+      {!noRideForecast && weather.hours && weather.hours.length > 1 && (
         <div className="mt-3 -mx-1 flex gap-1.5 overflow-x-auto pb-1" data-testid="hour-strip">
           {weather.hours.map((h) => {
             const rainy = (h.precipitationProbability ?? 0) >= 20 || h.precipitation >= 0.2;

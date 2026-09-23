@@ -123,12 +123,14 @@ input[type="search"]::-webkit-search-decoration {
   display: none;
 }
 
-/* Zoom controls: meet the 40px+ tap target on touch (default Leaflet is 30px) */
-.leaflet-touch .leaflet-bar a,
-.leaflet-control-zoom a {
-  width: 40px;
-  height: 40px;
-  line-height: 40px;
+/* Zoom controls: a 44px tap target (default Leaflet is 30px). The extra
+   .leaflet-container keeps these ahead of leaflet.css, which loads later
+   with the map chunk and would otherwise win on equal specificity. */
+.leaflet-container.leaflet-touch .leaflet-bar a,
+.leaflet-container .leaflet-control-zoom a {
+  width: 44px;
+  height: 44px;
+  line-height: 44px;
   font-size: 20px;
 }
 

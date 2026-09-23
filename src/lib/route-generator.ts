@@ -34,8 +34,10 @@ import {
   remapEdgeTags,
   buildRoadReport,
   compromiseAcceptable,
+  fixedPartBreaksPolicy,
   nameCompromises,
   describeCompromise,
+  EXIT_ZONE_KM,
   type EdgeTags,
   type RoadReport,
 } from "./road-segments";
@@ -395,10 +397,26 @@ async function routeWithFallback(
 ): Promise<RoutedPath | null> {
   const strict = await routeStrict(waypoints, profile);
   if (strict) return strict;
-  const relaxed = RELAXED_PROFILE[profile];
   // Only a genuine "no route under the standard" earns the relaxed profile.
-  if (!relaxed || !NO_ROUTE_RE.test(lastBRouterFailure)) return null;
-  const strictFailure = lastBRouterFailure;
+  if (!NO_ROUTE_RE.test(lastBRouterFailure)) return null;
+  return routeRelaxedFallback(waypoints, profile, lastBRouterFailure);
+}
+
+/**
+ * The relaxed half of routeWithFallback, for callers that have ALREADY seen
+ * the strict profile fail on these exact waypoints with a deterministic
+ * "no route" — repeating that strict search (the engine explores everything
+ * reachable before giving up, 3–4 s on mountain tiles) would return the same
+ * failure. `strictFailure` is kept as the reported reason when the relaxed
+ * profile finds nothing either.
+ */
+async function routeRelaxedFallback(
+  waypoints: [number, number][],
+  profile: string,
+  strictFailure: string
+): Promise<RoutedPath | null> {
+  const relaxed = RELAXED_PROFILE[profile];
+  if (!relaxed) { lastBRouterFailure = strictFailure; return null; }
   const path = await routeViaBRouter(waypoints, relaxed);
   if (!path) { lastBRouterFailure = strictFailure; return null; }
   genDebug(`candidate routed on the relaxed profile (strict: ${strictFailure})`);
@@ -488,6 +506,42 @@ function nogoPolyline(coords: [number, number][], skipStartKm: number, skipEndKm
   return `&polylines=${pts.map(([lat, lng]) => `${lng.toFixed(5)},${lat.toFixed(5)}`).join(",")},${LOOP_NOGO_WEIGHT}`;
 }
 
+/** Path point nearest a waypoint must be this close for it to count as the leg boundary. */
+const LEG_BOUNDARY_KM = 0.15;
+
+/**
+ * Edge-index ranges of the legs a far-point move leaves untouched. The engine
+ * routes each leg between consecutive via points independently, so moving
+ * waypoint `farIdx` re-routes only the legs into and out of it; the route
+ * before waypoint farIdx−1 and after waypoint farIdx+1 is byte-identical in
+ * every moved attempt. Returns null (no claim) when either boundary cannot be
+ * located on the path, or when either fixed leg is shorter than the exit
+ * zone — the exit-zone classification of a stretch in a fixed leg is only
+ * guaranteed to survive a move when the OTHER fixed leg is longer than the
+ * zone (the far side of the route can then never come within the zone).
+ */
+function fixedLegEdgeRanges(
+  coords: [number, number][],
+  waypoints: [number, number][],
+  farIdx: number
+): Array<[number, number]> | null {
+  if (farIdx < 2 || farIdx > waypoints.length - 3 || coords.length < 3) return null;
+  const before = waypoints[farIdx - 1];
+  const after = waypoints[farIdx + 1];
+  let iA = -1;
+  for (let i = 0; i < coords.length; i++) {
+    if (haversineKm(coords[i][0], coords[i][1], before[0], before[1]) <= LEG_BOUNDARY_KM) { iA = i; break; }
+  }
+  let iB = -1;
+  for (let i = coords.length - 1; i >= 0; i--) {
+    if (haversineKm(coords[i][0], coords[i][1], after[0], after[1]) <= LEG_BOUNDARY_KM) { iB = i; break; }
+  }
+  if (iA < 0 || iB < 0 || iA >= iB) return null;
+  const legKm = (from: number, to: number) => pathDistanceKm(coords.slice(from, to + 1));
+  if (legKm(0, iA) <= EXIT_ZONE_KM || legKm(iB, coords.length - 1) <= EXIT_ZONE_KM) return null;
+  return [[0, iA], [iB, coords.length - 1]];
+}
+
 function joinPaths(a: RoutedPath, b: RoutedPath): RoutedPath {
   const dup =
     b.coords.length > 0 && a.coords.length > 0 &&
@@ -523,7 +577,7 @@ function joinPaths(a: RoutedPath, b: RoutedPath): RoutedPath {
  * requested distance on a tie. Every attempt is a real engine route, so
  * nothing here can invent a road.
  */
-async function routeLoopCandidate(
+export async function routeLoopCandidate(
   waypoints: [number, number][],
   profile: string,
   targetKm: number,
@@ -564,7 +618,21 @@ async function routeLoopCandidate(
   };
   let first = await routeStrict(waypoints, profile);
   let firstCompromise = first ? compromiseM(first) : Infinity;
-  if (waypoints.length >= 4 && (first ? firstCompromise > 0 : NO_ROUTE_RE.test(lastBRouterFailure))) {
+  // A deterministic "no route" for these exact waypoints: never worth a
+  // second strict search (see routeRelaxedFallback).
+  const strictNoRoute = !first && NO_ROUTE_RE.test(lastBRouterFailure);
+  // Moving the far point re-routes only the two legs that touch it. When
+  // the legs it leaves untouched already carry a disqualifying stretch (a
+  // 3 km main-road exit from a valley town, say), every moved attempt would
+  // be rejected for the same reason — skip straight past five engine
+  // searches. Only distance-independent rules are used for this verdict.
+  let movesUseless = false;
+  if (first && firstCompromise > 0 && first.edgeTags) {
+    const fixed = fixedLegEdgeRanges(first.coords, waypoints, farIdx);
+    movesUseless = !!fixed && fixedPartBreaksPolicy(first.coords, first.edgeTags, discipline, fixed);
+  }
+  if (movesUseless) genDebug(`far-point moves skipped: the legs a move keeps already break the serving policy (${Math.round(firstCompromise)} m of compromise)`);
+  if (waypoints.length >= 4 && !movesUseless && (first ? firstCompromise > 0 : strictNoRoute)) {
     const strictFailure = first ? `${Math.round(firstCompromise)} m of compromise` : lastBRouterFailure;
     const moved: Array<{ label: string; wps: [number, number][] }> = [
       { label: "far point +25°", wps: moveFar(farBearing + 25, farDist) },
@@ -588,7 +656,15 @@ async function routeLoopCandidate(
     }
     if (!first) lastBRouterFailure = strictFailure;
   }
-  if (!first) first = await routeWithFallback(waypoints, profile);
+  // Last resort: the relaxed profile. When the strict search for these
+  // waypoints already came back "no route", go straight to it instead of
+  // paying for that same search again; a strict TIMEOUT or network error is
+  // not deterministic and still gets its retry through routeWithFallback.
+  if (!first) {
+    first = strictNoRoute
+      ? await routeRelaxedFallback(waypoints, profile, lastBRouterFailure)
+      : await routeWithFallback(waypoints, profile);
+  }
   if (!first) return done(null, "no path");
 
   // Memoised per path: repair is the most expensive step and the loop-shaping
@@ -723,6 +799,26 @@ async function routeLoopCandidate(
 /** Per-request routing deadline (epoch ms) — engine calls never overrun it
  *  by more than a couple of seconds. Set by generateFreshRoutes. */
 let currentRoutingDeadline = 0;
+
+/** The whole pipeline must answer inside this (the API's 55 s budget less
+ *  scoring and the response). */
+const SCENERY_DEADLINE_MS = 44_000;
+/**
+ * How long, once routing is done, scoring may wait for the scenery lookup
+ * that was started with the request. The lookup keeps running in the
+ * background and lands in the cache for the next rider either way; waiting
+ * beyond this only trades the rider's time for a scenery score on THIS
+ * answer. The engine phase usually outlasts a healthy lookup (18 s cap)
+ * anyway; the cap bites when the public map service is slow or
+ * rate-limiting — a request from a fast, flat start (Faro: routing in
+ * ~6 s) used to sit up to 38 s waiting for scenery.
+ */
+const SCENERY_WAIT_AFTER_ROUTING_MS = 12_000;
+
+/** Milliseconds scoring may still wait for scenery, `elapsedMs` into the request. */
+export function sceneryWaitBudgetMs(elapsedMs: number): number {
+  return Math.max(1500, Math.min(SCENERY_WAIT_AFTER_ROUTING_MS, SCENERY_DEADLINE_MS - elapsedMs));
+}
 
 async function routeViaBRouter(
   waypoints: [number, number][],       // [lat, lng]
@@ -2019,7 +2115,7 @@ async function generateFreshRoutes(
   // pipeline budget allows (leaving ~8 s for scoring and the response);
   // past that, loops are scored with scenery "not assessed". A second pass
   // covers a new area whose scenery is usually not cached yet.
-  const sceneryWaitMs = Math.max(1500, 44_000 - (Date.now() - t0));
+  const sceneryWaitMs = sceneryWaitBudgetMs(Date.now() - t0);
   const scenicFetch = passLabel === "pass 1"
     ? scenicPromise
     : prefetchScenic(unionBbox(waypointSets.map((w) => bboxOf(w, 0.08))));

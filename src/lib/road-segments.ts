@@ -431,6 +431,37 @@ export function compromiseAcceptable(report: RoadReport, distanceKm: number): bo
   return totalM <= allowance && longest <= 1500;
 }
 
+/**
+ * Serving-policy verdict for PART of a route: only the edges inside `ranges`
+ * (half-open [from, to) edge-index ranges) are judged; every other edge is
+ * treated as unknown road. Only the distance-independent rules are applied
+ * (an exit stretch over 2.5 km / 4 km in total, a mid-ride stretch over
+ * 1.5 km, unpaved over 200 m, unsuitable over 100 m, any motorway) — the
+ * 3 %-of-the-ride allowance is left out because the ride length is not known
+ * for the routes this verdict is meant to stand in for.
+ *
+ * Compromise stretches only ever add up, so a part that breaks the policy
+ * on its own means every route that keeps those edges breaks it too. The
+ * generator uses this to skip far-point moves that cannot help: moving the
+ * far point re-routes only the two legs that touch it, and when the legs it
+ * leaves untouched already carry the disqualifying stretch, five more engine
+ * searches would all end in the same rejection.
+ */
+export function fixedPartBreaksPolicy(
+  coords: [number, number][],
+  edgeTags: EdgeTags,
+  discipline: Discipline,
+  ranges: Array<[number, number]>
+): boolean {
+  const n = Math.min(Math.max(0, coords.length - 1), edgeTags.length);
+  const masked: EdgeTags = new Array(n).fill(null);
+  for (const [from, to] of ranges) {
+    for (let e = Math.max(0, from); e < Math.min(n, to); e++) masked[e] = edgeTags[e];
+  }
+  const report = buildRoadReport(coords, masked, discipline);
+  return !compromiseAcceptable(report, Number.POSITIVE_INFINITY);
+}
+
 // ── Quality dimensions from edges ────────────────────────────────────────────
 
 const HIGHWAY_WEIGHTS: Record<string, [number, number, number]> = {

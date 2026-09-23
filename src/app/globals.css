@@ -75,6 +75,20 @@ button {
   z-index: 0;
 }
 
+/* Start / meeting-point label on the route map */
+.leaflet-tooltip.start-label {
+  background: #0a0a0a;
+  color: #c8ff00;
+  border: 1px solid #c8ff00;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font: 800 11px/1.4 "Inter", system-ui, sans-serif;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+.leaflet-tooltip.start-label::before { border-top-color: #c8ff00; }
+
 .leaflet-popup-content-wrapper {
   border-radius: 12px;
   background: var(--bg-card);

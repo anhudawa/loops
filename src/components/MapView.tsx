@@ -29,6 +29,7 @@ export default function MapView({
   onRouteSelect,
   windOverlay,
   travelOverlay,
+  startLabel,
   hoverPosition,
   highlightSection,
   onPolylineClick,
@@ -39,6 +40,8 @@ export default function MapView({
   onRouteSelect?: (id: string) => void;
   windOverlay?: { direction: number; speed: number } | null;
   travelOverlay?: boolean;
+  /** Permanent label on the selected route's start marker ("Start", "Meet here"). */
+  startLabel?: string | null;
   hoverPosition?: { lat: number; lng: number } | null;
   highlightSection?: { coords: [number, number][]; color: string } | null;
   onPolylineClick?: (latlng: { lat: number; lng: number }) => void;
@@ -137,6 +140,10 @@ export default function MapView({
         </div>
       `);
 
+      if (startLabel && isSelected) {
+        marker.bindTooltip(startLabel, { permanent: true, direction: "top", offset: [0, -8], className: "start-label" });
+      }
+
       if (onRouteSelect) {
         marker.on("click", () => onRouteSelect(route.id));
         polyline.on("click", () => onRouteSelect(route.id));
@@ -166,7 +173,7 @@ export default function MapView({
         mapRef.current.fitBounds(L.latLngBounds(allCoords), { padding: [30, 30] });
       }
     }
-  }, [routes, selectedRouteId, onRouteSelect, onPolylineClick]);
+  }, [routes, selectedRouteId, onRouteSelect, onPolylineClick, startLabel]);
 
   // Hover marker from elevation profile
   useEffect(() => {

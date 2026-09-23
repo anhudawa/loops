@@ -92,7 +92,9 @@ export default function RouteDetailView({ ride }: { ride?: RideInvite | null } =
   const [loading, setLoading] = useState(true);
   const [windData, setWindData] = useState<{ direction: number; speed: number } | null>(null);
   const [windOverlayEnabled, setWindOverlayEnabled] = useState(false);
-  const [travelOverlayEnabled, setTravelOverlayEnabled] = useState(false);
+  // Ride links show the direction of travel from the start — riders want to
+  // know which way the group goes before they get there.
+  const [travelOverlayEnabled, setTravelOverlayEnabled] = useState(!!ride);
   const [isFollowingCreator, setIsFollowingCreator] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
   const [isFavourited, setIsFavourited] = useState(false);
@@ -433,6 +435,7 @@ export default function RouteDetailView({ ride }: { ride?: RideInvite | null } =
           selectedRouteId={route.id}
           windOverlay={windOverlayEnabled && windData ? windData : null}
           travelOverlay={travelOverlayEnabled}
+          startLabel={ride?.meet ? "Meet here" : "Start"}
           hoverPosition={hoverPosition}
           highlightSection={highlightSection}
           onPolylineClick={handlePolylineClick}

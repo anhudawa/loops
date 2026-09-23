@@ -129,6 +129,18 @@ export function migrateDb(): Promise<void> {
 
 async function runMigrations() {
   await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS strava_id TEXT UNIQUE`;
+  // Email sign-in: the return path travels with the token (not a cookie).
+  await sql`
+    CREATE TABLE IF NOT EXISTS magic_links (
+      id TEXT PRIMARY KEY,
+      email TEXT NOT NULL,
+      token TEXT NOT NULL UNIQUE,
+      expires_at TIMESTAMPTZ NOT NULL,
+      used BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`ALTER TABLE magic_links ADD COLUMN IF NOT EXISTS redirect TEXT`;
   await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id TEXT UNIQUE`;
   // Persisted quality score so the flagship "quality-scored" panel is instant
   // and resilient — it no longer depends on a live Overpass call per page view.
@@ -940,21 +952,22 @@ export async function getRoutesByStravaActivityIds(activityIds: number[]): Promi
 }
 
 // ──── Magic links ────
-export async function createMagicLink(id: string, email: string, token: string, expiresAt: Date): Promise<void> {
+export async function createMagicLink(id: string, email: string, token: string, expiresAt: Date, redirect: string | null = null): Promise<void> {
   await sql`
-    INSERT INTO magic_links (id, email, token, expires_at)
-    VALUES (${id}, ${email}, ${token}, ${expiresAt.toISOString()})
+    INSERT INTO magic_links (id, email, token, expires_at, redirect)
+    VALUES (${id}, ${email}, ${token}, ${expiresAt.toISOString()}, ${redirect})
   `;
 }
 
-export async function validateMagicLink(token: string): Promise<{ email: string } | null> {
+/** Valid, unused link → its email and (when the rider asked from a page) where to return. */
+export async function validateMagicLink(token: string): Promise<{ email: string; redirect: string | null } | null> {
   const { rows } = await sql`
     SELECT * FROM magic_links
     WHERE token = ${token} AND used = FALSE AND expires_at > NOW()
   `;
   if (rows.length === 0) return null;
   await sql`UPDATE magic_links SET used = TRUE WHERE token = ${token}`;
-  return { email: rows[0].email };
+  return { email: rows[0].email, redirect: rows[0].redirect ?? null };
 }
 
 // ──── Follows ────

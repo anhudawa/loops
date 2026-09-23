@@ -685,7 +685,7 @@ export default function RouteDetailView({ ride }: { ride?: RideInvite | null } =
 
         {/* Share Ride — prominent CTA */}
         <div className="mb-4">
-          <ShareRide route={route} />
+          <ShareRide route={route} ride={ride} />
         </div>
 
         {/* Ride Actions */}

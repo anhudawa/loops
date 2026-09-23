@@ -83,7 +83,7 @@ function LoginPage() {
     if (newsletterOptInRef.current) document.cookie = `newsletter_optin=1; path=/; max-age=1800; SameSite=Lax`;
     setEmailState("sending");
     try {
-      const res = await fetch("/api/auth/magic", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }) });
+      const res = await fetch("/api/auth/magic", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, redirect }) });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) { setEmailError(body?.error ?? "Couldn't send the email."); setEmailState("idle"); return; }
       setEmailState("sent");

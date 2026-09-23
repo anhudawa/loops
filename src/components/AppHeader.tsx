@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 
 /**
@@ -43,6 +43,15 @@ function NavLinks({ pathname }: { pathname: string }) {
 export default function AppHeader({ sticky = true }: { sticky?: boolean }) {
   const { user, loading: authLoading, authError, logout, unreadCount } = useAuth();
   const pathname = usePathname();
+  const router = useRouter();
+  const loginHref = `/login?redirect=${encodeURIComponent(pathname ?? "/")}`;
+  // Keep the query (a ride link's day/time/meeting point) through sign-in;
+  // read at click time so server and client render the same markup.
+  const goToLogin = (e: React.MouseEvent) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey) return;
+    e.preventDefault();
+    router.push(`/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+  };
 
   return (
     <header
@@ -141,14 +150,16 @@ export default function AppHeader({ sticky = true }: { sticky?: boolean }) {
             ) : (
               <>
                 <Link
-                  href={`/login?redirect=${encodeURIComponent(pathname ?? "/")}`}
+                  href={loginHref}
+                  onClick={goToLogin}
                   className="text-sm font-semibold hover:opacity-80 px-2.5 min-h-[44px] inline-flex items-center"
                   style={{ color: "var(--text)" }}
                 >
                   Log in
                 </Link>
                 <Link
-                  href={`/login?redirect=${encodeURIComponent(pathname ?? "/")}`}
+                  href={loginHref}
+                  onClick={goToLogin}
                   className="text-sm font-bold px-4 rounded-lg hover:opacity-90 min-h-[44px] inline-flex items-center"
                   style={{ background: "var(--accent)", color: "var(--bg)" }}
                 >

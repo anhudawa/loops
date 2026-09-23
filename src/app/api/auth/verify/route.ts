@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import { validateMagicLink, upsertEmailUser, migrateDb, recordEvent, markNewsletterOptIn, ANALYTICS_EVENTS } from "@/lib/db";
 import { ATTRIBUTION_COOKIE, decodeAttribution } from "@/lib/attribution";
 import { subscribeToNewsletter } from "@/lib/beehiiv";
+import { safeRedirectPath } from "@/lib/safe-redirect";
 
 /** Magic-link landing: one-time token → session → back where the rider was. */
 export async function GET(request: NextRequest) {
@@ -27,12 +28,13 @@ export async function GET(request: NextRequest) {
       properties: { method: "email", new_user: isNew, source: isNew ? attribution?.source ?? "direct" : null },
     });
 
-    let to = "/";
-    const r = request.cookies.get("login_redirect")?.value;
-    if (r) {
-      const d = decodeURIComponent(r);
-      if (d.startsWith("/") && !d.startsWith("//")) to = d;
-    }
+    // The link's own return path first (works in any browser), then the
+    // cookie from the browser that asked for it.
+    let cookieRedirect: string | null = null;
+    try {
+      cookieRedirect = safeRedirectPath(decodeURIComponent(request.cookies.get("login_redirect")?.value ?? ""));
+    } catch { /* malformed cookie */ }
+    const to = safeRedirectPath(link.redirect) ?? cookieRedirect ?? "/";
     const res = NextResponse.redirect(new URL(to, base));
     res.cookies.set("session", sessionToken, {
       httpOnly: true,

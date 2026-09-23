@@ -10,6 +10,10 @@
 export interface DeliveryRequest {
   distance_km: number;
   elevation_preference: string; // "flat" | "rolling" | "hilly" | "mountainous" | "any"
+  /** Destination ride: the place sets the length, so say it that way. */
+  destination?: string;
+  /** false: the rider named no distance, so there is nothing to compare against. */
+  distance_asked?: boolean;
 }
 
 export interface DeliveryActual {
@@ -30,9 +34,11 @@ export function deliveryNote(
   // Distance: flag a deviation over 12% AND at least 3 km (avoid nagging on
   // tiny differences that are within routing tolerance).
   const reqKm = req.distance_km;
-  if (reqKm > 0) {
+  if (reqKm > 0 && !(req.destination && req.distance_asked === false)) {
     const diff = actual.distance_km - reqKm;
-    if (Math.abs(diff) / reqKm > 0.12 && Math.abs(diff) >= 3) {
+    if (Math.abs(diff) / reqKm > 0.12 && Math.abs(diff) >= 3 && req.destination) {
+      notes.push(`${req.destination} and back is ${Math.round(actual.distance_km)} km — ${diff < 0 ? "shorter" : "longer"} than the ${Math.round(reqKm)} km you asked for.`);
+    } else if (Math.abs(diff) / reqKm > 0.12 && Math.abs(diff) >= 3) {
       notes.push(
         diff < 0
           ? `Came out ${Math.round(-diff)} km shorter than the ${Math.round(reqKm)} km you asked for — the best loop we could route from here.`

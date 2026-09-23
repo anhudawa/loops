@@ -110,6 +110,10 @@ export interface GeneratedRoute {
    * for how long ("600 m on the R755"). Trust rule: never a silent bad road.
    */
   road_report?: RoadReport;
+  /** A name for the ride when it is not a plain loop ("Port de Pollença to Cap de Formentor and back"). */
+  title?: string;
+  /** How the ride is shaped, said plainly ("Out and back on the same road — …"). */
+  ride_note?: string;
 }
 
 /**
@@ -146,6 +150,10 @@ export interface InterpretedIntent {
   start_point?: [number, number];
   /** Said to the rider when the ask was adjusted (e.g. gravel → road in v1). */
   notice?: string;
+  /** Destination ride: where it goes (out and back). */
+  destination?: string;
+  /** Destination ride: false when the rider named no distance or time (the place sets the length). */
+  distance_asked?: boolean;
 }
 
 export interface GenerateResult {
@@ -1195,6 +1203,12 @@ export async function generateRouteCandidates(
   const interpreted = { ...(await summariseIntent(spec, options.userSpeedKmh)), ...(notice ? { notice } : {}) };
   markPhase("summarise");
   const candidates = await candidatesFromSpec(spec, { userSpeedKmh: options.userSpeedKmh });
+  // A destination ride with no distance asked: its length is the road there
+  // and back — report that, not the 50 km default we never aimed for.
+  if (spec.destination && !spec.destination.distance_asked && candidates[0]) {
+    interpreted.distance_km = candidates[0].distance_km;
+    delete interpreted.duration_minutes;
+  }
   markPhase("total");
   const timings = currentTimings;
   currentTimings = null;
@@ -1262,6 +1276,7 @@ async function summariseIntent(spec: RouteSpec, userSpeedKmh?: number): Promise<
     parser: spec.parser,
     start_source: spec.start_source,
     start_point: spec.start_point,
+    ...(spec.destination ? { destination: spec.destination.name, distance_asked: spec.destination.distance_asked } : {}),
   };
 }
 
@@ -1524,6 +1539,12 @@ async function candidatesFromSpecInner(
   windForecast: WindForecast | null
 ): Promise<RouteCandidate[]> {
 
+  // ── Destination ride ("Pollença to Cap de Formentor and back") ───────────
+  if (spec.destination) {
+    const rides = await generateDestinationRides(spec);
+    return rides.map((g) => ({ source: "generated" as const, ...g }));
+  }
+
   // ── Workout mode ───────────────────────────────────────────────────────────
   // A workout is a hard constraint: either the route's segments can host it
   // or they can't. Library-first still wins when available (known-good >
@@ -1589,6 +1610,174 @@ async function candidatesFromSpecInner(
   }
 
   return generated.map((g) => ({ source: "generated" as const, ...g }));
+}
+
+// ── Destination rides ────────────────────────────────────────────────────────
+
+/** A different road home is worth it when it shares less than this with the way out. */
+const DEST_MAX_SHARED_HOME = 0.5;
+/** …and is at most this much longer than riding back the same way. */
+const DEST_MAX_HOME_STRETCH = 1.4;
+/** A way home sharing at least this much with the way out is "the same road". */
+const SAME_ROAD_SHARE = 0.8;
+
+/**
+ * Out to a named place and home again (owner rule, 2026-09-23): "If I'm in
+ * Pollença and I want a route to Cap de Formentor and back I should get
+ * one. The only way there is out and back." So the loop rules' retrace and
+ * U-turn rejections do not apply here — the rider asked for exactly that.
+ * What still applies: the Road Standard (every compromise measured and
+ * named; motorways and unpaved stretches decline), honest labelling (same
+ * road both ways is said so), and a real engine route for every metre.
+ *
+ * Served: a different road home when one exists that is really different
+ * and not an absurd detour, plus the same road back (the shortest ride).
+ */
+async function generateDestinationRides(spec: RouteSpec): Promise<GeneratedRoute[]> {
+  const dest = spec.destination!;
+  const profile = DISCIPLINE_PROFILE[spec.discipline];
+  const startName = spec.region ?? "your start";
+  currentRoutingDeadline = Date.now() + ROUTING_BUDGET_MS;
+  // Scenery for the area, fetched while the engine routes (as for loops).
+  const scenicFetch = prefetchScenic(bboxOf([spec.start_point, dest.point], 0.08));
+  try {
+    const out = await routeWithFallback([spec.start_point, dest.point], profile);
+    markPhase("destination out");
+    if (!out || out.coords.length < 2) {
+      throw new Error(`No valid routes: we found no road from ${startName} to ${dest.name} that a road bike can ride.`);
+    }
+    // Home: the same road reversed (always possible), and — when the network
+    // has one — a different road, the way out penalised as a no-go.
+    const nogo = avoidPolylines([out.coords], dest.point, spec.start_point);
+    const [same, other] = await Promise.all([
+      routeWithFallback([dest.point, spec.start_point], profile),
+      nogo ? routeViaBRouter([dest.point, spec.start_point], profile, false, nogo) : Promise.resolve(null),
+    ]);
+    markPhase("destination home");
+    // Label each way home by what it MEASURES, not by how it was asked for:
+    // the plain route back can itself be a different road (one-way systems,
+    // a cheaper descent), and the no-go route can still share most of it.
+    const back = same ?? reversePath(out);
+    const homes = [other, back]
+      .filter((h): h is RoutedPath => !!h && h.coords.length >= 2 && h.distance_km <= back.distance_km * DEST_MAX_HOME_STRETCH + 0.5)
+      .map((home) => ({ home, shared: sharedShare(home.coords, [out.coords]) }));
+    const different = homes.filter((h) => h.shared < DEST_MAX_SHARED_HOME);
+    const sameRoad = homes.filter((h) => h.shared >= SAME_ROAD_SHARE);
+    const options: { home: RoutedPath; note: string }[] = [];
+    const bestDifferent = different.sort((a, b) => a.shared - b.shared || a.home.distance_km - b.home.distance_km)[0];
+    if (bestDifferent) {
+      options.push({
+        home: bestDifferent.home,
+        note: `Out one way, home by a different road${bestDifferent.shared >= 0.1 ? ` (${Math.round(bestDifferent.shared * 100)} % of it shared with the way out)` : ""}.`,
+      });
+    }
+    // The same road back — always offered: it is the shortest, and for a cape
+    // or a summit with one road in, it is the ride.
+    const retrace = sameRoad[0]?.home ?? reversePath(out);
+    options.push({
+      home: retrace,
+      note: bestDifferent
+        ? `Out and back on the same road${retrace.distance_km <= bestDifferent.home.distance_km ? ` — the shortest way to ${dest.name} and home` : ""}.`
+        : `Out and back on the same road — there is no other sensible road to ${dest.name}.`,
+    });
+
+    const scenic = await Promise.race([
+      scenicFetch,
+      new Promise<null>((r) => setTimeout(() => r(null), SCENERY_WAIT_AFTER_ROUTING_MS)),
+    ]);
+    const rides: GeneratedRoute[] = [];
+    let declined = "";
+    for (const opt of options) {
+      const joined = joinPaths(out, opt.home);
+      // The engine's filtered ascend per leg beats re-summing a noisy series.
+      const homeGain = opt.home.elevation_gain_m;
+      if (out.elevation_gain_m != null && homeGain != null) joined.elevation_gain_m = out.elevation_gain_m + homeGain;
+      const ride = await destinationRide(joined, spec, startName, opt.note, scenic);
+      if (typeof ride === "string") declined = ride;
+      else rides.push(ride);
+    }
+    markPhase("destination scoring");
+    if (rides.length === 0) {
+      throw new Error(declined || `No valid routes to ${dest.name} that we would take a friend on.`);
+    }
+    return rides;
+  } finally {
+    currentRoutingDeadline = 0;
+  }
+}
+
+function reversePath(p: RoutedPath): RoutedPath {
+  return {
+    coords: p.coords.slice().reverse(),
+    elevations: p.elevations.slice().reverse(),
+    distance_km: p.distance_km,
+    elevation_gain_m: null,
+    edgeTags: p.edgeTags ? p.edgeTags.slice().reverse() : null,
+    profile: p.profile,
+  };
+}
+
+/** One destination ride from the joined out + home path, or the reason it is declined. */
+async function destinationRide(
+  path: RoutedPath,
+  spec: RouteSpec,
+  startName: string,
+  note: string,
+  scenic: Awaited<ReturnType<typeof prefetchScenic>>,
+): Promise<GeneratedRoute | string> {
+  const dest = spec.destination!;
+  const elevations = path.elevations.slice();
+  for (let i = 0; i < elevations.length; i++) {
+    if (!Number.isNaN(elevations[i])) continue;
+    let j = i + 1;
+    while (j < elevations.length && Number.isNaN(elevations[j])) j++;
+    const prev = i > 0 ? elevations[i - 1] : elevations[j] ?? 0;
+    const next = j < elevations.length ? elevations[j] : prev;
+    for (let k = i; k < j; k++) elevations[k] = prev + ((next - prev) * (k - i + 1)) / (j - i + 1);
+  }
+  const gain = Math.round(path.elevation_gain_m ?? elevationGainFromSeries(elevations));
+  // Out and back to the same point: what goes up comes down.
+  const loss = gain;
+  const distKm = path.distance_km;
+
+  // Road Standard: a destination the rider named is served even when the
+  // only road there is a compromise — measured and named, never hidden. A
+  // motorway or a stretch of dirt is not a road ride: decline.
+  let roadReport: RoadReport | undefined;
+  if (path.edgeTags && path.edgeTags.length > 0) {
+    roadReport = buildRoadReport(path.coords, path.edgeTags, spec.discipline);
+    const hard = roadReport.compromises.filter((c) => c.highway === "motorway" || c.highway === "motorway_link" || c.kind === "unsuitable" || c.kind === "unpaved");
+    const hardM = hard.reduce((s, c) => s + c.meters, 0);
+    if (hard.some((c) => c.highway === "motorway" || c.highway === "motorway_link") || hardM > 200) {
+      return `The only way to ${dest.name} from ${startName} uses ${hard.some((c) => c.kind === "unpaved") ? "unpaved road" : "a road you can't ride a bike on"} — not a road ride we would plan.`;
+    }
+    if (!roadReport.standard_met) {
+      await nameCompromises(path.coords, roadReport.compromises);
+      roadReport.summary = summariseCompromises(roadReport.compromises);
+    }
+  }
+
+  const quality = await scoreRoute(path.coords, spec.discipline, { edgeTags: path.edgeTags, scenic: path.edgeTags ? scenic ?? undefined : undefined });
+  const title = `${startName} to ${dest.name} and back`;
+  return {
+    coordinates: path.coords,
+    elevations,
+    distance_km: Math.round(distKm * 10) / 10,
+    elevation_gain_m: gain,
+    elevation_loss_m: Math.round(loss),
+    quality_score: quality.total,
+    quality_tier: quality.total >= QUALITY_WORLD_CLASS ? "excellent" : "good",
+    quality_breakdown: quality.breakdown as unknown as Record<string, number>,
+    highlights: extractHighlights(quality.flags),
+    road_type_breakdown: quality.road_class_breakdown ?? computeRoadTypeBreakdown(path.coords),
+    surface_breakdown: quality.surface_breakdown,
+    gpx_data: buildGpx(path.coords, elevations, title, spec.discipline),
+    waypoints_used: [spec.start_point, dest.point, spec.start_point],
+    match_score: dest.distance_asked ? computeMatchScore(distKm, gain, spec, quality.total) : Math.round(quality.total),
+    title,
+    ride_note: note,
+    ...(roadReport ? { road_report: roadReport } : {}),
+  };
 }
 
 /**

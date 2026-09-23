@@ -87,6 +87,9 @@ interface GeneratedCandidate {
   wind_note?: string;
   wind_forecast?: { direction_deg: number; speed_kmh: number };
   waypoints_used?: [number, number][];
+  /** Destination ride name and shape ("Out and back on the same road — …"). */
+  title?: string;
+  ride_note?: string;
   /** Road Standard report from the routing engine (see road-segments.ts). */
   road_report?: {
     standard_met: boolean;
@@ -109,6 +112,9 @@ interface Interpreted {
   discipline: "road" | "gravel" | "mtb";
   elevation_preference: "flat" | "rolling" | "hilly" | "mountainous" | "any";
   region?: string;
+  /** Destination ride: where it goes (out and back). */
+  destination?: string;
+  distance_asked?: boolean;
   country: string;
   is_workout: boolean;
   workout_summary?: string;
@@ -151,7 +157,7 @@ async function saveGeneratedRoute(
   // Otherwise the rider's prompt is the initial name.
   const rawName = candidate.source === "library"
     ? `${candidate.name} from ${interpreted?.region ?? "your start"}`.slice(0, 80)
-    : submittedPrompt.slice(0, 80).trim();
+    : (candidate.title ?? submittedPrompt).slice(0, 80).trim();
   const name = rawName.length > 0 ? rawName : `Generated ${candidate.distance_km} km route`;
 
   // Use the discipline the LLM parsed from the prompt; fall back to road
@@ -640,6 +646,7 @@ function InterpretedPanel({ interpreted }: { interpreted: Interpreted }) {
     interpreted.discipline,
     terrainLabel,
     locationLabel,
+    interpreted.destination && `to ${interpreted.destination} and back`,
     windLabel,
     interpreted.cafe_stop && "café stop",
   ].filter(Boolean);
@@ -959,7 +966,7 @@ function CandidateCard({
   const isLibrary = candidate.source === "library";
   const title = isLibrary
     ? candidate.name
-    : `Generated ${candidate.distance_km} km route`;
+    : candidate.title ?? `Generated ${candidate.distance_km} km route`;
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -1035,7 +1042,7 @@ function CandidateCard({
                   ? candidate.from_home
                     ? `${candidate.county} · new loop from your start, built on this verified route`
                     : `${candidate.county} · verified`
-                  : "Freshly generated"}
+                  : candidate.ride_note ?? "Freshly generated"}
               </p>
             </div>
             <SourceBadge
@@ -1141,7 +1148,7 @@ function CandidateCard({
           {viewing && (
             <RouteViewerModal
               coordinates={candidate.coordinates}
-              title={isLibrary ? candidate.name : `${candidate.distance_km} km ${interpreted?.discipline ?? ""} route`}
+              title={isLibrary ? candidate.name : candidate.title ?? `${candidate.distance_km} km ${interpreted?.discipline ?? ""} route`}
               stats={`${candidate.distance_km} km · +${candidate.elevation_gain_m} m`}
               onClose={() => setViewing(false)}
             />

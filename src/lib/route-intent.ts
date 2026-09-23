@@ -8,6 +8,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { lookupKnownPlace } from "./places-known";
+import { findPlaceNear } from "./map-labels";
 import type { IntensityZone } from "./intensity";
 import { ZONES } from "./intensity";
 import type { WindStrategy } from "./wind";
@@ -52,6 +53,12 @@ export interface RouteSpec {
   parser?: "llm" | "basic";
   /** How the start point was found (diagnostic; surfaced in the API). */
   start_source?: "known_place" | "geocoded" | "origin";
+  /**
+   * A destination ride ("Pollença to Cap de Formentor and back"): ride out
+   * to this place and home again. Out and back on the same road is allowed
+   * here — when a cape or a summit has one road, that road is the ride.
+   */
+  destination?: { name: string; point: [number, number]; distance_asked: boolean };
 }
 
 /**
@@ -130,6 +137,10 @@ Riders ask either by distance ("60km loop") OR by time ("2 hour ride", "90 minut
 - Most cycling route requests are loops (start = end), so is_loop: true by default
 - Only false if explicitly "point to point" or "A to B"
 
+## Destination rides:
+- When the rider names a place to ride TO and come back from ("Pollença to Cap de Formentor and back", "ride out to Glendalough and back from Bray", "I'm in Calpe, route to Guadalest"), set destination to that place and region to where they start. Otherwise destination: null.
+- "loop from X" / "finish in X" is NOT a destination. Keep is_loop: true (they come home).
+
 ## Region & country:
 - Extract the region/town/city mentioned if any ("Wicklow", "Dublin", "from Blessington"). Set region to that.
 - Set country to the country the named place is in, even when the prompt does not say it ("Girona" → "Spain", "Lucca" → "Italy", "Nice" → "France", "Algarve" → "Portugal"). Only when NO place is named default to "Ireland".
@@ -185,6 +196,7 @@ Return ONLY valid JSON matching this TypeScript interface (no markdown, no expla
   "avoid": string[],
   "vibes": string[],
   "region": string | null,
+  "destination": string | null,
   "country": string,
   "wind_strategy": "tailwind_home" | "tailwind_out" | "headwind_out" | "none",
   "cafe_stop": boolean,
@@ -208,6 +220,7 @@ interface ParsedIntent {
   avoid: string[];
   vibes: string[];
   region: string | null;
+  destination?: string | null;
   country: string;
   wind_strategy?: string;
   cafe_stop?: boolean;
@@ -294,17 +307,25 @@ export interface GeocodeHit {
 }
 
 /** Geocoder signature — injectable so start-point resolution is testable. */
-export type Geocoder = (place: string, countryCode?: string) => Promise<GeocodeHit | null>;
+export type Geocoder = (place: string, countryCode?: string, near?: [number, number]) => Promise<GeocodeHit | null>;
 
-async function geocodePlace(place: string, countryCode?: string): Promise<GeocodeHit | null> {
+const NOT_A_PLACE_CLASS = new Set(["building", "shop", "office", "craft", "healthcare", "emergency", "club", "company"]);
+
+async function geocodePlace(place: string, countryCode?: string, near?: [number, number]): Promise<GeocodeHit | null> {
   const params = new URLSearchParams({
     q: place,
     format: "json",
-    limit: "1",
+    limit: "5",
     addressdetails: "1",
     "accept-language": "en", // country names in English ("Spain", not "España")
   });
   if (countryCode) params.set("countrycodes", countryCode);
+  if (near) {
+    // Bounded to ~1° around the start: the Formentor near Pollença, not another.
+    const [lat, lng] = near;
+    params.set("viewbox", `${lng - 1.2},${lat + 1},${lng + 1.2},${lat - 1}`);
+    params.set("bounded", "1");
+  }
   const url = `https://nominatim.openstreetmap.org/search?${params.toString()}`;
   try {
     const res = await fetch(url, {
@@ -313,8 +334,11 @@ async function geocodePlace(place: string, countryCode?: string): Promise<Geocod
     });
     if (!res.ok) return null;
     const data = await res.json();
-    if (!data || data.length === 0) return null;
-    const hit = data[0];
+    if (!Array.isArray(data) || data.length === 0) return null;
+    // A house or a shop that happens to be called "Narnia" is not a place
+    // to ride to (or from): only places, roads, landmarks and nature count.
+    const hit = data.find((h: { class?: string }) => !NOT_A_PLACE_CLASS.has(h.class ?? ""));
+    if (!hit) return null;
     return {
       point: [parseFloat(hit.lat), parseFloat(hit.lon)],
       country: typeof hit.address?.country === "string" ? hit.address.country : undefined,
@@ -359,6 +383,57 @@ export async function resolveStartPoint(
   );
 }
 
+/** A destination further than this (straight line) is not a day ride out and back. */
+export const MAX_DESTINATION_KM = 90;
+
+/** Trailing words a rider adds that a map does not ("Formentor lighthouse"). */
+const GENERIC_SUFFIX = /\s+(?:lighthouse|light house|summit|top|village|town|beach|harbour|harbor|port|climb|and back)$/i;
+
+function kmBetween(a: [number, number], b: [number, number]): number {
+  const dy = (b[0] - a[0]) * 111.32, dx = (b[1] - a[1]) * 111.32 * Math.cos((a[0] * Math.PI) / 180);
+  return Math.hypot(dx, dy);
+}
+
+/**
+ * Where a destination ride goes. Trust rule, as for the start: the place
+ * the rider named resolves near where they start, or we decline and say so
+ * — "Cap de Formentor" must never become a Formentor somewhere else.
+ *   1. Known places (launch towns, iconic capes and climbs).
+ *   2. Bundled GeoNames towns and villages near the start.
+ *   3. The geocoder, bounded to a box around the start; then the same
+ *      without a generic trailing word ("… lighthouse").
+ */
+export async function resolveDestination(
+  name: string,
+  start: [number, number],
+  country: string,
+  geocode: Geocoder = geocodePlace,
+): Promise<[number, number]> {
+  const near = (p: [number, number] | null | undefined) => (p && kmBetween(start, p) <= MAX_DESTINATION_KM ? p : null);
+  const names = [name];
+  const stripped = name.replace(GENERIC_SUFFIX, "").trim();
+  if (stripped && stripped !== name) names.push(stripped);
+  let farHit: [number, number] | null = null;
+  for (const n of names) {
+    const known = lookupKnownPlace(n)?.point;
+    if (near(known)) return known!;
+    if (known) { farHit = known; break; } // a known place far away is the one they mean
+    const town = findPlaceNear(n, start, MAX_DESTINATION_KM);
+    if (town) return [town.lat, town.lng];
+  }
+  for (const n of farHit ? [] : names) {
+    const hit = await geocode(n, countryToCode(country), start);
+    if (near(hit?.point)) return hit!.point;
+    if (hit) farHit = hit.point;
+  }
+  if (farHit) {
+    throw new Error(
+      `"${name}" is about ${Math.round(kmBetween(start, farHit))} km away in a straight line — too far to ride out and back in a day. Try a place closer to your start.`
+    );
+  }
+  throw new Error(`Couldn't find the location "${name}" near your start. Check the spelling, or name a nearby town.`);
+}
+
 function countryToCode(country: string): string {
   const normalized = country.trim().toLowerCase();
   const map: Record<string, string> = {
@@ -385,6 +460,49 @@ export interface ParseRouteIntentOptions {
    * give me a ride" case. A place named in the prompt always wins over this.
    */
   origin?: [number, number];
+}
+
+// Words after "to" that are not a place: "want to ride", "close to home".
+const NOT_A_DESTINATION = new Set([
+  "ride", "go", "do", "get", "be", "have", "plan", "include", "finish", "make", "start", "take", "see",
+  "climb", "keep", "avoid", "stay", "end", "come", "head", "use", "try", "train", "work", "spin", "cycle",
+  "home", "me", "you", "us", "the", "a", "an", "my", "it", "this", "that", "sea", "coast", "hills",
+  "mountains", "somewhere", "anywhere", "work",
+]);
+
+const PLACE = "[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ'’. -]{1,50}?";
+const DEST_END = "(?=\\s+(?:and|&|then|via|with|on|in|for|from|returning|return)\\b|\\s+\\d|[,.;!?]|$)";
+
+/**
+ * "Pollença to Cap de Formentor and back", "ride from Bray to Glendalough",
+ * "I'm in Calpe, want a route to Guadalest and back" → where the ride goes
+ * and (when named) where it starts. Null when the prompt names no place to
+ * ride TO — "finish in Kinsale" or "loop from Dublin" are not destinations.
+ */
+export function parseDestination(prompt: string): { start: string | null; destination: string } | null {
+  const text = prompt.replace(/\s+/g, " ").trim();
+  const clean = (s: string) => s.trim().replace(/^the\s+/i, "").replace(/[\s'’.-]+$/, "");
+  const firstWord = (s: string) => s.toLowerCase().split(/\s+/)[0];
+  const ok = (s: string | undefined) => !!s && s.length >= 3 && !NOT_A_DESTINATION.has(firstWord(s));
+
+  // "[from] X to Y" — X at the start of the prompt (after an optional verb
+  // phrase), or after "from".
+  const fromTo = text.match(new RegExp(`\\bfrom\\s+(${PLACE})\\s+to\\s+(?:the\\s+)?(${PLACE})${DEST_END}`, "i"))
+    ?? text.match(new RegExp(`^(?:(?:a\\s+)?(?:ride|route|spin|cycle)\\s+)?(${PLACE})\\s+to\\s+(?:the\\s+)?(${PLACE})${DEST_END}`, "i"));
+  if (fromTo && ok(clean(fromTo[2])) && !/\b(?:ride|route|loop|spin|want|need|hour|km|out|back|there)\b/i.test(fromTo[1])) {
+    return { start: clean(fromTo[1]), destination: clean(fromTo[2]) };
+  }
+
+  // "... (ride|route|spin|out and back|there and back) [out] to Y ..." with
+  // the start (if any) named by "from X" / "in X" / "at X".
+  const toOnly = text.match(new RegExp(`\\b(?:ride|route|spin|cycle|loop|trip|back|head|go|going|out)\\s+(?:out\\s+)?to\\s+(?:the\\s+)?(${PLACE})${DEST_END}`, "i"));
+  if (toOnly && ok(clean(toOnly[1]))) {
+    const destination = clean(toOnly[1]);
+    const rest = text.replace(toOnly[0], " ");
+    const start = rest.match(new RegExp(`\\b(?:from|in|at)\\s+(${PLACE})(?=\\s+(?:and|with|on|for|i|i'm|we|to)\\b|\\s+\\d|[,.;!?]|$)`, "i"));
+    return { start: start && ok(clean(start[1])) ? clean(start[1]) : null, destination };
+  }
+  return null;
 }
 
 /**
@@ -422,10 +540,13 @@ export function parseBasicIntent(prompt: string): ParsedIntent | null {
   // prompt specific enough to default (spec: neither distance nor duration →
   // default 50 km). Stops at punctuation or terrain/wind keywords.
   let region: string | null = null;
+  const dest = parseDestination(prompt);
   const fromMatch = prompt.match(/\bfrom\s+([A-Za-zÀ-ÿ''. -]{3,40}?)(?:[,.;]|\s+(?:with|on|in|and|tailwind|headwind)\b|\s+\d|$)/i);
   if (fromMatch) region = fromMatch[1].trim();
+  if (dest) region = dest.start;
 
-  if (duration === null && distance === null) {
+  // A destination ride's length is the road there and back.
+  if (duration === null && distance === null && !dest) {
     // Truly vague ("give me a ride") — no distance, no time, no place.
     if (!region) return null;
     // A place is named ("gravel loop from Dublin") — default the distance
@@ -468,6 +589,7 @@ export function parseBasicIntent(prompt: string): ParsedIntent | null {
     avoid: ["motorway", "trunk"],
     vibes: [],
     region,
+    destination: dest?.destination ?? null,
     country: DEFAULT_COUNTRY,
     wind_strategy: wind,
     cafe_stop,
@@ -567,6 +689,16 @@ export async function parseRouteIntent(
   const startPoint = resolved.point;
   const country = resolved.country;
 
+  // Destination ride: where it goes must resolve near the start (trust rule).
+  const destinationName = typeof parsed.destination === "string" && parsed.destination.trim().length >= 3 ? parsed.destination.trim() : null;
+  const destination = destinationName
+    ? {
+        name: destinationName,
+        point: await resolveDestination(destinationName, startPoint, country),
+        distance_asked: typeof parsed.distance_km === "number" || parsed.duration_minutes != null,
+      }
+    : undefined;
+
   return {
     distance_km: distanceKm,
     distance_tolerance_km: distanceToleranceKm,
@@ -587,5 +719,6 @@ export async function parseRouteIntent(
     cafe_stop: parsed.cafe_stop === true,
     parser,
     start_source: resolved.source,
+    ...(destination ? { destination } : {}),
   };
 }

@@ -23,6 +23,9 @@ export const KNOWN_PLACES: KnownPlace[] = [
   { name: "Palma", country: "Spain", point: [39.5696, 2.6502], aliases: ["mallorca", "majorca", "palma de mallorca"] },
   { name: "Port de Pollença", country: "Spain", point: [39.9077, 3.0813], aliases: ["port de pollenca", "port de pollensa", "puerto pollensa", "puerto de pollensa", "pollenca", "pollença"] },
   { name: "Alcúdia", country: "Spain", point: [39.8523, 3.1213], aliases: ["alcudia", "port d'alcudia", "port d'alcúdia"] },
+  // Ride-to destinations (road-end points): capes and climbs with one road in.
+  { name: "Cap de Formentor", country: "Spain", point: [39.9612, 3.2127], aliases: ["formentor", "cape formentor", "cap formentor", "formentor lighthouse", "far de formentor", "formentor lighthouse mallorca"] },
+  { name: "Sa Calobra", country: "Spain", point: [39.8506, 2.7969], aliases: ["calobra", "la calobra"] },
   { name: "Sóller", country: "Spain", point: [39.7657, 2.7147], aliases: ["soller", "port de soller", "port de sóller"] },
   { name: "Málaga", country: "Spain", point: [36.7213, -4.4214], aliases: ["malaga"] },
   { name: "Calpe", country: "Spain", point: [38.6447, 0.0453], aliases: ["calp"] },

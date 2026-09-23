@@ -94,3 +94,28 @@ export function labelsForRoute(coords: [number, number][], max = 4): MapLabel[] 
   }
   return out;
 }
+
+function normName(s: string): string {
+  return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+/**
+ * A named town or village near a point ("Guadalest" near Calpe), from the
+ * bundled GeoNames list: the exact-name match nearest `near` within `maxKm`.
+ * Local and instant — the geocoder is only asked when this misses.
+ */
+export function findPlaceNear(name: string, near: [number, number], maxKm: number): MapLabel | null {
+  const q = normName(name);
+  if (!q) return null;
+  let best: { row: Row; d: number } | null = null;
+  let biggest: Row | null = null;
+  for (const r of (data as unknown as { p: Row[] }).p) {
+    if (normName(r[0]) !== q) continue;
+    if (!biggest || r[3] > biggest[3]) biggest = r;
+    const d = km(near, [r[1] / 1e4, r[2] / 1e4]);
+    if (d <= maxKm && (!best || d < best.d)) best = { row: r, d };
+  }
+  // "Cork" from Dublin means the city, not a hamlet of the same name nearby.
+  if (best && biggest && biggest !== best.row && biggest[3] >= 50_000 && biggest[3] >= 20 * best.row[3]) return null;
+  return best ? { name: best.row[0], lat: best.row[1] / 1e4, lng: best.row[2] / 1e4, pop: best.row[3], start: false } : null;
+}

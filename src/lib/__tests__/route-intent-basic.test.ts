@@ -255,6 +255,7 @@ describe("parseBasicIntent — structured fallback form", () => {
       avoid: ["motorway", "trunk"],
       vibes: [],
       region: "Skerries",
+      destination: null,
       country: "Ireland",
       wind_strategy: "none",
       cafe_stop: false,

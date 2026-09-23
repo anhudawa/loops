@@ -4,7 +4,7 @@ import { getRoute, updateRouteElevation, updateRouteGeometry, storeRouteRoadRepo
 import { apiError, handleApiError } from "@/lib/api-utils";
 import { fetchElevations } from "@/lib/elevation";
 import { rerouteWaypoints, engineTrace } from "@/lib/route-generator";
-import { traceRoadReport } from "@/lib/road-trace";
+import { traceRoadReport, traceProfileFor } from "@/lib/road-trace";
 import { ROAD_RULES_VERSION, nameCompromises } from "@/lib/road-segments";
 
 export const maxDuration = 30;
@@ -133,7 +133,8 @@ function scheduleRoadTrace(route: NonNullable<Awaited<ReturnType<typeof getRoute
       const discipline = route.discipline === "gravel" || route.discipline === "mtb" ? route.discipline : "road";
       // After the response, names can take their time: three stretches, 2.5 s each.
       const namer = (c: [number, number][], comps: Parameters<typeof nameCompromises>[1]) => nameCompromises(c, comps, fetch, { timeoutMs: 2500, max: 3 });
-      const report = await traceRoadReport(coords, discipline, engineTrace, TRACE_BUDGET_MS, namer);
+      const engine = (wps: [number, number][]) => engineTrace(wps, traceProfileFor(discipline));
+      const report = await traceRoadReport(coords, discipline, engine, TRACE_BUDGET_MS, namer);
       if (report) {
         await storeRouteRoadReport(route.id, report);
         console.log(JSON.stringify({ evt: "route_road_traced", route_id: route.id, standard_met: report.standard_met, compromises: report.compromises.length, ms: Date.now() - started }));

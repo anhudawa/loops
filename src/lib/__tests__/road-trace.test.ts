@@ -54,3 +54,12 @@ describe("road-trace", () => {
     expect(await traceRoadReport(track(), "road", engine("tertiary"), -1)).toBeNull();
   });
 });
+
+import { traceProfileFor } from "../road-trace";
+describe("traceProfileFor", () => {
+  it("follows each discipline's own terrain", () => {
+    expect(traceProfileFor("road")).toBe("trekking");
+    expect(traceProfileFor("gravel")).toBe("gravel");
+    expect(traceProfileFor("mtb")).toBe("mtb");
+  });
+});

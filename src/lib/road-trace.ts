@@ -22,6 +22,14 @@ export type TraceEngine = (
 ) => Promise<{ coords: [number, number][]; edgeTags: EdgeTags | null; distance_km: number } | null>;
 
 export const TRACE_PROFILE = "trekking";
+/**
+ * Tracing profile per discipline — each follows its own terrain faithfully:
+ * trekking detours around rough tracks and trips the drift check on gravel
+ * and MTB routes, which then stay "unknown". All three ship with BRouter.
+ */
+export function traceProfileFor(discipline: Discipline): string {
+  return discipline === "gravel" ? "gravel" : discipline === "mtb" ? "mtb" : TRACE_PROFILE;
+}
 const VIA_SPACING_KM = 0.8;
 const MAX_VIA = 150;          // ≤ 5 engine calls for any route
 const CHUNK = 30;             // via points per engine call

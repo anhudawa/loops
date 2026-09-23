@@ -2015,10 +2015,19 @@ async function generateFreshRoutes(
   // biggest latency and timeout source in generation. Fail-soft: null means
   // "scenery not assessed", reported honestly and left out of the score.
   const withTags = routed.filter((r) => r.edgeTags && r.edgeTags.length > 0);
+  // Scenery never costs the request its answer: wait only as long as the
+  // pipeline budget allows (leaving ~8 s for scoring and the response);
+  // past that, loops are scored with scenery "not assessed". A second pass
+  // covers a new area whose scenery is usually not cached yet.
+  const sceneryWaitMs = Math.max(1500, 44_000 - (Date.now() - t0));
+  const scenicFetch = passLabel === "pass 1"
+    ? scenicPromise
+    : prefetchScenic(unionBbox(waypointSets.map((w) => bboxOf(w, 0.08))));
   const scenic = withTags.length > 0
-    ? await (passLabel === "pass 1"
-        ? scenicPromise
-        : prefetchScenic(unionBbox(waypointSets.map((w) => bboxOf(w, 0.08)))))
+    ? await Promise.race([
+        scenicFetch,
+        new Promise<null>((r) => setTimeout(() => { genDebug(`scenery wait capped at ${sceneryWaitMs} ms`); r(null); }, sceneryWaitMs)),
+      ])
     : undefined;
   if (withTags.length > 0) {
     genDebug(`scenery ${scenic ? `loaded (${scenic.length} elements)` : "unavailable"} for ${withTags.length} engine-tagged candidate(s)`);
@@ -2174,14 +2183,14 @@ async function generateFreshRoutes(
   // there is time — the final ranking keeps the best three overall.
   const offKm = (c: GeneratedRoute) => Math.abs(c.distance_km - spec.distance_km);
   const servedWell = candidates.filter((c) => offKm(c) <= Math.max(5, spec.distance_km * 0.15)).length;
-  if (servedWell < 2 && Date.now() - t0 < 20_000 && sorted.length >= 2 && Math.abs(medianRatio - 1) > 0.2) {
+  if (servedWell < 2 && Date.now() - t0 < 18_000 && sorted.length >= 2 && Math.abs(medianRatio - 1) > 0.2) {
     const corrected = Math.max(0.5, Math.min(1.5, radiusScale / medianRatio));
     genDebug(`first pass loops ran ×${medianRatio.toFixed(2)} of the ask — re-placing with radius ×${corrected.toFixed(2)}`);
     const again = await generateWaypointSets(spec, { radiusScale: corrected });
     candidates = candidates.concat(await runPass(again, "pass 2 (recalibrated)"));
     recalibrated = true;
   }
-  if (!recalibrated && candidates.length < 2 && Date.now() - t0 < 22_000) {
+  if (!recalibrated && candidates.length < 2 && Date.now() - t0 < 18_000) {
     const start = spec.start_point;
     const usedBearings = waypointSets.map((ws) => {
       let far = ws[1], farD = -1;

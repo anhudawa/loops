@@ -84,6 +84,67 @@ export function parseBRouterMessages(
   return matched > 0 ? edges : null;
 }
 
+/** Something on the road that breaks a sustained effort. */
+export interface RoadStop {
+  lat: number;
+  lng: number;
+  kind: "traffic_signals" | "stop" | "give_way" | "roundabout" | "barrier" | "traffic_calming" | "turn";
+}
+
+/** Engine turn cost at or above this is a turn at a junction, not a bend. */
+const JUNCTION_TURN_COST = 40;
+/** …and at or above this it is a turn whatever the road does (a right-angle turn off). */
+const SHARP_TURN_COST = 90;
+
+/**
+ * Where a rider has to stop, yield or turn at a junction along the engine's
+ * route — from the same `messages` rows (NodeTags + TurnCost). Used to check
+ * an effort stretch is uninterrupted without a second map lookup.
+ */
+export function parseBRouterStops(messages: unknown[] | undefined): RoadStop[] {
+  if (!Array.isArray(messages) || messages.length < 2) return [];
+  const header = messages[0];
+  if (!Array.isArray(header)) return [];
+  const lonIdx = header.indexOf("Longitude");
+  const latIdx = header.indexOf("Latitude");
+  const nodeIdx = header.indexOf("NodeTags");
+  const turnIdx = header.indexOf("TurnCost");
+  const tagIdx = header.indexOf("WayTags");
+  const out: RoadStop[] = [];
+  for (let m = 1; m < messages.length; m++) {
+    const row = messages[m];
+    if (!Array.isArray(row)) continue;
+    const lng = Number(row[lonIdx]) / 1e6, lat = Number(row[latIdx]) / 1e6;
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+    const node = nodeIdx >= 0 ? parseWayTags(String(row[nodeIdx] ?? "")) : {};
+    // A sign tagged direction=forward/backward applies to one direction of
+    // the way only; the engine marks a way ridden against its drawing
+    // direction with reversedirection=yes. A stop sign facing the other
+    // traffic is not the rider's stop.
+    if (node.direction === "forward" || node.direction === "backward") {
+      const reversed = / reversedirection=yes/.test(` ${String(row[tagIdx] ?? "")}`);
+      if ((node.direction === "forward") === reversed) delete node.highway;
+    }
+    const hw = node.highway;
+    let kind: RoadStop["kind"] | null = null;
+    if (hw === "traffic_signals" || node.crossing === "traffic_signals") kind = "traffic_signals";
+    else if (hw === "stop") kind = "stop";
+    else if (hw === "give_way") kind = "give_way";
+    else if (hw === "mini_roundabout") kind = "roundabout";
+    else if (node.barrier) kind = "barrier";
+    else if (node.traffic_calming && !/rumble|painted|island|choker/.test(node.traffic_calming)) kind = "traffic_calming";
+    else if (turnIdx >= 0 && Number(row[turnIdx]) >= JUNCTION_TURN_COST) {
+      // A bend at a side road is not a turn: only count it when the rider
+      // leaves the road they were on (the way tags change at this node).
+      const next = messages[m + 1];
+      const hwOf = (r: unknown) => (Array.isArray(r) ? parseWayTags(String(r[tagIdx] ?? "")).highway ?? "" : "");
+      if (hwOf(row) !== hwOf(next) || Number(row[turnIdx]) >= SHARP_TURN_COST) kind = "turn";
+    }
+    if (kind) out.push({ lat, lng, kind });
+  }
+  return out;
+}
+
 function parseWayTags(s: string): WayTags {
   const tags: WayTags = {};
   for (const kv of s.split(" ")) {

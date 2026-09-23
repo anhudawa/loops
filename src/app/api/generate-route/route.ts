@@ -72,6 +72,7 @@ export async function POST(request: NextRequest) {
 
   let prompt: string;
   let origin: [number, number] | undefined;
+  let repeatEfforts: boolean | undefined;
 
   try {
     const body = await request.json();
@@ -87,6 +88,8 @@ export async function POST(request: NextRequest) {
         origin = [lat, lng];
       }
     }
+    // Workouts: "OK to repeat your efforts on the same stretch?"
+    if (typeof body?.repeat_efforts === "boolean") repeatEfforts = body.repeat_efforts;
   } catch {
     return NextResponse.json(
       { error: "Invalid JSON body", code: "INVALID_BODY" },
@@ -141,6 +144,7 @@ export async function POST(request: NextRequest) {
       generateRouteCandidates(trimmedPrompt, {
         userSpeedKmh: userSpeedKmh ?? DEFAULT_SPEED_KMH,
         origin,
+        repeatEfforts,
       }),
       timeoutPromise,
     ]);
@@ -242,12 +246,6 @@ export async function POST(request: NextRequest) {
         { status: 422 }
       );
     }
-    if (message.includes("geocode") || message.includes("location") || message.includes("too far to ride")) {
-      return NextResponse.json(
-        { error: message, code: "GEOCODE_FAILED" },
-        { status: 422 }
-      );
-    }
 
     if (message.includes("No valid routes")) {
       return NextResponse.json(
@@ -262,11 +260,19 @@ export async function POST(request: NextRequest) {
         { status: 422 }
       );
     }
+    if (message.includes("geocode") || message.includes("location") || message.includes("too far to ride")) {
+      return NextResponse.json(
+        { error: message, code: "GEOCODE_FAILED" },
+        { status: 422 }
+      );
+    }
 
     if (message.includes("Failed to parse LLM response")) {
       return NextResponse.json(
         {
-          error: "I couldn't fully understand that — use the quick form below and I'll take it from there.",
+          error: /\binterval|\beffort|\bthreshold\b|\bftp\b|\btempo\b|\bvo2|sweet\s*spot|\bsprints?\b|\bzone\s*[3-7]\b/i.test(trimmedPrompt)
+            ? "Tell me the efforts and I'll place them — e.g. \"4x4 min VO2 max\", \"2x20 min threshold\" or \"20 min tempo\", plus how long you want to ride."
+            : "I couldn't fully understand that — use the quick form below and I'll take it from there.",
           code: "PARSE_FAILED",
         },
         { status: 422 }
@@ -293,8 +299,8 @@ export async function POST(request: NextRequest) {
 function classifyErrorCode(message: string): string {
   if (message.includes("timed out")) return "TIMEOUT";
   if (message.includes("No valid routes")) return "NO_ROUTES_FOUND";
-  if (message.includes("geocode") || message.includes("location") || message.includes("too far to ride")) return "GEOCODE_FAILED";
   if (message.includes("host this workout") || message.includes("uninterrupted at that intensity")) return "NO_WORKOUT_MATCH";
+  if (message.includes("geocode") || message.includes("location") || message.includes("too far to ride")) return "GEOCODE_FAILED";
   if (message.includes("Failed to parse LLM response")) return "PARSE_FAILED";
   if (message.includes("Overpass")) return "OVERPASS_ERROR";
   return "INTERNAL_ERROR";

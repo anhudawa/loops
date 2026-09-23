@@ -127,6 +127,11 @@ interface GenerateResponse {
   candidates: Candidate[];
 }
 
+/** The prompt describes structured efforts (mirrors the server's parser). */
+function looksLikeSession(text: string): boolean {
+  return /\d\s*[x×]\s*\d|\binterval|\bthreshold\b|\bftp\b|\btempo\b|\bvo2|sweet\s*spot|\banaerobic\b|\bsprints?\b|\bzone\s*[3-7]\b|\bz[3-7]\b/i.test(text);
+}
+
 const EXAMPLES = [
   "2 hour ride with a few rolling hills on quiet lanes",
   "90 min Zone 2 endurance ride, flat and steady",
@@ -204,6 +209,11 @@ function GenerateContent() {
   const searchParams = useSearchParams();
 
   const [prompt, setPrompt] = useState("");
+  // Interval sessions: "OK to repeat your efforts on the same stretch?"
+  // Yes (default) → every effort on the best stretch (hill repeats on a
+  // climb, laps of a flat road); No → efforts spread along the ride.
+  const [repeatEfforts, setRepeatEfforts] = useState(true);
+  const isSession = looksLikeSession(prompt);
   const [loading, setLoading] = useState(false);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [interpreted, setInterpreted] = useState<Interpreted | null>(null);
@@ -306,7 +316,11 @@ function GenerateContent() {
       const res = await fetch("/api/generate-route", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: trimmed, ...(origin ? { origin } : {}) }),
+        body: JSON.stringify({
+          prompt: trimmed,
+          ...(origin ? { origin } : {}),
+          ...(looksLikeSession(trimmed) ? { repeat_efforts: repeatEfforts } : {}),
+        }),
         signal: controller.signal,
       });
       const body = await res.json();
@@ -464,6 +478,41 @@ function GenerateContent() {
           )}
           {voice.error && (
             <p className="text-xs mt-2" style={{ color: "#ff6b6b" }}>{voice.error}</p>
+          )}
+
+          {isSession && (
+            <fieldset className="mt-3 rounded-xl p-3" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+              <legend className="sr-only">Where to do your efforts</legend>
+              <p className="text-sm font-semibold" style={{ color: "var(--text)" }}>
+                OK to repeat your efforts on the same stretch?
+              </p>
+              <p className="text-xs mt-0.5 mb-2" style={{ color: "var(--text-muted)" }}>
+                We&apos;ll find the best place for them — a steady climb for VO2 work, a quiet flat road for threshold.
+              </p>
+              <div className="flex flex-wrap gap-2" role="radiogroup">
+                {[
+                  { v: true, label: "Yes — best stretch" },
+                  { v: false, label: "No — spread them out" },
+                ].map((o) => (
+                  <button
+                    key={o.label}
+                    type="button"
+                    role="radio"
+                    aria-checked={repeatEfforts === o.v}
+                    onClick={() => setRepeatEfforts(o.v)}
+                    disabled={loading}
+                    className="min-h-[44px] px-4 rounded-full text-sm font-semibold"
+                    style={{
+                      background: repeatEfforts === o.v ? "var(--accent)" : "var(--bg-raised)",
+                      color: repeatEfforts === o.v ? "var(--bg)" : "var(--text)",
+                      border: "1px solid var(--border)",
+                    }}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
           )}
 
           {/* Primary submit — placed directly under the textarea so it's the

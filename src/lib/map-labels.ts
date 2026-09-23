@@ -119,3 +119,20 @@ export function findPlaceNear(name: string, near: [number, number], maxKm: numbe
   if (best && biggest && biggest !== best.row && biggest[3] >= 50_000 && biggest[3] >= 20 * best.row[3]) return null;
   return best ? { name: best.row[0], lat: best.row[1] / 1e4, lng: best.row[2] / 1e4, pop: best.row[3], start: false } : null;
 }
+
+/**
+ * The place a rider would name a spot by: the largest town within `maxKm`,
+ * unless a village is much closer (a climb "at Howth", not "near Dublin").
+ */
+export function placeNear(point: [number, number], maxKm = 5): string | null {
+  const cands = [...nearTrack([point], maxKm).values()];
+  if (!cands.length) return null;
+  const scored = cands.map((c) => ({ name: c.row[0], score: Math.log10(c.row[3]) - c.d * 0.6 }));
+  scored.sort((a, b) => b.score - a.score);
+  return scored[0].name;
+}
+
+/** Named places within `radiusKm` of a point (towns and villages, 500+ people). */
+export function placesNear(point: [number, number], radiusKm: number): MapLabel[] {
+  return [...nearTrack([point], radiusKm).values()].map((c) => ({ name: c.row[0], lat: c.row[1] / 1e4, lng: c.row[2] / 1e4, pop: c.row[3], start: false }));
+}

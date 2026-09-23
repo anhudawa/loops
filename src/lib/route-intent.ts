@@ -59,6 +59,11 @@ export interface RouteSpec {
    * here — when a cape or a summit has one road, that road is the ride.
    */
   destination?: { name: string; point: [number, number]; distance_asked: boolean };
+  /**
+   * Workouts: may every effort be repeated on one stretch ("repeat", the
+   * default — hill repeats on Howth) or must they be spread along the ride?
+   */
+  effort_layout?: "repeat" | "spread";
 }
 
 /**
@@ -167,7 +172,7 @@ If the rider describes a workout:
 - Default warmup_minutes: 15, cooldown_minutes: 10
 - Default recovery_minutes per interval: half the interval duration (e.g. 10min recovery for a 20min interval) unless the rider specifies
 - total_minutes = warmup + (count × duration + (count-1) × recovery) summed over all interval blocks + cooldown
-- ALSO set duration_minutes at the top level to total_minutes so the route length honours the session length
+- Set duration_minutes at the top level to the ride length the rider asked for ("4 hour ride" → 240) when they gave one; otherwise to total_minutes. The session sits inside the ride.
 - Set elevation_preference to "flat" for threshold/tempo/sweet-spot workouts unless the rider asks for hills (these zones need steady terrain). VO2/hill-repeat workouts can use "rolling".
 
 If no workout is described, omit the workout field (set it to null).
@@ -505,6 +510,87 @@ export function parseDestination(prompt: string): { start: string | null; destin
   return null;
 }
 
+// Intensity words → zone (longest first so "vo2 max" wins over "vo2").
+const ZONE_WORDS: Array<[RegExp, IntensityZone]> = [
+  [/\bsweet\s*spot\b/, "z3"],
+  [/\bvo2\s*max\b|\bvo2\b|\bv02\b/, "z5"],
+  [/\blactate threshold\b|\bthreshold\b|\bftp\b/, "z4"],
+  [/\btempo\b/, "z3"],
+  [/\banaerobic\b/, "z6"],
+  [/\bsprints?\b/, "z7"],
+  [/\bzone\s*([1-7])\b|\bz([1-7])\b/, "z1"], // zone from the digit
+];
+const ZONE_RE = /(sweet\s*spot|vo2\s*max|vo2|v02|lactate threshold|threshold|ftp|tempo|anaerobic|sprints?|zone\s*[1-7]|z[1-7])\b/;
+
+function zoneOf(text: string): IntensityZone | null {
+  for (const [re, zone] of ZONE_WORDS) {
+    const m = text.match(re);
+    if (!m) continue;
+    const digit = m[1] ?? m[2];
+    return digit ? (`z${digit}` as IntensityZone) : zone;
+  }
+  return null;
+}
+
+// A unit must end its word: the "s" of "sweet spot" is not seconds.
+const UNIT = String.raw`(?:(?:secs?|seconds?|s|mins?|minutes?|m)(?![a-z])|'|’)?`;
+
+/**
+ * Efforts written the way riders write them, without the model:
+ * "20 mins threshold", "4x4 mins vo2 max", "2 x 20 min threshold with 5 min
+ * rest", "5 x 5 min VO2 max efforts", "10 x 30s sprints", "3x10 sweet spot".
+ * Zone 1–2 alone ("90 min zone 2") is a steady ride, not intervals: null.
+ * Returns the session and the prompt with the session text removed, so its
+ * minutes are never read as the ride's length.
+ */
+export function parseBasicWorkout(prompt: string): { workout: WorkoutSpec; stripped: string } | null {
+  const text = prompt.toLowerCase().replace(/[–—]/g, "-");
+  const intervals: WorkoutInterval[] = [];
+  let stripped = text;
+  const toMin = (n: number, unit: string | undefined) => (/^s/.test(unit ?? "") ? n / 60 : n);
+
+  // "4x4 mins vo2 max", "2 x 20 min threshold" (zone right after, or anywhere in the prompt).
+  const reps = new RegExp(String.raw`(\d+)\s*[x×]\s*(\d+(?:\.\d+)?)\s*(${UNIT})\s*(?:(?:min(?:ute)?s?\s+)?(?:of|at|@)\s*)?(?:hard\s+|max\s+)?(?:${ZONE_RE.source})?`, "g");
+  for (const m of text.matchAll(reps)) {
+    const zone = zoneOf(m[4] ?? "") ?? zoneOf(text);
+    if (!zone) continue;
+    intervals.push({ count: parseInt(m[1], 10), duration_minutes: toMin(parseFloat(m[2]), m[3]), zone });
+    stripped = stripped.replace(m[0], " ");
+  }
+  // "20 mins threshold", "a 20 minute ftp effort", "30 min of tempo".
+  if (intervals.length === 0) {
+    const single = new RegExp(String.raw`(\d+(?:\.\d+)?)\s*(${UNIT})\s*(?:of\s+|at\s+|@\s*)?${ZONE_RE.source}`, "g");
+    for (const m of text.matchAll(single)) {
+      const zone = zoneOf(m[3]);
+      if (!zone) continue;
+      intervals.push({ count: 1, duration_minutes: toMin(parseFloat(m[1]), m[2]), zone });
+      stripped = stripped.replace(m[0], " ");
+    }
+  }
+  // Zone 1–2 is not an interval session.
+  const hard = intervals.filter((iv) => iv.zone !== "z1" && iv.zone !== "z2");
+  if (hard.length === 0) return null;
+
+  // "with 5 min rest", "3 min recovery", "2 mins easy between".
+  const rec = text.match(/(\d+(?:\.\d+)?)\s*(?:m|mins?|minutes?)\s*(?:of\s+)?(?:rest|recovery|recover|easy|off)\b/);
+  if (rec) stripped = stripped.replace(rec[0], " ");
+  const workout: WorkoutSpec = {
+    intervals: hard.map((iv) => ({
+      count: Math.max(1, Math.min(20, iv.count)),
+      // Sessions are planned in whole minutes: a 30 s sprint needs a 1-minute stretch.
+      duration_minutes: Math.max(1, Math.round(iv.duration_minutes)),
+      zone: iv.zone,
+      recovery_minutes: rec ? Math.round(parseFloat(rec[1])) : Math.max(1, Math.round(iv.duration_minutes / 2)),
+    })),
+    warmup_minutes: 15,
+    cooldown_minutes: 10,
+    total_minutes: 0,
+  };
+  workout.total_minutes = workout.warmup_minutes + workout.cooldown_minutes + workout.intervals.reduce(
+    (s, iv) => s + iv.count * iv.duration_minutes + Math.max(0, iv.count - 1) * (iv.recovery_minutes ?? 0), 0);
+  return { workout, stripped };
+}
+
 /**
  * Deterministic fallback parser — no LLM. Handles the structured-form
  * prompt format and simple free text so that a total LLM outage degrades
@@ -514,25 +600,30 @@ export function parseDestination(prompt: string): { start: string | null; destin
 export function parseBasicIntent(prompt: string): ParsedIntent | null {
   const p = prompt.toLowerCase();
 
-  // Workout prompts need the LLM — stripping the session and serving a
-  // plain ride would silently compromise it. Decline so the caller
-  // surfaces PARSE_FAILED and the structured form.
-  if (/\d\s*[x×]\s*\d|\binterval|\bthreshold\b|\btempo\b|\bvo2|sweet\s*spot|\bzone\s*[1-7]\b|\bz[1-7]\b/.test(p)) {
-    return null;
-  }
+  // Structured efforts ("20 mins threshold", "4x4 min VO2 max") are parsed
+  // here too, so a rider's session never depends on the model being up. An
+  // intensity word we cannot turn into a session is declined (never served
+  // as a plain ride that silently drops the efforts).
+  const session = parseBasicWorkout(prompt);
+  const mentionsEfforts = /\d\s*[x×]\s*\d|\binterval|\bthreshold\b|\bftp\b|\btempo\b|\bvo2|sweet\s*spot|\banaerobic\b|\bsprints?\b|\bzone\s*[3-7]\b|\bz[3-7]\b/.test(p);
+  if (mentionsEfforts && !session) return null;
+  // The session's own minutes are not the ride's length: "20 mins
+  // threshold … 4 hour ride" is a 4-hour ride.
+  const p0 = p;
+  const pNoSession = session ? session.stripped.toLowerCase() : p0;
 
   // Duration: "2 hour", "1.5 hours", "90 min"
   let duration: number | null = null;
-  const hourMatch = p.match(/(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)\b/);
-  const minMatch = p.match(/(\d+)\s*(?:minutes?|mins?)\b/);
+  const hourMatch = pNoSession.match(/(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)\b/);
+  const minMatch = pNoSession.match(/(\d+)\s*(?:minutes?|mins?)\b/);
   if (hourMatch) duration = Math.round(parseFloat(hourMatch[1]) * 60);
   if (minMatch) duration = (duration ?? 0) + parseInt(minMatch[1], 10);
 
   // Distance: "60km", "40 mile"
   let distance: number | null = null;
   // Negative lookahead: "30km/h" is a pace, not a distance.
-  const kmMatch = p.match(/(\d+(?:\.\d+)?)\s*(?:km|kilometres?|kilometers?)\b(?!\s*\/?\s*h\b)/);
-  const miMatch = p.match(/(\d+(?:\.\d+)?)\s*(?:miles?|mi)\b/);
+  const kmMatch = pNoSession.match(/(\d+(?:\.\d+)?)\s*(?:km|kilometres?|kilometers?)\b(?!\s*\/?\s*h\b)/);
+  const miMatch = pNoSession.match(/(\d+(?:\.\d+)?)\s*(?:miles?|mi)\b/);
   if (kmMatch) distance = Math.round(parseFloat(kmMatch[1]));
   else if (miMatch) distance = Math.round(parseFloat(miMatch[1]) * 1.609);
 
@@ -546,7 +637,7 @@ export function parseBasicIntent(prompt: string): ParsedIntent | null {
   if (dest) region = dest.start;
 
   // A destination ride's length is the road there and back.
-  if (duration === null && distance === null && !dest) {
+  if (duration === null && distance === null && !dest && !session) {
     // Truly vague ("give me a ride") — no distance, no time, no place.
     if (!region) return null;
     // A place is named ("gravel loop from Dublin") — default the distance
@@ -593,7 +684,7 @@ export function parseBasicIntent(prompt: string): ParsedIntent | null {
     country: DEFAULT_COUNTRY,
     wind_strategy: wind,
     cafe_stop,
-    workout: null,
+    workout: session?.workout ?? null,
   };
 }
 
@@ -662,11 +753,14 @@ export async function parseRouteIntent(
     typeof parsed.distance_km === "number" && Number.isFinite(parsed.distance_km)
       ? parsed.distance_km
       : null;
-  // A workout fully defines the session length — prefer its total_minutes
-  // over a free-text duration if both exist.
+  // A workout sets the MINIMUM ride length; the rider's own ride length
+  // wins when it is longer ("20 mins threshold … 4 hour ride" = 4 hours).
+  const askedMin = typeof parsed.duration_minutes === "number" && parsed.duration_minutes > 0 ? parsed.duration_minutes : null;
+  // With no ride length asked, a session gets room to reach roads that can
+  // hold it (a 75-minute 2×20 from a city start is otherwise all suburbs).
   const durationMin = workout
-    ? workout.total_minutes
-    : parsed.duration_minutes ?? null;
+    ? Math.max(askedMin ? workout.total_minutes : Math.round(workout.total_minutes * 1.25), askedMin ?? 0)
+    : askedMin;
 
   if (distanceKm === null && durationMin !== null) {
     distanceKm = durationToDistanceKm(durationMin, discipline, elevationPref, userSpeedKmh);

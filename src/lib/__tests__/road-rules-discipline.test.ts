@@ -30,3 +30,28 @@ describe("classifyEdge by discipline", () => {
     expect(r.standard_met).toBe(true);
   });
 });
+
+describe("main-road crossings", () => {
+  // ~11 m per edge at this latitude step; 6 edges ≈ 66 m, 14 edges ≈ 155 m.
+  const step = 0.0001;
+  const line = (n: number): [number, number][] => Array.from({ length: n + 1 }, (_, i) => [53 + i * step, -6.2]);
+  const tags = (n: number, from: number, to: number) =>
+    Array.from({ length: n }, (_, i) => (i >= from && i < to ? { highway: "primary", surface: "asphalt" } : { highway: "tertiary", surface: "asphalt" }));
+  it("a 60-70 m crossing of a primary is a junction, not a compromise", () => {
+    const r = buildRoadReport(line(60), tags(60, 30, 36), "road");
+    expect(r.compromises).toEqual([]);
+    expect(r.standard_met).toBe(true);
+    expect(r.main_road_pct).toBeGreaterThan(0); // still counted in the share
+  });
+  it("150 m along a primary is a compromise", () => {
+    const r = buildRoadReport(line(60), tags(60, 30, 44), "road");
+    expect(r.compromises.length).toBe(1);
+    expect(r.compromises[0].kind).toBe("main_road");
+    expect(r.standard_met).toBe(false);
+  });
+  it("a 50 m gravel patch still counts on a road ride", () => {
+    const t = Array.from({ length: 60 }, (_, i) => (i >= 30 && i < 35 ? { highway: "track", surface: "gravel" } : { highway: "tertiary", surface: "asphalt" }));
+    const r = buildRoadReport(line(60), t, "road");
+    expect(r.compromises.some((c) => c.kind === "unpaved")).toBe(true);
+  });
+});

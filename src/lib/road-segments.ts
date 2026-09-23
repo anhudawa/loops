@@ -254,7 +254,7 @@ export interface RoadReport {
  * Bump when the classification rules change: stored reports with an older
  * (or missing) version are re-traced on next view (api/routes/[id]).
  */
-export const ROAD_RULES_VERSION = 2;
+export const ROAD_RULES_VERSION = 3;
 
 // "Unsuitable" by surface is discipline-aware: smoothness=bad is a hazard on
 // a road bike and the whole point of a gravel ride; class:bicycle −2 is
@@ -282,7 +282,10 @@ export function classifyEdge(t: WayTags, discipline: Discipline): CompromiseKind
 
 /** Start/finish zone for the exit allowance (see compromiseAcceptable). */
 export const EXIT_ZONE_KM = 6;
-const MIN_COMPROMISE_M = 40;   // shorter = crossing a junction, not riding the road
+// Shorter than this = crossing the road at a junction or a roundabout, not
+// riding along it (Faro: 45–96 m traversals of the EN125/N2 ring that every
+// loop must cross). Surface/access hazards count from 40 m.
+const MIN_COMPROMISE_M: Record<CompromiseKind, number> = { main_road: 100, fast_road: 100, unpaved: 40, unsuitable: 40 };
 const MERGE_GAP_M = 60;        // same-kind stretches this close are one stretch
 
 function buildRoadReportInner(
@@ -348,7 +351,7 @@ function buildRoadReportInner(
   const exitM = EXIT_ZONE_KM * 1000;
 
   const compromises: Compromise[] = merged
-    .filter((r) => r.meters >= MIN_COMPROMISE_M)
+    .filter((r) => r.meters >= MIN_COMPROMISE_M[r.kind])
     .map((r) => {
       const nearStart = cumM[r.start] <= exitM || total - cumM[Math.min(r.end, n)] <= exitM;
       return {

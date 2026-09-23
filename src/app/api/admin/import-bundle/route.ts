@@ -24,12 +24,10 @@ const BUNDLES: Record<string, Bundle> = {
   // The Girona collection was built with a car router (OSRM demo) and rides
   // autovías; these are the same rides rebuilt on our engine with the Road
   // Standard profile (relaxed for the three long ones), reports included.
-  // Withdrawn 2026-09-23 pending redesign: the rebuilt tracks were refuted
-  // (landmarks not reached, heavy retrace). Re-enable when the new designs
-  // pass verification.
-  ...(process.env.ENABLE_GIRONA_REBUILD === "1"
-    ? { "girona-rebuild": { mode: "replace" as const, label: "Rebuild Girona tracks", country: "Spain", routes: gironaRebuild as ReplaceRoute[] } }
-    : {}),
+  // Redesigned 2026-09-23 (the old tracks were car-routed and never rides):
+  // real landmarks reached, true loops, routed on our engine; 8 of the 10
+  // (Empordà Plain and La Traka 100 keep their tracks for now).
+  "girona-rebuild": { mode: "replace", label: "Rebuild Girona tracks", country: "Spain", routes: gironaRebuild as ReplaceRoute[] },
 };
 
 export async function GET(request: NextRequest) {

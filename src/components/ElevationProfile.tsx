@@ -134,11 +134,17 @@ export default function ElevationProfile({
     // X-axis labels
     ctx.textAlign = "center";
     const distStep = niceDistanceStep(distanceKm);
+    // The "km" unit sits right-aligned at the axis end; any tick whose label
+    // would run into it is omitted rather than drawn on top ("80km").
+    const unitLeft = width - padding.right - ctx.measureText("km").width - 6;
     for (let d = 0; d <= distanceKm; d += distStep) {
       const x = padding.left + (d / distanceKm) * plotWidth;
       if (x < padding.left || x > width - padding.right) continue;
-      ctx.fillText(`${Math.round(d)}`, x, height - padding.bottom + 14);
+      const label = `${Math.round(d)}`;
+      if (x + ctx.measureText(label).width / 2 > unitLeft) continue;
+      ctx.fillText(label, x, height - padding.bottom + 14);
     }
+    ctx.textAlign = "right";
     ctx.fillText("km", width - padding.right, height - padding.bottom + 14);
 
     // Draw gradient-coloured fill + line segments

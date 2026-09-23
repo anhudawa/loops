@@ -367,7 +367,7 @@ export default async function DestinationPage({ params }: Props) {
               className="text-sm mb-3"
               style={{ color: "var(--text-muted)" }}
             >
-              Short on time? Our hand-picked pick of the {dest.name} classics.
+              Short on time? Our pick of the {dest.name} classics.
             </p>
             <Link
               href={`/collections/${dest.collectionSlug}`}

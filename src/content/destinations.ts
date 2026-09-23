@@ -35,17 +35,17 @@ export const destinations: Destination[] = [
     tagline: "Where the pros train and the roads stay quiet",
     country: "Spain",
     bestMonths: "March to June, September to November",
-    avgTemp: "14-27 C across the riding season",
+    avgTemp: "14-27°C across the riding season",
     rainfall: "Driest months are June through August; spring can bring afternoon showers in the hills",
     riding: [
       "Girona is the unofficial cycling capital of Europe. A few hundred professional riders live here for a reason: within 30 minutes of the medieval old town you reach rolling farmland, coastal flats, volcanic terrain in the Garrotxa, and the first serious foothills of the Pyrenees. Traffic on the secondary roads to the north and west is almost non-existent.",
-      "The terrain suits every rider. If you want steady Zone 2 volume, the GI-554 corridor towards Banyoles and the lake loop is flat-to-rolling perfection. If you want to hurt, Rocacorba, Mare de Deu del Mont, and the Pyrenean cols around Camprodon are all within reach of a long day. Gravel riders can disappear into the volcanic tracks around Olot or head east to the coastal paths of the Costa Brava.",
+      "The terrain suits every rider. If you want steady Zone 2 volume, the GI-554 corridor towards Banyoles and the lake loop is flat-to-rolling perfection. If you want to hurt, Rocacorba, Mare de Déu del Mont, and the Pyrenean cols around Camprodon are all within reach of a long day. Gravel riders can disappear into the volcanic tracks around Olot or head east to the coastal paths of the Costa Brava.",
       "Road surfaces are generally excellent. The Catalan government resurfaces cycling-popular roads regularly, and local drivers are accustomed to large groups. The cafe culture rounds it off: rides start and end at La Fabrica, Federal, or any of the bike-friendly stops along the Onyar.",
     ],
     climbs: [
-      "Els Angels (10 km, avg 4-5%) — the daily bread of every Girona-based rider, steady gradient to a hilltop sanctuary at 485 m",
+      "Els Àngels (10 km, avg 4-5%) — the daily bread of every Girona-based rider, steady gradient to a hilltop sanctuary at 485 m",
       "Rocacorba (10 km, avg 7%, ramps to 15%) — the local test piece, finishing above 990 m at the antenna cluster; sub-40 is a strong amateur benchmark",
-      "Mare de Deu del Mont (12 km, avg 5.5%) — a longer, more isolated climb north of Banyoles through dense forest",
+      "Mare de Déu del Mont (12 km, avg 5.5%) — a longer, more isolated climb north of Banyoles through dense forest",
       "Coll de Bracons (10 km, avg 5.8%) — a quiet Pyrenean approach climb with consistent gradient and beautiful views",
       "Santa Pellaia loop — not a single climb but a rolling circuit through the Gavarres massif, punchy and technical",
     ],
@@ -66,7 +66,7 @@ export const destinations: Destination[] = [
       {
         question: "When is the best time to cycle in Girona?",
         answer:
-          "The peak season runs from March to June and September to November. Spring offers mild temperatures (15-22 C), wildflowers and manageable tourist traffic. Autumn is drier and slightly warmer. July and August are hot (30 C+) but rideable with early starts. Winter (December-February) is cool but rarely freezing at lower elevations.",
+          "The peak season runs from March to June and September to November. Spring offers mild temperatures (15-22°C), wildflowers and manageable tourist traffic. Autumn is drier and slightly warmer. July and August are hot (30°C+) but rideable with early starts. Winter (December-February) is cool but rarely freezing at lower elevations.",
       },
       {
         question: "How do I get to Girona with a bike?",
@@ -81,7 +81,7 @@ export const destinations: Destination[] = [
       {
         question: "What are the must-ride climbs near Girona?",
         answer:
-          "Els Angels is the signature daily climb (10 km, 4-5%). Rocacorba is the test piece (10 km, 7% average with ramps to 15%). For longer efforts, Mare de Deu del Mont and the Pyrenean cols around Camprodon and Coll de Bracons are all within reach of a full day out.",
+          "Els Àngels is the signature daily climb (10 km, 4-5%). Rocacorba is the test piece (10 km, 7% average with ramps to 15%). For longer efforts, Mare de Déu del Mont and the Pyrenean cols around Camprodon and Coll de Bracons are all within reach of a full day out.",
       },
     ],
     collectionSlug: "girona",
@@ -95,7 +95,7 @@ export const destinations: Destination[] = [
     tagline: "The original spring training island",
     country: "Spain",
     bestMonths: "February to May, September to November",
-    avgTemp: "12-26 C across the riding season",
+    avgTemp: "12-26°C across the riding season",
     rainfall: "Very dry from May through September; winter storms can close mountain passes briefly",
     riding: [
       "Mallorca set the template for the European cycling camp. Every February, thousands of riders from northern Europe descend on the island to escape the dark and log volume on wide, well-surfaced roads with almost no traffic outside Palma. The Serra de Tramuntana mountain range that runs along the northwest coast provides the drama: a 90 km spine of twisting cliff roads, deep descents, and cols that would not look out of place in a Grand Tour.",
@@ -126,7 +126,7 @@ export const destinations: Destination[] = [
       {
         question: "When is the best time to cycle in Mallorca?",
         answer:
-          "February to May is peak season: the almond blossom is out, temperatures are 14-22 C, and the island is set up for cyclists. September to November is equally good with warmer sea temperatures. June through August can exceed 35 C, making midday riding uncomfortable. Winter (December-January) is cool but rideable.",
+          "February to May is peak season: the almond blossom is out, temperatures are 14-22°C, and the island is set up for cyclists. September to November is equally good with warmer sea temperatures. June through August can exceed 35°C, making midday riding uncomfortable. Winter (December-January) is cool but rideable.",
       },
       {
         question: "Is Sa Calobra as hard as people say?",
@@ -155,7 +155,7 @@ export const destinations: Destination[] = [
     tagline: "City rides, coastal roads, and mountains on the doorstep",
     country: "Ireland",
     bestMonths: "April to September",
-    avgTemp: "9-20 C across the riding season",
+    avgTemp: "9-20°C across the riding season",
     rainfall: "Rain is possible any day; the driest stretch is April to June. Always bring a gilet",
     riding: [
       "Dublin is not an obvious cycling destination, but it punches above its weight. Within 30 minutes of the city centre you reach the Wicklow Mountains, the coastal road south through Killiney and Bray, and the flat rolling farmland of Meath and Kildare to the west. The variety is genuine: you can ride a 100 km loop from Dublin that includes a serious mountain pass, a coastal stretch, and quiet country lanes.",
@@ -186,7 +186,7 @@ export const destinations: Destination[] = [
       {
         question: "When is the best time to cycle in Dublin?",
         answer:
-          "April to September offers the longest days and mildest weather. May and June are the driest months. Irish summers rarely exceed 22 C, which makes for comfortable riding. Daylight extends past 10pm in midsummer. Winter riding is possible but days are short and wet.",
+          "April to September offers the longest days and mildest weather. May and June are the driest months. Irish summers rarely exceed 22°C, which makes for comfortable riding. Daylight extends past 10pm in midsummer. Winter riding is possible but days are short and wet.",
       },
       {
         question: "What is the best cycling route from Dublin?",
@@ -215,7 +215,7 @@ export const destinations: Destination[] = [
     tagline: "Sun, climbs, and pro-team winter camps on the Costa Blanca",
     country: "Spain",
     bestMonths: "January to May, October to December",
-    avgTemp: "12-28 C across the riding season",
+    avgTemp: "12-28°C across the riding season",
     rainfall: "Almost no rain from May to September; occasional heavy downpours in autumn",
     riding: [
       "Calpe is where northern European pro teams go when they need guaranteed sunshine in January. The small coastal town on Spain's Costa Blanca sits at the foot of the Penon de Ifach rock and serves as the base for some of the best winter and spring riding in Europe. The terrain inland is relentlessly hilly: a network of quiet CV-roads climb through almond and orange groves into the Marina Alta and Marina Baixa mountains.",
@@ -246,7 +246,7 @@ export const destinations: Destination[] = [
       {
         question: "When is the best time to cycle in Calpe?",
         answer:
-          "January to May and October to December. Winter temperatures of 12-18 C are ideal for hard training. Spring (March-May) is perfect at 18-25 C. Summer (June-September) exceeds 30 C and is uncomfortably hot for long rides. Autumn offers warm weather with shorter days.",
+          "January to May and October to December. Winter temperatures of 12-18°C are ideal for hard training. Spring (March-May) is perfect at 18-25°C. Summer (June-September) exceeds 30°C and is uncomfortably hot for long rides. Autumn offers warm weather with shorter days.",
       },
       {
         question: "How hilly is cycling around Calpe?",
@@ -275,7 +275,7 @@ export const destinations: Destination[] = [
     tagline: "Ireland's mountain playground, 30 minutes from Dublin",
     country: "Ireland",
     bestMonths: "April to September",
-    avgTemp: "8-18 C across the riding season",
+    avgTemp: "8-18°C across the riding season",
     rainfall: "Frequent light rain year-round; the eastern valleys are drier than the mountain tops. Pack a rain cape",
     riding: [
       "The Wicklow Mountains are the closest real mountains to Dublin, and for Irish cyclists they are the default training ground. The landscape is raw: open moorland, deep glacial valleys, conifer plantations, and exposed mountain passes above 500 m. The roads are mostly single-carriageway R-roads with light traffic, and the views on a clear day reach from the Irish Sea to the midlands.",
@@ -335,7 +335,7 @@ export const destinations: Destination[] = [
     tagline: "Volcanic altitude and year-round sunshine for serious climbing",
     country: "Spain",
     bestMonths: "November to April (escape winter), May to June (mild summit)",
-    avgTemp: "18-28 C at the coast, 5-15 C above 2000 m",
+    avgTemp: "18-28°C at the coast, 5-15°C above 2000 m",
     rainfall: "Very dry, especially on the south coast; north side and summit can be cloudy. Almost no rain from May to September",
     riding: [
       "Tenerife is where cyclists go to climb. The island is dominated by Mount Teide, a 3718 m volcano with a paved road reaching 2100 m. That single fact shapes everything: from almost any point on the coast, you can ride uphill for 2-3 hours on a continuously ascending road. The gradients are steady (4-7%), the surfaces are superb, and the landscape shifts from subtropical coastal scrub through pine forest to lunar volcanic terrain above the treeline.",
@@ -371,7 +371,7 @@ export const destinations: Destination[] = [
       {
         question: "When is the best time to cycle in Tenerife?",
         answer:
-          "November to April is peak season for cyclists escaping northern European winter. Coastal temperatures sit at 18-24 C. The summit of Teide can be cold (5-10 C) and occasionally has ice or snow on the road. May and June are excellent - warm but not yet scorching. July and August are very hot at lower elevations.",
+          "November to April is peak season for cyclists escaping northern European winter. Coastal temperatures sit at 18-24°C. The summit of Teide can be cold (5-10°C) and occasionally has ice or snow on the road. May and June are excellent - warm but not yet scorching. July and August are very hot at lower elevations.",
       },
       {
         question: "Can beginners cycle in Tenerife?",
@@ -395,7 +395,7 @@ export const destinations: Destination[] = [
     tagline: "Winter sun, mountain roads ten minutes from the beach",
     country: "Spain",
     bestMonths: "October to May",
-    avgTemp: "16-24 C through the winter riding season",
+    avgTemp: "16-24°C through the winter riding season",
     rainfall: "Very dry; occasional wet spells November to January, almost none March onwards",
     riding: [
       "Málaga has quietly become one of Europe's best winter bases. The city sits with its back against the Montes de Málaga, so within fifteen minutes of the seafront you are climbing on quiet, well-surfaced mountain roads while the rest of northern Europe is on the turbo. The A-7000 over the Montes is the classic artery: a steady, beautifully engineered climb that opens into a high plateau of rolling roads towards Colmenar.",
@@ -421,7 +421,7 @@ export const destinations: Destination[] = [
       {
         question: "Is Málaga good for winter cycling?",
         answer:
-          "Málaga is one of the best winter cycling destinations in Europe. Daytime temperatures of 16-20 C from November to March, very little rain, and mountain climbs starting within fifteen minutes of the city make it ideal for winter training volume.",
+          "Málaga is one of the best winter cycling destinations in Europe. Daytime temperatures of 16-20°C from November to March, very little rain, and mountain climbs starting within fifteen minutes of the city make it ideal for winter training volume.",
       },
       {
         question: "What is the best climb in Málaga?",
@@ -431,7 +431,7 @@ export const destinations: Destination[] = [
       {
         question: "When is the best time to cycle on the Costa del Sol?",
         answer:
-          "October to May. Mid-winter (December-February) is mild and dry by northern European standards, and spring brings 20-24 C with green hillsides. July and August are too hot for long rides except at dawn.",
+          "October to May. Mid-winter (December-February) is mild and dry by northern European standards, and spring brings 20-24°C with green hillsides. July and August are too hot for long rides except at dawn.",
       },
       {
         question: "How do I get to Málaga with a bike?",
@@ -455,12 +455,12 @@ export const destinations: Destination[] = [
     tagline: "A volcano of switchbacks with summer all winter",
     country: "Spain",
     bestMonths: "October to April",
-    avgTemp: "18-25 C at the coast year-round; cooler at altitude",
+    avgTemp: "18-25°C at the coast year-round; cooler at altitude",
     rainfall: "Minimal in the south; the summit can catch cloud and showers in winter",
     riding: [
       "Gran Canaria is a near-circular volcanic island that rises to almost 2,000 m in its centre, which means every ride is a choice of how much climbing you want — and the answer can be enormous. From the southern resorts the roads tilt upwards almost immediately into ravine climbs with engineered gradients, endless switchbacks and very little traffic once you leave the coast.",
       "The Valley of the Tears (VOTT) is the island's legend: a brutally steep road on the GC-606 with sustained double-digit ramps, regularly named among the hardest climbs in Europe. But the everyday riding is friendlier — Fataga, Ayagaures and Soria are steady, scenic climbs, and the full ascent to Pico de las Nieves is a 40+ km drag to the island's roof with views over the cloud sea to Teide.",
-      "Winter is peak season: while northern Europe freezes, the south of the island sits at 20-24 C. Wind is a factor on exposed ridges, and the descents are long and technical — good brakes and cool judgement matter here.",
+      "Winter is peak season: while northern Europe freezes, the south of the island sits at 20-24°C. Wind is a factor on exposed ridges, and the descents are long and technical — good brakes and cool judgement matter here.",
     ],
     climbs: [
       "Pico de las Nieves from Maspalomas via Fataga (45 km to 1,920 m) — the island's roof, a full morning of climbing in one effort",
@@ -481,7 +481,7 @@ export const destinations: Destination[] = [
       {
         question: "Is Gran Canaria good for cycling?",
         answer:
-          "Gran Canaria is one of the best winter cycling destinations in the world. The south of the island offers 20-24 C from November to March, quiet engineered mountain roads, and climbing options from steady 4% valley roads to some of the hardest ramps in Europe.",
+          "Gran Canaria is one of the best winter cycling destinations in the world. The south of the island offers 20-24°C from November to March, quiet engineered mountain roads, and climbing options from steady 4% valley roads to some of the hardest ramps in Europe.",
       },
       {
         question: "How hard is the Valley of the Tears?",
@@ -491,7 +491,7 @@ export const destinations: Destination[] = [
       {
         question: "When is the best time to cycle in Gran Canaria?",
         answer:
-          "October to April. Coastal temperatures sit between 18 and 25 C all winter. Summer is rideable but hot inland. The summit of Pico de las Nieves can be 10-15 C cooler than the coast — carry a layer for the descent in any season.",
+          "October to April. Coastal temperatures sit between 18 and 25°C all winter. Summer is rideable but hot inland. The summit of Pico de las Nieves can be 10-15°C cooler than the coast — carry a layer for the descent in any season.",
       },
       {
         question: "Is Gran Canaria too hilly for beginners?",
@@ -515,7 +515,7 @@ export const destinations: Destination[] = [
     tagline: "Volcanic roads, honest wind, triathlon hardness",
     country: "Spain",
     bestMonths: "October to April",
-    avgTemp: "17-24 C year-round",
+    avgTemp: "17-24°C year-round",
     rainfall: "One of the driest places in Europe — rain is rare in any month",
     riding: [
       "Lanzarote is the leanest of the Canary cycling islands: no big mountains, no forests, just a stark volcanic landscape of black rock, white villages and roads that roll constantly without ever climbing for more than half an hour. What it lacks in cols it makes up for in honesty — the wind blows most days, and riding here builds the kind of strength you notice at home.",
@@ -541,7 +541,7 @@ export const destinations: Destination[] = [
       {
         question: "Is Lanzarote good for cycling?",
         answer:
-          "Yes — Lanzarote is a winter cycling staple. It offers 17-24 C temperatures year-round, almost no rain, quiet well-surfaced roads through striking volcanic scenery, and a deep sporting culture built around Club La Santa and Ironman Lanzarote.",
+          "Yes — Lanzarote is a winter cycling staple. It offers 17-24°C temperatures year-round, almost no rain, quiet well-surfaced roads through striking volcanic scenery, and a deep sporting culture built around Club La Santa and Ironman Lanzarote.",
       },
       {
         question: "How windy is Lanzarote for cycling?",
@@ -575,7 +575,7 @@ export const destinations: Destination[] = [
     tagline: "Portugal's quiet-road winter playground",
     country: "Portugal",
     bestMonths: "October to May",
-    avgTemp: "15-22 C through the winter season",
+    avgTemp: "15-22°C through the winter season",
     rainfall: "Mild Atlantic winters; most rain falls November to January in short spells",
     riding: [
       "The Algarve is the most underrated winter destination on the European circuit. The coast gets the tourists; the riding happens inland, where the hills of the Serra do Caldeirão and Serra de Monchique hide hundreds of kilometres of quiet, twisting, well-surfaced roads through cork oak and eucalyptus. The Volta ao Algarve brings the pro peloton here every February for a reason.",
@@ -601,7 +601,7 @@ export const destinations: Destination[] = [
       {
         question: "Is the Algarve good for cycling?",
         answer:
-          "Excellent — the inland Algarve offers quiet rolling roads, mild 15-22 C winters and the climbs made famous by the Volta ao Algarve, while coastal bases provide affordable winter accommodation and direct flights. It is one of Europe's best-value winter training destinations.",
+          "Excellent — the inland Algarve offers quiet rolling roads, mild 15-22°C winters and the climbs made famous by the Volta ao Algarve, while coastal bases provide affordable winter accommodation and direct flights. It is one of Europe's best-value winter training destinations.",
       },
       {
         question: "What are the famous climbs in the Algarve?",
@@ -611,7 +611,7 @@ export const destinations: Destination[] = [
       {
         question: "When is the best time to cycle in the Algarve?",
         answer:
-          "October to May. February to April is the sweet spot — the Volta ao Algarve atmosphere, green hills, wildflowers and 17-22 C days. Summer is hot and busy on the coast but the inland hills stay rideable with early starts.",
+          "October to May. February to April is the sweet spot — the Volta ao Algarve atmosphere, green hills, wildflowers and 17-22°C days. Summer is hot and busy on the coast but the inland hills stay rideable with early starts.",
       },
       {
         question: "Is the Algarve flat or hilly?",
@@ -635,7 +635,7 @@ export const destinations: Destination[] = [
     tagline: "Renaissance walls, pro test climbs and Italy's finest riding",
     country: "Italy",
     bestMonths: "March to June, September to October",
-    avgTemp: "13-27 C across the riding season",
+    avgTemp: "13-27°C across the riding season",
     rainfall: "Spring and autumn bring occasional wet days; summer is dry and hot",
     riding: [
       "Lucca is Italian cycling distilled: a perfectly preserved walled city sitting between the flat Piana di Lucca — ideal for recovery spins and group work — and the mountains of the Garfagnana and Monte Pisano. Generations of professionals have based themselves here, and Monte Serra remains one of the sport's most famous test climbs, the road where Tuscan careers are measured.",
@@ -671,7 +671,7 @@ export const destinations: Destination[] = [
       {
         question: "When is the best time to cycle in Tuscany?",
         answer:
-          "April to June and September to October are ideal: 18-27 C, green landscapes or harvest colours, and stable weather. July and August are hot but rideable with dawn starts. Winter is quiet and cool with occasional rain — many locals ride year-round.",
+          "April to June and September to October are ideal: 18-27°C, green landscapes or harvest colours, and stable weather. July and August are hot but rideable with dawn starts. Winter is quiet and cool with occasional rain — many locals ride year-round.",
       },
       {
         question: "Can I ride gravel near Lucca?",
@@ -695,7 +695,7 @@ export const destinations: Destination[] = [
     tagline: "Where the pro peloton lives — cols rising straight from the sea",
     country: "France",
     bestMonths: "March to June, September to November",
-    avgTemp: "13-26 C across the riding season",
+    avgTemp: "13-26°C across the riding season",
     rainfall: "Over 300 sunny days a year; autumn brings short heavy showers",
     riding: [
       "More WorldTour professionals live around Nice than almost anywhere else in the sport, and the reason is obvious from the first ride: serious climbing starts inside the city limits. From the Promenade des Anglais you can be on the Col d'Èze in twenty minutes or threading up to the Col de la Madone — the most famous test climb in professional cycling — within the hour.",
@@ -731,7 +731,7 @@ export const destinations: Destination[] = [
       {
         question: "When is the best time to cycle in Nice?",
         answer:
-          "March to June and September to November are perfect: 16-26 C and reliable sun. Winter riding is genuinely good by northern standards (13-15 C, mostly dry). July and August are hot and the coast roads are at their busiest.",
+          "March to June and September to November are perfect: 16-26°C and reliable sun. Winter riding is genuinely good by northern standards (13-15°C, mostly dry). July and August are hot and the coast roads are at their busiest.",
       },
       {
         question: "Is riding in Nice traffic-heavy?",

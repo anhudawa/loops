@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicRoute } from "@/lib/public-route";
 import { getRoute, updateRouteElevation, recordEvent, ANALYTICS_EVENTS } from "@/lib/db";
 import { apiError, handleApiError } from "@/lib/api-utils";
 import { fetchElevations } from "@/lib/elevation";
@@ -72,7 +73,7 @@ export async function GET(
       properties: { route_id: route.id, distance_km: route.distance_km, discipline: route.discipline, country: route.country },
     });
 
-    return NextResponse.json(route);
+    return NextResponse.json(publicRoute(route as unknown as Record<string, unknown>));
   } catch (err) {
     return handleApiError(err);
   }

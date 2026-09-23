@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicRoute } from "@/lib/public-route";
 import {
   getUserById,
   getUserStats,
@@ -62,36 +63,46 @@ export async function GET(
 
     // Check if current viewer is following this user
     let viewerFollowing = false;
+    let isSelf = false;
     const sessionToken = request.cookies.get("session")?.value;
     if (sessionToken) {
-      const viewer = await getUserBySession(sessionToken);
+      const viewer = await getUserBySession(sessionToken).catch(() => null);
       if (viewer && viewer.id !== id) {
         viewerFollowing = await isFollowing(viewer.id, id);
       }
+      isSelf = !!viewer && (viewer.id === id || viewer.role === "admin");
     }
 
+    // Email, role, speed, downloads and favourites are PRIVATE: only the
+    // user themselves (or an admin) sees them. This endpoint used to return
+    // them to anyone holding a user id — and every public route carries its
+    // creator's id.
     return NextResponse.json({
       id: user.id,
       name: user.name,
-      email: user.email,
       bio: user.bio,
       location: user.location,
       avatar_url: user.avatar_url,
-      role: user.role,
       created_at: user.created_at,
       stats,
-      routes,
+      routes: routes.map((r) => publicRoute(r as unknown as Record<string, unknown>)),
       totalKm,
       followers,
       following,
       activity,
       viewerFollowing,
-      uploadedRoutes,
-      downloadedRoutes,
-      favouritedRoutes,
+      uploadedRoutes: uploadedRoutes.map((r) => publicRoute(r as unknown as Record<string, unknown>)),
       communityScore,
       loopRating,
-      avg_speed_kmh: user.avg_speed_kmh ?? 25,
+      ...(isSelf
+        ? {
+            email: user.email,
+            role: user.role,
+            downloadedRoutes,
+            favouritedRoutes,
+            avg_speed_kmh: user.avg_speed_kmh ?? 25,
+          }
+        : {}),
     });
   } catch (err) {
     return handleApiError(err);

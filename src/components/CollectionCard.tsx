@@ -1,4 +1,5 @@
 import { placeLabel, plural } from "@/lib/copy";
+import { ENABLED_DISCIPLINES, disciplineEnabled } from "@/config/constants";
 import Link from "next/link";
 
 const DISCIPLINE_LABELS: Record<string, { icon: string; label: string }> = {
@@ -23,7 +24,13 @@ interface CollectionCardProps {
 }
 
 export default function CollectionCard({ collection }: CollectionCardProps) {
-  const disc = DISCIPLINE_LABELS[collection.discipline] ?? DISCIPLINE_LABELS.mixed;
+  // The card counts (and the page lists) only the disciplines LOOPS plans:
+  // with one enabled (v1: road), a "Mixed"/gravel label would promise
+  // routes the rider cannot open.
+  const shown = disciplineEnabled(collection.discipline) || ENABLED_DISCIPLINES.length !== 1
+    ? collection.discipline
+    : ENABLED_DISCIPLINES[0];
+  const disc = DISCIPLINE_LABELS[shown] ?? DISCIPLINE_LABELS.mixed;
   const locationText = placeLabel(collection.location, collection.country);
 
   return (

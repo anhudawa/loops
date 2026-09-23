@@ -2,9 +2,12 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import AppHeader from "@/components/AppHeader";
 import JsonLd from "@/components/JsonLd";
+import Breadcrumbs from "@/components/Breadcrumbs";
 import { generateBreadcrumbJsonLd, generateFaqJsonLd, slugify } from "@/lib/seo";
+import { plural } from "@/lib/copy";
 import { getDestinationBySlug, type Destination } from "@/content/destinations";
-import { getCollectionBySlug, getRegionStats } from "@/lib/db";
+import { getCollectionBySlug, getRoutesByRegionSlug } from "@/lib/db";
+import { listedRoutes, visibleRoutes } from "@/app/routes/country/library";
 
 interface Props {
   params: Promise<{ destination: string }>;
@@ -45,10 +48,15 @@ export default async function DestinationPage({ params }: Props) {
   // Only offer the collection link when the collection actually exists —
   // otherwise the button is a dead link (a missing/unseeded collection 404s).
   // Fail soft: a DB hiccup just hides the button, never breaks the page.
+  // The count is the cards the collection page shows (v1 disciplines, no
+  // broken tracks), so the button and the page agree.
   let hasCollection = false;
+  let collectionRouteCount = 0;
   if (dest.collectionSlug) {
     try {
-      hasCollection = (await getCollectionBySlug(dest.collectionSlug)) != null;
+      const coll = await getCollectionBySlug(dest.collectionSlug);
+      collectionRouteCount = coll ? listedRoutes(coll.routes).length : 0;
+      hasCollection = collectionRouteCount > 0;
     } catch {
       hasCollection = false;
     }
@@ -57,17 +65,24 @@ export default async function DestinationPage({ params }: Props) {
   // Same for "Browse all <region> routes": only when that region listing
   // exists (Wicklow's link was the only 404 in the site crawl) and holds
   // more than one route — "Browse all" over a single route is a dead end.
+  // Counted from the cards the region page shows (broken tracks hidden), not
+  // the SQL total, so "8 Gran Canaria loops" opens 8 cards.
   let hasRegion = false;
   let regionRouteCount = 0;
   if (dest.routesCountry && dest.routesRegion) {
     try {
-      const st = await getRegionStats(slugify(dest.routesCountry), slugify(dest.routesRegion));
-      regionRouteCount = Number((st as { routeCount?: number } | null)?.routeCount ?? 0);
-      hasRegion = !!st && regionRouteCount > 1;
+      const routes = await getRoutesByRegionSlug(slugify(dest.routesCountry), slugify(dest.routesRegion));
+      regionRouteCount = visibleRoutes(routes).length;
+      hasRegion = regionRouteCount > 1;
     } catch {
       hasRegion = false;
     }
   }
+
+  // "Plan a ride in <name>" opens the planner on a loop from the
+  // destination's base town (and keeps it through sign-in: /generate carries
+  // ?q= through the login redirect) instead of an empty planner.
+  const planHref = `/generate?q=${encodeURIComponent(`A 2-hour road loop from ${dest.plannerPlace}`)}`;
 
   const breadcrumb = generateBreadcrumbJsonLd([
     { name: "Home", url: "https://www.loops.ie" },
@@ -84,9 +99,11 @@ export default async function DestinationPage({ params }: Props) {
       {/* Header */}
       <AppHeader />
 
-      <main className="max-w-3xl mx-auto px-4 py-10">
+      <main className="max-w-3xl mx-auto px-4 pt-4 pb-10">
+        <Breadcrumbs items={[{ label: "Destinations", href: "/cycling" }, { label: dest.name }]} />
+
         {/* Hero */}
-        <div className="mb-10">
+        <div className="mb-10 mt-6">
           <div className="flex items-center gap-2 mb-3">
             <span
               className="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded"
@@ -115,28 +132,36 @@ export default async function DestinationPage({ params }: Props) {
           </p>
 
           {/* The routes, up front: on a phone the full CTAs sit ~11,000 px down. */}
-          {(hasRegion || (dest.collectionSlug && hasCollection)) && (
-            <div className="mt-5 flex flex-wrap items-center gap-2" data-testid="destination-route-strip">
-              {hasRegion && dest.routesCountry && dest.routesRegion && (
-                <Link
-                  href={`/routes/country/${slugify(dest.routesCountry)}/${slugify(dest.routesRegion)}`}
-                  className="inline-flex items-center justify-center min-h-[44px] font-bold text-sm px-4 rounded-lg"
-                  style={{ background: "var(--accent)", color: "var(--bg)" }}
-                >
-                  {regionRouteCount} {dest.name} loops →
-                </Link>
-              )}
-              {dest.collectionSlug && hasCollection && (
-                <Link
-                  href={`/collections/${dest.collectionSlug}`}
-                  className="inline-flex items-center justify-center min-h-[44px] font-bold text-sm px-4 rounded-lg"
-                  style={{ border: "1px solid var(--border)", color: "var(--text)", background: "var(--bg-card)" }}
-                >
-                  The classics
-                </Link>
-              )}
-            </div>
-          )}
+          <div className="mt-5 flex flex-wrap items-center gap-2" data-testid="destination-route-strip">
+            {hasRegion && dest.routesCountry && dest.routesRegion && (
+              <Link
+                href={`/routes/country/${slugify(dest.routesCountry)}/${slugify(dest.routesRegion)}`}
+                className="inline-flex items-center justify-center min-h-[44px] font-bold text-sm px-4 rounded-lg"
+                style={{ background: "var(--accent)", color: "var(--bg)" }}
+              >
+                {regionRouteCount} {dest.name} loops →
+              </Link>
+            )}
+            {dest.collectionSlug && hasCollection && (
+              <Link
+                href={`/collections/${dest.collectionSlug}`}
+                className="inline-flex items-center justify-center min-h-[44px] font-bold text-sm px-4 rounded-lg"
+                style={{ border: "1px solid var(--border)", color: "var(--text)", background: "var(--bg-card)" }}
+              >
+                {plural(collectionRouteCount, "classic loop")} →
+              </Link>
+            )}
+            {/* No library here yet (Wicklow): the way forward is a planned loop. */}
+            {!hasRegion && !hasCollection && (
+              <Link
+                href={planHref}
+                className="inline-flex items-center justify-center min-h-[44px] font-bold text-sm px-4 rounded-lg"
+                style={{ background: "var(--accent)", color: "var(--bg)" }}
+              >
+                Plan a loop from {dest.plannerPlace} →
+              </Link>
+            )}
+          </div>
         </div>
 
         {/* Best time to ride */}
@@ -378,17 +403,17 @@ export default async function DestinationPage({ params }: Props) {
             }}
           >
             <p className="text-sm mb-3" style={{ color: "var(--text-muted)" }}>
-              Every {dest.name} loop in the library — Road Standard report, elevation profile and climbs for each.
+              {plural(regionRouteCount, `${dest.name} loop`)} in the library — elevation profile and climbs for each.
             </p>
             <Link
               href={`/routes/country/${slugify(dest.routesCountry)}/${slugify(dest.routesRegion)}`}
-              className="inline-flex items-center justify-center font-bold text-sm px-5 py-2.5 rounded-lg"
+              className="inline-flex items-center justify-center font-bold text-sm px-5 min-h-[44px] rounded-lg"
               style={{
                 background: "var(--accent)",
                 color: "var(--bg)",
               }}
             >
-              Browse all {dest.name} routes
+              Browse {plural(regionRouteCount, `${dest.name} loop`)}
             </Link>
           </div>
         )}
@@ -410,7 +435,7 @@ export default async function DestinationPage({ params }: Props) {
             </p>
             <Link
               href={`/collections/${dest.collectionSlug}`}
-              className="inline-flex items-center justify-center font-bold text-sm px-5 py-2.5 rounded-lg"
+              className="inline-flex items-center justify-center font-bold text-sm px-5 min-h-[44px] rounded-lg"
               style={{
                 border: "1px solid var(--border)",
                 color: "var(--text)",
@@ -440,15 +465,16 @@ export default async function DestinationPage({ params }: Props) {
             className="text-sm leading-relaxed mb-4 max-w-md mx-auto"
             style={{ color: "var(--text-muted)" }}
           >
-            Tell our AI where you are, how long you want to ride and the
-            terrain you prefer &mdash; get a route that fits.
+            Start with a 2-hour loop from {dest.plannerPlace}, then tell the
+            planner how long you want to ride and the terrain you prefer
+            &mdash; get a route that fits.
           </p>
           <Link
-            href="/generate"
-            className="inline-flex items-center justify-center font-bold text-sm px-6 py-3 rounded-lg"
+            href={planHref}
+            className="inline-flex items-center justify-center font-bold text-sm px-6 min-h-[44px] rounded-lg"
             style={{ background: "var(--accent)", color: "#0a0a0a" }}
           >
-            Generate a route
+            Plan a loop from {dest.plannerPlace}
           </Link>
         </div>
       </main>

@@ -1,16 +1,36 @@
 import type { Metadata } from "next";
+import { cache } from "react";
 import { routeCard } from "@/lib/public-route";
 import { SOCIAL_FEATURES_ENABLED as SHOW_RATINGS } from "@/config/constants";
 import { freeGpxPhrase, placeLabel, plural } from "@/lib/copy";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCountries, getRegions, getRegionStats, getRoutesByRegionSlug } from "@/lib/db";
 import { slugify, generateItemListJsonLd, generateBreadcrumbJsonLd, generateFaqJsonLd } from "@/lib/seo";
 import JsonLd from "@/components/JsonLd";
 import Breadcrumbs from "@/components/Breadcrumbs";
+import AppHeader from "@/components/AppHeader";
 import RouteCard from "@/components/RouteCard";
+import { disciplineList, totalKm, visibleRoutes } from "../../library";
 
 export const revalidate = 3600;
+
+/**
+ * The region's stats and the routes a rider can open; counts come from the
+ * visible list so the heading, stat, FAQ and JSON-LD match the cards.
+ */
+const loadRegion = cache(async (countrySlug: string, regionSlug: string) => {
+  const stats = await getRegionStats(countrySlug, regionSlug);
+  if (!stats) return null;
+  const routes = visibleRoutes(await getRoutesByRegionSlug(countrySlug, regionSlug));
+  return {
+    ...stats,
+    // "london" and "Tipperary " share a page with "London" / "Tipperary".
+    displayName: stats.displayName.trim().charAt(0).toUpperCase() + stats.displayName.trim().slice(1),
+    routes,
+    routeCount: routes.length,
+    totalDistanceKm: totalKm(routes),
+  };
+});
 
 export async function generateStaticParams() {
   // Fail soft: if the DB is unreachable at build time, render on demand
@@ -24,7 +44,14 @@ export async function generateStaticParams() {
         params.push({ country: slugify(country), region: slugify(region) });
       }
     }
-    return params;
+    // "London" and "london" are one page: one param each.
+    const seen = new Set<string>();
+    return params.filter((p) => {
+      const k = `${p.country}/${p.region}`;
+      if (!p.region || seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
   } catch {
     return [];
   }
@@ -36,9 +63,9 @@ export async function generateMetadata({
   params: Promise<{ country: string; region: string }>;
 }): Promise<Metadata> {
   const { country: countrySlug, region: regionSlug } = await params;
-  let stats: Awaited<ReturnType<typeof getRegionStats>> = null;
+  let stats: Awaited<ReturnType<typeof loadRegion>> = null;
   try {
-    stats = await getRegionStats(countrySlug, regionSlug);
+    stats = await loadRegion(countrySlug, regionSlug);
   } catch {
     return { title: "Cycling Routes | LOOPS" };
   }
@@ -77,17 +104,16 @@ export default async function RegionPage({
 }) {
   const { country: countrySlug, region: regionSlug } = await params;
   // Fail soft: a DB outage shows an honest message, never a crash page.
-  let stats: Awaited<ReturnType<typeof getRegionStats>> = null;
-  let routes: Awaited<ReturnType<typeof getRoutesByRegionSlug>> = [];
+  let stats: Awaited<ReturnType<typeof loadRegion>> = null;
   let dbDown = false;
   try {
-    stats = await getRegionStats(countrySlug, regionSlug);
-    if (stats) routes = await getRoutesByRegionSlug(countrySlug, regionSlug);
+    stats = await loadRegion(countrySlug, regionSlug);
   } catch {
     dbDown = true;
   }
   if (dbDown) return <RoutesUnavailable />;
   if (!stats) notFound();
+  const routes = stats.routes;
 
   const place = placeLabel(stats.displayName, stats.countryDisplayName);
   const breadcrumbItems = [
@@ -119,18 +145,9 @@ export default async function RegionPage({
       <JsonLd data={generateItemListJsonLd(`Cycling Routes in ${place}`, routes.map((r) => ({ id: r.id, name: r.name })))} />
       <JsonLd data={generateFaqJsonLd(faqItems)} />
 
-      <header className="px-4 md:px-6 py-3" style={{ background: "var(--bg-raised)", borderBottom: "1px solid var(--border)" }}>
-        <div className="max-w-5xl mx-auto flex items-center gap-3">
-          <Link href={`/routes/country/${countrySlug}`} className="min-w-[44px] min-h-[44px] flex items-center justify-center hover:opacity-80" style={{ color: "var(--text-muted)" }}>
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-          </Link>
-          <Link href="/">
-            <span className="logo-mark text-xl" style={{ color: "var(--text)" }}>LOOPS</span>
-          </Link>
-        </div>
-      </header>
+      {/* The shared header: sign-in / account state and the main nav on
+          these Google landing pages too. The breadcrumb below leads up. */}
+      <AppHeader />
 
       <div className="max-w-5xl mx-auto px-4 md:px-6 py-8">
         <Breadcrumbs items={[
@@ -144,8 +161,8 @@ export default async function RegionPage({
         </h1>
 
         <p className="text-sm leading-relaxed mb-8" style={{ color: "var(--text-secondary)" }}>
-          {plural(stats.routeCount, "cycling route")} in {place} on LOOPS.
-          Browse {stats.disciplines.join(", ")} routes with {freeGpxPhrase()}.
+          {plural(stats.routeCount, `${disciplineList(stats.disciplines)} loop`)} in {place} on LOOPS.{" "}
+          {freeGpxPhrase({ title: true })}.
         </p>
 
         {/* Stats bar */}

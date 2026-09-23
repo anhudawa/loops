@@ -24,11 +24,17 @@ export interface Destination {
   /** Country/region used to link to this destination's route library pages. */
   routesCountry?: string;
   routesRegion?: string;
+  /**
+   * Where "Plan a ride in <name>" starts the planner: a town the planner
+   * resolves (src/lib/places-known.ts), so the rider lands on a loop there.
+   */
+  plannerPlace: string;
 }
 
 export const destinations: Destination[] = [
   {
     slug: "girona",
+    plannerPlace: "Girona",
     routesCountry: "Spain",
     routesRegion: "Girona",
     name: "Girona",
@@ -89,6 +95,7 @@ export const destinations: Destination[] = [
 
   {
     slug: "mallorca",
+    plannerPlace: "Port de Pollença",
     routesCountry: "Spain",
     routesRegion: "Mallorca",
     name: "Mallorca",
@@ -149,6 +156,7 @@ export const destinations: Destination[] = [
 
   {
     slug: "dublin",
+    plannerPlace: "Dublin",
     routesCountry: "Ireland",
     routesRegion: "Dublin",
     name: "Dublin",
@@ -209,6 +217,7 @@ export const destinations: Destination[] = [
 
   {
     slug: "calpe",
+    plannerPlace: "Calpe",
     routesCountry: "Spain",
     routesRegion: "Costa Blanca",
     name: "Calpe",
@@ -269,6 +278,7 @@ export const destinations: Destination[] = [
 
   {
     slug: "wicklow",
+    plannerPlace: "Wicklow",
     routesCountry: "Ireland",
     routesRegion: "Wicklow",
     name: "Wicklow",
@@ -329,6 +339,7 @@ export const destinations: Destination[] = [
 
   {
     slug: "tenerife",
+    plannerPlace: "Puerto de la Cruz",
     routesCountry: "Spain",
     routesRegion: "Tenerife",
     name: "Tenerife",
@@ -389,6 +400,7 @@ export const destinations: Destination[] = [
 
   {
     slug: "malaga",
+    plannerPlace: "Málaga",
     routesCountry: "Spain",
     routesRegion: "Andalucía",
     name: "Málaga / Costa del Sol",
@@ -449,6 +461,7 @@ export const destinations: Destination[] = [
 
   {
     slug: "gran-canaria",
+    plannerPlace: "Maspalomas",
     routesCountry: "Spain",
     routesRegion: "Gran Canaria",
     name: "Gran Canaria",
@@ -509,6 +522,7 @@ export const destinations: Destination[] = [
 
   {
     slug: "lanzarote",
+    plannerPlace: "Puerto del Carmen",
     routesCountry: "Spain",
     routesRegion: "Lanzarote",
     name: "Lanzarote",
@@ -569,6 +583,7 @@ export const destinations: Destination[] = [
 
   {
     slug: "algarve",
+    plannerPlace: "Faro",
     routesCountry: "Portugal",
     routesRegion: "Algarve",
     name: "Algarve",
@@ -629,6 +644,7 @@ export const destinations: Destination[] = [
 
   {
     slug: "lucca",
+    plannerPlace: "Lucca",
     routesCountry: "Italy",
     routesRegion: "Toscana",
     name: "Lucca / Tuscany",
@@ -689,6 +705,7 @@ export const destinations: Destination[] = [
 
   {
     slug: "nice",
+    plannerPlace: "Nice",
     routesCountry: "France",
     routesRegion: "Côte d'Azur",
     name: "Nice / Côte d'Azur",

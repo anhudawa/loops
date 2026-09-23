@@ -1,38 +1,63 @@
 import type { Metadata } from "next";
+import { cache } from "react";
 import { DEFAULT_OG_IMAGE, pageOpenGraph, siteUrl } from "@/lib/site-meta";
 import { routeCard } from "@/lib/public-route";
 import { placeLabel, plural } from "@/lib/copy";
 import { notFound } from "next/navigation";
-import { getCollectionBySlug } from "@/lib/db";
+import { getCollectionBySlug, getCollections } from "@/lib/db";
 import RouteCard from "@/components/RouteCard";
 import JsonLd from "@/components/JsonLd";
 import { generateCollectionJsonLd, generateBreadcrumbJsonLd } from "@/lib/seo";
 import Link from "next/link";
 import AppHeader from "@/components/AppHeader";
-import { disciplineEnabled } from "@/config/constants";
+import { listDiscipline, listedRoutes, mentionsHiddenDiscipline } from "@/app/routes/country/library";
 
 // Collections change rarely: cache for an hour (was rendered per request).
 export const revalidate = 3600;
+
+// Pre-render the known collections so a tap is a cached page, not a
+// per-request render (they were no-store / MISS on every hit). Fail soft:
+// with the DB down at build time, pages render on demand.
+export async function generateStaticParams() {
+  try {
+    return (await getCollections()).map((c) => ({ slug: c.slug }));
+  } catch {
+    return [];
+  }
+}
 
 interface Props {
   params: Promise<{ slug: string }>;
 }
 
+/**
+ * The collection and the routes a rider can open (v1 disciplines, no broken
+ * tracks). The count, the numbering, the badge and the JSON-LD all come
+ * from this list. Shared by metadata and the page.
+ */
+const loadCollection = cache(async (slug: string) => {
+  const collection = await getCollectionBySlug(slug);
+  if (!collection) return null;
+  const routes = listedRoutes(collection.routes);
+  return { ...collection, routes, total_routes_count: routes.length };
+});
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  let collection: Awaited<ReturnType<typeof getCollectionBySlug>> = null;
+  let collection: Awaited<ReturnType<typeof loadCollection>> = null;
   try {
-    collection = await getCollectionBySlug(slug);
+    collection = await loadCollection(slug);
   } catch {
     return {};
   }
   if (!collection) return {};
 
   const title = collection.seo_title || `${collection.name} — LOOPS Collections`;
-  const description =
-    collection.seo_description ||
-    collection.description ||
-    `${plural(collection.total_routes_count, "curated cycling route")}${collection.location ? ` in ${collection.location}` : ""}.`;
+  const generated = `${plural(collection.total_routes_count, "curated road route")}${collection.location ? ` in ${collection.location}` : ""}.`;
+  // Stored copy written before v1 went road-only can promise gravel the
+  // page does not list: use the generated line then.
+  const stored = [collection.seo_description, collection.description].find((d) => d && !mentionsHiddenDiscipline(d));
+  const description = stored || generated;
 
   return {
     title,
@@ -64,9 +89,9 @@ const DISCIPLINE_LABELS: Record<string, { icon: string; label: string }> = {
 
 export default async function CollectionPage({ params }: Props) {
   const { slug } = await params;
-  let collection: Awaited<ReturnType<typeof getCollectionBySlug>> = null;
+  let collection: Awaited<ReturnType<typeof loadCollection>> = null;
   try {
-    collection = await getCollectionBySlug(slug);
+    collection = await loadCollection(slug);
   } catch {
     // DB outage is not a 404 — show an honest degraded state.
     return (
@@ -84,7 +109,12 @@ export default async function CollectionPage({ params }: Props) {
   }
   if (!collection) notFound();
 
-  const disc = DISCIPLINE_LABELS[collection.discipline] ?? DISCIPLINE_LABELS.mixed;
+  // v1 plans road only: the list shows the disciplines LOOPS plans, and no
+  // broken tracks (RouteCard hides those — an empty numbered bubble before).
+  const routes = collection.routes;
+  // The badge describes what is listed, not the stored label ("Mixed" over
+  // a road-only list).
+  const disc = DISCIPLINE_LABELS[listDiscipline(routes, collection.discipline)] ?? DISCIPLINE_LABELS.mixed;
   const locationText = placeLabel(collection.location, collection.country);
 
   const breadcrumbJsonLd = generateBreadcrumbJsonLd([
@@ -93,9 +123,6 @@ export default async function CollectionPage({ params }: Props) {
     { name: collection.name },
   ]);
 
-  // v1 plans road only: the list shows the disciplines LOOPS plans.
-  const routes = collection.routes.filter((r) => disciplineEnabled((r as { discipline?: string }).discipline));
-
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
       <JsonLd data={generateCollectionJsonLd(collection)} />
@@ -103,7 +130,7 @@ export default async function CollectionPage({ params }: Props) {
 
       <AppHeader />
       <nav aria-label="Breadcrumb" className="max-w-5xl mx-auto px-4 pt-3 text-xs flex items-center gap-2" style={{ color: "var(--text-muted)" }}>
-        <Link href="/collections" className="font-semibold hover:opacity-80 py-3 -my-3">Collections</Link>
+        <Link href="/collections" className="font-semibold hover:opacity-80 min-h-[44px] inline-flex items-center pr-1">Collections</Link>
         <span aria-hidden="true" style={{ color: "var(--border-light)" }}>/</span>
         <span className="font-semibold truncate" style={{ color: "var(--text)" }}>{collection.name}</span>
       </nav>
@@ -163,8 +190,11 @@ export default async function CollectionPage({ params }: Props) {
               <div className="max-w-2xl text-base leading-relaxed space-y-3" style={{ color: "var(--text-muted)" }}>
                 <p>{paras[0]}</p>
                 {paras.length > 1 && (
-                  <details>
-                    <summary className="text-sm font-bold cursor-pointer select-none py-2" style={{ color: "var(--accent)" }}>Read more</summary>
+                  <details className="group">
+                    <summary className="text-sm font-bold cursor-pointer select-none min-h-[44px] flex items-center" style={{ color: "var(--accent)" }}>
+                      <span className="group-open:hidden">Read more</span>
+                      <span className="hidden group-open:inline">Show less</span>
+                    </summary>
                     <div className="space-y-3 mt-2">
                       {paras.slice(1).map((p, i) => <p key={i}>{p}</p>)}
                     </div>

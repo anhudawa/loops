@@ -86,8 +86,10 @@ export default function RouteCard({ route, showDistance }: RouteCardProps) {
   const discipline = route.discipline ? DISCIPLINE_LABELS[route.discipline] : null;
   const roadStatus: "met" | "notes" | null =
     route.road_standard ?? (route.road_report?.standard_met === true ? "met" : route.road_report?.standard_met === false ? "notes" : null);
-  const locationText = route.region || route.county;
-  const countryText = route.country ? `, ${route.country}` : "";
+  // Stored places can carry stray spaces ("Tipperary ") — never print " , ".
+  const rawPlace = (route.region ?? "").trim() || (route.county ?? "").trim();
+  const locationText = rawPlace.charAt(0).toUpperCase() + rawPlace.slice(1); // "london" → "London"
+  const countryText = route.country?.trim() ? `, ${route.country.trim()}` : "";
   // Ratings are a social feature — hidden for launch.
   const hasRating = SOCIAL_FEATURES_ENABLED && route.avg_score !== undefined && Number(route.avg_score) > 0;
 

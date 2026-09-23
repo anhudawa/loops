@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { cache } from "react";
 import { SOCIAL_FEATURES_ENABLED as SHOW_RATINGS } from "@/config/constants";
 import { routeCard } from "@/lib/public-route";
 import { freeGpxPhrase, plural } from "@/lib/copy";
@@ -8,15 +9,30 @@ import { getCountries, getCountryStats, getRoutesByCountrySlug } from "@/lib/db"
 import { slugify, generateItemListJsonLd, generateBreadcrumbJsonLd, generateFaqJsonLd } from "@/lib/seo";
 import JsonLd from "@/components/JsonLd";
 import Breadcrumbs from "@/components/Breadcrumbs";
-
-const DISCIPLINE_WORD: Record<string, string> = { road: "road", gravel: "gravel", mtb: "MTB" };
-const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
-/** "road, gravel and MTB" */
-function disciplineList(ds: string[]): string {
-  const w = ds.map((d) => DISCIPLINE_WORD[d] ?? d);
-  return w.length <= 1 ? (w[0] ?? "") : `${w.slice(0, -1).join(", ")} and ${w[w.length - 1]}`;
-}
+import AppHeader from "@/components/AppHeader";
 import RouteCard from "@/components/RouteCard";
+import { disciplineList, measuredCount, regionCards, totalKm, visibleRoutes } from "../library";
+
+const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+
+/**
+ * The country's stats and the routes a rider can open. Every count on the
+ * page (stat, regions, FAQ, JSON-LD, metadata) comes from the visible list,
+ * so the numbers match the cards. Cached per request: metadata and the page
+ * share one load.
+ */
+const loadCountry = cache(async (countrySlug: string) => {
+  const stats = await getCountryStats(countrySlug);
+  if (!stats) return null;
+  const routes = visibleRoutes(await getRoutesByCountrySlug(countrySlug));
+  return {
+    ...stats,
+    routes,
+    routeCount: routes.length,
+    totalDistanceKm: totalKm(routes),
+    regions: regionCards(routes),
+  };
+});
 
 export const revalidate = 3600;
 
@@ -37,9 +53,9 @@ export async function generateMetadata({
   params: Promise<{ country: string }>;
 }): Promise<Metadata> {
   const { country: countrySlug } = await params;
-  let stats: Awaited<ReturnType<typeof getCountryStats>> = null;
+  let stats: Awaited<ReturnType<typeof loadCountry>> = null;
   try {
-    stats = await getCountryStats(countrySlug);
+    stats = await loadCountry(countrySlug);
   } catch {
     return { title: "Cycling Routes | LOOPS" };
   }
@@ -77,18 +93,18 @@ export default async function CountryPage({
 }) {
   const { country: countrySlug } = await params;
   // Fail soft: a DB outage shows an honest message, never a crash page.
-  let stats: Awaited<ReturnType<typeof getCountryStats>> = null;
-  let routes: Awaited<ReturnType<typeof getRoutesByCountrySlug>> = [];
+  let stats: Awaited<ReturnType<typeof loadCountry>> = null;
   let dbDown = false;
   try {
-    stats = await getCountryStats(countrySlug);
-    if (stats) routes = await getRoutesByCountrySlug(countrySlug);
+    stats = await loadCountry(countrySlug);
   } catch {
     dbDown = true;
   }
   if (dbDown) return <RoutesUnavailable />;
   if (!stats) notFound();
+  const routes = stats.routes;
   const featuredRoutes = routes.slice(0, 6);
+  const measured = measuredCount(routes);
 
   const breadcrumbItems = [
     { name: "LOOPS", url: "https://www.loops.ie" },
@@ -118,18 +134,9 @@ export default async function CountryPage({
       <JsonLd data={generateItemListJsonLd(`Cycling Routes in ${stats.displayName}`, routes.map((r) => ({ id: r.id, name: r.name })))} />
       <JsonLd data={generateFaqJsonLd(faqItems)} />
 
-      <header className="px-4 md:px-6 py-3" style={{ background: "var(--bg-raised)", borderBottom: "1px solid var(--border)" }}>
-        <div className="max-w-5xl mx-auto flex items-center gap-3">
-          <Link href="/" className="min-w-[44px] min-h-[44px] flex items-center justify-center hover:opacity-80" style={{ color: "var(--text-muted)" }}>
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-          </Link>
-          <Link href="/">
-            <span className="logo-mark text-xl" style={{ color: "var(--text)" }}>LOOPS</span>
-          </Link>
-        </div>
-      </header>
+      {/* The shared header: sign-in / account state and the main nav on
+          these Google landing pages too. */}
+      <AppHeader />
 
       <div className="max-w-5xl mx-auto px-4 md:px-6 py-8">
         <Breadcrumbs items={[
@@ -142,9 +149,14 @@ export default async function CountryPage({
         </h1>
 
         <p className="text-sm leading-relaxed mb-8" style={{ color: "var(--text-secondary)" }}>
-          {plural(stats.routeCount, "cycling route")} in {stats.displayName} on LOOPS.
-          {plural(stats.routeCount, "loop")} across {plural(stats.regions.length, "region")}: {disciplineList(stats.disciplines)}.
-          Every loop carries a Road Standard report; {freeGpxPhrase()}.
+          {plural(stats.routeCount, `${disciplineList(stats.disciplines)} loop`)} across {plural(stats.regions.length, "region")}.{" "}
+          {/* Only claim what is measured: many cards still say "Not yet measured". */}
+          {measured > 0 && measured === routes.length
+            ? "Every loop carries a Road Standard report. "
+            : measured > 0
+              ? `${measured} of them carry a Road Standard report so far. `
+              : ""}
+          {cap(freeGpxPhrase())}.
         </p>
 
         {/* Stats bar */}
@@ -174,8 +186,8 @@ export default async function CountryPage({
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
               {stats.regions.map((region) => (
                 <Link
-                  key={region.name}
-                  href={`/routes/country/${countrySlug}/${slugify(region.name)}`}
+                  key={region.slug}
+                  href={`/routes/country/${countrySlug}/${region.slug}`}
                   className="px-4 py-3 rounded-lg transition-colors hover:opacity-80"
                   style={{ background: "var(--bg-raised)", border: "1px solid var(--border)" }}
                 >

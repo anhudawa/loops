@@ -220,6 +220,14 @@ node scripts/import-routes.mjs scripts/hub-data/girona-eat-sleep-cycle.json --dr
   "Open in Strava" button is hidden too (Strava's upload page is for
   recorded activities, not planned routes). Komoot button opens Komoot's
   GPX import (komoot.com/upload).
+- Destination rides (owner rule 2026-09-23: "Pollença to Cap de Formentor and
+  back" must work — a cape/summit with one road is an exception to the
+  out-and-back rule): parseDestination (route-intent.ts) → resolveDestination
+  (known places → bundled towns → geocoder bounded around the start; houses/
+  shops ignored; known place > 90 km → "too far") → generateDestinationRides
+  (route-generator.ts): out, a different road home when one really exists
+  (measured shared < 50 %), plus the same road back. Labels are measured, never
+  assumed. Road Standard applies (compromises named; motorway/unpaved decline).
 - No CSRF tokens; cookie-only sessions; locale hardcoded en-IE
 
 ## Conventions

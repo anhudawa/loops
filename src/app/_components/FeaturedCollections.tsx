@@ -36,7 +36,7 @@ export default function FeaturedCollections() {
     <section className="mb-8">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-black tracking-tight" style={{ color: "var(--text)" }}>Collections</h2>
-        <Link href="/collections" className="text-xs font-bold hover:opacity-80" style={{ color: "var(--accent)" }}>
+        <Link href="/collections" className="text-xs font-bold hover:opacity-80 min-h-[44px] inline-flex items-center px-2 -mr-2" style={{ color: "var(--accent)" }}>
           View all →
         </Link>
       </div>

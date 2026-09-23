@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, Suspense } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import DurationStrip from "@/components/DurationStrip";
 import DisciplineTabs from "@/components/DisciplineTabs";
@@ -15,6 +15,7 @@ import { locationIfAllowed, requestLocation } from "@/lib/location";
 import LocationHelp from "@/components/LocationHelp";
 import FeaturedCollections from "./FeaturedCollections";
 import RouteSearchBox from "@/components/RouteSearchBox";
+import { guideForSearch } from "@/content/destination-guides";
 
 interface Route {
   id: string;
@@ -59,13 +60,14 @@ function normalizeRoute(raw: Record<string, unknown>): Route {
   };
 }
 
-const STORAGE_KEY = "loops-filters";
+/** Filters used to live in localStorage and came back on every visit. */
+const LEGACY_STORAGE_KEY = "loops-filters";
 
 interface FilterState {
   duration: string | null;
   discipline: string;
   country: string;
-  city: string;
+  region: string;
   sort: string;
   search: string;
 }
@@ -74,36 +76,25 @@ const DEFAULT_FILTERS: FilterState = {
   duration: null,
   discipline: "",
   country: "",
-  city: "",
+  region: "",
   sort: "",
   search: "",
 };
 
-function filtersFromParams(params: URLSearchParams): FilterState | null {
-  const keys = ["duration", "discipline", "country", "city", "sort", "search"];
-  const hasAny = keys.some((k) => params.has(k));
-  if (!hasAny) return null;
-
+/**
+ * The URL is the only source of truth for the feed's filters: a fresh visit
+ * to loops.ie is the plain feed, a shared link is exactly that feed, and the
+ * logo / "Routes" (href "/") reset it. `?city=` is the old region key.
+ */
+function filtersFromParams(params: URLSearchParams): FilterState {
   return {
     duration: params.get("duration") || null,
     discipline: params.get("discipline") || "",
     country: params.get("country") || "",
-    city: params.get("city") || "",
+    region: params.get("region") || params.get("city") || "",
     sort: params.get("sort") || "",
     search: params.get("search") || "",
   };
-}
-
-function filtersFromStorage(): FilterState | null {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) return null;
-    const parsed = JSON.parse(stored) as Partial<FilterState>;
-    // Merge over defaults so older stored shapes (pre-search) stay valid.
-    return { ...DEFAULT_FILTERS, ...parsed };
-  } catch {
-    return null;
-  }
 }
 
 function filtersToParams(f: FilterState): URLSearchParams {
@@ -111,11 +102,83 @@ function filtersToParams(f: FilterState): URLSearchParams {
   if (f.duration) p.set("duration", f.duration);
   if (f.discipline) p.set("discipline", f.discipline);
   if (f.country) p.set("country", f.country);
-  if (f.city) p.set("city", f.city);
+  if (f.region) p.set("region", f.region);
   if (f.sort) p.set("sort", f.sort);
   if (f.search) p.set("search", f.search);
   return p;
 }
+
+/** The query string a set of filters is shown under (canonical key order). */
+const filtersKey = (f: FilterState) => filtersToParams(f).toString();
+
+/**
+ * Region names as stored carry duplicates that differ only by case or a
+ * stray space ("London" / "london", "Tipperary "): one option each, the
+ * tidiest spelling. The region filter matches case-insensitively.
+ */
+function tidyRegions(list: unknown[]): string[] {
+  const byKey = new Map<string, string>();
+  for (const raw of list) {
+    const r = typeof raw === "string" ? raw.trim() : "";
+    if (!r) continue;
+    const k = r.toLowerCase();
+    const cur = byKey.get(k);
+    const capitalised = (t: string) => t.charAt(0) !== t.charAt(0).toLowerCase();
+    if (!cur || (!capitalised(cur) && capitalised(r))) byKey.set(k, r);
+  }
+  return [...byKey.values()].sort((a, b) => a.localeCompare(b));
+}
+
+// ── Back to the same feed ────────────────────────────────────────────────
+// Route card → Back used to remount the feed on page 1 at the wrong scroll
+// position. The list the rider left (all loaded pages + scroll) is kept per
+// tab for the query it was showing, and restored only on a Back/Forward.
+
+const FEED_CACHE_KEY = "loops:feed";
+const FEED_CACHE_MS = 30 * 60 * 1000;
+
+interface FeedCache {
+  key: string;
+  routes: Route[];
+  page: number;
+  hasMore: boolean;
+  scrollY: number;
+  userLocation: { lat: number; lng: number } | null;
+  at: number;
+}
+
+/** Set by a browser Back/Forward; cleared when the feed has used it or the rider taps forward. */
+let arrivedByHistory =
+  typeof window !== "undefined" &&
+  (performance.getEntriesByType?.("navigation")?.[0] as PerformanceNavigationTiming | undefined)?.type === "back_forward";
+if (typeof window !== "undefined") {
+  window.addEventListener("popstate", () => { arrivedByHistory = true; });
+  // Any link tap is a forward navigation: the logo / "Routes" give a fresh feed.
+  document.addEventListener("click", (e) => {
+    if ((e.target as Element | null)?.closest?.("a")) arrivedByHistory = false;
+  }, true);
+}
+
+function readFeedCache(key: string): FeedCache | null {
+  if (!arrivedByHistory) return null;
+  try {
+    const raw = sessionStorage.getItem(FEED_CACHE_KEY);
+    if (!raw) return null;
+    const c = JSON.parse(raw) as FeedCache;
+    if (c.key !== key || Date.now() - c.at > FEED_CACHE_MS || !Array.isArray(c.routes)) return null;
+    return c;
+  } catch {
+    return null;
+  }
+}
+
+function writeFeedCache(c: FeedCache) {
+  try { sessionStorage.setItem(FEED_CACHE_KEY, JSON.stringify(c)); } catch { /* quota / private mode */ }
+}
+
+/** Positions within ~1 km are the same place: no refetch, no lost list. */
+const samePlace = (a: { lat: number; lng: number } | null, b: { lat: number; lng: number }) =>
+  !!a && Math.abs(a.lat - b.lat) < 0.01 && Math.abs(a.lng - b.lng) < 0.01;
 
 const selectStyle = {
   background: "var(--bg-card)",
@@ -203,29 +266,79 @@ function AnswerMachine({ onBrowseNearby }: { onBrowseNearby: () => void }) {
 function HomeContent() {
   const { user, loading: authLoading, authError } = useAuth();
   const searchParams = useSearchParams();
-  const router = useRouter();
+  const searchKey = searchParams.toString();
 
-  const [filters, setFilters] = useState<FilterState>(() => {
-    return filtersFromParams(searchParams) ?? filtersFromStorage() ?? DEFAULT_FILTERS;
-  });
+  const [filters, setFiltersState] = useState<FilterState>(() => filtersFromParams(searchParams));
+  // Back from a route page: the list the rider left, for this exact query.
+  const [restored] = useState(() => readFeedCache(filtersKey(filtersFromParams(searchParams))));
 
-  const [routes, setRoutes] = useState<Route[]>([]);
+  const [routes, setRoutes] = useState<Route[]>(() => restored?.routes ?? []);
   const [countries, setCountries] = useState<string[]>([]);
-  const [cities, setCities] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [regions, setRegions] = useState<string[]>([]);
+  const [loading, setLoading] = useState(!restored);
   const [fetchError, setFetchError] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(false);
-  const [page, setPage] = useState(1);
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [hasMore, setHasMore] = useState(restored?.hasMore ?? false);
+  const [page, setPage] = useState(restored?.page ?? 1);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(restored?.userLocation ?? null);
   const [locationDenied, setLocationDenied] = useState(false);
   const [avgSpeedKmh, setAvgSpeedKmh] = useState(DEFAULT_SPEED_KMH);
+  // A returning rider (signed in on this device before) most likely IS
+  // signed in: while auth resolves they see the answer machine; anyone else
+  // sees a neutral block — never the marketing hero flashed at a member, nor
+  // the member card flashed at a newcomer.
+  const [likelyMember] = useState(() => {
+    try { return !!localStorage.getItem("loops:lastSignIn"); } catch { return false; }
+  });
+
+  // ── Filters ⇄ URL ──────────────────────────────────────────────────────
+  // The latest filters for handlers, and the query string we last wrote, so
+  // a URL change we did not make (Back, the logo, a link) re-reads the URL.
+  const filtersRef = useRef(filters);
+  const writtenKeyRef = useRef(filtersKey(filters));
+  useEffect(() => { filtersRef.current = filters; }, [filters]);
+
+  useEffect(() => {
+    const fromUrl = filtersFromParams(new URLSearchParams(searchKey));
+    const key = filtersKey(fromUrl);
+    if (key === writtenKeyRef.current) return; // our own write
+    writtenKeyRef.current = key;
+    filtersRef.current = fromUrl;
+    setFiltersState(fromUrl);
+  }, [searchKey]);
+
+  // Old builds kept filters in localStorage and re-applied them forever.
+  useEffect(() => {
+    try { localStorage.removeItem(LEGACY_STORAGE_KEY); } catch { /* noop */ }
+  }, []);
+
+  /**
+   * Change the filters and the URL together. Discrete taps (tabs, pills,
+   * selects, Clear) push, so Back undoes the last one; search keystrokes
+   * replace. The native History API keeps Next's router in step without a
+   * server round trip.
+   */
+  const applyFilters = useCallback((update: (f: FilterState) => FilterState, mode: "push" | "replace" = "push") => {
+    const next = update(filtersRef.current);
+    const key = filtersKey(next);
+    if (key === filtersKey(filtersRef.current)) return;
+    filtersRef.current = next;
+    writtenKeyRef.current = key;
+    setFiltersState(next);
+    const url = key ? `/?${key}` : "/";
+    if (url !== window.location.pathname + window.location.search) {
+      if (mode === "push") window.history.pushState(null, "", url);
+      else window.history.replaceState(null, "", url);
+    }
+  }, []);
 
   // Never prompt on load: use the position only if already allowed (or
   // cached); otherwise the heading offers "Use my location".
   useEffect(() => {
     let cancelled = false;
-    locationIfAllowed().then((p) => { if (!cancelled && p) setUserLocation(p); });
+    locationIfAllowed().then((p) => {
+      if (!cancelled && p) setUserLocation((prev) => (samePlace(prev, p) ? prev : p));
+    });
     return () => { cancelled = true; };
   }, []);
   const [locationBlocked, setLocationBlocked] = useState(false);
@@ -235,29 +348,22 @@ function HomeContent() {
     setLocating(true);
     const p = await pending;
     setLocating(false);
-    if (p) { setUserLocation(p); setLocationBlocked(false); }
+    if (p) { setUserLocation((prev) => (samePlace(prev, p) ? prev : p)); setLocationBlocked(false); }
     else { setLocationDenied(true); setLocationBlocked(true); }
   };
-
-  // Persist filters to localStorage and URL
-  useEffect(() => {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(filters)); } catch { /* noop */ }
-    const params = filtersToParams(filters);
-    const paramStr = params.toString();
-    const currentStr = new URLSearchParams(window.location.search).toString();
-    if (paramStr !== currentStr) {
-      router.replace(paramStr ? `/?${paramStr}` : "/", { scroll: false });
-    }
-  }, [filters, router]);
 
   const hasActiveFilters =
     filters.duration !== null ||
     filters.discipline !== "" ||
     filters.country !== "" ||
-    filters.city !== "" ||
+    filters.region !== "" ||
     filters.search !== "";
 
   const isSearching = filters.search !== "";
+  // "Nearest" needs a position: without one (a shared link, an expired
+  // location cache) the feed is the default order and says so.
+  const nearbyWithoutLocation = filters.sort === "nearby" && !userLocation;
+  const effectiveFilterSort = nearbyWithoutLocation ? "" : filters.sort;
 
   // Fetch countries on mount
   useEffect(() => {
@@ -267,28 +373,47 @@ function HomeContent() {
       .catch(() => {});
   }, []);
 
-  // Fetch cities when country changes
+  // Fetch regions when country changes (a slow reply for the previous
+  // country is dropped).
   useEffect(() => {
     if (!filters.country) {
-      setCities([]);
+      setRegions([]);
       return;
     }
+    let cancelled = false;
     fetch(`/api/routes?regions=true&country=${encodeURIComponent(filters.country)}`)
       .then((r) => r.json())
-      .then((data) => setCities(Array.isArray(data) ? data : []))
+      .then((data) => { if (!cancelled) setRegions(Array.isArray(data) ? tidyRegions(data) : []); })
       .catch(() => {});
+    return () => { cancelled = true; };
   }, [filters.country]);
 
+  // Only the newest request may paint: an older reply (previous filter,
+  // previous page) arriving late is dropped, and the request itself aborted.
+  const requestSeq = useRef(0);
+  const inFlight = useRef<AbortController | null>(null);
+
   const fetchRoutes = useCallback(async (pageNum = 1, append = false, fallbackSort?: string) => {
+    const seq = ++requestSeq.current;
+    inFlight.current?.abort();
+    const controller = new AbortController();
+    inFlight.current = controller;
+
     const params = new URLSearchParams();
     if (filters.discipline) params.set("discipline", filters.discipline);
     if (filters.country) params.set("country", filters.country);
-    if (filters.city) params.set("county", filters.city);
+    if (filters.region) {
+      params.set("region", filters.region);
+      // The routes API's text search matches r.region (case-insensitive),
+      // so the region filter works before the API reads ?region= itself.
+      // (?county= matched nothing: the options are regions.)
+      if (!filters.search) params.set("search", filters.region);
+    }
     if (filters.duration) params.set("duration", filters.duration);
     if (filters.search) params.set("search", filters.search);
 
     // Use fallback sort if provided, otherwise use filter sort
-    const effectiveSort = fallbackSort || filters.sort;
+    const effectiveSort = fallbackSort || effectiveFilterSort;
     if (effectiveSort) params.set("sort", effectiveSort);
 
     if (userLocation) {
@@ -304,14 +429,15 @@ function HomeContent() {
 
     setFetchError(false);
     try {
-      const res = await fetch(`/api/routes?${params}`);
+      const res = await fetch(`/api/routes?${params}`, { signal: controller.signal });
       if (!res.ok) throw new Error(`routes API ${res.status}`);
       const json = await res.json();
+      if (seq !== requestSeq.current) return; // a newer request owns the list
       const rawRoutes = Array.isArray(json.data) ? json.data : Array.isArray(json) ? json : [];
       const newRoutes: Route[] = rawRoutes.map(normalizeRoute);
 
       // If no routes found with default sort and user has location, fall back to top rated
-      if (newRoutes.length === 0 && pageNum === 1 && !append && !fallbackSort && !filters.sort && userLocation) {
+      if (newRoutes.length === 0 && pageNum === 1 && !append && !fallbackSort && !effectiveFilterSort && userLocation) {
         fetchRoutes(1, false, "newest");
         return;
       }
@@ -323,35 +449,82 @@ function HomeContent() {
       setLoading(false);
       setLoadingMore(false);
     } catch {
+      if (seq !== requestSeq.current) return; // aborted for a newer request
       setFetchError(true);
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [filters, userLocation]);
+  }, [filters, userLocation, effectiveFilterSort]);
+
+  // The restored list already answers this query: no refetch (which would
+  // cut it back to page 1) until the filters or position change.
+  const restoredFetchKey = useRef<string | null>(
+    restored ? JSON.stringify([filtersKey(filters), restored.userLocation]) : null,
+  );
 
   useEffect(() => {
+    const key = JSON.stringify([filtersKey(filters), userLocation]);
+    if (restoredFetchKey.current === key) return;
+    restoredFetchKey.current = null;
     setLoading(true);
     setPage(1);
     fetchRoutes(1, false);
-  }, [fetchRoutes]);
+  }, [fetchRoutes, filters, userLocation]);
+
+  // Back to where the rider was in the restored list.
+  useEffect(() => {
+    arrivedByHistory = false;
+    if (!restored) return;
+    const y = restored.scrollY;
+    const raf = requestAnimationFrame(() => window.scrollTo(0, y));
+    const t = setTimeout(() => { if (Math.abs(window.scrollY - y) > 4) window.scrollTo(0, y); }, 150);
+    return () => { cancelAnimationFrame(raf); clearTimeout(t); };
+  }, [restored]);
+
+  // Leaving through a route card: remember this list and the scroll.
+  const rememberFeed = (e: React.MouseEvent) => {
+    if (!(e.target as Element | null)?.closest?.('a[href^="/routes/"]')) return;
+    writeFeedCache({
+      key: filtersKey(filters),
+      routes,
+      page,
+      hasMore,
+      scrollY: window.scrollY,
+      userLocation,
+      at: Date.now(),
+    });
+  };
 
   const loadMore = () => {
     setLoadingMore(true);
     fetchRoutes(page + 1, true);
   };
 
-  const clearAllFilters = () => setFilters(DEFAULT_FILTERS);
+  const clearAllFilters = () => applyFilters(() => DEFAULT_FILTERS);
 
   const setSearch = useCallback((value: string) => {
-    setFilters((f) => (f.search === value ? f : { ...f, search: value }));
-  }, []);
+    // The first search is a step Back can undo; refining it is not.
+    applyFilters((f) => (f.search === value ? f : { ...f, search: value }), filtersRef.current.search ? "replace" : "push");
+  }, [applyFilters]);
 
+  // Land the feed's search box just below the sticky header (the header
+  // sits above the anchor for signed-in riders and would cover it).
   const scrollToContent = () => {
     const el = document.getElementById("scroll-anchor");
-    if (el) {
-      const top = el.getBoundingClientRect().top + window.scrollY;
-      window.scrollTo({ top, behavior: "smooth" });
-    }
+    if (!el) return;
+    const header = document.querySelector("header");
+    const headerAbove = header && header.getBoundingClientRect().top <= el.getBoundingClientRect().top;
+    const offset = headerAbove ? header.offsetHeight : 0;
+    const top = el.getBoundingClientRect().top + window.scrollY - offset;
+    window.scrollTo({ top, behavior: "smooth" });
+  };
+
+  // "Browse nearby" means nearby: ask for the position (from the tap, iOS)
+  // when there is none, then bring the feed into view.
+  const browseNearby = () => {
+    if (!userLocation) void askLocation();
+    if (filters.sort && filters.sort !== "nearby") applyFilters((f) => ({ ...f, sort: "" }));
+    scrollToContent();
   };
 
   // The heading above the feed answers "what am I looking at?" honestly.
@@ -361,40 +534,46 @@ function HomeContent() {
     if (filters.sort === "newest") return "Newest";
     if (filters.sort === "distance") return "Longest";
     if (filters.sort === "rating") return "Top rated";
-    if (filters.sort === "nearby") return "Nearest to you";
+    if (filters.sort === "nearby" && userLocation) return "Nearest to you";
     // A country/region/duration filter replaces the default ordering story.
-    const scope = [filters.city, filters.country, filters.duration ? `${filters.duration} loops` : ""].filter(Boolean).join(" · ");
+    const scope = [filters.region, filters.country, filters.duration ? `${filters.duration} loops` : ""].filter(Boolean).join(" · ");
     if (scope) return scope;
     if (userLocation) return "Near you";
     return `${DEFAULT_COUNTRY} first, then the best of the rest`;
-  }, [filters.sort, filters.search, filters.city, filters.country, filters.duration, isSearching, userLocation]);
+  }, [filters.sort, filters.search, filters.region, filters.country, filters.duration, isSearching, userLocation]);
 
   // Honest sub-label: explain why this ordering when there's no location.
   const sortSubLabel = useMemo(() => {
     if (isSearching) return null;
-    if (filters.sort) return null;
-    if (filters.city || filters.country || filters.duration) return null;
-    if (userLocation) return "Closest rideable loops first";
+    if (effectiveFilterSort) return null;
+    if (filters.region || filters.country || filters.duration) return null;
+    // Nearby loops lead; further out the order is by rating — so not
+    // "closest first" all the way down.
+    if (userLocation) return "Nearby loops first";
     if (locationDenied) return `Location off — showing ${DEFAULT_COUNTRY} first`;
+    if (nearbyWithoutLocation) return "Share your location to sort by distance";
     return null;
-  }, [filters.sort, filters.city, filters.country, filters.duration, isSearching, userLocation, locationDenied]);
+  }, [effectiveFilterSort, nearbyWithoutLocation, filters.region, filters.country, filters.duration, isSearching, userLocation, locationDenied]);
 
   const sortSelect = (
     <select
       value={filters.sort}
-      onChange={(e) => setFilters((f) => ({ ...f, sort: e.target.value }))}
+      onChange={(e) => applyFilters((f) => ({ ...f, sort: e.target.value }))}
+      aria-label="Sort by"
       className="cursor-pointer"
       style={selectStyle}
     >
       <option value="">Default</option>
-      {userLocation && <option value="nearby">Nearest</option>}
+      {(userLocation || filters.sort === "nearby") && <option value="nearby">Nearest</option>}
       <option value="distance">Longest</option>
       <option value="newest">Newest</option>
     </select>
   );
 
   // Empty state that helps: search-aware, with concrete next steps. Never a
-  // dead end (north star: always hand the rider a way forward).
+  // dead end (north star: always hand the rider a way forward). A search
+  // that names a destination guide ("Wicklow") leads to the guide.
+  const guide = isSearching ? guideForSearch(filters.search) : null;
   const emptyState = (
     <div className="text-center py-16">
       <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: "var(--bg-card)" }}>
@@ -408,6 +587,17 @@ function HomeContent() {
       <p className="text-xs" style={{ color: "var(--text-muted)" }}>
         {isSearching ? "Try a town, region, or route name — or a different spelling." : "Try broadening your search."}
       </p>
+      {guide && (
+        <p className="text-sm mt-3">
+          <Link
+            href={`/cycling/${guide.slug}`}
+            className="font-bold underline min-h-[44px] inline-flex items-center px-2"
+            style={{ color: "var(--accent)" }}
+          >
+            See the {guide.name} guide →
+          </Link>
+        </p>
+      )}
       {filters.duration && (
         <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
           Try {filters.duration === "1h" ? "2h" : filters.duration === "4h+" ? "3h" : filters.duration === "2h" ? "1h or 3h" : "2h or 4h+"} instead
@@ -488,14 +678,24 @@ function HomeContent() {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)" }}>
-      {user || authLoading || authError ? (
-        // Logged in, auth still resolving, OR a transient auth failure: show
-        // the answer machine. We only fall back to the marketing hero on a
-        // CONFIRMED logged-out state, never on a loading window or a blip —
-        // otherwise a signed-in rider gets flashed the paywall.
+      {authLoading && !likelyMember ? (
+        // Auth still resolving for someone this device has not seen sign
+        // in: a neutral block the size of the hero — neither the member card
+        // nor the marketing hero until we know which is true.
+        <>
+          <div aria-hidden="true" className="min-h-[60vh] md:min-h-[85vh]" />
+          <div id="scroll-anchor" />
+          <AppHeader />
+        </>
+      ) : user || authLoading || authError ? (
+        // Logged in, auth still resolving for a returning rider, OR a
+        // transient auth failure: show the answer machine. We only fall back
+        // to the marketing hero on a CONFIRMED logged-out state, never on a
+        // loading window or a blip — otherwise a signed-in rider gets flashed
+        // the paywall.
         <>
           <AppHeader />
-          <AnswerMachine onBrowseNearby={scrollToContent} />
+          <AnswerMachine onBrowseNearby={browseNearby} />
           {/* Scroll anchor — "Browse nearby" lands here */}
           <div id="scroll-anchor" />
         </>
@@ -525,7 +725,7 @@ function HomeContent() {
         <div className="py-6">
           <DurationStrip
             selected={filters.duration}
-            onSelect={(d: string | null) => setFilters((f) => ({ ...f, duration: d }))}
+            onSelect={(d: string | null) => applyFilters((f) => ({ ...f, duration: d }))}
             avgSpeedKmh={avgSpeedKmh}
           />
         </div>
@@ -534,30 +734,36 @@ function HomeContent() {
         <div className="flex flex-wrap items-center gap-2 pb-4">
           <DisciplineTabs
             selected={filters.discipline}
-            onSelect={(d: string) => setFilters((f) => ({ ...f, discipline: d }))}
+            onSelect={(d: string) => applyFilters((f) => ({ ...f, discipline: d }))}
           />
 
           <select
             value={filters.country}
-            onChange={(e) => setFilters((f) => ({ ...f, country: e.target.value, city: "" }))}
+            onChange={(e) => applyFilters((f) => ({ ...f, country: e.target.value, region: "" }))}
+            aria-label="Country"
             className="cursor-pointer"
             style={selectStyle}
           >
-            <option value="">All Countries</option>
+            <option value="">All countries</option>
             {countries.map((c) => (
               <option key={c} value={c}>{c}</option>
             ))}
           </select>
 
           <select
-            value={filters.city}
-            onChange={(e) => setFilters((f) => ({ ...f, city: e.target.value }))}
+            value={filters.region}
+            onChange={(e) => applyFilters((f) => ({ ...f, region: e.target.value }))}
             disabled={!filters.country}
+            aria-label="Region"
             className="cursor-pointer disabled:opacity-50"
             style={selectStyle}
           >
             <option value="">All regions</option>
-            {cities.map((c) => (
+            {/* A region from a shared link shows even before the list loads. */}
+            {filters.region && !regions.includes(filters.region) && (
+              <option value={filters.region}>{filters.region}</option>
+            )}
+            {regions.map((c) => (
               <option key={c} value={c}>{c}</option>
             ))}
           </select>
@@ -565,23 +771,26 @@ function HomeContent() {
           {sortSelect}
 
           {hasActiveFilters && (
-            <button onClick={clearAllFilters} className="text-xs font-bold hover:opacity-80" style={{ color: "var(--accent)" }}>
+            <button onClick={clearAllFilters} className="text-xs font-bold hover:opacity-80 min-h-[44px] inline-flex items-center px-2" style={{ color: "var(--accent)" }}>
               Clear all
             </button>
           )}
         </div>
 
         {/* Feed heading — answers "what am I looking at?" honestly. */}
-        <div className="flex items-baseline gap-2 pb-3">
-          <h2 className="text-sm font-bold" style={{ color: "var(--text)" }}>{sortLabel}</h2>
-          <span className="text-xs" style={{ color: "var(--text-muted)", opacity: 0.5 }}>&mdash;</span>
+        {/* On a phone the heading takes its own line; the count, the note and
+            "Use my location" wrap below it (not three ragged columns). */}
+        <div className="flex flex-wrap items-baseline gap-x-2 pb-3">
+          <h2 className="text-sm font-bold basis-full sm:basis-auto" style={{ color: "var(--text)" }}>{sortLabel}</h2>
+          <span className="text-xs hidden sm:inline" style={{ color: "var(--text-muted)", opacity: 0.5 }}>&mdash;</span>
           <span className="text-xs font-bold" style={{ color: "var(--text-muted)" }}>
-            {loading ? "..." : `${routes.length} loop${routes.length !== 1 ? "s" : ""}`}
+            {/* Loaded, not the total: more follow while hasMore. */}
+            {loading ? "…" : hasMore ? `Showing ${routes.length} loops` : `${routes.length} loop${routes.length !== 1 ? "s" : ""}`}
           </span>
           {sortSubLabel && !loading && (
             <span className="text-xs" style={{ color: "var(--text-muted)" }}>· {sortSubLabel}</span>
           )}
-          {!userLocation && !isSearching && !filters.sort && !filters.city && !filters.country && !filters.duration && (
+          {!userLocation && !isSearching && !effectiveFilterSort && !filters.region && !filters.country && !filters.duration && (
             <button
               onClick={askLocation}
               disabled={locating}
@@ -599,7 +808,7 @@ function HomeContent() {
         )}
 
         {/* Route Cards */}
-        <div className="space-y-2">
+        <div className="space-y-2" onClickCapture={rememberFeed}>
           {loading ? (
             [...Array(6)].map((_, i) => <SkeletonCard key={i} />)
           ) : fetchError ? (
@@ -615,9 +824,25 @@ function HomeContent() {
   );
 }
 
+/**
+ * What paints before the feed hydrates (useSearchParams renders it on the
+ * client): the page's shape — a hero-sized block and card skeletons — so
+ * the SEO block below is not the first thing a visitor sees.
+ */
+function HomeFallback() {
+  return (
+    <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)" }}>
+      <div aria-hidden="true" className="min-h-[60vh] md:min-h-[85vh]" />
+      <main className="max-w-3xl mx-auto w-full px-4 md:px-6 pb-20 pt-6 space-y-2" aria-busy="true">
+        {[...Array(3)].map((_, i) => <SkeletonCard key={i} />)}
+      </main>
+    </div>
+  );
+}
+
 export default function HomeClient() {
   return (
-    <Suspense>
+    <Suspense fallback={<HomeFallback />}>
       <HomeContent />
     </Suspense>
   );

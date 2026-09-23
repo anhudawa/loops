@@ -1,37 +1,27 @@
 import type { Metadata } from "next";
+import { DEFAULT_OG_IMAGE, pageOpenGraph, siteUrl } from "@/lib/site-meta";
+
+const TAGLINE = "Routes and GPX are free forever. Pro (coming) adds training intelligence.";
 
 export const metadata: Metadata = {
   title: "Sign In — LOOPS",
-  description:
-    "Discover real cycling routes shared by real riders. Free GPX downloads, no paywall, no subscription. Browse gravel, road & MTB loops worldwide — human-curated, community-rated, open to everyone.",
-  alternates: {
-    canonical: "https://loops.ie/login",
-  },
+  description: `Sign in to LOOPS: real cycling routes from riders who know the roads. ${TAGLINE} Gravel, road & MTB loops, ready for Strava, Komoot, Wahoo & Garmin.`,
+  alternates: { canonical: siteUrl("/login") },
   robots: {
     index: true,
     follow: true,
   },
-  openGraph: {
+  openGraph: pageOpenGraph({
+    path: "/login",
     title: "LOOPS — Routes Worth Riding",
-    description:
-      "Real routes from real riders. Free GPX downloads, community ratings, no paywall, no lock-in. Works with Strava, Komoot, Wahoo & Garmin.",
-    siteName: "LOOPS",
-    type: "website",
-    images: [
-      {
-        url: "/api/og",
-        width: 1200,
-        height: 630,
-        alt: "LOOPS — Discover free cycling routes worldwide",
-      },
-    ],
-  },
+    description: `Real routes from real riders. ${TAGLINE} Works with Strava, Komoot, Wahoo & Garmin.`,
+    images: [{ ...DEFAULT_OG_IMAGE, alt: "LOOPS — Discover free cycling routes worldwide" }],
+  }),
   twitter: {
     card: "summary_large_image",
     title: "LOOPS — Routes Worth Riding",
-    description:
-      "Real routes from real riders. Free GPX downloads, community ratings, no paywall. Works with Strava, Komoot, Wahoo & Garmin.",
-    images: ["/api/og"],
+    description: `Real routes from real riders. ${TAGLINE}`,
+    images: [DEFAULT_OG_IMAGE.url],
   },
 };
 

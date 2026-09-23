@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import AppHeader from "@/components/AppHeader";
+import { DEFAULT_OG_IMAGE, pageOpenGraph, siteUrl } from "@/lib/site-meta";
+
+// The one line of truth on price — the same sentence on every page.
+const FREE_LINE = "Routes and GPX are free forever. Pro (coming) adds training intelligence.";
 
 export const metadata: Metadata = {
   title: "Pricing — Free Forever, Plus Pro | LOOPS",
-  description:
-    "GPX import/export, bulk import, free GPX to your Garmin/Wahoo/Hammerhead and your saved routes are free forever on LOOPS. LOOPS Pro adds training intelligence for €39/yr. Founding Rider: €49 for Pro for life.",
+  description: `${FREE_LINE} GPX import/export, bulk import and your saved routes cost nothing. LOOPS Pro will be €39/yr; Founding Rider is €49 for Pro for life.`,
   keywords: [
     "LOOPS pricing",
     "free cycling route planner",
@@ -14,19 +17,17 @@ export const metadata: Metadata = {
     "LOOPS Pro",
     "Founding Rider",
   ],
-  alternates: { canonical: "/pricing" },
-  openGraph: {
+  alternates: { canonical: siteUrl("/pricing") },
+  openGraph: pageOpenGraph({
+    path: "/pricing",
     title: "Pricing — Free Forever, Plus Pro | LOOPS",
-    description:
-      "Everything Komoot paywalled is free forever on LOOPS. Pro adds AI generation, session-aware workouts and wind planning for €39/yr.",
-    url: "https://www.loops.ie/pricing",
-    type: "website",
-  },
+    description: `${FREE_LINE} Everything Komoot paywalled stays free on LOOPS.`,
+  }),
   twitter: {
     card: "summary_large_image",
     title: "Pricing — Free Forever, Plus Pro | LOOPS",
-    description:
-      "GPX import/export, bulk import, free GPX to your Garmin/Wahoo/Hammerhead, and your saved routes — free forever. Pro adds training intelligence for €39/yr.",
+    description: `${FREE_LINE} Pro will be €39/yr.`,
+    images: [DEFAULT_OG_IMAGE.url],
   },
 };
 
@@ -37,7 +38,7 @@ const FREE_FEATURES = [
   "All your saved routes",
   "Draw-on-map route planner",
   "Browse all destinations",
-  "3 AI route generations per week",
+  "AI route generation (3 a week once Pro launches)",
 ];
 
 // Free, but not shipped yet — shown honestly as "coming", never as a live
@@ -91,6 +92,9 @@ export default function PricingPage() {
             <h1 className="text-3xl md:text-5xl font-black tracking-tight leading-[1.05] mb-4" style={{ color: "var(--text)" }}>
               Your routes are free. Forever.
             </h1>
+            <p className="text-base md:text-lg font-semibold mb-3" style={{ color: "var(--text)" }}>
+              {FREE_LINE}
+            </p>
             <p className="text-base md:text-lg leading-relaxed max-w-2xl mx-auto" style={{ color: "var(--text-secondary)" }}>
               Everything Komoot put behind a paywall — GPX import and export, bulk import, free GPX
               to your device, your saved routes — is free on LOOPS and always will be. We charge for
@@ -147,7 +151,7 @@ export default function PricingPage() {
                 className="absolute -top-2.5 right-5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full"
                 style={{ background: "var(--accent)", color: "var(--bg)" }}
               >
-                At launch
+                Coming
               </span>
               <div className="mb-4">
                 <h2 className="text-lg font-black uppercase tracking-wide" style={{ color: "var(--text)" }}>
@@ -175,7 +179,7 @@ export default function PricingPage() {
                 style={{ background: "var(--surface)", color: "var(--text-muted)", border: "1px solid var(--border)", cursor: "default" }}
                 aria-disabled="true"
               >
-                Available at launch
+                Coming soon
               </div>
             </div>
           </div>
@@ -191,7 +195,7 @@ export default function PricingPage() {
               <div className="min-w-0">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full" style={{ background: "var(--accent)", color: "var(--bg)" }}>
-                    Available now · capped at ~200
+                    Limited founding places
                   </span>
                 </div>
                 <h2 className="text-xl md:text-2xl font-black tracking-tight mb-2" style={{ color: "var(--text)" }}>
@@ -199,8 +203,8 @@ export default function PricingPage() {
                 </h2>
                 <p className="text-sm md:text-base leading-relaxed" style={{ color: "var(--text-secondary)" }}>
                   Pay once, get LOOPS Pro for life at the founding price, a founding badge, and a
-                  direct line to shape the product. No subscription, ever. We&apos;re taking the first
-                  riders by email while we finish checkout — send a note and we&apos;ll set you up.
+                  direct line to shape the product. No subscription, ever. Founding places are claimed
+                  by email for now — send a note and we&apos;ll set you up.
                 </p>
               </div>
               <a
@@ -211,8 +215,7 @@ export default function PricingPage() {
               </a>
             </div>
             <p className="text-xs mt-4" style={{ color: "var(--text-muted)" }}>
-              Founding Rider is informational for now — the button opens an email to Anthony. No
-              payment is taken on this page.
+              No payment is taken on this page. The button opens an email; we reply with the details.
             </p>
           </div>
         </section>

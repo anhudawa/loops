@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { DEFAULT_OG_IMAGE, pageOpenGraph, siteUrl } from "@/lib/site-meta";
 import { notFound } from "next/navigation";
 import { getDestinationBySlug, getAllDestinationSlugs } from "@/content/destinations";
 
@@ -22,18 +23,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title,
     description,
-    alternates: { canonical: `/cycling/${dest.slug}` },
-    openGraph: {
-      title,
-      description,
-      url: `https://www.loops.ie/cycling/${dest.slug}`,
-      type: "website",
-      siteName: "LOOPS",
-    },
+    alternates: { canonical: siteUrl(`/cycling/${dest.slug}`) },
+    openGraph: pageOpenGraph({ path: `/cycling/${dest.slug}`, title, description }),
     twitter: {
       card: "summary_large_image",
       title,
       description,
+      images: [DEFAULT_OG_IMAGE.url],
     },
   };
 }

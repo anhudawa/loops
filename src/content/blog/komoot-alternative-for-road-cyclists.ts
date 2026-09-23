@@ -63,7 +63,7 @@ export const komootAlternative: BlogPost = {
     {
       question: "Is LOOPS free?",
       answer:
-        "Yes — browsing routes, generating rides and downloading GPX files are free with a free account. There are no region unlocks and no premium tier for device files.",
+        "Routes and GPX are free forever. Pro (coming) adds training intelligence. Browsing routes and downloading GPX files need only a free account — no region unlocks and no premium tier for device files.",
     },
     {
       question: "Does LOOPS work with Garmin and Wahoo?",

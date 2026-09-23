@@ -24,9 +24,10 @@ export default async function HomeSeoContent() {
         Discover Cycling Routes Worldwide
       </h2>
       <p className="text-sm leading-relaxed mb-6" style={{ color: "var(--text-secondary)" }}>
-        LOOPS is a free cycling route discovery platform: a curated library of the world's best
+        LOOPS is a cycling route discovery platform: a curated library of the world's best
         cycling roads plus wind-aware route generation. Browse gravel, road, and MTB routes,
-        download free GPX files, and find your next ride.
+        download GPX files, and find your next ride. Routes and GPX are free forever. Pro
+        (coming) adds training intelligence.
         Works with Strava, Komoot, Wahoo, and Garmin.
       </p>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">

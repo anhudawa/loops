@@ -19,7 +19,8 @@ const outfit = Outfit({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.loops.ie"),
-  alternates: { canonical: "/" },
+  // No site-wide canonical: each page sets its own (a root canonical of "/"
+  // made every page without one point at the homepage).
   title: "LOOPS — Cycling Routes Worldwide | Free GPX Downloads",
   description: "Discover cycling routes worldwide. Free GPX downloads, community ratings, elevation profiles. Gravel, road & MTB routes from real riders.",
   keywords: ["cycling routes", "gravel cycling", "GPX", "bike routes", "MTB trails", "road cycling", "route sharing", "cycling community"],

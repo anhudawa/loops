@@ -1,13 +1,19 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import AppHeader from "@/components/AppHeader";
+import { pageMeta } from "@/lib/site-meta";
 import { destinations, LAUNCH_DESTINATION_SLUGS } from "@/content/destinations";
 
 export const metadata: Metadata = {
   title: "Cycling Destinations — Route Guides | LOOPS",
   description:
     "Complete cycling guides for the world's best riding destinations: Mallorca, Girona, Tenerife, the Algarve and more. Climbs, best months, bike hire and ready-to-ride routes.",
-  alternates: { canonical: "https://loops.ie/cycling" },
+  ...pageMeta({
+    path: "/cycling",
+    title: "Cycling Destinations — Route Guides | LOOPS",
+    description:
+      "Complete cycling guides for the world's best riding destinations: Mallorca, Girona, Tenerife, the Algarve and more.",
+  }),
 };
 
 export default function CyclingIndexPage() {

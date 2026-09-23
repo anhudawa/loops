@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { DEFAULT_OG_IMAGE, pageOpenGraph, siteUrl } from "@/lib/site-meta";
 import Link from "next/link";
 import AppHeader from "@/components/AppHeader";
 import JsonLd from "@/components/JsonLd";
@@ -16,19 +17,19 @@ export const metadata: Metadata = {
     "Komoot to Garmin sync free",
     "cycling route planner",
   ],
-  alternates: { canonical: "/switch" },
-  openGraph: {
+  alternates: { canonical: siteUrl("/switch") },
+  openGraph: pageOpenGraph({
+    path: "/switch",
     title: "Switching from Komoot? Your Routes Come With You",
     description:
       "GPX import & export free forever. Free GPX to your Garmin, Wahoo or Hammerhead. No region locks. Your routes stay yours. Here's how to move from Komoot to LOOPS.",
-    url: "https://www.loops.ie/switch",
-    type: "website",
-  },
+  }),
   twitter: {
     card: "summary_large_image",
     title: "Switching from Komoot? Your Routes Come With You",
     description:
       "GPX import & export free forever. Free GPX to your Garmin, Wahoo or Hammerhead. No region locks. Move your routes to LOOPS in minutes.",
+    images: [DEFAULT_OG_IMAGE.url],
   },
 };
 
@@ -173,8 +174,9 @@ export default function SwitchPage() {
               Our promise, in writing
             </h2>
             <p className="text-sm md:text-base leading-relaxed mb-6" style={{ color: "var(--text-secondary)" }}>
-              Everything Komoot put behind a paywall, we keep free forever. We charge for route
-              intelligence, never for access to your own routes.
+              Everything Komoot put behind a paywall, we keep free forever. Routes and GPX are free
+              forever. Pro (coming) adds training intelligence — never a charge for access to your
+              own routes.
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {PROMISES.map((p) => (

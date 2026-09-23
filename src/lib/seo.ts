@@ -41,13 +41,13 @@ export function generateRouteJsonLd(route: RouteJsonLdInput) {
     "@type": "ExerciseAction",
     name: route.name,
     description: route.description || `${route.discipline} route in ${route.region || route.county}, ${route.country}`,
-    url: `https://loops.ie/routes/${route.id}`,
+    url: `https://www.loops.ie/routes/${route.id}`,
     exerciseType: route.discipline.charAt(0).toUpperCase() + route.discipline.slice(1),
     distance: {
       "@type": "Distance",
       name: `${route.distance_km} km`,
     },
-    image: `https://loops.ie/api/og/${route.id}`,
+    image: `https://www.loops.ie/api/og/${route.id}`,
     location: {
       "@type": "Place",
       name: `${route.region || route.county}, ${route.country}`,
@@ -107,8 +107,8 @@ export function generateSportsActivityLocationJsonLd(route: SportsActivityLocati
     description:
       route.description ||
       `${route.distance_km}km ${route.discipline} cycling route in ${location}, ${route.country} with ${route.elevation_gain_m}m of climbing.`,
-    url: `https://loops.ie/routes/${route.id}`,
-    image: `https://loops.ie/api/og/${route.id}`,
+    url: `https://www.loops.ie/routes/${route.id}`,
+    image: `https://www.loops.ie/api/og/${route.id}`,
     sport: `${cap(route.discipline)} cycling`,
     geo: {
       "@type": "GeoCoordinates",
@@ -217,7 +217,7 @@ export function generateOrganizationJsonLd() {
     "@context": "https://schema.org",
     "@type": "Organization",
     name: "Loops.ie",
-    url: "https://loops.ie",
+    url: "https://www.loops.ie",
     description: "Discover cycling routes across Ireland",
   };
 }
@@ -227,13 +227,13 @@ export function generateWebSiteJsonLd() {
     "@context": "https://schema.org",
     "@type": "WebSite",
     name: "LOOPS",
-    url: "https://loops.ie",
+    url: "https://www.loops.ie",
     description: "Find and share the best cycling routes worldwide",
     potentialAction: {
       "@type": "SearchAction",
       target: {
         "@type": "EntryPoint",
-        urlTemplate: "https://loops.ie/?q={search_term_string}",
+        urlTemplate: "https://www.loops.ie/?q={search_term_string}",
       },
       "query-input": "required name=search_term_string",
     },
@@ -298,7 +298,7 @@ export function generateItemListJsonLd(name: string, routes: ItemListRoute[]) {
       "@type": "ListItem",
       position: i + 1,
       name: route.name,
-      url: `https://loops.ie/routes/${route.id}`,
+      url: `https://www.loops.ie/routes/${route.id}`,
     })),
   };
 }
@@ -318,13 +318,13 @@ export function generateCollectionJsonLd(collection: CollectionJsonLdInput) {
     "@type": "ItemList",
     name: collection.name,
     description: collection.description || `Curated cycling routes${collection.location ? ` in ${collection.location}` : ""}`,
-    url: `https://loops.ie/collections/${collection.slug}`,
+    url: `https://www.loops.ie/collections/${collection.slug}`,
     numberOfItems: collection.routes.length,
     itemListElement: collection.routes.map((route, index) => ({
       "@type": "ListItem",
       position: index + 1,
       name: route.name,
-      url: `https://loops.ie/routes/${route.id}`,
+      url: `https://www.loops.ie/routes/${route.id}`,
     })),
   };
 }

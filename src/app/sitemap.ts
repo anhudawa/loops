@@ -21,33 +21,33 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }
 
   const staticPages: MetadataRoute.Sitemap = [
-    { url: "https://loops.ie", changeFrequency: "weekly", priority: 1.0 },
-    { url: "https://loops.ie/switch", changeFrequency: "monthly", priority: 0.9 },
-    { url: "https://loops.ie/pricing", changeFrequency: "monthly", priority: 0.8 },
-    { url: "https://loops.ie/collections", changeFrequency: "weekly", priority: 0.9 },
-    { url: "https://loops.ie/blog", changeFrequency: "weekly", priority: 0.8 },
-    { url: "https://loops.ie/login", changeFrequency: "monthly", priority: 0.3 },
-    { url: "https://loops.ie/about", changeFrequency: "monthly", priority: 0.2 },
-    { url: "https://loops.ie/privacy", changeFrequency: "monthly", priority: 0.2 },
-    { url: "https://loops.ie/terms", changeFrequency: "monthly", priority: 0.2 },
+    { url: "https://www.loops.ie", changeFrequency: "weekly", priority: 1.0 },
+    { url: "https://www.loops.ie/switch", changeFrequency: "monthly", priority: 0.9 },
+    { url: "https://www.loops.ie/pricing", changeFrequency: "monthly", priority: 0.8 },
+    { url: "https://www.loops.ie/collections", changeFrequency: "weekly", priority: 0.9 },
+    { url: "https://www.loops.ie/blog", changeFrequency: "weekly", priority: 0.8 },
+    { url: "https://www.loops.ie/login", changeFrequency: "monthly", priority: 0.3 },
+    { url: "https://www.loops.ie/about", changeFrequency: "monthly", priority: 0.2 },
+    { url: "https://www.loops.ie/privacy", changeFrequency: "monthly", priority: 0.2 },
+    { url: "https://www.loops.ie/terms", changeFrequency: "monthly", priority: 0.2 },
   ];
 
   const collectionPages: MetadataRoute.Sitemap = collections.map((c) => ({
-    url: `https://loops.ie/collections/${c.slug}`,
+    url: `https://www.loops.ie/collections/${c.slug}`,
     lastModified: new Date(c.updated_at),
     changeFrequency: "weekly",
     priority: 0.85,
   }));
 
   const routePages: MetadataRoute.Sitemap = routes.map((route) => ({
-    url: `https://loops.ie/routes/${route.id}`,
+    url: `https://www.loops.ie/routes/${route.id}`,
     lastModified: new Date(route.created_at),
     changeFrequency: "weekly",
     priority: 0.8,
   }));
 
   const countryPages: MetadataRoute.Sitemap = countries.map((country) => ({
-    url: `https://loops.ie/routes/country/${slugify(country)}`,
+    url: `https://www.loops.ie/routes/country/${slugify(country)}`,
     changeFrequency: "weekly",
     priority: 0.7,
   }));
@@ -63,7 +63,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }
     for (const region of regions) {
       regionPages.push({
-        url: `https://loops.ie/routes/country/${slugify(country)}/${slugify(region)}`,
+        url: `https://www.loops.ie/routes/country/${slugify(country)}/${slugify(region)}`,
         changeFrequency: "weekly",
         priority: 0.6,
       });
@@ -71,14 +71,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }
 
   const blogPages: MetadataRoute.Sitemap = getAllPosts().map((post) => ({
-    url: `https://loops.ie/blog/${post.slug}`,
+    url: `https://www.loops.ie/blog/${post.slug}`,
     lastModified: new Date(post.updated ?? post.date),
     changeFrequency: "monthly",
     priority: 0.7,
   }));
 
   const destinationPages: MetadataRoute.Sitemap = getAllDestinationSlugs().map((slug) => ({
-    url: `https://loops.ie/cycling/${slug}`,
+    url: `https://www.loops.ie/cycling/${slug}`,
     changeFrequency: "monthly",
     priority: 0.8,
   }));

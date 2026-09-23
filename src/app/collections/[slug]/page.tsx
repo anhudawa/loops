@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { DEFAULT_OG_IMAGE, pageOpenGraph, siteUrl } from "@/lib/site-meta";
 import { routeCard } from "@/lib/public-route";
 import { notFound } from "next/navigation";
 import { getCollectionBySlug } from "@/lib/db";
@@ -30,14 +31,20 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title,
     description,
-    alternates: { canonical: `/collections/${slug}` },
-    openGraph: {
+    alternates: { canonical: siteUrl(`/collections/${slug}`) },
+    openGraph: pageOpenGraph({
+      path: `/collections/${slug}`,
       title,
       description,
-      url: `https://www.loops.ie/collections/${slug}`,
-      ...(collection.cover_image_url && {
-        images: [{ url: collection.cover_image_url, width: 1200, height: 630, alt: collection.name }],
-      }),
+      images: collection.cover_image_url
+        ? [{ url: collection.cover_image_url, width: 1200, height: 630, alt: collection.name }]
+        : undefined,
+    }),
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [collection.cover_image_url ?? DEFAULT_OG_IMAGE.url],
     },
   };
 }
@@ -75,8 +82,8 @@ export default async function CollectionPage({ params }: Props) {
   const locationText = [collection.location, collection.country].filter(Boolean).join(", ");
 
   const breadcrumbJsonLd = generateBreadcrumbJsonLd([
-    { name: "Home", url: "https://loops.ie" },
-    { name: "Collections", url: "https://loops.ie/collections" },
+    { name: "Home", url: siteUrl("/") },
+    { name: "Collections", url: siteUrl("/collections") },
     { name: collection.name },
   ]);
 

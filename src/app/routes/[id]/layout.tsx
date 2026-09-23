@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { getRoute, getRouteRating } from "@/lib/db";
 import {
   generateRouteJsonLd,
@@ -41,6 +42,7 @@ export async function generateMetadata({
     openGraph: {
       title: `${route.name} — ${route.distance_km}km ${route.discipline} route in ${location}, ${route.country}`,
       description,
+      url: `https://www.loops.ie/routes/${id}`,
       siteName: "LOOPS",
       type: "article",
       locale: "en_IE",
@@ -74,7 +76,10 @@ export default async function RouteLayout({
     return children;
   }
 
-  if (!route) return children;
+  // The route definitively does not exist (the DB answered, no row): a real
+  // 404, not a 200 "Route not found" page. A DB hiccup (catch above) still
+  // renders the shell, fail-soft.
+  if (!route) notFound();
 
   const routeJsonLd = generateRouteJsonLd({
     id: route.id,
@@ -93,13 +98,13 @@ export default async function RouteLayout({
   });
 
   const breadcrumbItems: { name: string; url?: string }[] = [
-    { name: "LOOPS", url: "https://loops.ie" },
-    { name: route.country, url: `https://loops.ie/routes/country/${slugify(route.country)}` },
+    { name: "LOOPS", url: "https://www.loops.ie" },
+    { name: route.country, url: `https://www.loops.ie/routes/country/${slugify(route.country)}` },
   ];
   if (route.region) {
     breadcrumbItems.push({
       name: route.region,
-      url: `https://loops.ie/routes/country/${slugify(route.country)}/${slugify(route.region)}`,
+      url: `https://www.loops.ie/routes/country/${slugify(route.country)}/${slugify(route.region)}`,
     });
   }
   breadcrumbItems.push({ name: route.name });

@@ -51,7 +51,9 @@ export function findHills(start: [number, number], radiusKm: number, rows: Row[]
     if (d < 3 || d > radiusKm) continue;
     const pass = r[4] === "PASS";
     const h: Hill = { name: r[0], point: p, elevation_m: r[3], dist_km: Math.round(d * 10) / 10, pass };
-    out.push({ h, score: Math.min(r[3], 400) / 80 + (pass ? 1 : 0) - Math.abs(d - radiusKm * 0.5) / radiusKm });
+    // No bonus for "passes": in the OSM data most are walkers' cols. Whether
+    // a road reaches the top is checked on the engine (summit road).
+    out.push({ h, score: Math.min(r[3], 400) / 80 - Math.abs(d - radiusKm * 0.5) / radiusKm });
   }
   return out.sort((a, b) => b.score - a.score).map((x) => x.h);
 }

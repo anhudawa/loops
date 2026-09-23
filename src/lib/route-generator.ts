@@ -1859,13 +1859,20 @@ async function generateRepeatWorkoutRoutes(spec: RouteSpec, workout: WorkoutSpec
   let hillTops: Hill[] = [];
   if (hill) {
     const reachKm = Math.min(20, Math.max(6, loopSpec.distance_km / 3.2));
-    const found = findHills(spec.start_point, reachKm).slice(0, 2);
+    const found = findHills(spec.start_point, reachKm).slice(0, 4);
     // A peak is often on heath or a track the road profile can't reach
     // (the engine then silently drops the via point): aim at the highest
     // ROAD point near it instead — where a walking route to the top leaves
     // the road network.
     const tops = await Promise.all(found.map((h) => summitRoad(spec.start_point, h)));
-    const hills = found.map((h, i) => (tops[i] ? { ...h, point: tops[i]! } : null)).filter((h): h is Hill => !!h);
+    // Two different climbs: hills whose summit roads meet are one climb.
+    const hills: Hill[] = [];
+    found.forEach((h, i) => {
+      const top = tops[i];
+      if (!top || hills.length >= 2) return;
+      if (hills.some((o) => haversineKm(o.point[0], o.point[1], top[0], top[1]) < 1)) return;
+      hills.push({ ...h, point: top });
+    });
     hillsTried = found;
     hillTops = hills;
     markPhase("hills");

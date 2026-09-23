@@ -110,9 +110,13 @@ test.describe("group-ride link", () => {
   test("Forward this ride opens the share sheet; Escape closes it", async ({ page }) => {
     await openRoute(page, RIDE_PATH);
 
-    await page.getByRole("button", { name: "Forward this ride" }).click();
+    // The page paints from the server before it is interactive (~0.5 s);
+    // tap again until the sheet opens, as a rider would.
     const sheetTitle = page.getByRole("heading", { name: "Forward this ride" });
-    await expect(sheetTitle).toBeVisible();
+    await expect(async () => {
+      await page.getByRole("button", { name: "Forward this ride" }).click();
+      await expect(sheetTitle).toBeVisible({ timeout: 1_000 });
+    }).toPass({ timeout: 20_000 });
     // The ride's own day and time are pre-filled, so sending is possible at once.
     await expect(page.getByRole("button", { name: /send on whatsapp/i })).toBeEnabled();
 

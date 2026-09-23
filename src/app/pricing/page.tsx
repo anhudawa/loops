@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import AppHeader from "@/components/AppHeader";
+import FreeAccountCta from "./FreeAccountCta";
 import { DEFAULT_OG_IMAGE, pageOpenGraph, siteUrl } from "@/lib/site-meta";
 
 // The one line of truth on price — the same sentence on every page.
@@ -136,13 +137,7 @@ export default function PricingPage() {
                   </li>
                 ))}
               </ul>
-              <Link
-                href="/login"
-                className="inline-flex items-center justify-center font-bold text-sm uppercase tracking-wider px-6 py-3 rounded-xl mt-6"
-                style={{ border: "1px solid var(--border)", color: "var(--text)" }}
-              >
-                Create a free account
-              </Link>
+              <FreeAccountCta />
             </div>
 
             {/* Pro */}
@@ -216,6 +211,9 @@ export default function PricingPage() {
             </div>
             <p className="text-xs mt-4" style={{ color: "var(--text-muted)" }}>
               No payment is taken on this page. The button opens an email; we reply with the details.
+              No mail app? Write to{" "}
+              <span className="font-bold select-all" style={{ color: "var(--text)" }}>{CONTACT_EMAIL}</span>{" "}
+              with the subject &ldquo;{FOUNDING_SUBJECT}&rdquo;.
             </p>
           </div>
         </section>
@@ -225,7 +223,7 @@ export default function PricingPage() {
           <div className="max-w-3xl mx-auto text-center">
             <p className="text-sm md:text-base leading-relaxed max-w-xl mx-auto" style={{ color: "var(--text-secondary)" }}>
               Coming from Komoot? Your routes move over free and stay yours.{" "}
-              <Link href="/switch" className="font-semibold underline underline-offset-2" style={{ color: "var(--accent)" }}>
+              <Link href="/switch" className="font-semibold underline underline-offset-2 py-3" style={{ color: "var(--accent)" }}>
                 See how switching works
               </Link>
               .

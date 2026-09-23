@@ -1,6 +1,8 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
+import { useToast } from "@/components/Toast";
+import { SOCIAL_FEATURES_ENABLED } from "@/config/constants";
 
 interface User {
   id: string;
@@ -21,7 +23,11 @@ interface AuthContextType {
   unreadCount: number;
   refresh: () => Promise<void>;
   refreshUnread: () => Promise<void>;
-  logout: () => Promise<void>;
+  /** Resolves true once signed out. On a network/server failure it says so
+   *  (toast), keeps the rider signed in and resolves false. With redirectTo
+   *  the page is left with a full navigation BEFORE local state clears, so a
+   *  private page's "logged out → /login" guard never fires on the way out. */
+  logout: (opts?: { redirectTo?: string }) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -31,7 +37,7 @@ const AuthContext = createContext<AuthContextType>({
   unreadCount: 0,
   refresh: async () => {},
   refreshUnread: async () => {},
-  logout: async () => {},
+  logout: async () => false,
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -83,19 +89,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const logout = useCallback(async () => {
-    await fetch("/api/auth", { method: "DELETE" });
+  const { toast } = useToast();
+  const logout = useCallback(async (opts?: { redirectTo?: string }) => {
+    try {
+      const res = await fetch("/api/auth", { method: "DELETE" });
+      if (!res.ok) throw new Error(`logout ${res.status}`);
+    } catch {
+      toast("Couldn't log out — check your connection and try again.", "error");
+      return false;
+    }
+    if (opts?.redirectTo) {
+      window.location.replace(opts.redirectTo);
+      return true;
+    }
     setUser(null);
     setUnreadCount(0);
-  }, []);
+    return true;
+  }, [toast]);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
 
-  // Poll unread count every 30s when logged in
+  // Poll unread count every 30s when logged in (messaging is a social
+  // feature, hidden for launch: nothing to poll)
   useEffect(() => {
-    if (!user) return;
+    if (!user || !SOCIAL_FEATURES_ENABLED) return;
     refreshUnread();
     const interval = setInterval(refreshUnread, 30000);
     return () => clearInterval(interval);

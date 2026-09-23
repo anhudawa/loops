@@ -5,7 +5,7 @@ const TAGLINE = "Routes and GPX are free forever. Pro (coming) adds training int
 
 export const metadata: Metadata = {
   title: "Sign In — LOOPS",
-  description: `Sign in to LOOPS: real cycling routes from riders who know the roads. ${TAGLINE} Gravel, road & MTB loops, ready for Strava, Komoot, Wahoo & Garmin.`,
+  description: `Sign in to LOOPS: real cycling routes from riders who know the roads. ${TAGLINE} Road loops, ready for Strava, Komoot, Wahoo & Garmin.`,
   alternates: { canonical: siteUrl("/login") },
   robots: {
     index: true,

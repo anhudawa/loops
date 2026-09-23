@@ -28,7 +28,7 @@ export default function Footer() {
             <Link
               key={link.label}
               href={link.href}
-              className="inline-flex items-center min-h-[40px] py-1 text-[11px] font-bold uppercase tracking-wider transition-colors hover:opacity-80"
+              className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] py-1 text-[11px] font-bold uppercase tracking-wider transition-colors hover:opacity-80"
               style={{ color: "var(--text-muted)" }}
             >
               {link.label}

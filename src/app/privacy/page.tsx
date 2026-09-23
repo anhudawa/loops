@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import AppHeader from "@/components/AppHeader";
 import { pageMeta } from "@/lib/site-meta";
+import { STRAVA_IMPORT_ENABLED } from "@/config/constants";
 
 const DESCRIPTION = "What LOOPS collects, who processes it, how long we keep it and how to delete your account.";
 
@@ -12,14 +13,15 @@ export const metadata: Metadata = {
 
 const H2 = { color: "var(--text)" } as const;
 const MAIL = (
-  <a href="mailto:hello@loops.ie" className="font-bold hover:opacity-80" style={{ color: "var(--accent)" }}>
+  <a href="mailto:hello@loops.ie" className="font-bold hover:opacity-80 py-3.5" style={{ color: "var(--accent)" }}>
     hello@loops.ie
   </a>
 );
 
 // Who sees what. Keep this list in step with the code: if a new service
-// touches rider data, it goes here before it ships.
-const PROCESSORS: { name: string; what: string }[] = [
+// touches rider data, it goes here before it ships. Strava import is behind
+// STRAVA_IMPORT_ENABLED (off for v1): listed only while it is switched on.
+const ALL_PROCESSORS: { name: string; what: string }[] = [
   { name: "Vercel", what: "Hosts the website and stores uploaded photos. Sees every request, including your IP address." },
   { name: "Vercel Postgres, run by Neon", what: "Our database: your account, saved routes and uploads." },
   { name: "Resend", what: "Sends sign-in links and account emails. Sees your email address." },
@@ -29,22 +31,12 @@ const PROCESSORS: { name: string; what: string }[] = [
   { name: "OpenStreetMap", what: "Map tiles and road data. Your browser loads tiles directly from OpenStreetMap servers, which see your IP address." },
   { name: "Hetzner (Germany)", what: "Hosts our own routing server. Receives route points to calculate a route, nothing about you." },
 ];
+const PROCESSORS = ALL_PROCESSORS.filter((p) => STRAVA_IMPORT_ENABLED || p.name !== "Strava");
 
 export default function PrivacyPage() {
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
-      <header className="px-4 md:px-6 py-3" style={{ background: "var(--bg-raised)", borderBottom: "1px solid var(--border)" }}>
-        <div className="max-w-3xl mx-auto flex items-center gap-3">
-          <Link href="/" className="min-w-[44px] min-h-[44px] flex items-center justify-center hover:opacity-80 transition-opacity" style={{ color: "var(--text-muted)" }}>
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-          </Link>
-          <Link href="/">
-            <span className="logo-mark text-xl" style={{ color: "var(--text)" }}>LOOPS</span>
-          </Link>
-        </div>
-      </header>
+      <AppHeader />
 
       <div className="max-w-2xl mx-auto px-4 md:px-6 py-12">
         <h1 className="text-2xl font-extrabold mb-2" style={{ color: "var(--text)" }}>Privacy Policy</h1>
@@ -71,10 +63,12 @@ export default function PrivacyPage() {
                 <strong>What you add.</strong> Routes you upload or save, photos, and the text of
                 route requests you type or speak.
               </li>
-              <li>
-                <strong>Strava, if you connect it.</strong> The rides you choose to import and the
-                tokens needed to fetch them.
-              </li>
+              {STRAVA_IMPORT_ENABLED && (
+                <li>
+                  <strong>Strava, if you connect it.</strong> The rides you choose to import and the
+                  tokens needed to fetch them.
+                </li>
+              )}
               <li>
                 <strong>Cookies.</strong> A session cookie that keeps you signed in, and a
                 first-party cookie that remembers where you first came from (for example the

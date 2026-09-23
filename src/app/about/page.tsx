@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import AppHeader from "@/components/AppHeader";
 import { pageMeta } from "@/lib/site-meta";
 
 const DESCRIPTION =
@@ -14,18 +14,7 @@ export const metadata: Metadata = {
 export default function AboutPage() {
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
-      <header className="px-4 md:px-6 py-3" style={{ background: "var(--bg-raised)", borderBottom: "1px solid var(--border)" }}>
-        <div className="max-w-3xl mx-auto flex items-center gap-3">
-          <Link href="/" className="min-w-[44px] min-h-[44px] flex items-center justify-center hover:opacity-80 transition-opacity" style={{ color: "var(--text-muted)" }}>
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-          </Link>
-          <Link href="/">
-            <span className="logo-mark text-xl" style={{ color: "var(--text)" }}>LOOPS</span>
-          </Link>
-        </div>
-      </header>
+      <AppHeader />
 
       <div className="max-w-2xl mx-auto px-4 md:px-6 py-12">
         <h1 className="text-2xl font-extrabold mb-6" style={{ color: "var(--text)" }}>About LOOPS</h1>
@@ -38,14 +27,14 @@ export default function AboutPage() {
             and every generated route is scored against real road data with hard safety guardrails.
           </p>
           <p>
-            Whether you ride road, gravel, or mountain bike, LOOPS helps you find routes worth riding.
+            LOOPS is built for road riders first; gravel and mountain bike routes are coming later.
             Download any route as a GPX file and load it into Strava, Komoot, Wahoo, Garmin, or any
             app that supports GPX.
           </p>
           <p>
             LOOPS is built and maintained in Ireland. If you have questions or want to get in touch,
             reach out at{" "}
-            <a href="mailto:hello@loops.ie" className="font-bold hover:opacity-80" style={{ color: "var(--accent)" }}>
+            <a href="mailto:hello@loops.ie" className="font-bold hover:opacity-80 py-3.5" style={{ color: "var(--accent)" }}>
               hello@loops.ie
             </a>.
           </p>

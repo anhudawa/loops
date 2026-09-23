@@ -1,0 +1,234 @@
+import { test as base, expect, type APIResponse, type Page, type Response as PageResponse, type Route } from "@playwright/test";
+
+/**
+ * Production smoke suite — READ-ONLY.
+ *
+ * Runs against BASE_URL (playwright.config.ts; default https://www.loops.ie)
+ * on iPhone 13 emulation. It never signs in and never mutates anything:
+ * every non-GET request is blocked, except the POST /api/routes/quality
+ * scoring call a route page makes on its own (the /api/auth session check
+ * is a GET), and a test FAILS if the page attempts any other mutating
+ * request. Safe to point at production at any time.
+ */
+
+const RIDE_ID = "6565324e-8187-4cbd-ad69-f612cdd01d90";
+const RIDE_PATH = `/ride/${RIDE_ID}?t=2026-09-26T09:00&m=Clontarf%20Rd`;
+const RIDE_WHEN = "Sat 26 Sep · 9:00";
+const RIDE_MEET = "Clontarf Rd";
+
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+/** Same-origin POSTs a route page makes by itself (scoring is idempotent). */
+const ALLOWED_POSTS = [/^\/api\/routes\/quality$/];
+
+/**
+ * Claude Code sandbox (PW_SANDBOX, see playwright.config.ts): Chromium's own
+ * tunnels through the egress proxy drop about one request in six, so allowed
+ * requests are fetched by Playwright's request context (reliable through
+ * that proxy) with a few retries, and the browser is handed the result.
+ * Elsewhere the request simply continues in the browser.
+ */
+const SANDBOX = !!process.env.PW_SANDBOX;
+
+async function fetchWithRetries(route: Route): Promise<APIResponse | null> {
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    try {
+      return await route.fetch({ maxRedirects: 0, timeout: 45_000 });
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 300 * attempt));
+    }
+  }
+  return null;
+}
+
+async function serve(route: Route): Promise<void> {
+  try {
+    if (!SANDBOX) return await route.continue();
+    const response = await fetchWithRetries(route);
+    if (response) await route.fulfill({ response });
+    else await route.abort("failed");
+  } catch {
+    // The page moved on (or the test ended) while this request was in
+    // flight and its fetched response was disposed: nothing left to serve.
+  }
+}
+
+/** Block a request; ignore it if the page already gave up on it. */
+async function block(route: Route): Promise<void> {
+  await route.abort("blockedbyclient").catch(() => {});
+}
+
+const test = base.extend<{ readOnly: void }>({
+  readOnly: [
+    async ({ context, baseURL }, use) => {
+      const origin = new URL(baseURL ?? "https://www.loops.ie").origin;
+      const attempted: string[] = [];
+      await context.route("**/*", (route) => {
+        const req = route.request();
+        const method = req.method().toUpperCase();
+        if (SAFE_METHODS.has(method)) return serve(route);
+        const url = new URL(req.url());
+        if (method === "POST" && url.origin === origin && ALLOWED_POSTS.some((re) => re.test(url.pathname))) {
+          return serve(route);
+        }
+        attempted.push(`${method} ${url.href}`);
+        return block(route);
+      });
+      await use();
+      expect(attempted, "the page attempted mutating requests — the smoke suite is read-only").toEqual([]);
+    },
+    { auto: true },
+  ],
+});
+
+/** page.goto with a retry: a first load through a proxy occasionally fails outright. */
+async function open(page: Page, path: string): Promise<PageResponse> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const res = await page.goto(path, { waitUntil: "domcontentloaded" });
+      if (res) return res;
+      lastError = new Error(`no response for ${path}`);
+    } catch (err) {
+      lastError = err;
+    }
+    await page.waitForTimeout(1500 * attempt);
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
+}
+
+/**
+ * A route page renders client-side once /api/routes/<id> answers: wait for
+ * its one h1. A first load that dropped a JS chunk (blank shell) gets one
+ * reload before the test gives up.
+ */
+async function openRoute(page: Page, path: string): Promise<PageResponse> {
+  let res = await open(page, path);
+  const h1 = page.locator("h1");
+  try {
+    await expect(h1).toHaveCount(1, { timeout: 30_000 });
+  } catch {
+    res = (await page.reload({ waitUntil: "domcontentloaded" })) ?? res;
+    await expect(h1).toHaveCount(1, { timeout: 45_000 });
+  }
+  await expect(h1).not.toHaveText(/route not found/i);
+  return res;
+}
+
+// ── 1. Group-ride link ────────────────────────────────────────────────────
+
+test.describe("group-ride link", () => {
+  test("unfurls with the ride's day, time and image", async ({ page }) => {
+    const res = await open(page, RIDE_PATH);
+    expect(res.status()).toBe(200);
+    await expect(page.locator('meta[property="og:title"]').first()).toHaveAttribute("content", new RegExp(RIDE_WHEN));
+    await expect(page.locator('meta[property="og:image"]').first()).toHaveAttribute("content", new RegExp(`/api/og/${RIDE_ID}`));
+  });
+
+  test("shows the ride banner, one h1, the forecast and the map", async ({ page }) => {
+    await openRoute(page, RIDE_PATH);
+
+    const banner = page.getByTestId("ride-banner");
+    await expect(banner).toBeVisible();
+    await expect(banner).toContainText(RIDE_WHEN);
+    await expect(banner).toContainText(`Meet: ${RIDE_MEET}`);
+    await expect(page.locator("h1")).toHaveCount(1);
+
+    // Forecast for the ride time, or current conditions once that has passed.
+    await expect(page.getByRole("heading", { name: /^(Forecast ·|Weather now)/ })).toBeVisible({ timeout: 45_000 });
+
+    // Leaflet marks the container once the map is up.
+    await expect(page.locator("#map.leaflet-container")).toBeVisible();
+  });
+
+  test("Forward this ride opens the share sheet; Escape closes it", async ({ page }) => {
+    await openRoute(page, RIDE_PATH);
+
+    await page.getByRole("button", { name: "Forward this ride" }).click();
+    const sheetTitle = page.getByRole("heading", { name: "Forward this ride" });
+    await expect(sheetTitle).toBeVisible();
+    // The ride's own day and time are pre-filled, so sending is possible at once.
+    await expect(page.getByRole("button", { name: /send on whatsapp/i })).toBeEnabled();
+
+    await page.keyboard.press("Escape");
+    await expect(sheetTitle).toBeHidden();
+  });
+});
+
+// ── 2. Plain route page ───────────────────────────────────────────────────
+
+test("route page: title strip, invite and GPX call to action", async ({ page }) => {
+  await openRoute(page, `/routes/${RIDE_ID}`);
+  const name = (await page.locator("h1").textContent())?.trim() ?? "";
+  expect(name).not.toBe("");
+
+  // Phone-width strip above the map: name + "83.4 km · +554 m · Dublin".
+  const strip = page.locator('div[class~="md:hidden"]', { hasText: /\d km · \+\d+ m · / }).first();
+  await expect(strip).toBeVisible();
+  await expect(strip).toContainText(name);
+
+  await expect(page.getByRole("button", { name: "Invite a Friend to Ride" })).toBeVisible();
+  // Signed out: either the free download or the sign-up route to it (GPX_ACCESS).
+  await expect(page.getByRole("link", { name: /download gpx/i }).first()).toBeVisible();
+});
+
+// ── 3. Login with a ride redirect ─────────────────────────────────────────
+
+test("login keeps the ride redirect and offers Google and email", async ({ page }) => {
+  const res = await open(page, `/login?redirect=${encodeURIComponent(RIDE_PATH)}`);
+  expect(res.status()).toBe(200);
+  await expect(page.getByRole("button", { name: /get started with google/i }).first()).toBeVisible();
+  await expect(page.getByPlaceholder("you@example.com")).toBeVisible();
+  await expect(page.getByRole("button", { name: /email me/i })).toBeVisible();
+  await expect(page.getByTestId("login-return-context")).toBeVisible();
+});
+
+// ── 4. Public pages ───────────────────────────────────────────────────────
+
+const PUBLIC_PAGES = ["/", "/cycling", "/cycling/girona", "/collections", "/routes/country/ireland", "/privacy", "/pricing"];
+
+for (const path of PUBLIC_PAGES) {
+  test(`public page ${path}: 200, canonical and og:image`, async ({ page }) => {
+    const res = await open(page, path);
+    expect(res.status()).toBe(200);
+    // The canonical is always the www URL, whatever deployment is under test.
+    const canonical = path === "/" ? "https://www.loops.ie" : `https://www.loops.ie${path}`;
+    await expect(page.locator('link[rel="canonical"]').first()).toHaveAttribute("href", canonical);
+    await expect(page.locator('meta[property="og:image"]').first()).toHaveAttribute("content", /^https?:\/\/.+/);
+  });
+}
+
+// ── 5. Privacy invariants ─────────────────────────────────────────────────
+
+const PRIVATE_ROUTE_KEYS = ["operator_name", "operator_url", "created_by", "strava_activity_id", "avg_score"];
+
+test("route JSON carries no private provenance", async ({ page }) => {
+  const res = await open(page, `/api/routes/${RIDE_ID}`);
+  expect(res.status()).toBe(200);
+  const body = (await res.json()) as Record<string, unknown>;
+  const route = (body.data ?? body) as Record<string, unknown>;
+  expect(route.id).toBe(RIDE_ID);
+  for (const key of PRIVATE_ROUTE_KEYS) {
+    expect(route, `${key} must not be public`).not.toHaveProperty(key);
+  }
+});
+
+test("engine status tells anonymous callers nothing about the server", async ({ page }) => {
+  const res = await open(page, "/api/engine/status");
+  expect(res.status()).toBe(200);
+  const body = (await res.json()) as Record<string, unknown>;
+  const data = (body.data ?? body) as Record<string, unknown>;
+  for (const key of ["host", "ip", "engine", "expected"]) {
+    expect(data, `${key} is admin-only`).not.toHaveProperty(key);
+  }
+  expect(JSON.stringify(body)).not.toMatch(/\b\d{1,3}(?:\.\d{1,3}){3}\b/);
+});
+
+// ── 6. Not found ──────────────────────────────────────────────────────────
+
+for (const path of ["/ride/not-a-real-id", "/routes/not-a-real-id"]) {
+  test(`${path} is a 404`, async ({ page }) => {
+    const res = await open(page, path);
+    expect(res.status()).toBe(404);
+    await expect(page.getByRole("heading", { level: 1 })).toContainText(/404|not found/i);
+  });
+}

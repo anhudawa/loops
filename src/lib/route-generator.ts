@@ -465,6 +465,22 @@ const LOOP_RETRACE_FIX_KM = 3.0;
 const ROUTING_BUDGET_MS = 20_000;
 /** Still losing more than this after the no-go return → try moving the far point. */
 const LOOP_MOVE_FAR_KM = 3.0;
+
+/**
+ * How far a routed loop is from the ride the rider asked for, in kilometres:
+ * the served distance's gap to the ask PLUS the retrace that spur repair
+ * will cut out of it. A kilometre of spur costs as much as a kilometre off
+ * the ask — the spur never reaches the rider, but every kilometre cut is a
+ * deformation of the loop and a SPUR_UTURN risk, while a loop 18 km short
+ * of the ask is simply the wrong ride. Both the distance fit and the
+ * loop-shaping attempts pick the lower cost. (Retrace-first picking chose a
+ * 61 km loop losing 7.6 km over a 78 km loop losing 11.2 km for an 80 km
+ * ask; distance-first picking kept a 264 km route losing 160 km over a
+ * 121 km route losing 13.5 km because its served length was 4 km nearer.)
+ */
+export function loopFitCostKm(rawKm: number, lossKm: number, targetKm: number): number {
+  return Math.abs(rawKm - lossKm - targetKm) + lossKm;
+}
 /** No-go weight for the outbound roads when routing the return leg. Tested on
  *  the local engine: weight 50 cut a 9.7 km retrace to 4.3 km; a hard no-go
  *  (no weight) blew the return leg up to 96 km. */
@@ -691,11 +707,20 @@ export async function routeLoopCandidate(
     }
   }
 
+  // A loop that ends up more than 50% off the requested distance can never
+  // be served, and neither can a route so retraced that repair would have
+  // to cut half of it (a 160 km route "repaired" to 80 km is garbage
+  // geometry, not an 80 km loop). Neither the distance fit nor loop shaping
+  // trades a route that could be served for one that could not.
+  const fitsAsk = (p: RoutedPath) =>
+    Math.abs(p.distance_km - lossOf(p) - targetKm) <= targetKm * 0.5 && p.distance_km <= targetKm * 1.6;
+
   // Distance fit: the waypoint radius assumes roads add ~30% over straight
   // lines. Where the network detours more (Girona: 112 km for an 80 km ask)
   // or less, scale the loop's inner points toward/away from the start once
   // and re-route on the same profile. One extra engine call, kept only if
-  // it lands closer to the ask without retracing more.
+  // it serves the rider better (loopFitCostKm: closer to the ask counting
+  // the retrace to be cut as a cost).
   if (waypoints.length >= 4 && timeLeft()) {
     const served = first.distance_km - lossOf(first);
     const ratio = targetKm / Math.max(1, served);
@@ -709,10 +734,9 @@ export async function routeLoopCandidate(
       const p = await routeViaBRouter(scaled, first.profile);
       if (p && p.coords.length >= 2) {
         const pServed = p.distance_km - lossOf(p);
-        const gain = Math.abs(served - targetKm) - Math.abs(pServed - targetKm); // km closer to the ask
-        const accept =
-          (gain > 0 && lossOf(p) <= lossOf(first) + 1) ||
-          (gain > targetKm * 0.2 && lossOf(p) <= lossOf(first) + 3);
+        const costBefore = loopFitCostKm(first.distance_km, lossOf(first), targetKm);
+        const costAfter = loopFitCostKm(p.distance_km, lossOf(p), targetKm);
+        const accept = costAfter < costBefore - 1 && (fitsAsk(p) || !fitsAsk(first));
         if (accept) {
           genDebug(`distance fit: ${served.toFixed(0)} km → ${pServed.toFixed(0)} km for a ${targetKm} km ask (inner points scaled ×${scale.toFixed(2)})`);
           first = p;
@@ -744,19 +768,14 @@ export async function routeLoopCandidate(
   const usedProfile = first.profile;
   const consider = (p: RoutedPath, label: string) => {
     const loss = lossOf(p);
-    // A loop that ends up more than 50% off the requested distance is not
-    // a fix, whatever it saves in retrace — and neither is a route so
-    // retraced that repair would have to cut half of it (a 160 km route
-    // "repaired" to 80 km is garbage geometry, not an 80 km loop).
-    const fits =
-      Math.abs(p.distance_km - loss - targetKm) <= targetKm * 0.5 &&
-      p.distance_km <= targetKm * 1.6;
-    const better =
-      fits && (
-        loss < bestLoss - 0.2 ||
-        (Math.abs(loss - bestLoss) <= 0.2 &&
-          Math.abs(p.distance_km - loss - targetKm) < Math.abs(best.distance_km - bestLoss - targetKm)));
-    genDebug(`loop-aware ${label}: ${p.distance_km.toFixed(1)} km, would lose ${loss.toFixed(1)} km (best so far ${bestLoss.toFixed(1)})`);
+    // Lower cost wins among loops that could be served: retrace to cut and
+    // distance off the ask, kilometre for kilometre. Least-retrace-first
+    // pulled loops in far short of the ask (Faro: 61 km losing 7.6 km was
+    // chosen over 78 km losing 11.2 km).
+    const cost = loopFitCostKm(p.distance_km, loss, targetKm);
+    const bestCost = loopFitCostKm(best.distance_km, bestLoss, targetKm);
+    const better = fitsAsk(p) && cost < bestCost - 0.2;
+    genDebug(`loop-aware ${label}: ${p.distance_km.toFixed(1)} km, would lose ${loss.toFixed(1)} km, fit cost ${cost.toFixed(1)} (best so far ${bestLoss.toFixed(1)} km lost, cost ${bestCost.toFixed(1)})`);
     if (better) { best = p; bestLoss = loss; }
   };
 
@@ -1981,6 +2000,69 @@ async function generateFreshWorkoutRoutes(
   return candidates.slice(0, 3);
 }
 
+/** How one routed candidate came out: the engine's route, what spur repair cut, what is left. */
+export interface LoopSizing {
+  rawKm: number;     // the engine's route, before spur repair
+  lossKm: number;    // via-point spur cut out by repair
+  servedKm: number;  // what remains — the loop the rider would get
+}
+
+export type SecondPassPlan =
+  | { kind: "recalibrate"; radiusScale: number; servedRatio: number; rawRatio: number }
+  | { kind: "new-directions"; why: string }
+  | { kind: "none" };
+
+/**
+ * What the second pass should do, from how the first pass's loops came out.
+ *
+ * The radius is a SIZING lever: it only helps when the loops the engine
+ * routed were consistently long or short of the ask. Recalibrating on the
+ * served (post-repair) distance conflated two different shortfalls:
+ * - the network detours (Sóller: 107–211 km routed for 80) → loops are
+ *   long, scale the radius down by the served ratio — still done;
+ * - the network funnels (Faro: 81–89 km routed, 55–61 km served after
+ *   17–41 km of retrace was cut) → the routed loops were placed right and
+ *   scaling the radius up by the served ratio produced 105–184 km routes
+ *   with 37–100 km of retrace that died in SPUR_UTURN/distance drops
+ *   (12 s of engine time for one loop). Now: when the routed loops were
+ *   within 20 % of the ask, the shortfall is retrace, not placement, and the
+ *   second pass tries new directions instead. When the routed loops were
+ *   genuinely short, the scale-up follows the routed (raw) ratio — the
+ *   retrace does not shrink with a bigger radius, so the served ratio
+ *   over-corrects.
+ *
+ * `servedWell` = loops served within ~15 % of the ask, `served` = loops
+ * served at all; fewer than two of either is the trigger, as before.
+ */
+export function planSecondPass(
+  sizing: LoopSizing[],
+  targetKm: number,
+  servedWell: number,
+  served: number
+): SecondPassPlan {
+  const median = (xs: number[]) => {
+    const s = [...xs].sort((a, b) => a - b);
+    return s[Math.floor(s.length / 2)];
+  };
+  if (servedWell < 2 && sizing.length >= 2) {
+    const servedRatio = median(sizing.map((s) => s.servedKm)) / targetKm;
+    const rawRatio = median(sizing.map((s) => s.rawKm)) / targetKm;
+    if (Math.abs(servedRatio - 1) > 0.2) {
+      if (servedRatio < 1 && rawRatio >= 0.8) {
+        return {
+          kind: "new-directions",
+          why: `first pass loops were routed at ×${rawRatio.toFixed(2)} of the ask but served at ×${servedRatio.toFixed(2)} — the shortfall is retrace, not placement`,
+        };
+      }
+      const basis = servedRatio > 1 ? servedRatio : rawRatio;
+      const radiusScale = Math.max(0.5, Math.min(1.5, 1 / basis));
+      return { kind: "recalibrate", radiusScale, servedRatio, rawRatio };
+    }
+  }
+  if (served < 2) return { kind: "new-directions", why: `only ${served} loop(s) survived` };
+  return { kind: "none" };
+}
+
 async function generateFreshRoutes(
   spec: RouteSpec,
   windForecast: WindForecast | null = null
@@ -1992,7 +2074,7 @@ async function generateFreshRoutes(
   // (a two-leg probe was too crude: at Enniskerry one leg hit the mountains,
   // one the coast, and every loop came out 30 % short).
   const radiusScale = 1;
-  const servedKm: number[] = []; // served (post-repair) distance of every routed candidate
+  const sizing: LoopSizing[] = []; // routed / cut / served distance of every routed candidate
   const waypointSets = await generateWaypointSets(spec, { radiusScale });
   markPhase("waypoints");
 
@@ -2071,6 +2153,7 @@ async function generateFreshRoutes(
       // tags, then recompute distance/climb. SPUR_UTURN stays as backstop.
       let edgeTags = path.edgeTags;
       const rawCoords = dumpDir ? path.coords.slice() : null;
+      const rawKm = path.distance_km;
       const repair = repairSpurs(path.coords);
       if (rawCoords) {
         await dump(`candidate-${waypointSets.indexOf(waypoints)}`, {
@@ -2097,7 +2180,7 @@ async function generateFreshRoutes(
       }
 
       routed.push({ waypoints, path, elevations, elevGain: elevGain ?? 0, elevLoss, edgeTags });
-      servedKm.push(path.distance_km);
+      sizing.push({ rawKm, lossKm: repair.removedKm, servedKm: path.distance_km });
     })
   );
 
@@ -2271,23 +2354,24 @@ async function generateFreshRoutes(
 
   let candidates = await runPass(waypointSets, "pass 1");
 
-  // Calibrated second pass: the network made loops consistently long or
-  // short → re-place the same directions with the radius corrected.
-  const sorted = [...servedKm].sort((a, b) => a - b);
-  const medianRatio = sorted.length > 0 ? sorted[Math.floor(sorted.length / 2)] / spec.distance_km : 1;
-  let recalibrated = false;
-  // Also when loops were served but sized badly (Faro: 55–61 km for 80), if
-  // there is time — the final ranking keeps the best three overall.
+  // Second pass, if there is time: the network made loops consistently long
+  // or short → re-place the same directions with the radius corrected; the
+  // loops were placed right but retrace cut them short, or fewer than two
+  // survived → new directions (planSecondPass). Also when loops were served
+  // but sized badly (Faro: 55–61 km for 80) — the final ranking keeps the
+  // best three overall.
   const offKm = (c: GeneratedRoute) => Math.abs(c.distance_km - spec.distance_km);
   const servedWell = candidates.filter((c) => offKm(c) <= Math.max(5, spec.distance_km * 0.15)).length;
-  if (servedWell < 2 && Date.now() - t0 < 18_000 && sorted.length >= 2 && Math.abs(medianRatio - 1) > 0.2) {
-    const corrected = Math.max(0.5, Math.min(1.5, radiusScale / medianRatio));
-    genDebug(`first pass loops ran ×${medianRatio.toFixed(2)} of the ask — re-placing with radius ×${corrected.toFixed(2)}`);
+  const plan = Date.now() - t0 < 18_000
+    ? planSecondPass(sizing, spec.distance_km, servedWell, candidates.length)
+    : { kind: "none" as const };
+  if (plan.kind === "recalibrate") {
+    const corrected = radiusScale * plan.radiusScale;
+    genDebug(`first pass loops ran ×${plan.servedRatio.toFixed(2)} of the ask (routed ×${plan.rawRatio.toFixed(2)}) — re-placing with radius ×${corrected.toFixed(2)}`);
     const again = await generateWaypointSets(spec, { radiusScale: corrected });
     candidates = candidates.concat(await runPass(again, "pass 2 (recalibrated)"));
-    recalibrated = true;
   }
-  if (!recalibrated && candidates.length < 2 && Date.now() - t0 < 18_000) {
+  if (plan.kind === "new-directions") {
     const start = spec.start_point;
     const usedBearings = waypointSets.map((ws) => {
       let far = ws[1], farD = -1;
@@ -2306,7 +2390,7 @@ async function generateFreshRoutes(
       return usedBearings.every((u) => angDiff(bearingDegFrom(start, far), u) >= 20);
     });
     if (fresh.length > 0) {
-      genDebug(`only ${candidates.length} loop(s) survived — second pass with ${fresh.length} new direction(s)`);
+      genDebug(`${plan.why} — second pass with ${fresh.length} new direction(s)`);
       candidates = candidates.concat(await runPass(fresh, "pass 2"));
     }
   }

@@ -113,7 +113,11 @@ node scripts/import-routes.mjs scripts/hub-data/girona-eat-sleep-cycle.json --dr
 - Generation pipeline: bundled places → candidate diamonds → engine (strict →
   moved far point → relaxed) → spur repair → rules → road report + serving
   policy → scoring (roads from engine tags, scenery from one Overpass call) →
-  second pass if < 2 loops. Per-phase timings are logged (`timings`).
+  second pass if < 2 loops or < 2 near the ask (`planSecondPass`: radius
+  recalibrated when the ROUTED loops ran long/short, new directions when
+  retrace cut them short). Loop shaping and the distance fit both pick the
+  lowest `loopFitCostKm` (km off the ask + km of retrace to cut).
+  Per-phase timings are logged (`timings`).
 - Trust rules enforced in code: a named place must resolve or we decline;
   every generated/drawn route carries a `road_report`; loops > ±35 % off the
   requested distance are declined; nothing is silently downgraded.

@@ -1,6 +1,6 @@
 "use client";
 
-import { ENABLED_DISCIPLINES } from "@/config/constants";
+import { ENABLED_DISCIPLINES, STRAVA_IMPORT_ENABLED } from "@/config/constants";
 
 import { useState, useRef, useEffect, DragEvent } from "react";
 import { useRouter } from "next/navigation";
@@ -362,8 +362,9 @@ export default function UploadPage() {
         <h1 className="text-xl md:text-2xl font-extrabold tracking-tight uppercase mb-2" style={{ color: "var(--text)" }}>Share a Loop</h1>
         <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>Upload a route file, drop up to {MAX_BULK_FILES} at once to bulk-import, or import from RideWithGPS.</p>
 
-        {/* Strava Import Section */}
-        <div className="mb-6 p-4 rounded-xl" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+        {/* Strava Import Section (hidden in v1: STRAVA_IMPORT_ENABLED) */}
+        {STRAVA_IMPORT_ENABLED && (
+<div className="mb-6 p-4 rounded-xl" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-bold">Import from Strava</h3>
             <StravaConnectButton
@@ -397,6 +398,7 @@ export default function UploadPage() {
             </p>
           )}
         </div>
+        )}
 
         {/* Show imported Strava activity indicator */}
         {parsedRoute && (

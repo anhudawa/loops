@@ -32,6 +32,15 @@ export const DISCIPLINES = ["road", "gravel", "mtb"] as const;
 export const ENABLED_DISCIPLINES: readonly (typeof DISCIPLINES)[number][] = ["road"];
 export const disciplineEnabled = (d: string | null | undefined): boolean =>
   ENABLED_DISCIPLINES.includes((d ?? "road") as (typeof DISCIPLINES)[number]);
+/**
+ * Strava connect + activity import (owner, 2026-09-23: does not work —
+ * the production Strava app credentials were never set up). Hidden for v1;
+ * flip to true once STRAVA_CLIENT_ID/SECRET are set and it is tested.
+ * ("Open in Strava" after a GPX download is unaffected: it only opens
+ * Strava's own upload page.)
+ */
+export const STRAVA_IMPORT_ENABLED = false;
+
 /** Said when a rider asks for a discipline v1 does not plan. */
 export const DISCIPLINE_NOTICE = "LOOPS plans road rides for now — gravel and MTB are coming. Here are road loops instead.";
 export const CONDITION_STATUSES = ["good", "fair", "poor", "closed"] as const;

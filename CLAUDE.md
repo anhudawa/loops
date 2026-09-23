@@ -215,6 +215,11 @@ node scripts/import-routes.mjs scripts/hub-data/girona-eat-sleep-cycle.json --dr
   twice or a > 2 km gap = broken: banner, hidden from lists, never offered.
   Verified redesigns (src/data/hub-bundles/girona-rebuild.json) replace the
   stored track on first view (src/lib/bundle-corrections.ts).
+- Strava connect/import HIDDEN for v1 (STRAVA_IMPORT_ENABLED=false in
+  constants.ts): production Strava app credentials were never set up; the
+  "Open in Strava" button is hidden too (Strava's upload page is for
+  recorded activities, not planned routes). Komoot button opens Komoot's
+  GPX import (komoot.com/upload).
 - No CSRF tokens; cookie-only sessions; locale hardcoded en-IE
 
 ## Conventions

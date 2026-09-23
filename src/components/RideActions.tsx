@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { GPX_ACCESS } from "@/config/constants";
+import { GPX_ACCESS, STRAVA_IMPORT_ENABLED } from "@/config/constants";
 import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
 import { useClientUrl, loginHrefFor, paramFrom } from "@/lib/useClientUrl";
@@ -97,7 +97,7 @@ export default function RideActions({ routeId, routeName, rideLink = false }: Ri
       shareGpxToApp();
     } else {
       triggerDownload();
-      window.open("https://www.komoot.com/plan", "_blank");
+      window.open("https://www.komoot.com/upload", "_blank"); // Komoot's GPX import
     }
   };
 
@@ -171,9 +171,10 @@ export default function RideActions({ routeId, routeName, rideLink = false }: Ri
       )}
 
       {/* Secondary actions */}
-      <div className={`grid ${user ? "grid-cols-3" : "grid-cols-1"} gap-2`}>
+      <div className={`grid ${user ? (STRAVA_IMPORT_ENABLED ? "grid-cols-3" : "grid-cols-2") : "grid-cols-1"} gap-2`}>
         {user && (
           <>
+            {STRAVA_IMPORT_ENABLED && (
             <button
               onClick={openStrava}
               className="flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl text-xs font-bold transition-all hover:border-[rgba(200,255,0,0.3)]"
@@ -184,6 +185,7 @@ export default function RideActions({ routeId, routeName, rideLink = false }: Ri
               </svg>
               {canShareFiles ? "Open in Strava" : "Strava"}
             </button>
+            )}
 
             <button
               onClick={openKomoot}

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
+import { STRAVA_IMPORT_ENABLED } from "@/config/constants";
 import StravaConnectButton from "@/components/StravaConnectButton";
 
 export default function EditProfilePage() {
@@ -250,8 +251,9 @@ export default function EditProfilePage() {
             </p>
           </div>
 
-          {/* Connected Accounts */}
-          <div className="mt-8 pt-6" style={{ borderTop: "1px solid var(--border)" }}>
+          {/* Connected Accounts (hidden in v1: STRAVA_IMPORT_ENABLED) */}
+          {STRAVA_IMPORT_ENABLED && (
+<div className="mt-8 pt-6" style={{ borderTop: "1px solid var(--border)" }}>
             <h3 className="text-sm font-bold mb-3">Connected Accounts</h3>
             <div className="flex items-center justify-between p-3 rounded-xl" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
               <div>
@@ -265,6 +267,7 @@ export default function EditProfilePage() {
               />
             </div>
           </div>
+          )}
 
           {error && (
             <div className="px-4 py-3 rounded-lg text-sm" style={{ background: "rgba(255, 51, 85, 0.1)", border: "1px solid rgba(255, 51, 85, 0.3)", color: "var(--danger)" }}>

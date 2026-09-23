@@ -1,9 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { publicRoute } from "@/lib/public-route";
-import { getRoute, updateRouteElevation, updateRouteGeometry, recordEvent, ANALYTICS_EVENTS } from "@/lib/db";
+import { getRoute, updateRouteElevation, updateRouteGeometry, storeRouteRoadReport, recordEvent, ANALYTICS_EVENTS } from "@/lib/db";
 import { apiError, handleApiError } from "@/lib/api-utils";
 import { fetchElevations } from "@/lib/elevation";
-import { rerouteWaypoints } from "@/lib/route-generator";
+import { rerouteWaypoints, engineTrace } from "@/lib/route-generator";
+import { traceRoadReport } from "@/lib/road-trace";
 
 export const maxDuration = 30;
 
@@ -108,6 +109,43 @@ async function repairGapsIfAny(route: NonNullable<Awaited<ReturnType<typeof getR
   }
 }
 
+// Road report for routes we did not generate (uploads, imports, library):
+// traced through our engine after the response, once, then persisted. The
+// Trust Rule — every served route names its compromises — applied to the
+// whole library, not just fresh generation.
+const tracing = new Set<string>();
+const traceFailedAt = new Map<string, number>();
+const TRACE_RETRY_MS = 60 * 60 * 1000;
+const TRACE_BUDGET_MS = 20_000;
+
+function scheduleRoadTrace(route: NonNullable<Awaited<ReturnType<typeof getRoute>>>) {
+  if (route.road_report || !process.env.BROUTER_URL) return;
+  if (tracing.has(route.id)) return;
+  const failed = traceFailedAt.get(route.id);
+  if (failed && Date.now() - failed < TRACE_RETRY_MS) return;
+  tracing.add(route.id);
+  after(async () => {
+    const started = Date.now();
+    try {
+      const coords: [number, number][] = JSON.parse(route.coordinates).map((c: number[]) => [c[0], c[1]]);
+      const discipline = route.discipline === "gravel" || route.discipline === "mtb" ? route.discipline : "road";
+      const report = await traceRoadReport(coords, discipline, engineTrace, TRACE_BUDGET_MS);
+      if (report) {
+        await storeRouteRoadReport(route.id, report);
+        console.log(JSON.stringify({ evt: "route_road_traced", route_id: route.id, standard_met: report.standard_met, compromises: report.compromises.length, ms: Date.now() - started }));
+      } else {
+        traceFailedAt.set(route.id, Date.now());
+        console.log(JSON.stringify({ evt: "route_road_trace_unknown", route_id: route.id, ms: Date.now() - started }));
+      }
+    } catch (err) {
+      traceFailedAt.set(route.id, Date.now());
+      console.error("[routes/:id] road trace failed:", err instanceof Error ? err.message : err);
+    } finally {
+      tracing.delete(route.id);
+    }
+  });
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -122,6 +160,7 @@ export async function GET(
 
     route = await repairElevationIfFlat(route);
     route = await repairGapsIfAny(route);
+    scheduleRoadTrace(route);
 
     // Funnel: route detail viewed (fire-and-forget, no PII).
     void recordEvent(ANALYTICS_EVENTS.ROUTE_VIEWED, {

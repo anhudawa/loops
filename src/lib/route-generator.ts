@@ -2249,3 +2249,15 @@ function summariseCompromises(compromises: RoadReport["compromises"]): string {
   const more = compromises.length > 2 ? ` (+${compromises.length - 2} more)` : "";
   return `Compromise: ${top.join("; ")}${more}.`;
 }
+
+/**
+ * Trace an existing track through the engine with a neutral profile —
+ * the road report for uploads, imports and library loops (road-trace.ts).
+ */
+export async function engineTrace(
+  waypoints: [number, number][],
+  profile = "trekking"
+): Promise<{ coords: [number, number][]; edgeTags: EdgeTags | null; distance_km: number } | null> {
+  const path = await routeViaBRouter(waypoints, profile);
+  return path ? { coords: path.coords, edgeTags: path.edgeTags, distance_km: path.distance_km } : null;
+}

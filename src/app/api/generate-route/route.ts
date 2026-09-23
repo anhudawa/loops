@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateRouteCandidates, NoValidRoutesError } from "@/lib/route-generator";
+import { generateRouteCandidates, NoValidRoutesError, inFlightTimings } from "@/lib/route-generator";
 import { getUserBySession, recordEvent, ANALYTICS_EVENTS } from "@/lib/db";
 import { DEFAULT_SPEED_KMH } from "@/config/constants";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -228,7 +228,8 @@ export async function POST(request: NextRequest) {
     // Surface user-friendly messages for known failure modes
     if (message.includes("timed out")) {
       return NextResponse.json(
-        { error: "Route generation timed out — try a shorter distance or a more specific location", code: "TIMEOUT" },
+        // Phase timings reached so far (no PII) so a timeout can be profiled from the response.
+        { error: "Route generation timed out — try a shorter distance or a more specific location", code: "TIMEOUT", timings: inFlightTimings() },
         { status: 504 }
       );
     }

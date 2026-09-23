@@ -174,6 +174,10 @@ export interface GenerateResult {
 // interleave — never wrong routes).
 let currentTimings: Record<string, number> | null = null;
 let currentTimingsStart = 0;
+/** Phase timings of the generation in flight (diagnostics for a timeout answer). */
+export function inFlightTimings(): Record<string, number> | null {
+  return currentTimings ? { ...currentTimings } : null;
+}
 function markPhase(label: string): void {
   if (!currentTimings) return;
   currentTimings[label] = Math.round((Date.now() - currentTimingsStart) / 100) / 10;

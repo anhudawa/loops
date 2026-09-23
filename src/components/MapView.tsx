@@ -280,47 +280,62 @@ export default function MapView({
     compromiseLayerRef.current.clearLayers();
     if (!compromiseMarkers?.length) return;
     for (const m of compromiseMarkers) {
-      L.circleMarker(m.at, { radius: 4.5, fillColor: "#f5a524", color: "#0a0a0a", weight: 1.5, fillOpacity: 0.95 })
-        .bindTooltip(m.label, { direction: "top", offset: [0, -6], className: "compromise-label" })
+      const tip = { direction: "bottom" as const, offset: [0, 8] as [number, number], className: "compromise-label" };
+      L.circleMarker(m.at, { radius: 5, fillColor: "#f5a524", color: "#0a0a0a", weight: 1.5, fillOpacity: 0.95 })
+        .bindTooltip(m.label, tip)
+        .addTo(compromiseLayerRef.current);
+      // Invisible 22 px halo: a thumb can land on the dot.
+      L.circleMarker(m.at, { radius: 11, stroke: false, fillOpacity: 0 })
+        .bindTooltip(m.label, tip)
         .addTo(compromiseLayerRef.current);
     }
   }, [compromiseMarkers]);
 
-  // Travel direction overlay
+  // Travel direction overlay: small chevrons spaced by on-screen path
+  // length (one per ~90 px), so a loop that is only 150 px tall on a phone
+  // gets a few arrows instead of a blob that hides the line. Redrawn on zoom.
   useEffect(() => {
-    if (!travelLayerRef.current) return;
-    travelLayerRef.current.clearLayers();
+    const map = mapRef.current;
+    const layer = travelLayerRef.current;
+    if (!map || !layer) return;
 
-    if (!travelOverlay) return;
+    const draw = () => {
+      layer.clearLayers();
+      if (!travelOverlay) return;
+      const selected = routes.find((r) => r.id === selectedRouteId) || routes[0];
+      if (!selected) return;
+      const coords: [number, number][] = JSON.parse(selected.coordinates);
+      if (coords.length < 2) return;
 
-    const selected = routes.find((r) => r.id === selectedRouteId) || routes[0];
-    if (!selected) return;
+      const px = coords.map((c) => map.latLngToContainerPoint(c));
+      const cum: number[] = [0];
+      for (let i = 1; i < px.length; i++) cum.push(cum[i - 1] + px[i].distanceTo(px[i - 1]));
+      const total = cum[cum.length - 1];
+      const count = Math.max(3, Math.min(14, Math.floor(total / 90)));
+      let j = 1;
+      for (let k = 1; k <= count; k++) {
+        const target = (k / (count + 1)) * total;
+        while (j < cum.length - 1 && cum[j] < target) j++;
+        const prev = coords[Math.max(0, j - 1)];
+        const next = coords[Math.min(coords.length - 1, j + 1)];
+        const travelDeg = bearing(prev, next);
+        const icon = L.divIcon({
+          className: "wind-arrow-icon",
+          html: `<div style="transform:rotate(${travelDeg}deg);width:18px;height:18px;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);border-radius:50%;border:1.5px solid #c8ff00;">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="#c8ff00" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="5 14 12 7 19 14"/>
+            </svg>
+          </div>`,
+          iconSize: [18, 18],
+          iconAnchor: [9, 9],
+        });
+        L.marker(coords[j], { icon, interactive: false }).addTo(layer);
+      }
+    };
 
-    const coords: [number, number][] = JSON.parse(selected.coordinates);
-    if (coords.length < 2) return;
-
-    const count = Math.min(14, Math.max(6, Math.floor(coords.length / 3)));
-    const step = Math.floor(coords.length / (count + 1));
-
-    for (let i = 1; i <= count; i++) {
-      const idx = Math.min(i * step, coords.length - 1);
-      const prev = coords[Math.max(0, idx - 1)];
-      const next = coords[Math.min(coords.length - 1, idx + 1)];
-      const travelDeg = bearing(prev, next);
-
-      const icon = L.divIcon({
-        className: "wind-arrow-icon",
-        html: `<div style="transform:rotate(${travelDeg}deg);width:28px;height:28px;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.55);border-radius:50%;border:2px solid #c8ff00;box-shadow:0 0 8px rgba(200,255,0,0.4);">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#c8ff00" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="5 12 12 5 19 12"/>
-          </svg>
-        </div>`,
-        iconSize: [28, 28],
-        iconAnchor: [14, 14],
-      });
-
-      L.marker(coords[idx], { icon, interactive: false }).addTo(travelLayerRef.current!);
-    }
+    draw();
+    map.on("zoomend", draw);
+    return () => { map.off("zoomend", draw); };
   }, [travelOverlay, routes, selectedRouteId]);
 
   return <div id="map" role="application" aria-label="Interactive map showing cycling route locations" className="w-full h-full rounded-lg" />;

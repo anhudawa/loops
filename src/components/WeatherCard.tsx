@@ -88,24 +88,29 @@ export default function WeatherCard({ routeId, windOverlayEnabled, onWindToggle,
     [weather, coordinates]
   );
 
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
+    let cancelled = false;
     setLoading(true); // eslint-disable-line react-hooks/set-state-in-effect
-    setError(false);  
-    fetch(`/api/routes/${routeId}/weather${rideTime ? `?t=${encodeURIComponent(rideTime)}` : ""}`)
-      .then((r) => {
-        if (!r.ok) throw new Error();
-        return r.json();
-      })
+    setError(false);
+    const url = `/api/routes/${routeId}/weather${rideTime ? `?t=${encodeURIComponent(rideTime)}` : ""}`;
+    const get = () => fetch(url).then((r) => { if (!r.ok) throw new Error(); return r.json(); });
+    // One quiet retry: the forecast service occasionally times out.
+    get()
+      .catch(() => new Promise((res) => setTimeout(res, 1500)).then(get))
       .then((data: WeatherData) => {
+        if (cancelled) return;
         setWeather(data);
         setLoading(false);
         onWeatherLoaded({ direction: data.windDirection, speed: data.windSpeed });
       })
       .catch(() => {
+        if (cancelled) return;
         setError(true);
         setLoading(false);
       });
-  }, [routeId, rideTime]); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => { cancelled = true; };
+  }, [routeId, rideTime, attempt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) {
     return (
@@ -126,7 +131,18 @@ export default function WeatherCard({ routeId, windOverlayEnabled, onWindToggle,
   if (error || !weather) {
     return (
       <div className="rounded-2xl p-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-        <p className="text-xs text-center" style={{ color: "var(--text-muted)" }}>Weather unavailable</p>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+            {rideWhen ? `The forecast for ${rideWhen} isn't available right now.` : "The weather isn't available right now."}
+          </p>
+          <button
+            onClick={() => setAttempt((a) => a + 1)}
+            className="shrink-0 min-h-[44px] px-4 rounded-lg text-xs font-bold"
+            style={{ background: "var(--bg)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
+          >
+            Try again
+          </button>
+        </div>
       </div>
     );
   }
@@ -142,7 +158,7 @@ export default function WeatherCard({ routeId, windOverlayEnabled, onWindToggle,
             onClick={() => onTravelToggle(!travelOverlayEnabled)}
             title="Show the direction of travel on the map"
             aria-label="Show the direction of travel on the map"
-            className="flex items-center gap-1.5 px-3 py-2 min-h-[40px] rounded-full text-xs font-bold transition-all"
+            className="flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded-full text-xs font-bold transition-all"
             style={{
               color: travelOverlayEnabled ? "#c8ff00" : "var(--text-muted)",
               background: travelOverlayEnabled ? "rgba(200, 255, 0, 0.15)" : "var(--bg)",
@@ -158,7 +174,7 @@ export default function WeatherCard({ routeId, windOverlayEnabled, onWindToggle,
             onClick={() => onWindToggle(!windOverlayEnabled)}
             title="Show wind arrows on the map"
             aria-label="Show wind arrows on the map"
-            className="flex items-center gap-1.5 px-3 py-2 min-h-[40px] rounded-full text-xs font-bold transition-all"
+            className="flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded-full text-xs font-bold transition-all"
             style={{
               color: windOverlayEnabled ? "var(--danger)" : "var(--text-muted)",
               background: windOverlayEnabled ? "rgba(255, 51, 85, 0.15)" : "var(--bg)",

@@ -103,15 +103,14 @@ export default function RouteDetailView({ ride }: { ride?: RideInvite | null } =
   const [favLoading, setFavLoading] = useState(false);
   // On a /ride link the first screen is banner + map + forecast; the sticky
   // "Join LOOPS" bar waits until the rider scrolls past ~60% of the viewport
-  // so it never covers the forecast on arrival.
+  // so it never covers the forecast on arrival (ride links and route pages).
   const [pastRideFold, setPastRideFold] = useState(false);
   useEffect(() => {
-    if (!ride) return;
     const onScroll = () => setPastRideFold(window.scrollY > window.innerHeight * 0.6);
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
-  }, [ride]);
+  }, []);
   const [fetchError, setFetchError] = useState(false);
   const [mutationError, setMutationError] = useState("");
   // Quality/surface scoring (parity with /generate) — fetched fire-and-forget
@@ -412,7 +411,7 @@ export default function RouteDetailView({ ride }: { ride?: RideInvite | null } =
             href={`https://www.google.com/maps/dir/?api=1&destination=${route.start_lat},${route.start_lng}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 mt-2 px-3 py-2 min-h-[40px] rounded-lg text-xs font-bold"
+            className="inline-flex items-center gap-1 mt-2 px-3 py-2 min-h-[44px] rounded-lg text-xs font-bold"
             style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
           >
             Directions to the route start ↗
@@ -639,7 +638,7 @@ export default function RouteDetailView({ ride }: { ride?: RideInvite | null } =
               {/* Every stretch, named where we could: the rider decides. */}
               {!!route.road_report.compromises?.length && (
                 <details className="mt-2">
-                  <summary className="text-xs font-bold cursor-pointer select-none" style={{ color: "var(--text-secondary)" }}>
+                  <summary className="text-xs font-bold cursor-pointer select-none py-3 -my-2" style={{ color: "var(--text-secondary)" }}>
                     Where ({route.road_report.compromises.length} {route.road_report.compromises.length === 1 ? "stretch" : "stretches"})
                   </summary>
                   <ul className="mt-1.5 space-y-1 text-xs" style={{ color: "var(--text-secondary)" }}>
@@ -850,7 +849,7 @@ export default function RouteDetailView({ ride }: { ride?: RideInvite | null } =
       {!user && !authLoading && <div className="h-24" aria-hidden="true" />}
 
       {/* Sticky bottom CTA for unauthenticated users (on /ride: after scrolling) */}
-      {!user && !authLoading && (!ride || pastRideFold) && (
+      {!user && !authLoading && pastRideFold && (
         <div
           className="fixed bottom-0 left-0 right-0 z-50 px-4 py-3 md:py-4"
           style={{
@@ -869,7 +868,7 @@ export default function RouteDetailView({ ride }: { ride?: RideInvite | null } =
             </div>
             <Link
               href={loginHref()}
-              className="shrink-0 px-5 py-2.5 rounded-xl font-bold text-sm uppercase tracking-wider transition-all hover:brightness-110"
+              className="shrink-0 px-5 min-h-[44px] inline-flex items-center rounded-xl font-bold text-sm uppercase tracking-wider transition-all hover:brightness-110"
               style={{
                 background: "var(--accent)",
                 color: "var(--bg)",

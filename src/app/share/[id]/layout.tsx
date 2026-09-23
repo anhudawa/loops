@@ -8,7 +8,9 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const route = await getRoute(id);
+  // Fail soft: this page only redirects to /routes/<id>; a DB blip must not
+  // turn an old shared link into a 500.
+  const route = await getRoute(id).catch(() => undefined);
 
   if (!route) {
     return { title: "Route Not Found - LOOPS" };
@@ -41,12 +43,12 @@ export async function generateMetadata({
   return {
     title,
     description,
-    alternates: { canonical: `https://www.loops.ie/share/${id}` },
+    alternates: { canonical: `https://www.loops.ie/routes/${id}` },
     robots: { index: true, follow: true },
     openGraph: {
       title,
       description,
-      url: `https://www.loops.ie/share/${id}`,
+      url: `https://www.loops.ie/routes/${id}`,
       siteName: "LOOPS",
       type: "article",
       locale: "en_IE",

@@ -108,7 +108,7 @@ describe("buildRoadReport", () => {
     expect(r.road_class_pct.residential).toBe(40);
     expect(r.surface.paved_pct).toBe(100);
     expect(r.known_pct).toBe(100);
-    expect(r.summary).toMatch(/Meets the Loops road standard/);
+    expect(r.summary).toMatch(/Meets the LOOPS Road Standard/);
   });
 
   it("measures a mid-route primary stretch and names its kind (trust rule)", () => {

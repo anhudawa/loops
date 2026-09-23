@@ -127,7 +127,10 @@ export default function ShareRide({ route, ride }: ShareRideProps) {
       {open && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-[1000] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setOpen(false)}>
           <div
-            className="w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl overflow-hidden mx-0 sm:mx-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="share-ride-title"
+            className="w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl mx-0 sm:mx-4 max-h-[100dvh] sm:max-h-[90vh] overflow-y-auto overscroll-contain"
             style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -141,11 +144,11 @@ export default function ShareRide({ route, ride }: ShareRideProps) {
                     </svg>
                   </div>
                   <div>
-                    <h3 className="text-lg font-extrabold tracking-tight" style={{ color: "var(--text)" }}>{forwarding ? "Forward this ride" : "Invite to Ride"}</h3>
+                    <h3 id="share-ride-title" className="text-lg font-extrabold tracking-tight" style={{ color: "var(--text)" }}>{forwarding ? "Forward this ride" : "Invite to Ride"}</h3>
                     <p className="text-xs" style={{ color: "var(--text-muted)" }}>{route.name} · {route.region || route.county}</p>
                   </div>
                 </div>
-                <button onClick={() => setOpen(false)} className="hover:opacity-70 p-1" style={{ color: "var(--text-muted)" }}>
+                <button onClick={() => setOpen(false)} aria-label="Close" autoFocus={forwarding} className="hover:opacity-70 min-w-[44px] min-h-[44px] -mr-2 flex items-center justify-center" style={{ color: "var(--text-muted)" }}>
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                   </svg>
@@ -214,7 +217,7 @@ export default function ShareRide({ route, ride }: ShareRideProps) {
                 <button
                   onClick={nativeShare}
                   disabled={!when}
-                  className="py-2.5 rounded-xl text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="min-h-[44px] rounded-xl text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed"
                   style={{ background: "var(--bg)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
                 >
                   Share another way…
@@ -222,7 +225,7 @@ export default function ShareRide({ route, ride }: ShareRideProps) {
                 <button
                   onClick={copyMessage}
                   disabled={!when}
-                  className="py-2.5 rounded-xl text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="min-h-[44px] rounded-xl text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed"
                   style={{
                     background: copied ? "var(--accent-glow)" : "var(--bg)",
                     border: copied ? "1px solid var(--accent)" : "1px solid var(--border)",

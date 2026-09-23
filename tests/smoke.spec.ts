@@ -205,7 +205,7 @@ test.describe("Road Standard (Trust Rule)", () => {
     await openRoute(page, RIDE_PATH);
     const card = page.getByTestId("road-standard");
     await expect(card).toBeVisible({ timeout: 30000 });
-    await expect(card).toContainText(/Meets the Loops road standard|Compromise:/);
+    await expect(card).toContainText(/Meets the (?:Loops road standard|LOOPS Road Standard)|Compromise:/);
   });
 
   test("a route with compromises lists every stretch under Where", async ({ page }) => {

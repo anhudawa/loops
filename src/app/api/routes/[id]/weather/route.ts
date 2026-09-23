@@ -6,6 +6,7 @@ import type { ForecastHour } from "@/lib/ride-wind";
 
 const cache = new Map<string, { data: unknown; timestamp: number }>();
 const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+const STALE_TTL = 60 * 60 * 1000; // served when the forecast service fails
 const MAX_RIDE_HOURS = 8;
 
 const HOURLY = "temperature_2m,relative_humidity_2m,precipitation,precipitation_probability,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m";
@@ -53,6 +54,8 @@ export async function GET(
     const rideHour = t && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(t) ? `${t.slice(0, 13)}:00` : null;
     const cacheKey = rideHour ? `${id}@${rideHour}` : id;
     const cached = cache.get(cacheKey);
+    // A good answer from the last hour beats a 502 when the service blips.
+    const stale = () => (cached && Date.now() - cached.timestamp < STALE_TTL ? NextResponse.json(cached.data) : null);
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
       return NextResponse.json(cached.data);
     }
@@ -69,9 +72,10 @@ export async function GET(
       `https://api.open-meteo.com/v1/forecast?latitude=${route.start_lat}&longitude=${route.start_lng}` +
       `&current=temperature_2m,relative_humidity_2m,precipitation,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m` +
       `&hourly=${HOURLY}&wind_speed_unit=kmh&timezone=auto&forecast_days=16`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(8000) }).catch(() => null);
+    let res = await fetch(url, { signal: AbortSignal.timeout(6000), next: { revalidate: 600 } }).catch(() => null);
+    if (!res || !res.ok) res = await fetch(url, { signal: AbortSignal.timeout(6000) }).catch(() => null);
     if (!res || !res.ok) {
-      return apiError("Weather service unavailable", "SERVICE_UNAVAILABLE", 502);
+      return stale() ?? apiError("Weather service unavailable", "SERVICE_UNAVAILABLE", 502);
     }
     const raw = await res.json();
     const hourly = raw.hourly ?? {};

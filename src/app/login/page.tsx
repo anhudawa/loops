@@ -52,6 +52,11 @@ function LoginPage() {
   const routeMatch = returnTo?.match(/^\/(ride|routes)\/([^/?#]+)(?:[?#]|$)/);
   const returnKind = routeMatch ? (routeMatch[1] === "ride" ? "ride" : "route") : null;
   const returnRouteId = routeMatch && routeMatch[2] !== "country" ? routeMatch[2] : null;
+  // Came for the GPX (the redirect carries gpx=1) or just signing in?
+  const wantsGpx = !!returnTo && /[?&]gpx=1(?:&|$)/.test(returnTo);
+  // The way back never carries gpx=1: a rider who backs out (or copies that
+  // link) must not trigger an automatic download later.
+  const backHref = returnTo ? returnTo.replace(/([?&])gpx=1(&|$)/, (_, a, b) => (b ? a : "")).replace(/[?&]$/, "") : null;
   const [returnRouteName, setReturnRouteName] = useState<string | null>(null);
   useEffect(() => {
     if (!returnRouteId) return;
@@ -188,9 +193,9 @@ function LoginPage() {
             {returnRouteId && returnTo && (
               <div className="mb-4 text-sm" data-testid="login-return-context">
                 <p className="font-bold" style={{ color: "var(--text)" }}>
-                  Sign in to get the GPX {returnRouteName ? <>for <span style={{ color: "var(--accent)" }}>{returnRouteName}</span></> : `for this ${returnKind}`}
+                  {wantsGpx ? "Sign in to get the GPX" : "Sign in to save"} {returnRouteName ? <>{wantsGpx ? "for" : ""} <span style={{ color: "var(--accent)" }}>{returnRouteName}</span></> : wantsGpx ? `for this ${returnKind}` : `this ${returnKind}`}
                 </p>
-                <a href={returnTo} className="inline-block mt-1.5 text-xs font-bold underline" style={{ color: "var(--text-muted)" }}>
+                <a href={backHref ?? returnTo} className="inline-flex items-center min-h-[44px] text-xs font-bold underline" style={{ color: "var(--text-muted)" }}>
                   ← Back to the {returnKind}
                 </a>
               </div>

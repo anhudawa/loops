@@ -257,7 +257,7 @@ export interface RoadReport {
  * Bump when the classification rules change: stored reports with an older
  * (or missing) version are re-traced on next view (api/routes/[id]).
  */
-export const ROAD_RULES_VERSION = 5;
+export const ROAD_RULES_VERSION = 6;
 
 // "Unsuitable" by surface is discipline-aware: smoothness=bad is a hazard on
 // a road bike and the whole point of a gravel ride; class:bicycle −2 is
@@ -400,7 +400,7 @@ function summarise(r: RoadReport, discipline: Discipline): string {
     // read as partly unpaved.
     const pavedOfKnown = r.known_pct > 0 ? Math.min(100, Math.round((r.surface.paved_pct / r.known_pct) * 100)) : r.surface.paved_pct;
     const paved = discipline === "road" ? `, ${pavedOfKnown}% paved` : "";
-    return `Meets the Loops road standard: no main roads, nothing over 80 km/h${paved}${measuredSuffix(r)}.`;
+    return `Meets the LOOPS Road Standard: no main roads, nothing over 80 km/h${paved}${measuredSuffix(r)}.`;
   }
   const top = r.compromises.slice(0, 2).map(describeCompromise);
   const more = r.compromises.length > 2 ? ` (+${r.compromises.length - 2} more)` : "";

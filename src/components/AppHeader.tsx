@@ -61,7 +61,7 @@ export default function AppHeader({ sticky = true }: { sticky?: boolean }) {
 
   return (
     <header
-      className={`${sticky ? "sticky top-0 " : ""}z-40 border-b`}
+      className={`${sticky && !pathname?.startsWith("/ride/") ? "sticky top-0 " : ""}z-40 border-b`}
       style={{ background: "var(--bg-raised)", borderColor: "var(--border)" }}
     >
       <div className="max-w-5xl mx-auto px-4 md:px-6">
@@ -180,7 +180,8 @@ export default function AppHeader({ sticky = true }: { sticky?: boolean }) {
 
         {/* Mobile nav — second row so all primary links stay visible at 375px */}
         <nav
-          className="md:hidden flex items-center gap-1 overflow-x-auto -mx-1 px-1"
+          className="md:hidden flex items-center gap-1 overflow-x-auto -mx-1 px-1 pr-6 [scrollbar-width:none]"
+          style={{ maskImage: "linear-gradient(to right, black 88%, transparent)", WebkitMaskImage: "linear-gradient(to right, black 88%, transparent)" }}
           aria-label="Primary"
         >
           <NavLinks pathname={pathname} />

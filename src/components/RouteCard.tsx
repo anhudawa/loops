@@ -58,7 +58,7 @@ function RoadStandardChip({ status, small }: { status: "met" | "notes" | null; s
         background: met ? "rgba(200,255,0,0.12)" : "rgba(245,165,36,0.14)",
         border: `1px solid ${met ? "rgba(200,255,0,0.35)" : "rgba(245,165,36,0.45)"}`,
       }}
-      title={met ? "Meets the Loops road standard" : "Has named road-standard compromises"}
+      title={met ? "Meets the LOOPS Road Standard" : "Has named road-standard compromises"}
       aria-label={met ? "Meets the road standard" : "Road notes on this route"}
     >
       <span aria-hidden="true">{met ? "✓" : "⚠"}</span>

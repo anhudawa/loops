@@ -114,6 +114,13 @@ export default function RideActions({ routeId, routeName, rideLink = false }: Ri
     }
   };
 
+  // The page's own URL minus one-shot flags (gpx=1): what we share.
+  const shareableUrl = () => {
+    const u = new URL(window.location.href);
+    u.searchParams.delete("gpx");
+    return u.toString();
+  };
+
   const copyLink = async () => {
     // Use native share sheet in Capacitor app
     try {
@@ -123,14 +130,14 @@ export default function RideActions({ routeId, routeName, rideLink = false }: Ri
         await Share.share({
           title: routeName,
           text: `Check out this route: ${routeName}`,
-          url: window.location.href,
+          url: shareableUrl(),
         });
         return;
       }
     } catch {
       // Fall through to clipboard copy
     }
-    await navigator.clipboard.writeText(window.location.href);
+    await navigator.clipboard.writeText(shareableUrl());
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };

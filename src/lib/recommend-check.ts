@@ -1,5 +1,5 @@
 /** Compute and store a route's recommend_status (rules in recommendable.ts). */
-import { storeRecommendStatus } from "./db";
+import { storeRecommendStatus, getAllRoutesForRecommendCheck } from "./db";
 import { RECOMMEND_RULES_VERSION, shapeVerdict, turnaround, type RecommendStatus } from "./recommendable";
 import { outAndBackAlternative } from "./route-generator";
 
@@ -27,4 +27,22 @@ export async function checkRecommendable(route: { id: string; name?: string | nu
 export function needsRecommendCheck(route: { recommend_checked?: unknown }): boolean {
   const v = (route.recommend_checked as { v?: number } | null | undefined)?.v;
   return v !== RECOMMEND_RULES_VERSION;
+}
+
+/**
+ * Judge every route whose verdict is missing or stale, within `budgetMs`
+ * (admin button and the daily cron). An unjudged out-and-back stays off every
+ * list, so Cap Formentor was hidden until someone happened to open it.
+ */
+export async function recommendCheckPending(budgetMs: number): Promise<Record<string, number>> {
+  const started = Date.now();
+  const counts: Record<string, number> = {};
+  let left = 0;
+  for (const r of await getAllRoutesForRecommendCheck()) {
+    if (!needsRecommendCheck(r)) continue;
+    if (Date.now() - started > budgetMs) { left++; continue; }
+    const status = await checkRecommendable(r).catch(() => null);
+    counts[status ?? "error"] = (counts[status ?? "error"] ?? 0) + 1;
+  }
+  return { ...counts, still_to_check: left };
 }

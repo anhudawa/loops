@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { apiError, handleApiError } from "@/lib/api-utils";
 import { measureUnmeasured } from "@/lib/measure-route";
 import { applyBundleCorrections } from "@/lib/bundle-corrections";
+import { recommendCheckPending } from "@/lib/recommend-check";
 
 export const maxDuration = 60;
 
@@ -17,7 +18,7 @@ export async function GET(request: NextRequest) {
       return apiError("Unauthorized", "UNAUTHORIZED", 401);
     }
     const corrected = await applyBundleCorrections().catch(() => [] as string[]);
-    const result = { corrected, ...(await measureUnmeasured(45_000)) };
+    const result = { corrected, ...(await measureUnmeasured(30_000)), recommend: await recommendCheckPending(15_000).catch(() => ({})) };
     console.log(JSON.stringify({ evt: "routes_measured", ...result }));
     return NextResponse.json({ data: result });
   } catch (err) {

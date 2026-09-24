@@ -249,6 +249,17 @@ function AnchorMarker({ position, icon, onMove, onRemove }: {
 }
 
 /** Centres the map each time a new target is set (on load if allowed, or on "Use my location"). */
+/**
+ * The map credit never navigates away from a drawing: no "Leaflet" link, and
+ * the OpenStreetMap credit (required) opens in a new tab. A tap near the
+ * corner landed on it and left Draw (found by the Draw UI test run).
+ */
+function SafeAttribution() {
+  const map = useMap();
+  useEffect(() => { map.attributionControl?.setPrefix(false); }, [map]);
+  return null;
+}
+
 function RecenterOnce({ target }: { target: LatLng | null }) {
   const map = useMap();
   useEffect(() => {
@@ -1057,9 +1068,10 @@ export default function MapPlanner() {
           doubleClickZoom={false}
         >
           <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
+          <SafeAttribution />
           <RecenterOnce target={geoCenter} />
           <PopupWatch onChange={setPopupOpen} />
           {/* Hidden while a pin's popup is open: on a phone the chip (z 1000)

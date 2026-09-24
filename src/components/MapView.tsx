@@ -104,12 +104,14 @@ export default function MapView({
       "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
     const tileAttribution =
       process.env.NEXT_PUBLIC_MAP_TILE_ATTRIBUTION ||
-      '&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+      '&copy; <a href="https://openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors';
     L.tileLayer(tileUrl, {
       attribution: tileAttribution,
       maxZoom: 19,
     }).addTo(mapRef.current);
     if (attributionPosition) mapRef.current.attributionControl?.setPosition(attributionPosition);
+    // No "Leaflet" link: a tap near the corner must not leave the page.
+    mapRef.current.attributionControl?.setPrefix(false);
 
     layersRef.current = L.layerGroup().addTo(mapRef.current);
     windLayerRef.current = L.layerGroup().addTo(mapRef.current);

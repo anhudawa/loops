@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { v4 as uuidv4 } from "uuid";
 import { validateMagicLink, upsertEmailUser, migrateDb, recordEvent, markNewsletterOptIn, ANALYTICS_EVENTS } from "@/lib/db";
 import { ATTRIBUTION_COOKIE, decodeAttribution } from "@/lib/attribution";
@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
 
     if (isNew && request.cookies.get("newsletter_optin")?.value === "1") {
       await markNewsletterOptIn(user.id).catch(() => {});
-      void subscribeToNewsletter(link.email, { source: attribution?.source ?? null });
+      after(() => subscribeToNewsletter(link.email, { source: attribution?.source ?? null }));
     }
     void recordEvent(ANALYTICS_EVENTS.AUTH_SUCCEEDED, {
       userId: user.id,

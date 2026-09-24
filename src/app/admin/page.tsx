@@ -145,6 +145,24 @@ export default function AdminPage() {
     }
   };
 
+  const runBeehiiv = async (action: "status" | "backfill") => {
+    setImporting(`beehiiv-${action}`);
+    setImportMsg(null);
+    try {
+      const res = await fetch("/api/admin/beehiiv", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }) });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d?.error ?? "Failed");
+      const x = d.data ?? {};
+      setImportMsg(x.error ? `Beehiiv: ${x.error}` : action === "status"
+        ? `Beehiiv connected: ${x.publication ?? "publication"} · ${x.automations ? `${x.automations} automation(s) for new riders` : "no automation set (BEEHIIV_AUTOMATION_ID)"}`
+        : `Beehiiv: ${x.sent} opted-in riders sent${x.failed ? `, ${x.failed} failed` : ""}`);
+    } catch (e) {
+      setImportMsg(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setImporting(null);
+    }
+  };
+
   const importBundle = async (key: string) => {
     setImporting(key);
     setImportMsg(null);
@@ -523,6 +541,12 @@ export default function AdminPage() {
                 </button>
                 <button onClick={() => runTidy("hide-tests")} disabled={importing !== null} className="px-3 py-2 rounded-lg text-xs font-bold disabled:opacity-40" style={{ background: "var(--bg)", color: "var(--text)", border: "1px solid var(--border)" }} title="Oregon Karoo, Battersea, Redhill, Windsor — hidden from the public library, not deleted">
                   {importing === "hide-tests" ? "Working…" : "Hide test uploads (4)"}
+                </button>
+                <button onClick={() => runBeehiiv("status")} disabled={importing !== null} className="px-3 py-2 rounded-lg text-xs font-bold disabled:opacity-40" style={{ background: "var(--bg)", color: "var(--text)", border: "1px solid var(--border)" }} title="Checks the Beehiiv key and publication id set in Vercel">
+                  {importing === "beehiiv-status" ? "Checking…" : "Check Beehiiv"}
+                </button>
+                <button onClick={() => runBeehiiv("backfill")} disabled={importing !== null} className="px-3 py-2 rounded-lg text-xs font-bold disabled:opacity-40" style={{ background: "var(--bg)", color: "var(--text)", border: "1px solid var(--border)" }} title="Sends every rider who ticked the newsletter box at signup to Beehiiv (existing subscribers are left as they are)">
+                  {importing === "beehiiv-backfill" ? "Sending…" : "Send opted-in riders to Beehiiv"}
                 </button>
               </div>
             </div>

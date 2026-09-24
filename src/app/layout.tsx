@@ -6,6 +6,7 @@ import { CapacitorProvider } from "@/components/CapacitorProvider";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import Footer from "@/components/Footer";
 import InstallPrompt from "@/components/InstallPrompt";
+import RideCheckCard from "@/components/RideCheckCard";
 import JsonLd from "@/components/JsonLd";
 import { generateOrganizationJsonLd, generateWebSiteJsonLd } from "@/lib/seo";
 import { freeGpxPhrase } from "@/lib/copy";
@@ -73,6 +74,7 @@ export default function RootLayout({
                 {children}
                 <Footer />
                 <InstallPrompt />
+                <RideCheckCard />
               </AuthProvider>
             </CapacitorProvider>
           </ToastProvider>

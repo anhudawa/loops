@@ -242,6 +242,22 @@ node scripts/import-routes.mjs scripts/hub-data/girona-eat-sleep-cycle.json --dr
   give-way/junction turn — engine NodeTags/TurnCost, direction-aware) and splices
   the reps in; long flat efforts may be laps of a quiet flat stretch.
   No → one different stretch per rep on the loop pipeline's loops.
+- Rider-proven routes (owner 2026-09-24; rules in src/lib/ride-check.ts):
+  saving a route (or taking its GPX) books a check-in for the next day —
+  "Did you ride it? How was it (1–5)?" — asked by the in-app card
+  (RideCheckCard), web push (dormant until NEXT_PUBLIC_VAPID_PUBLIC_KEY +
+  VAPID_PRIVATE_KEY [+ VAPID_SUBJECT]) or email via Resend (daily cron
+  /api/cron/ride-checks, vercel.json; needs CRON_SECRET). A rider-saved
+  route is offered to others (quality_status approved, community_status
+  'proven') only when its creator rode it and rated it 4+ AND it is a
+  training loop (ends ≤ 1 km apart, ≥ 20 km, ≤ 40 % retrace, sound track)
+  AND its road report passes the serving policy; 3+ ratings averaging
+  < 3.5 drop it. Offered routes carry "Ridden and rated ★ x by n LOOPS
+  riders" — never a name.
+- Beehiiv (src/lib/beehiiv.ts): opted-in signups subscribe (+ enrol in
+  BEEHIIV_AUTOMATION_ID, the autoresponder) once BEEHIIV_API_KEY +
+  BEEHIIV_PUBLICATION_ID are set; /admin → "Check Beehiiv" and "Send
+  opted-in riders to Beehiiv" (backfill).
 - No CSRF tokens; cookie-only sessions; locale hardcoded en-IE
 
 ## Conventions

@@ -10,6 +10,7 @@ import {
   RATE_LIMIT_WRITE,
 } from "@/config/constants";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { bookCheckIn } from "@/lib/ride-check-service";
 
 /**
  * POST /api/routes/from-generated
@@ -194,6 +195,10 @@ export async function POST(request: NextRequest) {
         main_road_pct: body.road_report.main_road_pct ?? null,
       });
     }
+
+    // "Did you ride it? How was it?" — asked the day after. The answer
+    // decides whether this route is ever offered to other riders.
+    await bookCheckIn(id, user.id, true);
 
     // Funnel: a generated/drawn route was saved (fire-and-forget, no PII).
     // Separate the draw milestone from a generated save via the description

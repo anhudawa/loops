@@ -1,3 +1,4 @@
+import { bookCheckIn } from "@/lib/ride-check-service";
 import { NextRequest, NextResponse } from "next/server";
 import { getRoute, getUserBySession, trackDownload, migrateDb, recordEvent, ANALYTICS_EVENTS } from "@/lib/db";
 import { apiError, handleApiError } from "@/lib/api-utils";
@@ -34,6 +35,9 @@ export async function GET(
     } catch {
       // Don't block the download if tracking fails
     }
+    // Took the GPX → "did you ride it?" tomorrow: riders who are offered a
+    // route rate it too, so a poor one stops being suggested.
+    if (user) await bookCheckIn(id, user.id, route.created_by === user.id);
 
     // Funnel: GPX downloaded (fire-and-forget, no PII).
     void recordEvent(ANALYTICS_EVENTS.GPX_DOWNLOADED, {

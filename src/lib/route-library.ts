@@ -14,7 +14,8 @@ import { validRoadReport } from "./library-road-report";
 import { checkTrack } from "./track-shape";
 import { compromiseAcceptable } from "./road-segments";
 import { LIBRARY_ROAD_POLICY } from "@/config/constants";
-import { getRoutes, type Route } from "./db";
+import { getRoutes, getRouteProof, type Route } from "./db";
+import { provenLabel } from "./ride-check";
 import {
   detectIntervalSegments,
   segmentsForInterval,
@@ -51,6 +52,8 @@ export interface LibraryMatch {
   loop_km?: number;
   gpx_data?: string;
   road_report?: import("./road-segments").RoadReport;
+  /** "Ridden and rated ★ 4.6 by 5 LOOPS riders" when riders have rated it. */
+  proof?: string;
 }
 
 export interface WorkoutFit {
@@ -241,7 +244,15 @@ export async function matchLibraryRoutes(
   }
 
   scored.sort((a, b) => b.match_score - a.match_score);
-  return scored.slice(0, maxResults);
+  const top = scored.slice(0, maxResults);
+  // Rider proof: "Ridden and rated ★ 4.6 by 5 LOOPS riders" (never a name).
+  const proof = await getRouteProof(top.map((m) => m.route_id));
+  for (const m of top) {
+    const p = proof.get(m.route_id);
+    const label = p ? provenLabel(p.rides, p.avg) : null;
+    if (label) m.proof = label;
+  }
+  return top;
 }
 
 // ── Workout-mode matching ─────────────────────────────────────────────────────

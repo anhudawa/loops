@@ -77,6 +77,8 @@ interface LibraryCandidate {
   loop_km?: number;
   gpx_data?: string;
   road_report?: { standard_met: boolean; summary: string; compromises?: Compromise[] };
+  /** "Ridden and rated ★ 4.6 by 5 LOOPS riders" — riders' own check-ins. */
+  proof?: string;
 }
 
 interface GeneratedCandidate {
@@ -1226,12 +1228,15 @@ function CandidateCard({
               <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
                 {isLibrary
                   ? candidate.from_home
-                    ? `${candidate.county} · new loop from your start, built on this verified route`
-                    : `${candidate.county} · verified`
+                    ? `${candidate.county} · new loop from your start, built on this ${candidate.proof ? "rider-proven" : "verified"} route`
+                    : `${candidate.county} · ${candidate.proof ? "rider-proven" : "verified"}`
                   : edit
                   ? "Your edit · quality re-checked when you save"
                   : candidate.ride_note ?? "Freshly generated"}
               </p>
+              {isLibrary && candidate.proof && (
+                <p className="text-xs mt-0.5 font-semibold" style={{ color: "var(--accent)" }}>{candidate.proof}</p>
+              )}
             </div>
             {edit ? (
               <div

@@ -13,7 +13,7 @@ const PIPELINE_TIMEOUT_MS = 55_000;
 
 /** Each generation hits the LLM + Overpass + BRouter + Open-Meteo. Keep
  * the per-rider rate low to protect cost and downstream quotas. */
-const RATE_LIMIT_PER_MIN = 5;
+const RATE_LIMIT_PER_MIN = Math.max(1, parseInt(process.env.GENERATE_RATE_LIMIT_PER_MIN ?? "5", 10) || 5); // env override for local test runs only
 const RATE_LIMIT_WINDOW_MS = 60_000;
 
 /**

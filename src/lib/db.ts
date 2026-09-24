@@ -2062,3 +2062,212 @@ export async function setSceneryCache(key: string, payload: unknown): Promise<vo
   }
 }
 
+
+// ── Ride check-ins and rider-proven routes (src/lib/ride-check.ts) ──────────
+
+let rideCheckTablesReady: Promise<void> | null = null;
+function ensureRideCheckTables(): Promise<void> {
+  if (!rideCheckTablesReady) {
+    rideCheckTablesReady = (async () => {
+      await sql`
+        CREATE TABLE IF NOT EXISTS ride_checks (
+          id TEXT PRIMARY KEY,
+          route_id TEXT NOT NULL REFERENCES routes(id) ON DELETE CASCADE,
+          user_id TEXT NOT NULL REFERENCES users(id),
+          token TEXT NOT NULL UNIQUE,
+          is_creator BOOLEAN NOT NULL DEFAULT FALSE,
+          due_at TIMESTAMPTZ NOT NULL,
+          asks INT NOT NULL DEFAULT 0,
+          last_asked_at TIMESTAMPTZ,
+          answered_at TIMESTAMPTZ,
+          rode BOOLEAN,
+          score INT CHECK (score IS NULL OR (score >= 1 AND score <= 5)),
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          UNIQUE (route_id, user_id)
+        )
+      `;
+      await sql`CREATE INDEX IF NOT EXISTS idx_ride_checks_user_due ON ride_checks(user_id, due_at) WHERE answered_at IS NULL`;
+      await sql`
+        CREATE TABLE IF NOT EXISTS web_push_subscriptions (
+          endpoint TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL REFERENCES users(id),
+          p256dh TEXT NOT NULL,
+          auth TEXT NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+      `;
+      await sql`ALTER TABLE routes ADD COLUMN IF NOT EXISTS community_status TEXT`;
+    })().catch((err) => {
+      rideCheckTablesReady = null;
+      throw err;
+    });
+  }
+  return rideCheckTablesReady;
+}
+
+export interface RideCheck {
+  id: string;
+  route_id: string;
+  user_id: string;
+  token: string;
+  is_creator: boolean;
+  due_at: string;
+  asks: number;
+  answered_at: string | null;
+  rode: boolean | null;
+  score: number | null;
+  route_name?: string;
+  distance_km?: number;
+}
+
+/** Book "did you ride it?" for a rider and a route (idempotent: one per rider per route). */
+export async function bookRideCheck(routeId: string, userId: string, isCreator: boolean, dueAt: Date): Promise<void> {
+  await ensureRideCheckTables();
+  const token = `${uuidv4().replace(/-/g, "")}${uuidv4().replace(/-/g, "").slice(0, 8)}`;
+  await sql`
+    INSERT INTO ride_checks (id, route_id, user_id, token, is_creator, due_at)
+    VALUES (${uuidv4()}, ${routeId}, ${userId}, ${token}, ${isCreator}, ${dueAt.toISOString()})
+    ON CONFLICT (route_id, user_id) DO NOTHING
+  `;
+}
+
+/** Unanswered check-ins that are due for this rider (newest first). */
+export async function getDueRideChecks(userId: string): Promise<RideCheck[]> {
+  await ensureRideCheckTables();
+  const { rows } = await sql`
+    SELECT c.*, r.name AS route_name, r.distance_km
+    FROM ride_checks c JOIN routes r ON r.id = c.route_id
+    WHERE c.user_id = ${userId} AND c.answered_at IS NULL AND c.due_at <= NOW()
+    ORDER BY c.due_at DESC LIMIT 3
+  `;
+  return rows as RideCheck[];
+}
+
+export async function getRideCheckByToken(token: string): Promise<RideCheck | undefined> {
+  await ensureRideCheckTables();
+  const { rows } = await sql`
+    SELECT c.*, r.name AS route_name, r.distance_km
+    FROM ride_checks c JOIN routes r ON r.id = c.route_id WHERE c.token = ${token}
+  `;
+  return rows[0] as RideCheck | undefined;
+}
+
+export async function getRideCheck(id: string): Promise<RideCheck | undefined> {
+  await ensureRideCheckTables();
+  const { rows } = await sql`SELECT * FROM ride_checks WHERE id = ${id}`;
+  return rows[0] as RideCheck | undefined;
+}
+
+/** "Not yet": ask again later (or stop asking after the last try). */
+export async function snoozeRideCheck(id: string, nextAt: Date | null): Promise<void> {
+  await ensureRideCheckTables();
+  if (nextAt) await sql`UPDATE ride_checks SET due_at = ${nextAt.toISOString()}, asks = asks + 1 WHERE id = ${id}`;
+  else await sql`UPDATE ride_checks SET answered_at = NOW(), rode = NULL WHERE id = ${id}`;
+}
+
+/** Record the answer; a rating also goes into the ratings table (one per rider per route). */
+export async function answerRideCheck(check: RideCheck, rode: boolean, score: number | null): Promise<void> {
+  await ensureRideCheckTables();
+  await sql`UPDATE ride_checks SET answered_at = NOW(), rode = ${rode}, score = ${rode ? score : null} WHERE id = ${check.id}`;
+  if (rode && score) await upsertRating(uuidv4(), check.route_id, check.user_id, score);
+}
+
+/** Check-ins due for a reminder (email/push): due, unanswered, not asked in the last day. */
+export async function getRideChecksToRemind(limit = 200): Promise<Array<RideCheck & { email: string }>> {
+  await ensureRideCheckTables();
+  const { rows } = await sql`
+    SELECT c.*, r.name AS route_name, r.distance_km, u.email
+    FROM ride_checks c JOIN routes r ON r.id = c.route_id JOIN users u ON u.id = c.user_id
+    WHERE c.answered_at IS NULL AND c.due_at <= NOW()
+      AND (c.last_asked_at IS NULL OR c.last_asked_at < NOW() - INTERVAL '22 hours')
+      AND c.asks < 3
+    ORDER BY c.due_at LIMIT ${limit}
+  `;
+  return rows as Array<RideCheck & { email: string }>;
+}
+
+export async function markRideCheckReminded(id: string): Promise<void> {
+  await sql`UPDATE ride_checks SET last_asked_at = NOW(), asks = asks + 1 WHERE id = ${id}`;
+}
+
+/** Everything the community decision needs for one route. */
+export async function getCommunityInputs(routeId: string): Promise<{
+  route: Route | undefined;
+  creatorRode: boolean | null;
+  creatorScore: number | null;
+  ratings: number[];
+}> {
+  await ensureRideCheckTables();
+  const { rows: rrows } = await sql`SELECT * FROM routes WHERE id = ${routeId}`;
+  const route = rrows[0] as Route | undefined;
+  const { rows: crows } = await sql`
+    SELECT rode, score FROM ride_checks WHERE route_id = ${routeId} AND is_creator = TRUE AND answered_at IS NOT NULL LIMIT 1
+  `;
+  const { rows: ratings } = await sql`
+    SELECT c.score FROM ride_checks c WHERE c.route_id = ${routeId} AND c.rode = TRUE AND c.score IS NOT NULL
+  `;
+  return {
+    route,
+    creatorRode: (crows[0]?.rode as boolean | null) ?? null,
+    creatorScore: (crows[0]?.score as number | null) ?? null,
+    ratings: ratings.map((r) => Number(r.score)),
+  };
+}
+
+/**
+ * Open or close a rider-saved route to other riders. Only rider-saved
+ * routes (community_status set by this path) are ever demoted here —
+ * curated library routes are not touched.
+ */
+export async function setCommunityStatus(routeId: string, status: "proven" | "dropped" | "held"): Promise<void> {
+  await ensureRideCheckTables();
+  if (status === "proven") {
+    await sql`UPDATE routes SET community_status = 'proven', quality_status = 'approved' WHERE id = ${routeId}`;
+  } else if (status === "dropped") {
+    await sql`UPDATE routes SET community_status = 'dropped', quality_status = 'pending' WHERE id = ${routeId} AND community_status IS NOT NULL`;
+  } else {
+    await sql`UPDATE routes SET community_status = COALESCE(community_status, 'held') WHERE id = ${routeId} AND created_by IS NOT NULL AND quality_status = 'pending'`;
+  }
+}
+
+/** Rider-proof shown with a route: how many riders rode it and their average. */
+export async function getRouteProof(routeIds: string[]): Promise<Map<string, { rides: number; avg: number }>> {
+  const out = new Map<string, { rides: number; avg: number }>();
+  if (!routeIds.length) return out;
+  try {
+    await ensureRideCheckTables();
+    const { rows } = await sql.query(
+      `SELECT route_id, COUNT(*)::int AS rides, AVG(score)::float AS avg FROM ride_checks
+       WHERE route_id = ANY($1::text[]) AND rode = TRUE AND score IS NOT NULL GROUP BY route_id`,
+      [routeIds],
+    );
+    for (const r of rows) out.set(r.route_id as string, { rides: Number(r.rides), avg: Number(r.avg) });
+  } catch {
+    // Proof is a label: never fail the page over it.
+  }
+  return out;
+}
+
+export async function saveWebPushSubscription(userId: string, sub: { endpoint: string; p256dh: string; auth: string }): Promise<void> {
+  await ensureRideCheckTables();
+  await sql`
+    INSERT INTO web_push_subscriptions (endpoint, user_id, p256dh, auth) VALUES (${sub.endpoint}, ${userId}, ${sub.p256dh}, ${sub.auth})
+    ON CONFLICT (endpoint) DO UPDATE SET user_id = EXCLUDED.user_id, p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth
+  `;
+}
+
+export async function getWebPushSubscriptions(userId: string): Promise<Array<{ endpoint: string; p256dh: string; auth: string }>> {
+  await ensureRideCheckTables();
+  const { rows } = await sql`SELECT endpoint, p256dh, auth FROM web_push_subscriptions WHERE user_id = ${userId}`;
+  return rows as Array<{ endpoint: string; p256dh: string; auth: string }>;
+}
+
+export async function deleteWebPushSubscription(endpoint: string): Promise<void> {
+  await sql`DELETE FROM web_push_subscriptions WHERE endpoint = ${endpoint}`;
+}
+
+/** Riders who opted in to the newsletter (Beehiiv backfill). */
+export async function getNewsletterOptInEmails(): Promise<string[]> {
+  const { rows } = await sql`SELECT email FROM users WHERE newsletter_opt_in = TRUE AND role != 'banned' ORDER BY created_at`;
+  return rows.map((r) => r.email as string);
+}

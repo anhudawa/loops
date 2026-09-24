@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { v4 as uuidv4 } from "uuid";
 import { sql } from "@vercel/postgres";
 import { upsertGoogleUser, getUserByGoogleId, migrateDb, recordEvent, markNewsletterOptIn, ANALYTICS_EVENTS } from "@/lib/db";
@@ -91,7 +91,7 @@ export async function GET(request: NextRequest) {
     if (wantsNewsletter) {
       await markNewsletterOptIn(authedUser.id).catch(() => {});
       // Beehiiv sync is dormant until keys are set; safe no-op otherwise.
-      void subscribeToNewsletter(email, { source: attribution?.source ?? null });
+      after(() => subscribeToNewsletter(email, { source: attribution?.source ?? null }));
     }
 
     // Funnel: login/signup success (fire-and-forget, no PII — no email).

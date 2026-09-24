@@ -1,3 +1,4 @@
+import { withAutoTitle } from "@/lib/route-title";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getRoute } from "@/lib/db";
@@ -70,7 +71,7 @@ export default async function RidePage({ params, searchParams }: Props) {
   let initialRoute: Record<string, unknown> | null = null;
   try {
     const r0 = await getRoute(id);
-    const r = r0 ? await withBundleCorrection(r0) : r0;
+    const r = r0 ? withAutoTitle(await withBundleCorrection(r0)) : r0;
     missing = r === undefined;
     if (r) initialRoute = initialRouteForPage(r as unknown as Record<string, unknown>);
   } catch {

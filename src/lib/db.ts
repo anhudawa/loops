@@ -2312,3 +2312,8 @@ export async function getAllRoutesForRecommendCheck(): Promise<Array<{ id: strin
   const { rows } = await sql`SELECT id, name, coordinates, distance_km, recommend_status, recommend_checked FROM routes`;
   return rows as Array<{ id: string; name: string; coordinates: string; distance_km: number; recommend_status: string | null; recommend_checked: { v?: number } | null }>;
 }
+
+/** Store an automatic title over a generic one (never over a name a rider typed). */
+export async function renameRoute(routeId: string, name: string, onlyIfName: string): Promise<void> {
+  await sql`UPDATE routes SET name = ${name} WHERE id = ${routeId} AND name = ${onlyIfName}`;
+}

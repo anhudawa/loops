@@ -1,7 +1,8 @@
+import { withAutoTitle } from "@/lib/route-title";
 import { checkRecommendable, needsRecommendCheck } from "@/lib/recommend-check";
 import { NextRequest, NextResponse, after } from "next/server";
 import { publicRoute } from "@/lib/public-route";
-import { getRoute, updateRouteElevation, updateRouteGeometry, storeRouteRoadReport, recordEvent, ANALYTICS_EVENTS } from "@/lib/db";
+import { renameRoute, getRoute, updateRouteElevation, updateRouteGeometry, storeRouteRoadReport, recordEvent, ANALYTICS_EVENTS } from "@/lib/db";
 import { apiError, handleApiError } from "@/lib/api-utils";
 import { fetchElevations } from "@/lib/elevation";
 import { rerouteWaypoints, engineTrace } from "@/lib/route-generator";
@@ -215,6 +216,13 @@ export async function GET(
     }
 
     route = await withBundleCorrection(route);
+    // "Planned road route — 116.9 km" → "Clontarf – Ashbourne – Clontarf · 117 km", stored once.
+    const titled = withAutoTitle(route);
+    if (titled.renamed) {
+      const from = route.name, to = titled.name, rid = route.id;
+      after(() => renameRoute(rid, to, from).catch(() => {}));
+      route = { ...route, name: to };
+    }
     route = await repairElevationIfFlat(route);
     route = await repairGapsIfAny(route);
     scheduleRoadTrace(route);

@@ -1,3 +1,4 @@
+import { withAutoTitle } from "@/lib/route-title";
 import { notFound } from "next/navigation";
 import { getRoute } from "@/lib/db";
 import { initialRouteForPage } from "@/lib/public-route";
@@ -14,7 +15,7 @@ export default async function RouteDetail({ params }: { params: Promise<{ id: st
   let missing = false;
   try {
     const r0 = await getRoute(id);
-    const r = r0 ? await withBundleCorrection(r0) : r0;
+    const r = r0 ? withAutoTitle(await withBundleCorrection(r0)) : r0;
     missing = r === undefined;
     if (r) initialRoute = initialRouteForPage(r as unknown as Record<string, unknown>);
   } catch {

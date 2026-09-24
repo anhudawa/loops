@@ -262,29 +262,37 @@ export default function MapView({
     const coords: [number, number][] = JSON.parse(selected.coordinates);
     if (coords.length < 2) return;
 
-    const count = Math.min(12, Math.max(5, Math.floor(coords.length / 4)));
-    const step = Math.floor(coords.length / (count + 1));
+    // Under 8 km/h wind is not worth planning around (src/lib/wind.ts): no arrows.
+    if (windOverlay.speed < 8) return;
+    // Six small arrows spread evenly by distance, the speed said once — not a
+    // dozen big badges piled on the route.
+    const cum: number[] = [0];
+    for (let i = 1; i < coords.length; i++) {
+      const [a, b] = [coords[i - 1], coords[i]];
+      cum.push(cum[i - 1] + Math.hypot(b[0] - a[0], (b[1] - a[1]) * Math.cos((a[0] * Math.PI) / 180)));
+    }
+    const total = cum[cum.length - 1];
+    const count = 6;
     const windBlowingTo = (windOverlay.direction + 180) % 360;
-
+    let idx = 0;
     for (let i = 1; i <= count; i++) {
-      const idx = Math.min(i * step, coords.length - 1);
+      const target = (total * i) / (count + 1);
+      while (idx < cum.length - 1 && cum[idx] < target) idx++;
       const [lat, lng] = coords[idx];
-
+      const label = i === 1 ? `<div style="font-size:10px;font-weight:800;color:#fff;white-space:nowrap;text-shadow:0 0 4px rgba(0,0,0,1);margin-top:1px;">${Math.round(windOverlay.speed)} km/h</div>` : "";
       const icon = L.divIcon({
         className: "wind-arrow-icon",
         html: `<div style="display:flex;flex-direction:column;align-items:center;">
-          <div style="transform:rotate(${windBlowingTo}deg);width:36px;height:36px;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);border-radius:50%;border:2px solid #ff3355;box-shadow:0 0 10px rgba(255,51,85,0.5);">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#ff3355" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+          <div style="transform:rotate(${windBlowingTo}deg);width:24px;height:24px;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.7);border-radius:50%;border:1.5px solid #ff3355;">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#ff3355" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
               <line x1="12" y1="19" x2="12" y2="5"/>
               <polyline points="5 12 12 5 19 12"/>
             </svg>
-          </div>
-          <div style="font-size:10px;font-weight:800;color:#fff;white-space:nowrap;text-shadow:0 0 4px rgba(0,0,0,1),0 0 8px rgba(255,51,85,0.6);margin-top:2px;">${Math.round(windOverlay.speed)} km/h</div>
+          </div>${label}
         </div>`,
-        iconSize: [48, 56],
-        iconAnchor: [24, 28],
+        iconSize: [40, 40],
+        iconAnchor: [20, 12],
       });
-
       L.marker([lat, lng], { icon, interactive: false }).addTo(windLayerRef.current!);
     }
   }, [windOverlay, routes, selectedRouteId]);

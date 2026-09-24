@@ -87,6 +87,8 @@ export default function WeatherCard({ routeId, windOverlayEnabled, onWindToggle,
   // days out): the service answered with the weather NOW, which says
   // nothing about that ride — so no verdict and no hour strip for it.
   const noRideForecast = !!rideTime && !!weather && !weather.forecastFor;
+  // Under 8 km/h the wind is not worth planning around: no wind arrows to offer.
+  const calm = !!weather && typeof weather.windSpeed === "number" && weather.windSpeed < 8;
   // Whether that ride's day is over (set when the weather arrives).
   const [rideOver, setRideOver] = useState(false);
 
@@ -192,6 +194,12 @@ export default function WeatherCard({ routeId, windOverlayEnabled, onWindToggle,
         </h2>
         <div className="flex items-center gap-2">
           {directionToggle}
+          {calm ? (
+            // Under 8 km/h: nothing worth drawing (the honesty rule in wind.ts).
+            <span className="flex items-center px-3 py-2 min-h-[44px] rounded-full text-xs font-bold" title="Under 8 km/h — not worth planning around" style={{ color: "var(--text-muted)", border: "1px solid var(--border)" }}>
+              Calm
+            </span>
+          ) : (
           <button
             onClick={() => onWindToggle(!windOverlayEnabled)}
             title="Show wind arrows on the map"
@@ -209,6 +217,7 @@ export default function WeatherCard({ routeId, windOverlayEnabled, onWindToggle,
             </svg>
             Wind
           </button>
+          )}
         </div>
       </div>
 

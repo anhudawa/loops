@@ -76,6 +76,7 @@ import {
 import { findEffortCorridors, type EffortCorridor } from "./session-assembly";
 import { findEffortStretch, spliceRepeats, lengthPlan, clearOfStops, lightTraffic, totalReps, isHillSession, repKm, hardestRep, type EffortStretch } from "./effort-repeats";
 import { placeNear, placesNear } from "./map-labels";
+import { autoTitle } from "./route-title";
 import { findHills, loopsOverHill, type Hill } from "./hill-finder";
 import { isClosedLoop, nearestIndex, rotateLoop } from "./loop-geometry";
 import { disciplineEnabled, DISCIPLINE_NOTICE } from "@/config/constants";
@@ -1322,6 +1323,10 @@ export async function generateRouteCandidates(
   if (spec.destination && !spec.destination.distance_asked && candidates[0]) {
     interpreted.distance_km = candidates[0].distance_km;
     delete interpreted.duration_minutes;
+  }
+  // Every generated ride gets a rider's title: start – far point – end · km.
+  for (const c of candidates) {
+    if (c.source === "generated" && !c.title) c.title = autoTitle(c.coordinates, c.distance_km);
   }
   markPhase("total");
   const timings = currentTimings;

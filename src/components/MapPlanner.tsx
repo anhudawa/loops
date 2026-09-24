@@ -784,6 +784,25 @@ export default function MapPlanner() {
   }
 
   const suggestedName = `Planned ${discipline} route — ${totals.distance_km} km`;
+  // Save asks for a name prefilled with a rider's title — "Clontarf –
+  // Ashbourne – Clontarf · 117 km" — from the server's town list; the generic
+  // name shows only until it answers (or if it can't).
+  function openNaming() {
+    setNaming(suggestedName);
+    const coords = legGeometryForChart(allLegs).map((p) => [p[0], p[1]] as LatLng);
+    if (coords.length < 2) return;
+    fetch("/api/route-title", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ coordinates: coords, distance_km: totals.distance_km }),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        const title = j?.data?.title;
+        if (typeof title === "string") setNaming((cur) => (cur === suggestedName ? title : cur));
+      })
+      .catch(() => {});
+  }
 
   /** Save the drawn route to the rider's library, then open its detail page.
    * Same payload shape /generate posts; sign-in is gated by the 401 the
@@ -1291,7 +1310,7 @@ export default function MapPlanner() {
           {naming === null && (
           <button
             type="button"
-            onClick={() => setNaming(suggestedName)}
+            onClick={() => openNaming()}
             disabled={!allSnapped || saving}
             title={allSnapped ? undefined : "Every leg must be snapped to a road before saving"}
             className="px-3 sm:px-4 rounded-xl text-xs font-bold uppercase tracking-wider disabled:opacity-40"

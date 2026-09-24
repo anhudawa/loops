@@ -1755,13 +1755,15 @@ async function candidatesFromSpecInner(
 
   // ── Destination ride ("Pollença to Cap de Formentor and back") ───────────
   if (spec.destination) {
+    // "Sally Gap loop from Rathfarnham, 90 km": the rider gave a length, so
+    // loops that go OVER the place, sized to the ask, are built alongside
+    // there-and-back (in parallel — one after the other misses the budget)
+    // and used when there-and-back misses the length by more than 20 %.
+    const loopsRun = spec.destination.distance_asked ? loopsOverDestination(spec).catch(() => [] as GeneratedRoute[]) : null;
     const rides = await generateDestinationRides(spec).catch((e) => { if (!spec.destination!.distance_asked) throw e; return [] as GeneratedRoute[]; });
-    // "Sally Gap loop from Rathfarnham, 90 km": the rider gave a length. When
-    // there-and-back falls well short (or long), also loops that go OVER the
-    // place, sized to the ask — first when they fit it better.
     const off = (r: GeneratedRoute) => Math.abs(r.distance_km - spec.distance_km) / spec.distance_km;
-    if (spec.destination.distance_asked && (rides.length === 0 || rides.every((r) => off(r) > 0.2))) {
-      const loops = await loopsOverDestination(spec).catch(() => [] as GeneratedRoute[]);
+    if (loopsRun && (rides.length === 0 || rides.every((r) => off(r) > 0.2))) {
+      const loops = await Promise.race([loopsRun, new Promise<GeneratedRoute[]>((r) => setTimeout(() => r([]), 40_000))]);
       const all = [...loops, ...rides].sort((a, b) => off(a) - off(b));
       if (all.length) return all.slice(0, 3).map((g) => ({ source: "generated" as const, ...g }));
       throw new Error(`No valid routes to ${spec.destination.name} that we would take a friend on.`);
@@ -2987,7 +2989,7 @@ async function lollipopRides(spec: RouteSpec): Promise<GeneratedRoute[]> {
         waypoints_used: [spec.start_point, ...loop.waypoints_used, spec.start_point],
         road_report: report,
         // Not "… loop": the stem is ridden twice (a lollipop, said as such).
-        title: `${startName} – ${town ?? "inland"} – ${startName} · ${Math.round(distKm)} km`,
+        title: town ? `${startName} – ${town} – ${startName} · ${Math.round(distKm)} km` : `${startName} – inland and back · ${Math.round(distKm)} km`,
         ride_note: `A loop ${town ? `from ${town}` : "inland"}, with the same ${stem.distance_km.toFixed(1)} km of road out of ${startName} and back — every loop straight from ${startName} doubled back on itself.`,
       };
       loopEngineData.set(ride, { edgeTags: tags, stops: [...(stem.stops ?? []), ...(data?.stops ?? [])] });
@@ -3459,6 +3461,12 @@ async function generateFreshRoutes(
   };
 
   let candidates = await runPass(waypointSets, "pass 1");
+  // Coastal and headland starts: when pass 1 kept nothing, start the
+  // lollipop (one road out to an inland town, a loop from it, the same road
+  // home) NOW, alongside any second pass — sequentially they miss the budget.
+  const lollipopRun = candidates.length === 0 && !presetWaypointSets && !noLollipop && Date.now() - t0 < 30_000
+    ? lollipopRides(spec).catch((e) => { genDebug(`lollipop failed: ${e instanceof Error ? e.message : e}`); return [] as GeneratedRoute[]; })
+    : null;
 
   // Second pass, if there is time: the network made loops consistently long
   // or short → re-place the same directions with the radius corrected; the
@@ -3501,6 +3509,11 @@ async function generateFreshRoutes(
     }
   }
 
+  if (candidates.length === 0 && lollipopRun) {
+    const left = Math.max(0, 46_000 - (Date.now() - t0));
+    candidates = candidates.concat(await Promise.race([lollipopRun, new Promise<GeneratedRoute[]>((r) => setTimeout(() => r([]), left))]));
+  }
+
   // Nothing met the serving policy, but real loops exist whose only fault is
   // main/fast road beyond the allowance (Sóller: every way out of the valley):
   // serve the one with the least of it, the compromise named (TRV-02).
@@ -3521,14 +3534,6 @@ async function generateFreshRoutes(
     alternative = await destinationAlternative(spec).catch(() => null);
   }
 
-  // Coastal and headland starts: when no loop survived, a lollipop — one
-  // road out to an inland town, a loop from it, the same road home.
-  if (candidates.length === 0 && !presetWaypointSets && !noLollipop && Date.now() - t0 < 28_000) {
-    candidates = candidates.concat(await lollipopRides(spec).catch((e) => {
-      genDebug(`lollipop failed: ${e instanceof Error ? e.message : e}`);
-      return [] as GeneratedRoute[];
-    }));
-  }
 
   if (candidates.length === 0) {
     dropped["_engine"] = (() => { try { return new URL(BROUTER_URL).host; } catch { return "?"; } })() as unknown as number;

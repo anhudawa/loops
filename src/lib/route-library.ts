@@ -13,6 +13,7 @@ import type { RouteSpec, WorkoutSpec } from "./route-intent";
 import { validRoadReport } from "./library-road-report";
 import { checkTrack } from "./track-shape";
 import { isClosedLoop, nearestIndex } from "./loop-geometry";
+import { trueClimb } from "./true-climb";
 import { compromiseAcceptable } from "./road-segments";
 import { LIBRARY_ROAD_POLICY } from "@/config/constants";
 import { getRoutes, getRouteProof, type Route } from "./db";
@@ -160,6 +161,7 @@ function toLibraryMatch(
   const hasEle = raw.length > 0 && raw.every((c) => typeof c[2] === "number");
   const elevations = hasEle ? raw.map((c) => c[2]) : undefined;
   const report = validRoadReport(route.road_report);
+  const climb = typeof route.coordinates === "string" ? trueClimb(route as unknown as { coordinates: string; elevation_gain_m: number; elevation_loss_m: number }) : null;
 
   return {
     route_id: route.id,
@@ -167,8 +169,9 @@ function toLibraryMatch(
     description: route.description,
     coordinates,
     distance_km: route.distance_km,
-    elevation_gain_m: route.elevation_gain_m,
-    elevation_loss_m: route.elevation_loss_m,
+    // Stored totals from noisy imports are corrected from the track (true-climb.ts).
+    elevation_gain_m: climb?.gain ?? route.elevation_gain_m,
+    elevation_loss_m: climb?.loss ?? route.elevation_loss_m,
     discipline: route.discipline,
     county: route.county,
     country: route.country,

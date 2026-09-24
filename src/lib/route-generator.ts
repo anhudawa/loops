@@ -17,6 +17,7 @@
  * production should set BROUTER_URL to a self-hosted instance.
  */
 
+import { climbStats } from "./geo-utils";
 import type { RouteSpec, Discipline, WorkoutSpec } from "./route-intent";
 import { estimateRideMinutes } from "./ride-time";
 import { mergeLoopReport } from "./library-road-report";
@@ -1726,10 +1727,11 @@ async function rideFromHome(match: LibraryMatch, spec: RouteSpec): Promise<Libra
   const share = loopLen > 0 ? loopUsedKm / loopLen : 1;
   let gain: number, loss: number;
   if (hasAllEle) {
-    gain = Math.round(elevationGainFromSeries(elevations) ?? 0);
-    let l = 0;
-    for (let i = 1; i < elevations.length; i++) { const d = elevations[i] - elevations[i - 1]; if (d < 0) l -= d; }
-    loss = Math.round(l);
+    // One climbing measure for gain AND loss (smoothed, thresholded): a loop
+    // home read 1,160 m up and 1,333 m down from two different counts.
+    const c = climbStats(coords, elevations);
+    gain = Math.round(c.gain_m);
+    loss = Math.round(c.loss_m);
   } else {
     gain = Math.round(match.elevation_gain_m * share + approachGain + backGain);
     loss = Math.round(match.elevation_loss_m * share + approachGain + backGain);
@@ -1846,13 +1848,24 @@ async function candidatesFromSpecInner(
   const fromHome = await ridesFromHome(libraryMatches, spec);
   if (!libraryDiag) libraryDiag = `${libraryMatches.length} matched, ${fromHome.length} served from home — ${libraryReasons.join(" | ")}`;
   markPhase("library");
-  if (fromHome.length > 0) {
+  // Library loops answer on their own only when there is a real choice near
+  // the ask: one 67 km loop for "80 km from Port de Pollença" is not enough.
+  const libraryNear = fromHome.filter((m) => Math.abs(m.distance_km - spec.distance_km) / spec.distance_km <= LIBRARY_ALONE_OFF);
+  if (fromHome.length >= 2 && libraryNear.length > 0) {
     return fromHome.map((m) => ({ source: "library" as const, ...m }));
   }
 
   // ── Fresh generation ───────────────────────────────────────────────────────
   const generated = await generateFreshRoutes(spec, windForecast);
   markPhase("fresh");
+
+  if (fromHome.length > 0) {
+    // Verified loops first (trust), then fresh ones, three in all.
+    return [
+      ...fromHome.map((m) => ({ source: "library" as const, ...m })),
+      ...generated.map((g) => ({ source: "generated" as const, ...g })),
+    ].slice(0, 3);
+  }
 
   // If none of the fresh builds hit "excellent", try to mix in library
   // routes as fallback. A verified operator route at "good" match is
@@ -1873,6 +1886,9 @@ async function candidatesFromSpecInner(
 
   return generated.map((g) => ({ source: "generated" as const, ...g }));
 }
+
+/** Library loops within this share of the asked length can answer alone (with 2+ of them). */
+const LIBRARY_ALONE_OFF = 0.12;
 
 // ── Destination rides ────────────────────────────────────────────────────────
 

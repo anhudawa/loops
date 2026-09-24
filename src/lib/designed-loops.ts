@@ -22,9 +22,15 @@ export function ensureDesignedLoops(): Promise<{ inserted: number; existing: num
     for (const [i, r] of (designed as Designed[]).entries()) {
       const status = await insertCuratedRoute({ ...r, id: uuidv4() });
       if (status === "inserted") inserted++; else existing++;
+      // The collection link is a nicety: it never stops the library import
+      // (it once did — the import stalled after the first loop).
       if (collectionId) {
-        const [row] = await getRoutesByName(r.name, r.country);
-        if (row) await addRouteToCollection(collectionId, row.id, 100 + i);
+        try {
+          const [row] = await getRoutesByName(r.name, r.country);
+          if (row) await addRouteToCollection(collectionId, row.id, 100 + i);
+        } catch (e) {
+          console.error(`[designed-loops] collection link failed for ${r.name}:`, e instanceof Error ? e.message : e);
+        }
       }
     }
     if (inserted) console.log(JSON.stringify({ evt: "designed_loops_imported", inserted, existing }));

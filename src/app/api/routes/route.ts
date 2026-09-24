@@ -1,7 +1,8 @@
 import { lookupKnownPlace } from "@/lib/places-known";
 import { findPlaceByName } from "@/lib/map-labels";
 import { recommendableNow } from "@/lib/recommendable";
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
+import { ensureDesignedLoops } from "@/lib/designed-loops";
 import { publicRoute, thinCoordinates } from "@/lib/public-route";
 import { getRoutes, hasMoreRows, insertRoute, getCounties, getRegions, getCountries, getUserBySession, recordEvent, ANALYTICS_EVENTS } from "@/lib/db";
 import { parseRouteFile } from "@/lib/route-parser";
@@ -15,6 +16,9 @@ import { v4 as uuidv4 } from "uuid";
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
+    // The designed Dublin & Wicklow loops join the library on the first list
+    // read of a fresh instance (idempotent, after the response).
+    after(() => ensureDesignedLoops().then(() => undefined));
 
     // Return distinct countries
     if (searchParams.get("countries") === "true") {

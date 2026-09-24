@@ -3104,7 +3104,12 @@ async function loopsOverDestination(spec: RouteSpec): Promise<GeneratedRoute[]> 
     .map((l) => ({
       ...l,
       title: `${startName} – ${dest.name} – ${startName} · ${Math.round(l.distance_km)} km`,
-      ride_note: `A loop over ${dest.name}, sized to the ${Math.round(spec.distance_km)} km you asked for.`,
+      ride_note: (() => {
+        const diff = l.distance_km - spec.distance_km;
+        return Math.abs(diff) / spec.distance_km <= 0.1
+          ? `A loop over ${dest.name}, sized to the ${Math.round(spec.distance_km)} km you asked for.`
+          : `A loop over ${dest.name}: ${Math.round(l.distance_km)} km, ${Math.round(Math.abs(diff))} km ${diff > 0 ? "over" : "under"} the ${Math.round(spec.distance_km)} km you asked for.`;
+      })(),
     }));
 }
 
@@ -3722,8 +3727,24 @@ async function generateFreshRoutes(
     return aDist - bDist;
   });
 
-  return keepAll ? candidates : pickByDistanceFit(candidates, spec.distance_km, spec.elevation_preference === "hilly" || spec.elevation_preference === "mountainous");
+  if (keepAll) return candidates;
+  const served = pickByDistanceFit(candidates, spec.distance_km, wantsClimbing, 3, climbsAsAsked);
+  for (const c of served) {
+    // Said, never silent: a loop well off the asked length, or flatter than
+    // a hilly ask, says so on its card.
+    const diff = c.distance_km - spec.distance_km;
+    if (Math.abs(diff) / spec.distance_km > DISTANCE_NOTE_OFF && !/than the .* km you asked for/.test(c.ride_note ?? "")) {
+      c.ride_note = [c.ride_note, `${Math.round(c.distance_km)} km — ${Math.round(Math.abs(diff))} km ${diff > 0 ? "longer" : "shorter"} than the ${Math.round(spec.distance_km)} km you asked for.`].filter(Boolean).join(" ");
+    }
+    if (wantsClimbing && !climbsAsAsked(c) && !/Flatter than you asked/.test(c.ride_note ?? "")) {
+      c.ride_note = [c.ride_note, `Flatter than you asked: ${Math.round(c.elevation_gain_m)} m of climbing (${(c.elevation_gain_m / Math.max(1, c.distance_km)).toFixed(0)} m per km).`].filter(Boolean).join(" ");
+    }
+  }
+  return served;
 }
+
+/** A served loop further off the asked length than this says so on its card. */
+const DISTANCE_NOTE_OFF = 0.15;
 
 /** Within this share of the asked length a loop fits; beyond FIT_WIDE it is a poor fit (CLT-12). */
 const FIT_CLOSE = 0.1;
@@ -3737,7 +3758,7 @@ const FIT_WIDE = 0.2;
  * offered 49, 61 and 37.5 km) — on a hilly ask, never when it is the longer
  * way off. Its own note still says how far off it came.
  */
-export function pickByDistanceFit<T extends { distance_km: number; road_report?: { standard_met: boolean } | null }>(ranked: T[], targetKm: number, hilly = false, max = 3): T[] {
+export function pickByDistanceFit<T extends { distance_km: number; road_report?: { standard_met: boolean } | null }>(ranked: T[], targetKm: number, hilly = false, max = 3, climbsAsAsked: (c: T) => boolean = () => true): T[] {
   const band = (c: T) => {
     const off = Math.abs(c.distance_km - targetKm) / targetKm;
     return off <= FIT_CLOSE ? 0 : off <= FIT_WIDE ? 1 : 2;
@@ -3745,7 +3766,9 @@ export function pickByDistanceFit<T extends { distance_km: number; road_report?:
   const std = (c: T) => (c.road_report?.standard_met ? 1 : 0);
   const order = ranked
     .map((c, i) => ({ c, i }))
-    .sort((a, b) => std(b.c) - std(a.c) || band(a.c) - band(b.c) || a.i - b.i)
+    // A hilly ask's climbing outranks the distance band (Rathfarnham 80 km
+    // hilly served a 10 m/km loop above a 14.6 m/km one).
+    .sort((a, b) => std(b.c) - std(a.c) || Number(climbsAsAsked(b.c)) - Number(climbsAsAsked(a.c)) || band(a.c) - band(b.c) || a.i - b.i)
     .map((x) => x.c);
   const fit = order.filter((c) => band(c) < 2);
   // Hilly asks: a loop 20 % too long is also far more climbing — hours more

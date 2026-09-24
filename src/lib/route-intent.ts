@@ -1055,6 +1055,8 @@ export function parseBasicIntent(rawPrompt: string, options: { origin?: [number,
     /\bnot\s+(?:bothered|fussed|worried)\s+(?:about|by|with)\s+(?:the\s+)?(?:climbs?|climbing|hills)|\bdon'?t\s+mind\s+(?:the\s+|some\s+)?(?:climbs?|climbing|hills)|\bany\s+terrain\b/.test(pTerrain) ? "any"
     : /\b(?:nothing|not)\s+too\s+(?:hilly|steep|lumpy|hard|mad|crazy)\b|\bnot\s+(?:very|that|so)\s+hilly\b/.test(pTerrain) ? "rolling"
     : /\bflat(?:tish|-ish|\s+ish)?\b|\bno\s+(?:big\s+|major\s+|real\s+|steep\s+|serious\s+)?(?:climb|climbs|climbing|hills)\b|\bavoid(?:ing)?\s+(?:the\s+|any\s+)?(?:hills|climbs|climbing)\b|\bwithout\s+(?:any\s+|big\s+)?(?:hills|climbs|climbing)\b|\bnot\s+hilly\b/.test(pTerrain) ? "flat"
+    // "easy spin", "recovery ride": the model parser's rule ("easy" → flat).
+    : /\b(?:easy|recovery|gentle|leisurely|relaxed|chilled)\s+(?:spin|ride|loop|day|cruise|pedal|one|pace)\b|\brecovery\b/.test(pTerrain) ? "flat"
     : /\brolling\b/.test(pTerrain) ? "rolling"
     : /\bhilly\b|\bhills\b|climbing\b/.test(pTerrain) ? "hilly"
     : /mountain(?:ous)?\b/.test(pTerrain) ? "mountainous"

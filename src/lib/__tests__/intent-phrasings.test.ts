@@ -354,3 +354,12 @@ describe("CA-04: sprints keep their seconds", () => {
     expect(workoutSummary(parseBasicWorkout("2x20 min threshold")!.workout)).toBe("2 × 20 min threshold");
   });
 });
+
+describe("easy / recovery rides are flat asks", () => {
+  it.each(["40km easy spin from Kinsale", "recovery ride from Clontarf 1 hour", "a gentle loop from Malahide 30km"])("%s", (p) => {
+    expect(parseBasicIntent(p)!.elevation_preference).toBe("flat");
+  });
+  it("an easy-to-follow route is not a terrain ask", () => {
+    expect(parseBasicIntent("60km easy to follow loop from Bray")!.elevation_preference).toBe("any");
+  });
+});

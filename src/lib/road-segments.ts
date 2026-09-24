@@ -634,12 +634,17 @@ export function mergeOutAndBack(coords: [number, number][], compromises: Comprom
  * and "(+N more)".
  */
 export function summaryParts(compromises: Compromise[]): string {
-  const city = compromises.filter((c) => c.kind === "city_streets");
-  const items: Compromise[] = compromises.filter((c) => c.kind !== "city_streets");
-  if (city.length) {
-    items.push({ ...city[0], meters: city.reduce((a, c) => a + c.meters, 0) });
-    items.sort((a, b) => b.meters - a.meters);
+  // Stretches of the same kind on the same road read as one, with their
+  // total ("769 m on the R122…", not "636 m on the R122…; 133 m on the R122…").
+  const groups = new Map<string, Compromise>();
+  for (const c of compromises) {
+    const k = c.kind === "city_streets"
+      ? `city|${c.name ?? ""}`
+      : [c.kind, c.name ?? "", c.highway, c.maxspeed ?? "", c.surface ?? "", c.why ?? "", c.near_start ? 1 : 0].join("|");
+    const g = groups.get(k);
+    groups.set(k, g ? { ...g, meters: g.meters + c.meters } : { ...c });
   }
+  const items: Compromise[] = [...groups.values()].sort((a, b) => b.meters - a.meters);
   // The same stretch ridden out and back reads once, not "624 m on a road
   // that is dirt; 624 m on a road that is dirt".
   const lines = [...new Set(items.map(describeCompromise))];

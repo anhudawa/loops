@@ -66,6 +66,9 @@ export function isGenericName(name: string | null | undefined): boolean {
  * (A to B), "Clontarf loop · 25 km" when it never leaves town. `place`
  * is injectable for tests.
  */
+/** A town named in a title is one the ride passes within this (km). */
+const FAR_TOWN_ON_ROUTE_KM = 1.5;
+
 export function autoTitle(
   coords: [number, number][],
   distanceKm: number,
@@ -82,7 +85,22 @@ export function autoTitle(
     for (const p of coords) { const d = km(start, p); if (d > best) { best = d; mid = p; } }
   }
   const a = place(start, 4);
-  const m = place(mid, 6);
+  // The far point is named only by a town the ride really passes (within
+  // 1.5 km): "Rathfarnham – Naas" came 3.7 km from Naas. The farthest
+  // points are tried first; with no town on the way the title is a loop's.
+  let m: string | null = null;
+  if (isLoop) {
+    const step = Math.max(1, Math.floor(coords.length / 80));
+    const far = coords.filter((_, i) => i % step === 0).sort((p, q) => km(start, q) - km(start, p));
+    const reach = km(start, far[0] ?? start);
+    for (const p of far) {
+      if (km(start, p) < reach * 0.6) break;
+      m = place(p, FAR_TOWN_ON_ROUTE_KM);
+      if (m && m !== a) break;
+    }
+  } else {
+    m = place(mid, FAR_TOWN_ON_ROUTE_KM);
+  }
   const b = isLoop ? a : place(end, 4);
   if (!a && !m && !b) return `Ride · ${dist}`;
   if (isLoop && (!m || m === a)) return `${a ?? m} loop · ${dist}`;

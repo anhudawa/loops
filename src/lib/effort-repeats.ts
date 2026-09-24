@@ -15,7 +15,7 @@
 
 import { ZONES, type IntensityZone } from "./intensity";
 import { smoothElevations, interpolateNaN, haversine } from "./climb-detection";
-import type { EdgeTags, RoadStop } from "./road-segments";
+import { effectiveMaxspeedKmh, inIreland, type EdgeTags, type RoadStop } from "./road-segments";
 import type { WorkoutSpec } from "./route-intent";
 
 export interface EffortStretch {
@@ -34,6 +34,10 @@ export interface EffortStretch {
   traffic_class: number | null;
   /** Laps: lengths of the stretch one effort takes (back and forth). 1 otherwise. */
   passes: number;
+  /** Laps on a stretch that is not flat all along (allowRolling): say "rolling", not "flat". */
+  rolling?: boolean;
+  /** Metres between the stretch's lowest and highest point. */
+  range_m?: number;
   score: number;
 }
 
@@ -66,6 +70,20 @@ export function lightTraffic(t: Record<string, string>): boolean {
   return t.highway !== "secondary" && t.highway !== "secondary_link";
 }
 export const MAX_EFFORT_TRAFFIC_CLASS = 3;
+
+/**
+ * No flat-out effort on a road where cars do 80 km/h (CA-01: all five VO2
+ * reps were put on the R755 above Enniskerry, an 80 km/h regional road).
+ * Regional roads (secondary) at 80+ — an Irish R-road with no sign counts
+ * as 80 — and anything signed 100+. A lane carrying the nominal rural
+ * default (Irish L-roads) is a quiet lane, as in the Road Standard.
+ */
+export function tooFastForEffort(t: Record<string, string>, ireland: boolean): boolean {
+  const kmh = effectiveMaxspeedKmh(t, ireland);
+  if (kmh === null) return false;
+  if (kmh >= 100) return true;
+  return kmh >= 80 && (t.highway === "secondary" || t.highway === "secondary_link");
+}
 
 /** Quiet side lanes allowed per km of effort (farm lanes, boreens); real junctions are never allowed. */
 const SIDE_ROADS_PER_KM = 2;
@@ -119,6 +137,10 @@ export interface FindStretchOptions {
    * repeating on one stretch, when no single stretch holds the whole rep.
    */
   laps?: boolean;
+  /** Return the first stretch that qualifies (in ride order), not the best. */
+  firstFit?: boolean;
+  /** Laps: accept a stretch that is flat on average but rolls (marked `rolling`). */
+  allowRolling?: boolean;
 }
 
 /** Shortest stretch worth lapping, and the most lengths one effort may take. */
@@ -126,6 +148,13 @@ const LAP_MIN_KM = 2.5;
 const LAP_MAX_PASSES = 4;
 /** Laps ride both ways: the stretch must be flat in both directions. */
 const LAP_MAX_ABS_PCT = 1.5;
+/**
+ * …and flat all along, not just on average (CA-06: Kinsale "flat" laps
+ * climbed 38 → 63 m with a 5.8 % ramp): every 100 m within ±3 %, and no
+ * more than 15 m between its lowest and highest point.
+ */
+export const LAP_MAX_100M_PCT = 3;
+export const LAP_MAX_RANGE_M = 15;
 
 /**
  * The best stretch on the loop for this session, or null when the loop has
@@ -170,9 +199,10 @@ export function findEffortStretch(
     if (best >= 0 && bestD <= STOP_NEAR_KM) (st.kind === "side_road" ? sideAt : stopAt).add(best);
   }
   const avoided = (i: number) => (opts.avoid ?? []).some(([a, b]) => i >= a && i <= b);
+  const ireland = inIreland(coords[0]);
   const roadOk = (e: number) => {
     const t = edgeTags[e];
-    return !!t && EFFORT_ROADS.has(t.highway ?? "") && lightTraffic(t);
+    return !!t && EFFORT_ROADS.has(t.highway ?? "") && lightTraffic(t) && !tooFastForEffort(t, ireland);
   };
 
   let best: EffortStretch | null = null;
@@ -237,6 +267,13 @@ export function findEffortStretch(
     const passes = opts.laps ? Math.ceil(repKm(rep.zone, rep.duration_minutes, 0) / len) : 1;
     if (opts.laps) {
       if (Math.abs(avg) > LAP_MAX_ABS_PCT || sd > terrain.max_gradient_variance + 1) continue;
+      let lo = Infinity, hi = -Infinity;
+      for (let k = i; k <= j; k++) { lo = Math.min(lo, elev[k]); hi = Math.max(hi, elev[k]); }
+      const rolls = hi - lo > LAP_MAX_RANGE_M || grads.some((g) => Math.abs(g) > LAP_MAX_100M_PCT);
+      if (rolls && !opts.allowRolling) {
+        opts.debug?.(`${cum[i].toFixed(2)}: rolling ${Math.round(hi - lo)} m`);
+        continue;
+      }
       score = 10 - sd - passes * 0.8;
     } else if (hill) {
       if (avg < HILL_MIN_PCT || avg > HILL_MAX_PCT) { opts.debug?.(`${cum[i].toFixed(2)}: avg ${avg.toFixed(1)}%`); continue; }
@@ -248,6 +285,13 @@ export function findEffortStretch(
       score = 10 - sd - Math.abs(avg - 1) * 0.3;
     }
     score -= sides * 0.5; // fewer side lanes, better place
+    let rangeM = 0;
+    if (opts.laps) {
+      let lo = Infinity, hi = -Infinity;
+      for (let k = i; k <= j; k++) { lo = Math.min(lo, elev[k]); hi = Math.max(hi, elev[k]); }
+      rangeM = hi - lo;
+      if (rangeM > LAP_MAX_RANGE_M || grads.some((g) => Math.abs(g) > LAP_MAX_100M_PCT)) score -= 3; // flat laps first
+    }
     if (!best || score > best.score) {
       let climb = 0;
       for (let k = i + 1; k <= j; k++) climb += Math.max(0, elev[k] - elev[k - 1]);
@@ -266,11 +310,56 @@ export function findEffortStretch(
           return m;
         })(),
         passes,
+        ...(opts.laps ? { range_m: Math.round(rangeM), rolling: rangeM > LAP_MAX_RANGE_M || grads.some((g) => Math.abs(g) > LAP_MAX_100M_PCT) } : {}),
         score,
       };
+      if (opts.firstFit) return best;
     }
   }
   return best;
+}
+
+/** Road between two spread efforts, at least (km): the recovery, ridden easy. */
+const SPREAD_MIN_GAP_KM = 1;
+/** Easy recovery pace (km/h) for sizing the gap between spread efforts. */
+const RECOVERY_KMH = 22;
+
+/**
+ * Spread efforts (the rider said no to repeating on one stretch): every rep
+ * on its own qualifying stretch, in ride order, with at least its recovery
+ * ridden between them — the same checks as findEffortStretch, applied per
+ * rep. Null when the loop cannot hold them all.
+ */
+export function findSpreadStretches(
+  coords: [number, number][],
+  elevations: number[],
+  edgeTags: EdgeTags | null,
+  stops: RoadStop[],
+  workout: WorkoutSpec,
+  opts: { avoid?: Array<[number, number]>; skipStartKm?: number; skipEndKm?: number } = {},
+): EffortStretch[] | null {
+  const n = coords.length;
+  if (n < 3 || !edgeTags) return null;
+  const cum: number[] = [0];
+  for (let i = 1; i < n; i++) cum.push(cum[i - 1] + haversine(coords[i - 1], coords[i]));
+  const out: EffortStretch[] = [];
+  let fromKm = opts.skipStartKm ?? 6;
+  for (const iv of workout.intervals) {
+    const one: WorkoutSpec = { ...workout, intervals: [{ ...iv, count: 1 }] };
+    const gapKm = Math.max(SPREAD_MIN_GAP_KM, ((iv.recovery_minutes ?? 0) * RECOVERY_KMH) / 60);
+    for (let k = 0; k < iv.count; k++) {
+      const st = findEffortStretch(coords, elevations, edgeTags, stops, one, {
+        avoid: opts.avoid,
+        skipStartKm: fromKm,
+        skipEndKm: opts.skipEndKm,
+        firstFit: true,
+      });
+      if (!st) return null;
+      out.push(st);
+      fromKm = cum[st.end] + gapKm;
+    }
+  }
+  return out;
 }
 
 export interface SplicedRide {

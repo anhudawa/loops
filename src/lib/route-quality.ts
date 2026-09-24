@@ -18,7 +18,7 @@
  */
 
 import { validateRouteRules, RouteValidationOptions } from "./route-rules";
-import { scoreEdges, validateRoadEdges, type EdgeTags } from "./road-segments";
+import { scoreEdges, validateRoadEdges, cityCoreKm, type EdgeTags } from "./road-segments";
 
 export type Discipline = "road" | "gravel" | "mtb";
 
@@ -49,6 +49,24 @@ export interface QualityScore {
   surface_breakdown?: { paved_pct: number; unpaved_pct: number; unknown_pct: number };
   /** Road-class share (% of sampled points per OSM highway class). */
   road_class_breakdown?: Record<string, number>;
+  /** Share (0–1) of the distance inside a dense city centre (road-segments CITY_CORES). */
+  city_share?: number;
+}
+
+/** Above this city-centre share a loop is never "excellent" (CLT-04). */
+export const CITY_TIER_CAP_SHARE = 0.15;
+
+/**
+ * Points off for riding through a city centre: 0.8 per % of the ride,
+ * at most 30 — a rural loop outranks one through 10 km of lights.
+ */
+export function cityPenalty(share: number): number {
+  return Math.min(30, Math.round(Math.max(0, share) * 80));
+}
+
+/** Quality tier with the city cap applied. */
+export function qualityTier(total: number, cityShare: number | undefined, worldClass: number): "excellent" | "good" {
+  return total >= worldClass && (cityShare ?? 0) <= CITY_TIER_CAP_SHARE ? "excellent" : "good";
 }
 
 // ──── Types for OSM data ────────────────────────────────────────────────────
@@ -393,7 +411,58 @@ function pickTags(tags: Record<string, string> | undefined): Record<string, stri
   const out: Record<string, string> = {};
   if (!tags) return out;
   for (const k of SCENERY_TAG_KEYS) if (tags[k] !== undefined) out[k] = tags[k];
+  // Café stops are named to the rider (cafeNear): keep the name of places to eat.
+  if (tags.name && /^(cafe|restaurant|pub)$/.test(tags.amenity ?? "")) out.name = tags.name;
   return out;
+}
+
+export interface CafeStop {
+  name: string | null;
+  lat: number;
+  lng: number;
+  /** Distance into the ride (km). */
+  km: number;
+}
+
+/**
+ * A café stop near the middle of the ride (CLT-08: "with a coffee stop
+ * halfway" only nudged ranking). From the scenery lookup the batch already
+ * has: a café (else a restaurant or pub) within `maxM` of the track, between
+ * `fromFrac` and `toFrac` of the distance — the one nearest halfway.
+ */
+export function cafeNear(
+  coords: Array<[number, number]>,
+  elements: OsmElement[] | null | undefined,
+  fromFrac = 0.45,
+  toFrac = 0.55,
+  maxM = 250,
+): CafeStop | null {
+  if (!elements?.length || coords.length < 2) return null;
+  const cum: number[] = [0];
+  for (let i = 1; i < coords.length; i++) cum.push(cum[i - 1] + haversineKm(coords[i - 1], coords[i]));
+  const total = cum[cum.length - 1];
+  let lo = 0;
+  while (lo < coords.length - 1 && cum[lo] < total * fromFrac) lo++;
+  let hi = lo;
+  while (hi < coords.length - 1 && cum[hi] <= total * toFrac) hi++;
+  const rank = (a?: string) => (a === "cafe" ? 0 : a === "restaurant" ? 1 : a === "pub" ? 2 : 9);
+  let best: (CafeStop & { r: number; off: number }) | null = null;
+  for (const el of elements) {
+    if (el.type !== "node" || el.lat === undefined || el.lon === undefined) continue;
+    const r = rank(el.tags?.amenity);
+    if (r > 2) continue;
+    // Cheap box test (~0.005° ≈ 350–550 m) before the exact distance.
+    for (let i = lo; i <= hi; i++) {
+      if (Math.abs(coords[i][0] - el.lat) > 0.005 || Math.abs(coords[i][1] - el.lon) > 0.008) continue;
+      if (haversineKm(coords[i], [el.lat, el.lon]) * 1000 > maxM) continue;
+      const off = Math.abs(cum[i] - total / 2);
+      if (!best || r < best.r || (r === best.r && off < best.off)) {
+        best = { name: el.tags?.name ?? null, lat: el.lat, lng: el.lon, km: Math.round(cum[i] * 10) / 10, r, off };
+      }
+      break;
+    }
+  }
+  return best ? { name: best.name, lat: best.lat, lng: best.lng, km: best.km } : null;
 }
 
 export function compactScenery(elements: OsmElement[]): CompactScenery {
@@ -1380,6 +1449,13 @@ export interface ScoreRouteOptions {
    * Omit to fetch for this route alone. Only used with `edgeTags`.
    */
   scenic?: OsmElement[] | null;
+  /**
+   * A destination ride the rider named ("Puerto de la Cruz to Teide and
+   * back"): the road there is the ride, its compromise already named in the
+   * road report. Road-type rules then lower the score (safety, traffic)
+   * instead of zeroing it (HV-06: served at quality 0).
+   */
+  declaredRoads?: boolean;
 }
 
 /** Raw points of the three scenery dimensions (scenic 20 + diversity 10 + POI 10). */
@@ -1447,6 +1523,7 @@ export async function scoreRoute(
       gps_quality_score,
       flags: allFlags,
       sampleIntervalMeters,
+      declaredRoads: options.declaredRoads,
     });
   }
 
@@ -1653,14 +1730,14 @@ async function scoreWithEdgeTags(
   discipline: Discipline,
   edgeTags: EdgeTags,
   scenic: OsmElement[] | null | undefined,
-  base: { gps_quality_score: number; flags: string[]; sampleIntervalMeters: number }
+  base: { gps_quality_score: number; flags: string[]; sampleIntervalMeters: number; declaredRoads?: boolean }
 ): Promise<QualityScore> {
   const allFlags = [...base.flags];
   const latLng = coordinates.map((c) => [c[0], c[1]] as [number, number]);
 
   // Hard road rules on the roads actually ridden.
   const roadViolations = validateRoadEdges(latLng, edgeTags, discipline);
-  const fatal = roadViolations.filter((v) => v.severity === "fatal");
+  const fatal = base.declaredRoads ? [] : roadViolations.filter((v) => v.severity === "fatal");
   const zero = (): QualityBreakdown => ({
     surface_score: 0, safety_score: 0, scenic_score: 0, gps_quality_score: base.gps_quality_score,
     traffic_volume_score: 0, scenic_diversity_score: 0, waypoint_interest_score: 0,
@@ -1725,7 +1802,13 @@ async function scoreWithEdgeTags(
     base.gps_quality_score + gradient.score +
     scenic_score + scenic_diversity_score + waypoint_interest_score;
   const denominator = sceneryAssessed ? MAX_RAW_SCORE : MAX_RAW_SCORE - SCENERY_RAW_MAX;
-  const total = Math.max(0, Math.min(100, Math.round((rawSum / denominator) * 100)));
+  // City centres: lawful, paved, and full of scenery "points of interest" —
+  // which is exactly why they scored high. Take it back.
+  const lenKm = totalDistanceKm(coordinates);
+  const cityKm = cityCoreKm(latLng);
+  const city_share = lenKm > 0 ? cityKm / lenKm : 0;
+  if (cityKm >= 1) allFlags.push(`${cityKm.toFixed(1)} km through a city centre`);
+  const total = Math.max(0, Math.min(100, Math.round((rawSum / denominator) * 100) - cityPenalty(city_share)));
 
   const { level: confidence_level, lowCoverageWarning: low_coverage_warning } =
     computeConfidenceLevel(roads.confidence);
@@ -1752,6 +1835,7 @@ async function scoreWithEdgeTags(
     confidence_level,
     low_coverage_warning,
     osm_cached,
+    city_share,
   };
 }
 

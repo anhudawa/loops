@@ -293,6 +293,14 @@ node scripts/import-routes.mjs scripts/hub-data/girona-eat-sleep-cycle.json --dr
   routing profiles" (POST /api/engine/sync-profiles) updates the engine's
   custom ids in place (BROUTER_ROAD_PROFILE / BROUTER_ROAD_RELAXED_PROFILE are
   set on Vercel since the first sync, 2026-09-24).
+- Dublin & Wicklow designed loops (2026-09-24): 16 loops (Clontarf ×3, Howth,
+  Malahide, Skerries, Naul, Rathfarnham ×3, Enniskerry ×2, Bray, Greystones,
+  Lucan, Kilcullen) routed on our engine, all meet the Road Standard →
+  src/data/hub-bundles/dublin-designed.json; /admin → Routes → "Import Dublin
+  & Wicklow loops" (insert, approved; skips names that exist).
+- Rules v9 (2026-09-24): access=no + bicycle=yes/designated is a cycle path
+  bikes may use (it was flagged "bikes not allowed"). Profiles: foot-only ways
+  (push the bike) cost 40× not 5× — needs /admin → "Sync routing profiles".
 - No CSRF tokens; cookie-only sessions; locale hardcoded en-IE
 
 ## Conventions

@@ -5,6 +5,7 @@ import { insertCuratedRoute, replaceRouteTrack } from "@/lib/db";
 import { handleApiError } from "@/lib/api-utils";
 import dublin from "@/data/hub-bundles/dublin.json";
 import gironaRebuild from "@/data/hub-bundles/girona-rebuild.json";
+import dublinDesigned from "@/data/hub-bundles/dublin-designed.json";
 
 /**
  * Admin: import a bundled LOOPS-curated route set — no laptop or database
@@ -21,6 +22,10 @@ type Bundle =
   | { mode: "replace"; label: string; country: string; routes: ReplaceRoute[] };
 const BUNDLES: Record<string, Bundle> = {
   dublin: { mode: "insert", label: "Import Dublin routes", routes: dublin as Omit<BundleRoute, "id">[] },
+  // Designed 2026-09-24 on our engine from local knowledge (Clontarf, Howth,
+  // Malahide, Skerries, the Naul, Rathfarnham, Enniskerry, Bray, Greystones,
+  // Lucan, Kilcullen): all 16 meet the Road Standard, reports included.
+  "dublin-designed": { mode: "insert", label: "Import Dublin & Wicklow loops", routes: dublinDesigned as Omit<BundleRoute, "id">[] },
   // The Girona collection was built with a car router (OSRM demo) and rides
   // autovías; these are the same rides rebuilt on our engine with the Road
   // Standard profile (relaxed for the three long ones), reports included.
@@ -29,6 +34,8 @@ const BUNDLES: Record<string, Bundle> = {
   // starts at Flaçà station: no Road-Standard way across the Ter from Girona.
   "girona-rebuild": { mode: "replace", label: "Rebuild Girona tracks", country: "Spain", routes: gironaRebuild as ReplaceRoute[] },
 };
+
+export const maxDuration = 60;
 
 export async function GET(request: NextRequest) {
   const auth = await requireAdmin(request);

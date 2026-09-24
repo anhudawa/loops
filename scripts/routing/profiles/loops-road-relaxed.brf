@@ -137,7 +137,7 @@ assign accesspenalty
        switch bikeaccess
               0
               switch footaccess
-                     5
+                     40   # LOOPS: foot-only ways (push the bike) — only when there is no other way
                      switch any_cycleroute
                             15
                             switch bicycle=use_sidepath

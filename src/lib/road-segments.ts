@@ -342,8 +342,15 @@ export function isPaved(t: WayTags): boolean | null {
   return null;
 }
 
+/** An explicit bicycle tag that lets bikes on, whatever the general access says. */
+const BIKES_ALLOWED = new Set(["yes", "designated", "permissive", "destination"]);
+
 export function isRestrictedForBikes(t: WayTags): boolean {
-  return t.bicycle === "no" || t.access === "no" || t.access === "private" ||
+  if (t.bicycle === "no" || t.bicycle === "private") return true;
+  // access=no + bicycle=designated is a cycle path closed to cars — bikes
+  // are allowed (OSM: the specific tag overrides the general one).
+  if (BIKES_ALLOWED.has(t.bicycle ?? "")) return false;
+  return t.access === "no" || t.access === "private" ||
     (t.motor_vehicle === "designated" && !t.bicycle);
 }
 
@@ -413,7 +420,7 @@ export interface RoadReport {
  * Bump when the classification rules change: stored reports with an older
  * (or missing) version are re-traced on next view (api/routes/[id]).
  */
-export const ROAD_RULES_VERSION = 8;
+export const ROAD_RULES_VERSION = 9;
 
 // "Unsuitable" by surface is discipline-aware: smoothness=bad is a hazard on
 // a road bike and the whole point of a gravel ride; class:bicycle −2 is

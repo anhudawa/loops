@@ -950,7 +950,10 @@ export default function RouteDetailView({ ride, initialRoute }: { ride?: RideInv
           {route.description ? (
             <p className="text-sm leading-relaxed" style={{ color: "var(--text-muted)" }}>{route.description}</p>
           ) : (
-            <p className="text-sm italic" style={{ color: "var(--text-muted)" }}>No description provided</p>
+            // No words from the source: say what the numbers say.
+            <p className="text-sm leading-relaxed" style={{ color: "var(--text-muted)" }}>
+              {`A ${route.distance_km} km road ${track?.shape === "out-and-back" ? "ride out and back" : track?.shape === "lollipop" ? "loop with a stretch ridden both ways" : "loop"}${route.region || route.county ? ` in ${route.region || route.county}` : ""} with ${route.elevation_gain_m} m of climbing — about ${rideTimeLabel.replace("~", "")} of riding.`}
+            </p>
           )}
         </div>
 

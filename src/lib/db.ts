@@ -77,7 +77,9 @@ const REGION_ALIASES: Record<string, string[]> = {
 
 /** "Majorca" / "Islas Baleares" / "Balearic Islands" → "Mallorca"; anything else trimmed. */
 export function canonicalRegion(region: string): string {
-  const r = region.trim();
+  let r = region.trim();
+  // "london" → "London": an all-lowercase import reads as a name.
+  if (r && r === r.toLowerCase()) r = r.replace(/(^|[\s-])(\p{L})/gu, (_m, a: string, b: string) => a + b.toUpperCase());
   const k = r.toLowerCase();
   for (const [name, aliases] of Object.entries(REGION_ALIASES)) {
     if (k === name.toLowerCase() || aliases.some((a) => a.toLowerCase() === k)) return name;

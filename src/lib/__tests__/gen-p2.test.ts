@@ -145,3 +145,11 @@ describe("TRV-11: hilly asks do not run far long", () => {
     expect(pickByDistanceFit([c(114), c(75)], 100, true).map((x) => x.distance_km)).toEqual([114, 75]);
   });
 });
+
+describe("pickByDistanceFit fallback", () => {
+  it("the second option, when none fits closely, is the one nearest the ask", () => {
+    const r = (km: number) => ({ distance_km: km, road_report: { standard_met: true } });
+    const out = pickByDistanceFit([r(49.4), r(34.5), r(61)], 50);
+    expect(out.map((x) => x.distance_km)).toEqual([49.4, 61]);
+  });
+});

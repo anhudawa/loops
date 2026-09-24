@@ -3181,6 +3181,9 @@ function cityClearFirst(sets: [number, number][][], core: CityCore | null): [num
  */
 let repeatTooLongKm: number | null = null;
 
+/** A served loop this far off the ask (fraction) triggers one rescaled re-route. */
+const REFIT_OFF = 0.12;
+
 /** Per-edge tags and stops for each served fresh loop, by object identity. */
 const loopEngineData = new WeakMap<GeneratedRoute, { edgeTags: EdgeTags | null; stops: RoadStop[] }>();
 
@@ -3559,6 +3562,28 @@ async function generateFreshRoutes(
     }
   }
 
+  // Refit: when not one loop is within REFIT_OFF of the ask,
+  // re-route them once with their waypoints pulled in/pushed out by the
+  // ratio ask ÷ served (the network's own stretch, measured). The re-routed
+  // loops then compete with the originals — it can only improve the fit.
+  if (!presetWaypointSets && !noLollipop && candidates.length > 0 && Date.now() - t0 < 28_000) {
+    const off = (c: GeneratedRoute) => (c.distance_km - spec.distance_km) / spec.distance_km;
+    if (!candidates.some((c) => Math.abs(off(c)) <= REFIT_OFF)) {
+      const start = spec.start_point;
+      const sets = candidates
+        .filter((c) => Math.abs(off(c)) > REFIT_OFF)
+        .sort((a, b) => Math.abs(off(a)) - Math.abs(off(b)))
+        .slice(0, 2)
+        .flatMap((c) => {
+          const f = spec.distance_km / c.distance_km;
+          return [f, f * (f < 1 ? 0.9 : 1.1)].map((k) => c.waypoints_used.map((w, i, arr) =>
+            i === 0 || i === arr.length - 1 ? w : [start[0] + (w[0] - start[0]) * k, start[1] + (w[1] - start[1]) * k] as [number, number]));
+        });
+      genDebug(`refit: best loop ${Math.round(Math.min(...candidates.map((c) => Math.abs(off(c)) * 100)))} % off the ask — re-routing ${sets.length} rescaled set(s)`);
+      candidates = candidates.concat(await runPass(sets, "refit"));
+    }
+  }
+
   if (candidates.length === 0 && lollipopRun) {
     const left = Math.max(0, 46_000 - (Date.now() - t0));
     candidates = candidates.concat(await Promise.race([lollipopRun, new Promise<GeneratedRoute[]>((r) => setTimeout(() => r([]), left))]));
@@ -3658,7 +3683,10 @@ export function pickByDistanceFit<T extends { distance_km: number; road_report?:
   const fit = order.filter((c) => band(c) < 2);
   // Hilly asks: a loop 20 % too long is also far more climbing — hours more
   // riding (TRV-11: 131 km / +1942 m for "100 km hilly"). Never offered.
-  const poor = order.filter((c) => band(c) === 2 && !(hilly && c.distance_km > targetKm));
+  // The fallback second option is the one closest to the ask.
+  const poor = order
+    .filter((c) => band(c) === 2 && !(hilly && c.distance_km > targetKm))
+    .sort((a, b) => Math.abs(a.distance_km - targetKm) - Math.abs(b.distance_km - targetKm));
   const out = fit.slice(0, max);
   if (out.length < 2 && poor.length) out.push(poor[0]);
   // Keep the Road Standard ordering among what is served.

@@ -1250,6 +1250,9 @@ const PLANNER_AVOID_WEIGHT = 200;
 /** A detour is worth it when it is at most this much longer than the direct leg. */
 const AVOID_MAX_STRETCH = 1.35;
 
+/** A drawn leg's optional steps (avoid / ride through) run only within this. */
+const REROUTE_OPTIONAL_BUDGET_MS = 12_000;
+
 export async function rerouteWaypoints(
   waypoints: [number, number][],
   discipline: Discipline,
@@ -1270,11 +1273,26 @@ export async function rerouteWaypoints(
   // Direct on the Road Standard profile; when that finds nothing (a pin
   // only a main road reaches) the relaxed profile, whose compromise is then
   // measured and named below — never a silent straight line.
+  // A drawn leg is one tap: it gets a time budget. The optional steps
+  // (avoiding the rest of the route, carrying on through a town) are skipped
+  // once it is spent — a busy engine left Dublin legs as straight lines.
+  const t0 = Date.now();
+  const budgetLeft = () => Date.now() - t0 < REROUTE_OPTIONAL_BUDGET_MS;
   let direct = await routeViaBRouter(waypoints, profile);
   if (!direct) direct = await routeWithFallback(waypoints, profile);
+  // Last resort: the general road profile, so the leg follows real roads —
+  // its road report (below) names every compromise; never a straight line
+  // while roads connect the pins.
+  if (!direct && !/timeout|watchdog|network|http:5/.test(lastBRouterFailure)) {
+    const general = await routeViaBRouter(waypoints, "trekking");
+    if (general && general.coords.length >= 2) {
+      genDebug(`[reroute] strict and relaxed found nothing (${lastBRouterFailure}) — general road profile`);
+      direct = general;
+    }
+  }
   if (!direct) console.error(`[reroute] no route ${JSON.stringify(waypoints)}: ${lastBRouterFailure}`);
   const directShared = direct && nogo ? sharedShare(direct.coords, avoid) : 0;
-  const avoiding = nogo && (!direct || directShared > 0.15) ? await routeViaBRouter(waypoints, profile, false, nogo) : null;
+  const avoiding = nogo && budgetLeft() && (!direct || directShared > 0.15) ? await routeViaBRouter(waypoints, profile, false, nogo) : null;
   let path = direct;
   if (avoiding && avoiding.coords.length >= 2 && (!direct || avoiding.distance_km <= direct.distance_km * AVOID_MAX_STRETCH)) {
     if (!direct || sharedShare(avoiding.coords, avoid) < directShared - 0.05) path = avoiding;
@@ -1283,7 +1301,7 @@ export async function rerouteWaypoints(
 
   // A pin in a town is a place the ride goes THROUGH: when the way on from
   // it would turn the rider straight round, try carrying on through first.
-  if (opts.arrive && opts.arrive.length >= 2) {
+  if (opts.arrive && opts.arrive.length >= 2 && budgetLeft()) {
     // Riding through, the way in must not be the way out: its road is a
     // no-go right up to 250 m from the pin (not the usual 1.5 km).
     const parts = [

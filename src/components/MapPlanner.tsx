@@ -444,8 +444,8 @@ export default function MapPlanner() {
       // answer, so tapping out a loop quickly never leaves dashed legs.
       const res = await snapQueue(async () => {
         let r: Response | null = null;
-        for (let attempt = 0; attempt < 3; attempt++) {
-          if (attempt) await new Promise((ok) => setTimeout(ok, attempt === 1 ? 1500 : 4000));
+        for (let attempt = 0; attempt < 4; attempt++) {
+          if (attempt) await new Promise((ok) => setTimeout(ok, [0, 1500, 4000, 8000][attempt]));
           r = await fetch("/api/reroute", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -1022,6 +1022,8 @@ export default function MapPlanner() {
         <p className="px-4 py-2 text-xs z-20 flex items-center gap-2" style={{ background: "rgba(255,80,80,0.1)", color: "#ff6b6b" }}>
           <span>
             {failedCount === 1 ? "One leg" : `${failedCount} legs`} couldn&apos;t snap — shown dashed as straight lines (total is approximate).
+            {/* Why, in the engine's words: busy, rate-limited, or a pin off the roads. */}
+            {(() => { const why = allLegs.find((l) => l.status === "failed")?.error; return why ? <span className="block opacity-90">{why}</span> : null; })()}
           </span>
           <button
             type="button"

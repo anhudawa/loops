@@ -3,11 +3,11 @@ import { getLastBRouterFailure, rerouteWaypoints } from "@/lib/route-generator";
 import { getUserBySession } from "@/lib/db";
 import { checkRateLimit } from "@/lib/rate-limit";
 
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 /** Drag-to-edit reroutes are cheap (one BRouter call) but rate-limited
  * to keep the public routing endpoint healthy. */
-const RATE_LIMIT_PER_MIN = 90; // a rider tapping out a loop fires two legs per tap
+const RATE_LIMIT_PER_MIN = 240; // a tap fires a leg and the closing leg; retries and re-snaps add more
 
 export async function POST(request: NextRequest) {
   const sessionToken = request.cookies.get("session")?.value;

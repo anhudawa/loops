@@ -2221,9 +2221,12 @@ export async function addRouteToCollection(collectionId: string, routeId: string
     UPDATE collections
     SET total_routes_count = (
       SELECT COUNT(*) FROM collection_routes WHERE collection_id = ${collectionId}
-    ), updated_at = NOW()
+    )
     WHERE id = ${collectionId}
   `;
+  // Older production tables have no updated_at (CREATE TABLE IF NOT EXISTS
+  // never adds a column): the link must not fail over a timestamp.
+  await sql`UPDATE collections SET updated_at = NOW() WHERE id = ${collectionId}`.catch(() => {});
 }
 
 

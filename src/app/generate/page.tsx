@@ -735,7 +735,16 @@ function GenerateContent() {
 
         {/* The scroll target includes "Here's what we understood", so a
             rider on a phone lands on the confirmation, then the loops. */}
-        <div ref={resultsRef} style={{ scrollMarginTop: 16 }}>
+        {/* The ask was edited since these results: say so, and dim them. */}
+        {!loading && candidates.length > 0 && submittedPrompt && prompt.trim() !== submittedPrompt.trim() && (
+          <p className="text-xs font-bold mb-2" style={{ color: "#f5a524" }} role="status">
+            These are for “{submittedPrompt.trim()}” — press “Find my route” to update them for your new ask.
+          </p>
+        )}
+        <div
+          ref={resultsRef}
+          style={{ scrollMarginTop: 16, opacity: !loading && submittedPrompt && prompt.trim() !== submittedPrompt.trim() ? 0.55 : 1, transition: "opacity 150ms" }}
+        >
         {!loading && interpreted && (
           <InterpretedPanel interpreted={interpreted} />
         )}

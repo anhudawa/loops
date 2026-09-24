@@ -128,6 +128,14 @@ export default function MapView({
       const color = DISCIPLINE_COLORS[route.discipline] || "#666";
       const isSelected = route.id === selectedRouteId;
 
+      // A dark casing under the line: neon/amber on a light map needs an edge
+      // to stand out (the way every cycling app draws a route).
+      L.polyline(coords, {
+        color: "#0a0a0a",
+        weight: (isSelected ? 5 : 3) + 4,
+        opacity: isSelected ? 0.85 : 0.5,
+        interactive: false,
+      }).addTo(layersRef.current!);
       const polyline = L.polyline(coords, {
         color,
         weight: isSelected ? 5 : 3,

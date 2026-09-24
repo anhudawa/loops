@@ -1093,7 +1093,12 @@ export async function rerouteWaypoints(
   // already rides (> 15 %) try again avoiding it — most legs cost one engine
   // call. Take the avoiding one unless it is an absurd detour or does not
   // actually reduce the shared road.
-  const direct = await routeViaBRouter(waypoints, profile);
+  // Direct on the Road Standard profile; when that finds nothing (a pin
+  // only a main road reaches) the relaxed profile, whose compromise is then
+  // measured and named below — never a silent straight line.
+  let direct = await routeViaBRouter(waypoints, profile);
+  if (!direct) direct = await routeWithFallback(waypoints, profile);
+  if (!direct) console.error(`[reroute] no route ${JSON.stringify(waypoints)}: ${lastBRouterFailure}`);
   const directShared = direct && nogo ? sharedShare(direct.coords, avoid) : 0;
   const avoiding = nogo && (!direct || directShared > 0.15) ? await routeViaBRouter(waypoints, profile, false, nogo) : null;
   let path = direct;

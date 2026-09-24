@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { rerouteWaypoints } from "@/lib/route-generator";
+import { getLastBRouterFailure, rerouteWaypoints } from "@/lib/route-generator";
 import { getUserBySession } from "@/lib/db";
 import { checkRateLimit } from "@/lib/rate-limit";
 
@@ -65,6 +65,10 @@ export async function POST(request: NextRequest) {
 
   try {
     const result = await rerouteWaypoints(waypoints, discipline, { avoid });
+    // Engine busy or slow (not "no road"): a 503 the planner retries.
+    if (!result && /timeout|watchdog|network|http:5/.test(getLastBRouterFailure())) {
+      return NextResponse.json({ error: "Routing is busy — trying again.", code: "ENGINE_BUSY" }, { status: 503 });
+    }
     if (!result) {
       return NextResponse.json(
         { error: "Couldn't route between those points — try moving the pin to a road.", code: "REROUTE_FAILED" },

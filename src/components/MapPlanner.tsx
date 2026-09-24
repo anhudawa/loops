@@ -683,6 +683,25 @@ export default function MapPlanner() {
     setResnapNote(null);
   }
 
+  // A leg that failed (engine busy, a pin off the road network) is retried
+  // once on its own as soon as nothing else is snapping — the rider should
+  // not have to spot a dashed line and tap Retry.
+  const autoRetriedRef = useRef<Set<number>>(new Set());
+  useEffect(() => {
+    const all = [...legs, ...(loopLeg ? [loopLeg] : [])];
+    if (all.some((l) => l.status === "pending")) return;
+    const t = setTimeout(() => {
+      for (const l of all) {
+        if (l.status === "failed" && !autoRetriedRef.current.has(l.id)) {
+          autoRetriedRef.current.add(l.id);
+          void resnapLeg(l, l.from, l.to, discipline);
+        }
+      }
+    }, 1200);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [legs, loopLeg]);
+
   function retryFailedLegs() {
     const all = [...legsRef.current, ...(loopLegRef.current ? [loopLegRef.current] : [])];
     for (const l of all) {
@@ -920,6 +939,26 @@ export default function MapPlanner() {
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
           <RecenterOnce target={geoCenter} />
+          {allLegs.length > 0 && (
+            // Live distance where the eyes are while plotting: every tap
+            // updates it (straight-line until a leg snaps, marked "~").
+            <div className="leaflet-top w-full flex justify-center pointer-events-none" style={{ zIndex: 1000 }}>
+              <div
+                className="mt-2 px-3 py-1.5 rounded-xl text-center shadow-lg"
+                style={{ background: "rgba(10,10,10,0.88)", border: "1px solid var(--border)" }}
+                role="status"
+                aria-live="polite"
+                data-testid="plan-live-distance"
+              >
+                <span className="block text-xl font-extrabold tabular-nums leading-tight" style={{ color: "var(--accent)" }}>
+                  {totals.approx ? "~" : ""}{totals.distance_km.toFixed(1)} km
+                </span>
+                <span className="block text-[11px] tabular-nums" style={{ color: "#d4d4d4" }}>
+                  +{totals.gain_m} m{loopLeg ? ` · incl. ${loopLeg.distance_km.toFixed(1)} km back to start` : ""}
+                </span>
+              </div>
+            </div>
+          )}
           {/* You are here — not interactive, so a tap on it drops a point there. */}
           {here && (
             <CircleMarker
@@ -932,21 +971,33 @@ export default function MapPlanner() {
           <ClickToAdd onAdd={addAnchor} />
           {/* Each leg renders itself: solid = genuine snapped geometry,
               dashed = pending / failed / anonymous straight line. */}
+          {/* Dark casing first, the line on top: neon on a light map needs an
+              edge to stand out. */}
+          {allLegs.map((l) => (
+            <Polyline
+              key={`casing-${l.id}-${l.status}`}
+              positions={l.status === "snapped" ? l.coords : [l.from, l.to]}
+              interactive={false}
+              pathOptions={{ color: "#0a0a0a", weight: l.status === "snapped" ? 9 : 6, opacity: l.status === "snapped" ? 0.85 : 0.5 }}
+            />
+          ))}
           {allLegs.map((l) =>
             l.status === "snapped" ? (
+              // Keyed by status: Leaflet keeps a dash pattern across a style
+              // update, so a leg that snapped must be a fresh, solid line.
               <Polyline
-                key={l.id}
+                key={`${l.id}-snapped`}
                 positions={l.coords}
-                pathOptions={{ color: "#c8ff00", weight: 4, opacity: 0.9 }}
+                pathOptions={{ color: "#c8ff00", weight: 5, opacity: 1, dashArray: undefined }}
               />
             ) : (
               <Polyline
-                key={l.id}
+                key={`${l.id}-${l.status}`}
                 positions={[l.from, l.to]}
                 pathOptions={{
                   color: l.status === "failed" ? "#ff6b6b" : "#c8ff00",
-                  weight: 2.5,
-                  opacity: 0.65,
+                  weight: 3,
+                  opacity: 0.9,
                   dashArray: "6 8",
                 }}
                 eventHandlers={l.status === "failed" ? { click: () => retryLeg(l.id) } : undefined}

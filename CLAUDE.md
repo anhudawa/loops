@@ -314,6 +314,20 @@ node scripts/import-routes.mjs scripts/hub-data/girona-eat-sleep-cycle.json --dr
   engine 324 m, this 327; stored was 554. Rupit: engine 2,675, this ~2,800;
   stored 6,191). Uploads use it; stored totals > 15 % off are corrected on
   view (true-climb.ts, stored by the route API) and by /admin "Tidy library data".
+- Rider-pass fixes (2026-09-24 afternoon): "Verified" badge/filter only when
+  the road report meets the standard; display title everywhere via
+  withAutoTitle (tidy + weak-name + no trailing "Loop" on a track ridden 30 %+
+  twice); near-duplicate library rides deduped in publicRows (starts ≤ 3 km,
+  70 %+ overlap both ways); a big named city (≥ 50k, place-names.json) is
+  geocoded where it is before the guessed country (Manchester ≠ Co. Clare);
+  "with/including the <known place>" is a destination; hilly asks rank loops
+  meeting 12 m/km (mountainous 20) first, else "Flatter than you asked";
+  scenery highlights need ≥ 10 % of samples; "excellent" never beside a
+  compromise; library loops answer alone only with 2+ and one within 12 % of
+  the ask; climb detection works on 100 m road steps (300 m smoothing);
+  /api/routes/quality takes stored routes only, cached 30 days; place
+  searches match name/county/region only; unjudged out-and-backs are judged
+  by the daily cron (Cap Formentor was hidden until opened).
 - No CSRF tokens; cookie-only sessions; locale hardcoded en-IE
 
 ## Conventions

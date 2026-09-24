@@ -69,6 +69,19 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Two pins on the same spot (a double tap; the start tapped again to close
+  // the loop) are a 0 km leg, not a routing failure.
+  const [a, b] = [waypoints[0], waypoints[waypoints.length - 1]];
+  const sameSpotM = Math.hypot((b[0] - a[0]) * 111_320, (b[1] - a[1]) * 111_320 * Math.cos((a[0] * Math.PI) / 180));
+  if (waypoints.length === 2 && sameSpotM < 25) {
+    return NextResponse.json({
+      data: {
+        coordinates: [a, b], elevations: [], distance_km: 0, elevation_gain_m: 0, elevation_loss_m: 0, gpx_data: "", warnings: [],
+        road_report: { known_pct: 100, road_class_pct: {}, surface: { paved_pct: 100, unpaved_pct: 0, unknown_pct: 0 }, main_road_pct: 0, fast_road_pct: 0, compromises: [], standard_met: true, summary: "Same spot — no riding on this leg." },
+      },
+    });
+  }
+
   try {
     const result = await rerouteWaypoints(waypoints, discipline, { avoid, arrive });
     // Engine busy or slow (not "no road"): a 503 the planner retries.

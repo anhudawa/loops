@@ -165,7 +165,7 @@ export default function ShareRide({ route, ride }: ShareRideProps) {
         className="w-full flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-xl font-bold text-sm uppercase tracking-wider transition-all hover:brightness-110"
         style={{
           background: "linear-gradient(135deg, #25D366, #128C7E)",
-          color: "#fff",
+          color: "#0a0a0a",
           boxShadow: "0 4px 20px rgba(37, 211, 102, 0.25)",
         }}
       >
@@ -261,7 +261,7 @@ export default function ShareRide({ route, ride }: ShareRideProps) {
                 className="w-full mt-5 py-3.5 rounded-xl font-bold text-sm uppercase tracking-wider flex items-center justify-center gap-2.5 transition-all hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:brightness-100"
                 style={{
                   background: "linear-gradient(135deg, #25D366, #128C7E)",
-                  color: "#fff",
+                  color: "#0a0a0a",
                   boxShadow: "0 4px 20px rgba(37, 211, 102, 0.3)",
                 }}
               >

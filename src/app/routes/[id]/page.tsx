@@ -1,6 +1,6 @@
 import { withAutoTitle } from "@/lib/route-title";
 import { notFound } from "next/navigation";
-import { getRoute } from "@/lib/db";
+import { getRouteOnce as getRoute } from "@/lib/db";
 import { initialRouteForPage } from "@/lib/public-route";
 import { withBundleCorrection } from "@/lib/bundle-corrections";
 import RouteDetailView from "@/components/RouteDetailView";

@@ -1,4 +1,5 @@
 import { sql } from "@vercel/postgres";
+import { cache } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { DURATION_TIERS, DEFAULT_SPEED_KMH, ENABLED_DISCIPLINES } from "@/config/constants";
 import { clampSpeedKmh, rideMinutesSql } from "@/lib/ride-time";
@@ -877,6 +878,9 @@ export async function getRoute(id: string): Promise<(Route & { is_verified?: num
   `;
   return (rows[0] ? withPublicDescription(rows[0]) : undefined) as (Route & { is_verified?: number; creator_name?: string | null; creator_avatar?: string | null; creator_rating?: number; creator_rating_count?: number }) | undefined;
 }
+
+/** getRoute once per server request: metadata, layout and page share one read. */
+export const getRouteOnce = cache(getRoute);
 
 /** Persist a verified quality score on a route so the detail page can show it
  *  instantly next time without re-hitting Overpass. Fire-and-safe. */

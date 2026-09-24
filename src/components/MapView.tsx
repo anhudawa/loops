@@ -327,7 +327,7 @@ export default function MapView({
         iconSize: [40, 40],
         iconAnchor: [20, 12],
       });
-      L.marker([lat, lng], { icon, interactive: false }).addTo(windLayerRef.current!);
+      L.marker([lat, lng], { icon, interactive: false, keyboard: false }).addTo(windLayerRef.current!);
     }
   }, [windOverlay, routes, selectedRouteId]);
 
@@ -386,7 +386,7 @@ export default function MapView({
           iconSize: [18, 18],
           iconAnchor: [9, 9],
         });
-        L.marker(coords[j], { icon, interactive: false }).addTo(layer);
+        L.marker(coords[j], { icon, interactive: false, keyboard: false }).addTo(layer);
       }
     };
 

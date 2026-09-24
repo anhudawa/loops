@@ -3611,7 +3611,8 @@ async function generateFreshRoutes(
 
 
   if (candidates.length === 0) {
-    dropped["_engine"] = (() => { try { return new URL(BROUTER_URL).host; } catch { return "?"; } })() as unknown as number;
+    // Which engine answered (own vs public demo) — a flag, never its address.
+    dropped["_engine"] = (process.env.BROUTER_URL ? "own" : "public") as unknown as number;
     if (libraryDiag) dropped["_library"] = libraryDiag as unknown as number;
     throw new NoValidRoutesError(Object.values(dropped).reduce((a, b) => a + (typeof b === "number" ? b : 0), 0), dropped, {
       distance_km: spec.distance_km,

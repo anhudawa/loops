@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { getRoute, getRouteRating } from "@/lib/db";
+import { getRouteOnce as getRoute, getRouteRating } from "@/lib/db";
 import {
   generateRouteJsonLd,
   generateBreadcrumbJsonLd,

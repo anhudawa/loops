@@ -1,7 +1,7 @@
 import { withAutoTitle } from "@/lib/route-title";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getRoute } from "@/lib/db";
+import { getRouteOnce as getRoute } from "@/lib/db";
 import { formatRideWhen, cleanMeet } from "@/lib/ride-invite";
 import RouteDetailView from "@/components/RouteDetailView";
 import { initialRouteForPage } from "@/lib/public-route";

@@ -16,8 +16,6 @@ export async function GET(
 ) {
   try {
     const { id: routeId } = await params;
-    await migrateDb();
-
     const sessionToken = request.cookies.get("session")?.value;
     let favourited = false;
 

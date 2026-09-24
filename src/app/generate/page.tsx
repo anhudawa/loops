@@ -687,12 +687,12 @@ function GenerateContent() {
             ))}
           </div>}
 
-          <p className="text-xs mt-3" style={{ color: "var(--text-muted)" }}>
+          {!loading && <p className="text-xs mt-3" style={{ color: "var(--text-muted)" }}>
             Prefer to draw it?{" "}
             <Link href="/plan" className="inline-flex items-center min-h-[44px] font-bold hover:opacity-80" style={{ color: "var(--accent)" }}>
               Open the map planner →
             </Link>
-          </p>
+          </p>}
         </form>
 
         {error && (

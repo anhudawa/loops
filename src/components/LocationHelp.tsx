@@ -9,9 +9,22 @@ let cachedHelp: ReturnType<typeof locationHelpFor> | null = null;
 const helpSnapshot = () =>
   (cachedHelp ??= locationHelpFor(navigator.userAgent, !!(navigator as Navigator & { brave?: unknown }).brave));
 
-/** Shown when location is blocked: the exact steps for this phone + a Try again. */
-export default function LocationHelp({ onRetry, onDismiss }: { onRetry: () => void; onDismiss?: () => void }) {
-  const [open, setOpen] = useState(true);
+/**
+ * Shown when location is blocked: the exact steps for this phone + a Try
+ * again. On a phone the steps start folded (one tap opens them) so the
+ * panel does not cover the map. `alternative` is the page's other way to
+ * set a start (Generate: name it in the request; Draw: tap the map).
+ */
+export default function LocationHelp({
+  onRetry,
+  onDismiss,
+  alternative = "Or just name a start point in your request.",
+}: {
+  onRetry: () => void;
+  onDismiss?: () => void;
+  alternative?: string;
+}) {
+  const [open, setOpen] = useState(() => typeof window === "undefined" || !window.matchMedia?.("(max-width: 639px)").matches);
   const help = useSyncExternalStore(noop, helpSnapshot, () => null);
   if (!help) return null;
   return (
@@ -36,7 +49,7 @@ export default function LocationHelp({ onRetry, onDismiss }: { onRetry: () => vo
         <button onClick={onRetry} className="min-h-[44px] px-4 rounded-lg font-bold" style={{ background: "var(--accent)", color: "var(--bg)" }}>
           Try again
         </button>
-        <span style={{ color: "var(--text-muted)" }}>Or just name a start point in your request.</span>
+        <span style={{ color: "var(--text-muted)" }}>{alternative}</span>
       </div>
     </div>
   );

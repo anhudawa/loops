@@ -16,6 +16,33 @@ import LocationHelp from "@/components/LocationHelp";
 import FeaturedCollections from "./FeaturedCollections";
 import RouteSearchBox from "@/components/RouteSearchBox";
 import { guideForSearch } from "@/content/destination-guides";
+import { KNOWN_PLACES } from "@/lib/places-known";
+
+/** Nearest loop further than this: the list is not "near you" — say so and offer to plan one. */
+const NONE_NEAR_KM = 100;
+
+function kmBetween(a: { lat: number; lng: number }, b: [number, number]): number {
+  const dLat = ((b[0] - a.lat) * Math.PI) / 180;
+  const dLng = ((b[1] - a.lng) * Math.PI) / 180;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos((a.lat * Math.PI) / 180) * Math.cos((b[0] * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+/**
+ * "Plan one from here": the planner prompt for this duration from the known
+ * start place nearest the rider (within 15 km), so the ask runs from where
+ * they are. No known place that close → the planner, without a prompt.
+ */
+function planFromHereHref(here: { lat: number; lng: number }, duration: string | null): string {
+  let best: { name: string; d: number } | null = null;
+  for (const p of KNOWN_PLACES) {
+    const d = kmBetween(here, p.point);
+    if (d <= 15 && (!best || d < best.d)) best = { name: p.name, d };
+  }
+  if (!best) return "/generate";
+  const hours = duration ? parseInt(duration, 10) : 2;
+  return `/generate?q=${encodeURIComponent(`${hours} hour loop from ${best.name}`)}`;
+}
 
 interface Route {
   id: string;
@@ -412,8 +439,10 @@ function HomeContent() {
     if (filters.duration) params.set("duration", filters.duration);
     if (filters.search) params.set("search", filters.search);
 
-    // Use fallback sort if provided, otherwise use filter sort
-    const effectiveSort = fallbackSort || effectiveFilterSort;
+    // Use fallback sort if provided, otherwise use filter sort; with the
+    // rider's position the default is nearest first (a 1h chip in Dublin
+    // must not lead with the best-rated loops 1,400 km away).
+    const effectiveSort = fallbackSort || effectiveFilterSort || (userLocation ? "nearby" : "");
     if (effectiveSort) params.set("sort", effectiveSort);
 
     if (userLocation) {
@@ -519,6 +548,15 @@ function HomeContent() {
     window.scrollTo({ top, behavior: "smooth" });
   };
 
+  // The feed heading, just below the sticky header.
+  const scrollToFeed = () => {
+    const el = document.getElementById("feed-results");
+    if (!el) return;
+    const header = document.querySelector("header");
+    const offset = header && getComputedStyle(header).position === "sticky" ? header.offsetHeight : 0;
+    window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - offset - 8, behavior: "smooth" });
+  };
+
   // "Browse nearby" means nearby: ask for the position (from the tap, iOS)
   // when there is none, then bring the feed into view.
   const browseNearby = () => {
@@ -549,7 +587,7 @@ function HomeContent() {
     if (filters.region || filters.country || filters.duration) return null;
     // Nearby loops lead; further out the order is by rating — so not
     // "closest first" all the way down.
-    if (userLocation) return "Nearby loops first";
+    if (userLocation) return "Nearest first";
     if (locationDenied) return `Location off — showing ${DEFAULT_COUNTRY} first`;
     if (nearbyWithoutLocation) return "Share your location to sort by distance";
     return null;
@@ -557,7 +595,7 @@ function HomeContent() {
 
   const sortSelect = (
     <select
-      value={filters.sort}
+      value={filters.sort || (userLocation ? "nearby" : "")}
       onChange={(e) => applyFilters((f) => ({ ...f, sort: e.target.value }))}
       aria-label="Sort by"
       className="cursor-pointer"
@@ -645,8 +683,38 @@ function HomeContent() {
     </div>
   );
 
+  // With the rider's position, a list whose nearest loop is a flight away is
+  // not an answer to "a 1h loop": say so, and offer to plan one from here.
+  const nearestKm = userLocation
+    ? routes.reduce((m, r) => (typeof r.distance_km_away === "number" && Number.isFinite(r.distance_km_away) ? Math.min(m, r.distance_km_away) : m), Infinity)
+    : Infinity;
+  const noneNear = !!userLocation && !isSearching && routes.length > 0 && Number.isFinite(nearestKm) && nearestKm > NONE_NEAR_KM;
+  const noneNearNote = noneNear && userLocation ? (
+    <div
+      className="rounded-xl p-4 mb-2 flex flex-wrap items-center gap-x-3 gap-y-2"
+      style={{ background: "var(--bg-card)", border: "1px solid var(--accent)" }}
+      role="status"
+      data-testid="none-near"
+    >
+      <p className="text-sm font-bold flex-1 min-w-[12rem]" style={{ color: "var(--text)" }}>
+        No {filters.duration ? `${filters.duration} ` : ""}loops near you yet
+        <span className="block text-xs font-normal mt-0.5" style={{ color: "var(--text-muted)" }}>
+          The nearest below is {Math.round(nearestKm).toLocaleString("en-IE")} km away.
+        </span>
+      </p>
+      <Link
+        href={planFromHereHref(userLocation, filters.duration)}
+        className="text-sm font-bold px-4 min-h-[44px] inline-flex items-center rounded-lg"
+        style={{ background: "var(--accent)", color: "var(--bg)" }}
+      >
+        Plan one from here →
+      </Link>
+    </div>
+  ) : null;
+
   const routeList = (
     <>
+      {noneNearNote}
       {routes.map((route) => (
         <RouteCard
           key={route.id}
@@ -725,7 +793,12 @@ function HomeContent() {
         <div className="py-6">
           <DurationStrip
             selected={filters.duration}
-            onSelect={(d: string | null) => applyFilters((f) => ({ ...f, duration: d }))}
+            onSelect={(d: string | null) => {
+              applyFilters((f) => ({ ...f, duration: d }));
+              // The answer is below the chips: bring the list up (on a phone
+              // it sat under the fold and the tap looked like it did nothing).
+              if (d) requestAnimationFrame(() => scrollToFeed());
+            }}
             avgSpeedKmh={avgSpeedKmh}
           />
         </div>
@@ -780,7 +853,7 @@ function HomeContent() {
         {/* Feed heading — answers "what am I looking at?" honestly. */}
         {/* On a phone the heading takes its own line; the count, the note and
             "Use my location" wrap below it (not three ragged columns). */}
-        <div className="flex flex-wrap items-baseline gap-x-2 pb-3">
+        <div id="feed-results" className="flex flex-wrap items-baseline gap-x-2 pb-3">
           <h2 className="text-sm font-bold basis-full sm:basis-auto" style={{ color: "var(--text)" }}>{sortLabel}</h2>
           <span className="text-xs hidden sm:inline" style={{ color: "var(--text-muted)", opacity: 0.5 }}>&mdash;</span>
           <span className="text-xs font-bold" style={{ color: "var(--text-muted)" }}>

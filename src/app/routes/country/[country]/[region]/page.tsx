@@ -22,6 +22,8 @@ const loadRegion = cache(async (countrySlug: string, regionSlug: string) => {
   const stats = await getRegionStats(countrySlug, regionSlug);
   if (!stats) return null;
   const routes = visibleRoutes(await getRoutesByRegionSlug(countrySlug, regionSlug));
+  // No route a rider can open: no page.
+  if (routes.length === 0) return null;
   return {
     ...stats,
     // "london" and "Tipperary " share a page with "London" / "Tipperary".

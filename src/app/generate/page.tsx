@@ -14,7 +14,7 @@ const RouteEditor = dynamic(() => import("@/components/RouteEditor"), { ssr: fal
 import type { EditedRoute } from "@/components/RouteEditor";
 import { useToast } from "@/components/Toast";
 import {
-  MIN_PROMPT_CHARS,
+  promptLongEnough,
   friendlyHttpError,
   resultsHeading,
   readResults,
@@ -242,8 +242,14 @@ function GenerateContent() {
   const [loading, setLoading] = useState(false);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [interpreted, setInterpreted] = useState<Interpreted | null>(null);
-  const [error, setError] = useState<{ message: string; code?: string } | null>(null);
+  const [error, setError] = useState<{ message: string; code?: string; notice?: string } | null>(null);
   const [submittedPrompt, setSubmittedPrompt] = useState("");
+  /** repeat_efforts sent with the last session ask (null: not a session). */
+  const [submittedRepeat, setSubmittedRepeat] = useState<boolean | null>(null);
+  const promptRef = useRef<HTMLTextAreaElement>(null);
+  // The answer when it is a "no" — scrolled into view like results are (on a
+  // phone it otherwise sat below the fold).
+  const errorRef = useRef<HTMLDivElement>(null);
   const [useMyLocation, setUseMyLocation] = useState(false);
 
   // Run a homepage-handed-off ?q= prompt exactly once.
@@ -292,7 +298,7 @@ function GenerateContent() {
     if (garmin) router.replace(q ? `/generate?q=${encodeURIComponent(q)}` : "/generate", { scroll: false });
     if (!q) return;
     setPrompt(q);
-    if (q.length >= MIN_PROMPT_CHARS) runGeneration(q);
+    if (promptLongEnough(q)) runGeneration(q);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, user, searchParams]);
 
@@ -304,6 +310,20 @@ function GenerateContent() {
       resultsRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   }, [loading, candidates]);
+  useEffect(() => {
+    if (!loading && error && errorRef.current) {
+      errorRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [loading, error]);
+
+  /** Back to the request box — for a "no" that the same words will only get again. */
+  function editRequest() {
+    const el = promptRef.current;
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.focus({ preventScroll: true });
+    el.setSelectionRange(el.value.length, el.value.length);
+  }
 
   function toggleVoice() {
     if (voice.listening) {
@@ -326,7 +346,7 @@ function GenerateContent() {
     e?.preventDefault();
     if (voice.listening) voice.stop();
     const trimmed = prompt.trim();
-    if (trimmed.length < MIN_PROMPT_CHARS) {
+    if (!promptLongEnough(trimmed)) {
       setError({ message: "Describe the route you want in a bit more detail.", code: "TOO_SHORT" });
       return;
     }
@@ -339,12 +359,14 @@ function GenerateContent() {
     if (submittedPrompt) runGeneration(submittedPrompt);
   }
 
-  async function runGeneration(trimmed: string) {
+  async function runGeneration(trimmed: string, repeat: boolean = repeatEfforts) {
+    const session = looksLikeSession(trimmed);
     setLoading(true);
     setError(null);
     setCandidates([]);
     setInterpreted(null);
     setSubmittedPrompt(trimmed);
+    setSubmittedRepeat(session ? repeat : null);
     // The ask lives in the URL (replace: no extra history entry), so Back
     // from a route page lands on these results, restored from this tab.
     clearResults();
@@ -366,7 +388,7 @@ function GenerateContent() {
         body: JSON.stringify({
           prompt: trimmed,
           ...(origin ? { origin } : {}),
-          ...(looksLikeSession(trimmed) ? { repeat_efforts: repeatEfforts } : {}),
+          ...(session ? { repeat_efforts: repeat } : {}),
         }),
         signal: controller.signal,
       });
@@ -375,7 +397,12 @@ function GenerateContent() {
       const body = await res.json().catch(() => null);
       if (!res.ok || !body) {
         const fallback = friendlyHttpError(res.ok ? 502 : res.status);
-        setError({ message: body?.error ?? fallback.message, code: body?.code ?? fallback.code });
+        setError({
+          message: body?.error ?? fallback.message,
+          code: body?.code ?? fallback.code,
+          // A server note on the "no" (e.g. no map data there yet) is shown as sent.
+          ...(typeof body?.notice === "string" && body.notice ? { notice: body.notice } : {}),
+        });
       } else {
         const data = body.data as GenerateResponse | Candidate[] | undefined;
         // Tolerate both the new { interpreted, candidates } shape and the
@@ -459,6 +486,7 @@ function GenerateContent() {
           </label>
           <div className="relative">
             <textarea
+              ref={promptRef}
               id="plan-prompt"
               value={prompt}
               onChange={(e) => {
@@ -523,7 +551,7 @@ function GenerateContent() {
           <p id="plan-prompt-hint" className="sr-only">
             Describe distance or duration, terrain, starting point, and optionally a structured interval workout.{voice.supported ? " You can also dictate with the microphone." : ""} Press Enter to search.
           </p>
-          {prompt.trim().length > 0 && prompt.trim().length < MIN_PROMPT_CHARS && !loading && (
+          {prompt.trim().length > 0 && !promptLongEnough(prompt) && !loading && (
             <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>
               Add a little more — how long, where from, what terrain (e.g. &ldquo;50 km loop from Skerries&rdquo;).
             </p>
@@ -656,11 +684,19 @@ function GenerateContent() {
         </form>
 
         {error && (
+          <div ref={errorRef} style={{ scrollMarginTop: 16 }}>
           <ErrorPanel
             error={error}
             onRetry={submittedPrompt && error.code !== "TOO_SHORT" && error.code !== "UNAUTHORIZED" ? retryLast : undefined}
+            onEdit={editRequest}
+            onRepeatOnOneStretch={
+              error.code === "NO_WORKOUT_MATCH" && submittedRepeat === false
+                ? () => { setRepeatEfforts(true); runGeneration(submittedPrompt, true); }
+                : undefined
+            }
             loginHref={loginHrefFor(submittedPrompt)}
           />
+          </div>
         )}
         {error?.code === "PARSE_FAILED" && (
           <FallbackForm
@@ -814,10 +850,16 @@ function formatDuration(minutes: number): string {
 function ErrorPanel({
   error,
   onRetry,
+  onEdit,
+  onRepeatOnOneStretch,
   loginHref,
 }: {
-  error: { message: string; code?: string };
+  error: { message: string; code?: string; notice?: string };
   onRetry?: () => void;
+  /** Back to the request box (a decline the same words would only get again). */
+  onEdit?: () => void;
+  /** The efforts could not be spread out: offer them on one stretch instead. */
+  onRepeatOnOneStretch?: () => void;
   loginHref: string;
 }) {
   const hint = (() => {
@@ -825,9 +867,14 @@ function ErrorPanel({
       case "FEATURE_DISABLED":
         return "Route generation is not yet enabled on this environment.";
       case "NO_WORKOUT_MATCH":
-        return "Try a shorter interval, a different zone, or starting from a different location.";
+        // After "No — spread them out" the one-tap alternative says it all.
+        return onRepeatOnOneStretch
+          ? "Your efforts can all go on one good stretch instead — the best one near you."
+          : "Try a shorter interval, a different zone, or starting from a different location.";
       case "NO_ROUTES_FOUND":
-        return "Try a different distance, location, or discipline.";
+        return "Try a different distance or start point.";
+      case "NO_MAP_DATA":
+        return "We don't have the road map for that area yet, so we can't plan there honestly. Try a start in Ireland or one of our destinations.";
       case "GEOCODE_FAILED":
         return "Try naming a specific town or landmark — and add the country if it's abroad (e.g. 'from Calpe, Spain').";
       case "TIMEOUT":
@@ -849,7 +896,11 @@ function ErrorPanel({
   const isDecline =
     error.code === "NO_WORKOUT_MATCH" ||
     error.code === "NO_ROUTES_FOUND" ||
-    error.code === "GEOCODE_FAILED";
+    error.code === "GEOCODE_FAILED" ||
+    error.code === "NO_MAP_DATA";
+  // Sending the same words again gets the same honest "no": these go back
+  // to the request box instead.
+  const editInstead = !!onEdit && (error.code === "GEOCODE_FAILED" || error.code === "NO_ROUTES_FOUND" || error.code === "NO_MAP_DATA");
 
   return (
     <div
@@ -873,10 +924,25 @@ function ErrorPanel({
           We won&apos;t serve a route we can&apos;t stand over
         </p>
       )}
+      {error.notice && (
+        <p className="text-xs mt-1 font-bold" style={{ color: "#f5a524" }} role="status">
+          {error.notice}
+        </p>
+      )}
       {hint && (
         <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
           {hint}
         </p>
+      )}
+      {onRepeatOnOneStretch && (
+        <button
+          type="button"
+          onClick={onRepeatOnOneStretch}
+          className="mt-3 mr-2 inline-flex items-center justify-center gap-2 min-h-[44px] px-5 rounded-xl text-sm font-bold"
+          style={{ background: "var(--accent)", color: "var(--bg)" }}
+        >
+          Yes, repeat on one stretch
+        </button>
       )}
       {error.code === "UNAUTHORIZED" && (
         <Link
@@ -887,7 +953,16 @@ function ErrorPanel({
           Log in
         </Link>
       )}
-      {onRetry && (
+      {editInstead ? (
+        <button
+          type="button"
+          onClick={onEdit}
+          className="mt-3 inline-flex items-center justify-center gap-2 min-h-[44px] px-5 rounded-xl text-sm font-bold uppercase tracking-wider"
+          style={{ background: "var(--accent)", color: "var(--bg)" }}
+        >
+          Change my request
+        </button>
+      ) : onRetry && !onRepeatOnOneStretch && (
         <button
           type="button"
           onClick={onRetry}

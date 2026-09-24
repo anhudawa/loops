@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   friendlyHttpError,
+  promptLongEnough,
   resultsHeading,
   readResults,
   writeResults,
@@ -57,5 +58,17 @@ describe("results cache", () => {
     s.setItem("loops:generate:last", "{not json");
     expect(readResults(s, 1)).toBeNull();
     expect(readResults(null)).toBeNull();
+  });
+});
+
+describe("promptLongEnough", () => {
+  it("accepts a short ask that says how long", () => {
+    for (const q of ["40km loop", "40 km", "2h", "1 hour", "90 min spin", "60k"]) expect(promptLongEnough(q)).toBe(true);
+  });
+  it("still asks for more from a short ask with no length", () => {
+    for (const q of ["loop", "hilly", "a ride", "  x  "]) expect(promptLongEnough(q)).toBe(false);
+  });
+  it("anything of 10+ characters goes through", () => {
+    expect(promptLongEnough("quiet lanes please")).toBe(true);
   });
 });

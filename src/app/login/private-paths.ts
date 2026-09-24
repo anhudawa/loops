@@ -20,8 +20,8 @@ export function isPrivatePath(path: string): boolean {
 export function gateHeading(path: string): string | null {
   if (!isPrivatePath(path)) return null;
   const pathname = path.split(/[?#]/)[0];
-  if (pathname.startsWith("/generate")) return "Plan a ride with LOOPS";
-  if (pathname.startsWith("/upload")) return "Upload a route to LOOPS";
+  if (pathname.startsWith("/generate")) return "Log in to plan a ride";
+  if (pathname.startsWith("/upload")) return "Log in to upload a route";
   if (pathname.startsWith("/messages")) return "Log in to see your messages";
   if (pathname.startsWith("/profile")) return "Log in to see your profile";
   return "Log in to continue";

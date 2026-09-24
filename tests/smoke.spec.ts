@@ -226,15 +226,17 @@ test.describe("Road Standard (Trust Rule)", () => {
 });
 
 test.describe("log in vs sign up", () => {
-  test("'Log in' lands on a login page, not a sign-up pitch", async ({ page }) => {
+  test("'Log in' lands on a login page and nothing else", async ({ page }) => {
     await open(page, "/login");
-    await expect(page.getByRole("heading", { level: 1, name: /welcome back/i })).toBeVisible();
-    await expect(page.getByText(/log in to loops/i)).toBeVisible();
-    await expect(page.getByRole("button", { name: /continue with google/i }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: /log in to loops/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /continue with google/i })).toHaveCount(1);
+    // Login is only for logging in: no demo, stats or route pitch.
+    await expect(page.getByText(/answers waiting inside|try it|km mapped/i)).toHaveCount(0);
   });
-  test("'Sign up' shows the pitch and a way back to log in", async ({ page }) => {
+  test("'Sign up' is just as plain, with a way back to log in", async ({ page }) => {
     await open(page, "/login?mode=signup");
-    await expect(page.getByRole("heading", { level: 1, name: /where should i ride today/i })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: /create your free account/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /continue with google/i })).toHaveCount(1);
     await expect(page.getByRole("link", { name: /already have an account\? log in/i })).toBeVisible();
   });
 });
@@ -243,7 +245,7 @@ test.describe("login wall says the right thing", () => {
   test("the planner gate never greets a new rider with 'Welcome back'", async ({ page }) => {
     await open(page, "/generate");
     await expect(page).toHaveURL(/\/login\?redirect=%2Fgenerate/);
-    await expect(page.getByRole("heading", { level: 1, name: /plan a ride with loops/i })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: /log in to plan a ride/i })).toBeVisible();
   });
   test("an unknown URL is the 404 page, not the login wall", async ({ page }) => {
     const res = await open(page, "/nope-404");

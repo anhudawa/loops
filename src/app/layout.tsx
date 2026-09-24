@@ -7,6 +7,7 @@ import ErrorBoundary from "@/components/ErrorBoundary";
 import Footer from "@/components/Footer";
 import InstallPrompt from "@/components/InstallPrompt";
 import RideCheckCard from "@/components/RideCheckCard";
+import HideOnPaths from "@/components/HideOnPaths";
 import JsonLd from "@/components/JsonLd";
 import { generateOrganizationJsonLd, generateWebSiteJsonLd } from "@/lib/seo";
 import { freeGpxPhrase } from "@/lib/copy";
@@ -72,7 +73,9 @@ export default function RootLayout({
             <CapacitorProvider>
               <AuthProvider>
                 {children}
-                <Footer />
+                <HideOnPaths paths={["/login"]}>
+                  <Footer />
+                </HideOnPaths>
                 <InstallPrompt />
                 <RideCheckCard />
               </AuthProvider>

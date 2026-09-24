@@ -4,35 +4,15 @@ import { useState, useEffect, Suspense, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
-import AnimatedNumber from "@/components/AnimatedNumber";
-import FadeIn from "@/components/FadeIn";
 import GoogleButton from "@/components/GoogleButton";
 import { safeRedirectPath } from "@/lib/safe-redirect";
-import FeaturedRouteTeaser, { type FeaturedRoute } from "@/components/FeaturedRouteTeaser";
 import { gateHeading, isPrivatePath } from "./private-paths";
 
-/* ── Demo prompts for the answer-machine preview ── */
-const DEMO_PROMPTS = [
-  "3 hours, quiet roads, tailwind home",
-  "80 km road loop from Girona",
-  "2 hours rolling hills, back for coffee",
-  "60 km road with 2x20 min threshold efforts",
-];
-
-/* ── Login page — everything answers "Where should I ride today?" ── */
+/* ── Login page — logging in, nothing else ── */
 function LoginPage() {
   const searchParams = useSearchParams();
   const { user, logout } = useAuth();
   const [manualError, setManualError] = useState("");
-  const [stats, setStats] = useState<{
-    routes: number;
-    totalKm: number;
-    countries: number;
-    featuredRoutes: FeaturedRoute[];
-    community: { riders: number; comments: number; ratings: number };
-  } | null>(null);
-  const [navSolid, setNavSolid] = useState(false);
-  const [demoIndex, setDemoIndex] = useState(0);
   // Newsletter opt-in — unticked by default. A ref mirrors it so every
   // "Sign in with Google" CTA (there are several) reads the current choice.
   const [newsletterOptIn, setNewsletterOptIn] = useState(false);
@@ -74,16 +54,10 @@ function LoginPage() {
   // The way back never carries gpx=1: a rider who backs out (or copies that
   // link) must not trigger an automatic download later.
   const backHref = returnTo ? returnTo.replace(/([?&])gpx=1(&|$)/, (_, a, b) => (b ? a : "")).replace(/[?&]$/, "") : null;
-  // Heading. A returning rider who tapped "Log in" gets "Welcome back"; a
-  // rider sent here by the login wall (/generate…) or for a GPX is usually
-  // new, so they get a neutral line that works for both.
+  // Heading: what the rider is logging in for (the GPX, planning a ride, or
+  // just logging in). The same button also creates an account, said below.
   const gated = returnTo ? gateHeading(returnTo) : null;
-  const heading = wantsGpx ? "Get the GPX" : isSignup ? "Where should I ride today?" : gated ?? "Welcome back";
-  const subline = isSignup && !wantsGpx
-    ? "Stop riding the same loops."
-    : wantsGpx || gated
-      ? "Log in, or create your free account: the same button does both."
-      : "Log in to LOOPS";
+  const heading = wantsGpx ? "Log in to get the GPX" : isSignup ? "Create your free account" : gated ?? "Log in to LOOPS";
   // A way back for any same-site page, unless it is a private one (that
   // would only bounce the rider straight back here).
   const showBack = !!backHref && !isPrivatePath(backHref) && !returnRouteId;
@@ -100,30 +74,6 @@ function LoginPage() {
       .catch(() => {});
     return () => { cancelled = true; };
   }, [returnRouteId]);
-
-  // Stats and featured routes only feed the sign-up pitch.
-  useEffect(() => {
-    if (!isSignup) return;
-    fetch("/api/stats")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data && typeof data.routes === "number") setStats(data);
-      })
-      .catch(() => {});
-  }, [isSignup]);
-
-  // Sticky nav transition
-  useEffect(() => {
-    const handleScroll = () => setNavSolid(window.scrollY > 60);
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-
-  // Rotate the demo prompt
-  useEffect(() => {
-    const id = setInterval(() => setDemoIndex((i) => (i + 1) % DEMO_PROMPTS.length), 3500);
-    return () => clearInterval(id);
-  }, []);
 
   // Email (magic link) sign-in — shown only when the server can send mail.
   const [emailEnabled, setEmailEnabled] = useState(false);
@@ -174,80 +124,46 @@ function LoginPage() {
     }
   }, [searchParams]);
 
-  // "Try it" carries the demo prompt through login into a real generation.
-  const handleTryDemo = useCallback(() => {
-    handleGoogleLogin(`/generate?q=${encodeURIComponent(DEMO_PROMPTS[demoIndex])}`);
-  }, [handleGoogleLogin, demoIndex]);
+  // Newsletter opt-in: offered to anyone who may be creating an account
+  // (not to a rider we know has signed in here before).
+  const offerNewsletter = isSignup || !lastMethod;
 
   return (
-    <div style={{ background: "var(--bg)" }}>
-      {/* ─── Sticky Nav ─── */}
-      <nav
-        className="fixed top-0 left-0 right-0 z-50 px-4 md:px-6 py-3 transition-all duration-300"
-        style={{
-          background: navSolid ? "rgba(10, 10, 10, 0.95)" : "transparent",
-          backdropFilter: navSolid ? "blur(12px)" : "none",
-          borderBottom: navSolid ? "1px solid var(--border)" : "1px solid transparent",
-        }}
-      >
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
+    <div className="min-h-[100dvh] flex flex-col" style={{ background: "var(--bg)" }}>
+      {/* Just the logo — the way home. Nothing else competes with logging in. */}
+      <nav className="px-4 md:px-6 py-3">
+        <div className="max-w-5xl mx-auto">
           <Link href="/" aria-label="LOOPS home" className="min-h-[44px] inline-flex items-center">
             <span className="logo-mark text-xl" style={{ color: "var(--text)" }}>LOOPS</span>
           </Link>
-          {/* The long sign-up pitch keeps a sign-in button in reach; the short
-              log-in page has one already, right under the heading. */}
-          {isSignup && !user && (
-            <GoogleButton size="small" onClick={() => { remember("google"); handleGoogleLogin(); }} />
-          )}
         </div>
       </nav>
 
-      {/* ─── Hero: the one question ─── */}
-      <section className="relative overflow-hidden px-4 pt-24 pb-12 md:pt-32 md:pb-16">
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{ background: "radial-gradient(ellipse 80% 60% at 50% 30%, rgba(200, 255, 0, 0.06) 0%, transparent 70%)" }}
-        />
-        <div
-          className="absolute inset-0 pointer-events-none opacity-[0.03]"
-          style={{ backgroundImage: `radial-gradient(circle at 1px 1px, var(--text-muted) 1px, transparent 0)`, backgroundSize: "40px 40px" }}
-        />
-
-        <div className="relative z-10 text-center max-w-3xl mx-auto">
-          <span className="logo-mark text-gradient" style={{ fontSize: "clamp(2.5rem, 7vw, 4.5rem)" }}>
-            LOOPS
-          </span>
-          <h1
-            className="font-extrabold tracking-tight leading-[1.02] mt-4 mb-3"
-            style={{ fontSize: "clamp(2rem, 6vw, 3.5rem)", color: "var(--text)" }}
-          >
+      <main className="flex-1 px-4 pt-10 pb-16">
+        <div className="max-w-sm mx-auto">
+          <h1 className="font-extrabold tracking-tight text-3xl" style={{ color: "var(--text)" }}>
             {heading}
           </h1>
-          <p className="text-base md:text-xl font-bold max-w-lg mx-auto" style={{ color: "var(--text-muted)" }}>
-            {subline}
-          </p>
-
-          {/* The one CTA */}
-          <div className="mt-8 max-w-xs mx-auto">
-            {returnRouteId && returnTo && (
-              <div className="mb-4 text-sm" data-testid="login-return-context">
-                <p className="font-bold" style={{ color: "var(--text)" }}>
-                  {wantsGpx ? "The GPX for " : "Log in and we'll bring you back to "}
-                  {returnRouteName ? <span style={{ color: "var(--accent)" }}>{returnRouteName}</span> : `this ${returnKind}`}
+          {returnRouteId && returnTo ? (
+            <div className="mt-2 text-sm" data-testid="login-return-context">
+              {returnRouteName && (
+                <p style={{ color: "var(--text-secondary)" }}>
+                  {wantsGpx ? "For " : "Then we'll take you back to "}
+                  <span className="font-bold" style={{ color: "var(--text)" }}>{returnRouteName}</span>.
                 </p>
-                <a href={backHref ?? returnTo} className="inline-flex items-center min-h-[44px] text-xs font-bold underline" style={{ color: "var(--text-muted)" }}>
-                  ← Back to the {returnKind}
-                </a>
-              </div>
-            )}
-            {showBack && backHref && (
-              <a href={backHref} className="inline-flex items-center min-h-[44px] mb-2 text-xs font-bold underline" style={{ color: "var(--text-muted)" }}>
-                ← Back
+              )}
+              <a href={backHref ?? returnTo} className="inline-flex items-center min-h-[44px] text-xs font-bold underline" style={{ color: "var(--text-muted)" }}>
+                ← Back to the {returnKind}
               </a>
-            )}
-            {error && (
-              <div className="alert-error mb-3 text-sm" role="alert">{error}</div>
-            )}
+            </div>
+          ) : showBack && backHref ? (
+            <a href={backHref} className="inline-flex items-center min-h-[44px] mt-1 text-xs font-bold underline" style={{ color: "var(--text-muted)" }}>
+              ← Back
+            </a>
+          ) : null}
+
+          <div className="mt-6">
+            {error && <div className="alert-error mb-3 text-sm" role="alert">{error}</div>}
             {user ? (
               // Already signed in (bookmark, stale tab): say so, don't ask again.
               <div className="text-sm" data-testid="login-signed-in">
@@ -269,206 +185,74 @@ function LoginPage() {
                 </button>
               </div>
             ) : (<>
-            <GoogleButton onClick={() => { remember("google"); handleGoogleLogin(); }} />
-            {lastMethod && (
-              <p className="text-[11px] mt-2" style={{ color: "var(--text-muted)" }}>
-                Last time you used {lastMethod === "google" ? "Google" : "an email link"}.
-              </p>
-            )}
-            {emailEnabled && (
-              emailState === "sent" ? (
-                <p className="text-sm mt-4" style={{ color: "var(--text)" }} role="status">
-                  Check your email — we sent a sign-in link to <strong>{email}</strong>. It works for 15 minutes.
+              <GoogleButton onClick={() => { remember("google"); handleGoogleLogin(); }} />
+              {lastMethod && (
+                <p className="text-[11px] mt-2" style={{ color: "var(--text-muted)" }}>
+                  Last time you used {lastMethod === "google" ? "Google" : "an email link"}.
                 </p>
-              ) : (
-                <form onSubmit={handleEmailLogin} className="mt-4">
-                  <p className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>{isSignup ? "No Google account? Get a sign-in link by email:" : "Or email me a sign-in link:"}</p>
-                  <div className="flex gap-2">
-                    <input
-                      type="email"
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="you@example.com"
-                      autoComplete="email"
-                      className="flex-1 min-w-0 px-3 py-3 min-h-[44px] rounded-xl text-sm"
-                      style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
-                    />
-                    <button
-                      type="submit"
-                      disabled={emailState === "sending"}
-                      className="px-4 py-3 min-h-[44px] rounded-xl text-sm font-bold disabled:opacity-50"
-                      style={{ background: "var(--bg-raised)", border: "1px solid var(--border)", color: "var(--text)" }}
-                    >
-                      {emailState === "sending" ? "Sending…" : "Email me"}
-                    </button>
-                  </div>
-                  {emailError && <p className="text-xs mt-2" style={{ color: "#f5a524" }}>{emailError}</p>}
-                </form>
-              )
-            )}
-            {isSignup && (
-            <label className="flex items-start gap-2 mt-3 text-left cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={newsletterOptIn}
-                onChange={(e) => { setNewsletterOptIn(e.target.checked); newsletterOptInRef.current = e.target.checked; }}
-                className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--accent)]"
-                style={{ minWidth: 16, minHeight: 16 }}
-              />
-              <span className="text-[12px] leading-snug" style={{ color: "var(--text-secondary)" }}>
-                Get <span style={{ color: "var(--text)" }}>the Saturday Spin</span> — the free weekly cycling newsletter.
-              </span>
-            </label>
-            )}
-            <p className="text-[11px] text-center mt-2.5" style={{ color: "var(--text-muted)" }}>
-              {isSignup ? (
-                <>Free forever. No credit card. Pro (coming) adds training intelligence.{" "}
-                  <a href={`/login${redirectParam ? `?redirect=${encodeURIComponent(redirectParam)}` : ""}`} className="underline font-bold inline-flex items-center min-h-[44px]">Already have an account? Log in</a></>
-              ) : (
-                <>{gated || wantsGpx ? "Want to know what you get first?" : "New to LOOPS? The same button creates your free account."}{" "}
-                  <a href={`/login?mode=signup${redirectParam ? `&redirect=${encodeURIComponent(redirectParam)}` : ""}`} className="underline font-bold inline-flex items-center min-h-[44px]">See what it does</a></>
               )}
-            </p>
+              {emailEnabled && (
+                emailState === "sent" ? (
+                  <p className="text-sm mt-5" style={{ color: "var(--text)" }} role="status">
+                    Check your email — we sent a sign-in link to <strong>{email}</strong>. It works for 15 minutes.
+                  </p>
+                ) : (
+                  <form onSubmit={handleEmailLogin} className="mt-5">
+                    <label htmlFor="login-email" className="block text-xs mb-2" style={{ color: "var(--text-muted)" }}>Or email me a sign-in link:</label>
+                    <div className="flex gap-2">
+                      <input
+                        id="login-email"
+                        type="email"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="you@example.com"
+                        autoComplete="email"
+                        className="flex-1 min-w-0 px-3 py-3 min-h-[44px] rounded-xl text-sm"
+                        style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+                      />
+                      <button
+                        type="submit"
+                        disabled={emailState === "sending"}
+                        className="px-4 py-3 min-h-[44px] rounded-xl text-sm font-bold disabled:opacity-50"
+                        style={{ background: "var(--bg-raised)", border: "1px solid var(--border)", color: "var(--text)" }}
+                      >
+                        {emailState === "sending" ? "Sending…" : "Email me"}
+                      </button>
+                    </div>
+                    {emailError && <p className="text-xs mt-2" style={{ color: "#f5a524" }}>{emailError}</p>}
+                  </form>
+                )
+              )}
+              {offerNewsletter && (
+                <label className="flex items-start gap-2 mt-4 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={newsletterOptIn}
+                    onChange={(e) => { setNewsletterOptIn(e.target.checked); newsletterOptInRef.current = e.target.checked; }}
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--accent)]"
+                    style={{ minWidth: 16, minHeight: 16 }}
+                  />
+                  <span className="text-[12px] leading-snug" style={{ color: "var(--text-secondary)" }}>
+                    Also send me <span style={{ color: "var(--text)" }}>the Saturday Spin</span>, the free weekly cycling newsletter.
+                  </span>
+                </label>
+              )}
+              <p className="text-xs mt-4" style={{ color: "var(--text-muted)" }}>
+                {isSignup ? (
+                  <>Free. No credit card.{" "}
+                    <a href={`/login${redirectParam ? `?redirect=${encodeURIComponent(redirectParam)}` : ""}`} className="underline font-bold inline-flex items-center min-h-[44px]">Already have an account? Log in</a></>
+                ) : (
+                  <>New to LOOPS? The same button creates your free account.</>
+                )}
+              </p>
             </>)}
           </div>
-
-          {/* Demo of the answer machine — ask it, sign in, get a real route.
-              Sign-up pitch only, and not when the rider is on their way back
-              somewhere (it would replace their redirect). */}
-          {isSignup && !returnTo && !user && (
-          <div className="mt-10 max-w-md mx-auto">
-            <p className="text-[10px] uppercase tracking-wider font-bold mb-2" style={{ color: "var(--text-muted)" }}>
-              Ask it like you&apos;d ask a riding buddy
-            </p>
-            <div
-              className="flex items-center gap-2 rounded-xl p-2 pl-4 text-left"
-              style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
-            >
-              <span
-                key={demoIndex}
-                className="flex-1 min-w-0 truncate text-sm"
-                style={{ color: "var(--text-secondary)", animation: "fade-in 0.4s ease" }}
-                aria-live="polite"
-              >
-                &ldquo;{DEMO_PROMPTS[demoIndex]}&rdquo;
-              </span>
-              <button
-                onClick={handleTryDemo}
-                className="btn-accent shrink-0 px-4 py-2.5 min-h-[44px] rounded-lg font-bold text-xs uppercase tracking-wider"
-              >
-                Sign up &amp; try it
-              </button>
-            </div>
-            <p className="text-[11px] mt-2" style={{ color: "var(--text-muted)", opacity: 0.7 }}>
-              Continue with Google and we&apos;ll plan this ride for you: wind-aware, quality-scored.
-            </p>
-          </div>
-          )}
-
-          {/* Live stats — evidence, not marketing (sign-up pitch only) */}
-          {isSignup && stats && (
-            <div className="flex items-center justify-center gap-8 md:gap-14 mt-12">
-              {[
-                { value: stats.routes, label: "Routes" },
-                { value: stats.totalKm, label: "Km Mapped" },
-                { value: stats.countries, label: "Destinations" },
-              ].map((s) => (
-                <div key={s.label} className="text-center">
-                  <p className="text-2xl md:text-3xl font-extrabold" style={{ color: "var(--accent)" }}>
-                    <AnimatedNumber target={s.value} />
-                  </p>
-                  <p className="text-[10px] md:text-xs uppercase tracking-wider font-bold mt-1" style={{ color: "var(--text-muted)" }}>
-                    {s.label}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
-      </section>
-
-      {/* ─── Featured Routes: real answers waiting inside ─── */}
-      {isSignup && stats?.featuredRoutes && stats.featuredRoutes.length > 0 && (
-        <FadeIn className="px-4 pb-16 md:pb-24 pt-8">
-          <div className="max-w-3xl mx-auto">
-            <h2 className="text-center font-extrabold text-sm uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>
-              Answers waiting inside
-            </h2>
-            <p className="text-center text-xs mb-8" style={{ color: "var(--text-muted)", opacity: 0.6 }}>
-              Verified routes, quality-scored — sign in to ride one
-            </p>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              {stats.featuredRoutes.map((route) => (
-                <FeaturedRouteTeaser key={route.id} route={route} onClick={() => handleGoogleLogin()} />
-              ))}
-            </div>
-
-            {SHOW_RIDER_COUNT && stats.community && (
-              <div className="flex items-center justify-center gap-6 mt-8">
-                <div className="text-center">
-                  <p className="text-sm font-extrabold" style={{ color: "var(--text-secondary)" }}>
-                    <AnimatedNumber target={stats.community.riders} duration={1200} />
-                  </p>
-                  <p className="text-[10px] uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>Riders</p>
-                </div>
-              </div>
-            )}
-          </div>
-        </FadeIn>
-      )}
-
-      {/* ─── Why LOOPS (comparison — every claim verified true) ─── */}
-      {isSignup && (
-      <FadeIn className="px-4 pb-20 md:pb-28">
-        <div className="max-w-xl mx-auto">
-          <h2 className="text-center font-extrabold text-sm uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>
-            Tired of the paywall?
-          </h2>
-          <p className="text-center text-xs mb-8" style={{ color: "var(--text-muted)" }}>
-            We built LOOPS because route discovery shouldn&apos;t cost a subscription.
-          </p>
-          <div className="grid grid-cols-1 gap-3">
-            {[
-              { them: "Device sync behind a paywall", us: "Every route free to download" },
-              { them: "Routes down busy roads", us: "Quality-scored, quiet-road loops" },
-              { them: "Locked into one ecosystem", us: "Open GPX export — works with every head unit" },
-              { them: "Bloated with features you don't use", us: "One question, answered well" },
-            ].map((item, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-4 rounded-xl px-5 py-4"
-                style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
-              >
-                <div className="shrink-0 flex flex-col gap-1.5">
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs line-through" style={{ color: "var(--text-muted)", opacity: 0.5 }}>
-                    {item.them}
-                  </p>
-                  <p className="text-sm font-bold" style={{ color: "var(--accent)" }}>
-                    {item.us}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </FadeIn>
-      )}
+      </main>
     </div>
   );
 }
-
-/** Rider counter hidden until the number is a boast. */
-const SHOW_RIDER_COUNT = false;
 
 export default function LoginPageWrapper() {
   return (

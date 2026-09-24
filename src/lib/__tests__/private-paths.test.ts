@@ -17,8 +17,8 @@ describe("isPrivatePath", () => {
 
 describe("gateHeading", () => {
   it("never says welcome back to someone sent by the gate", () => {
-    expect(gateHeading("/generate?q=3%20hours")).toBe("Plan a ride with LOOPS");
-    expect(gateHeading("/upload")).toBe("Upload a route to LOOPS");
+    expect(gateHeading("/generate?q=3%20hours")).toBe("Log in to plan a ride");
+    expect(gateHeading("/upload")).toBe("Log in to upload a route");
     expect(gateHeading("/admin")).toBe("Log in to continue");
   });
 

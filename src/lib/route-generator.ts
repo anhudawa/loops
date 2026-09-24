@@ -83,8 +83,9 @@ import {
 import { findEffortCorridors, type EffortCorridor } from "./session-assembly";
 import { findEffortStretch, findSpreadStretches, spliceRepeats, lengthPlan, clearOfStops, lightTraffic, totalReps, isHillSession, repKm, hardestRep, type EffortStretch } from "./effort-repeats";
 import { placeNear, placesNear } from "./map-labels";
-import { autoTitle } from "./route-title";
+import { autoTitle, nameAt } from "./route-title";
 import { findHills, loopsOverHill, type Hill } from "./hill-finder";
+import { nearbyPlaces } from "./places";
 import { isClosedLoop, nearestIndex, rotateLoop } from "./loop-geometry";
 import { disciplineEnabled, DISCIPLINE_NOTICE } from "@/config/constants";
 import { ZONES } from "./intensity";
@@ -2890,6 +2891,104 @@ async function summitRoad(start: [number, number], hill: Hill): Promise<[number,
   }
 }
 
+/**
+ * Coastal and headland starts (Galway, Maspalomas, Sóller, Howth): the
+ * diamonds aimed from the start run into the sea or up dead ends, and every
+ * candidate is dropped for doubling back. Riders there ride a lollipop — one
+ * road out to an inland town, a loop from it, the same road home — which the
+ * rules already accept as start/finish access (reported, never silent).
+ * Returns up to two such waypoint sets when several compass sectors round the
+ * start hold no places at all (sea), else none.
+ */
+async function lollipopAnchors(spec: RouteSpec): Promise<Array<{ a: [number, number]; stem: RoutedPath }>> {
+  const [lat, lng] = spec.start_point;
+  const reach = Math.min(25, Math.max(8, spec.distance_km / 2.5));
+  const places = nearbyPlaces(lat, lng, reach).filter((p) => {
+    const d = haversineKm(lat, lng, p.lat, p.lng);
+    return d >= 2 && d <= reach;
+  });
+  const sectors = Array.from({ length: 8 }, () => [] as Array<{ lat: number; lng: number; weight: number }>);
+  for (const p of places) sectors[Math.floor(bearingDegFrom(spec.start_point, [p.lat, p.lng]) / 45) % 8].push(p);
+  // Stem to a town about a fifth of the ride out: one candidate per
+  // well-supported sector, kept only when the road there is direct (a town
+  // across a bay is close in a straight line and far by road).
+  const stemKm = Math.min(12, Math.max(4, spec.distance_km / 5));
+  const picks = sectors
+    .map((ps) => ({ support: ps.reduce((a, p) => a + 1 + p.weight, 0), anchor: ps
+      .map((p) => ({ p, err: Math.abs(haversineKm(lat, lng, p.lat, p.lng) - stemKm) - p.weight }))
+      .sort((a, b) => a.err - b.err)[0]?.p }))
+    .filter((x) => x.anchor)
+    .sort((a, b) => b.support - a.support)
+    .slice(0, 4);
+  const profile = DISCIPLINE_PROFILE[spec.discipline];
+  const stems = await Promise.all(picks.map((x) => routeViaBRouter([spec.start_point, [x.anchor!.lat, x.anchor!.lng]], profile)));
+  return picks
+    .map((x, i) => ({ a: [x.anchor!.lat, x.anchor!.lng] as [number, number], stem: stems[i] }))
+    .filter((x): x is { a: [number, number]; stem: RoutedPath } =>
+      !!x.stem && x.stem.coords.length >= 2 && x.stem.distance_km <= 1.4 * haversineKm(lat, lng, x.a[0], x.a[1]) + 1)
+    .slice(0, 2);
+}
+
+/**
+ * Coastal and headland starts (Galway, Maspalomas, Sóller): every loop
+ * aimed from the start runs into the sea or doubles back. Riders there ride
+ * a lollipop — out on one road to an inland town, a real loop from it, the
+ * same road home. Built explicitly: the stem routed once, the loop by the
+ * full pipeline from the town (every rule applies to it), then joined. The
+ * shared stem is said on the card, never hidden.
+ */
+async function lollipopRides(spec: RouteSpec): Promise<GeneratedRoute[]> {
+  const anchors = await lollipopAnchors(spec);
+  const startName = spec.region ?? "the start";
+  const out: GeneratedRoute[] = [];
+  for (const { a, stem } of anchors) {
+    const rest = spec.distance_km - 2 * stem.distance_km;
+    if (rest < 15) continue;
+    const loops = await generateFreshRoutes({ ...spec, start_point: a, end_point: a, distance_km: rest, region: undefined }, null, undefined, true, true)
+      .catch(() => [] as GeneratedRoute[]);
+    for (const loop of loops.slice(0, 2)) {
+      const data = loopEngineData.get(loop);
+      const back = reversePath(stem);
+      const coords = [...stem.coords, ...loop.coordinates.slice(1), ...back.coords.slice(1)];
+      const elevations = [...stem.elevations, ...loop.elevations.slice(1), ...back.elevations.slice(1)];
+      const tags: EdgeTags = [
+        ...(stem.edgeTags ?? new Array(stem.coords.length - 1).fill(null)),
+        ...(data?.edgeTags ?? new Array(loop.coordinates.length - 1).fill(null)),
+        ...(back.edgeTags ?? new Array(back.coords.length - 1).fill(null)),
+      ];
+      const report = buildRoadReport(coords, tags, spec.discipline);
+      if (!compromiseAcceptable(report, loop.distance_km + 2 * stem.distance_km)) continue;
+      if (!report.standard_met) {
+        await nameCompromises(coords, report.compromises);
+        report.summary = summariseCompromises(report.compromises);
+      }
+      const distKm = Math.round((loop.distance_km + 2 * stem.distance_km) * 10) / 10;
+      const gain = Math.round(loop.elevation_gain_m + (stem.elevation_gain_m ?? 0) + (back.elevation_gain_m ?? elevationGainFromSeries(back.elevations)));
+      const town = nameAt(a, 6);
+      const ride: GeneratedRoute = {
+        ...loop,
+        coordinates: coords,
+        elevations,
+        distance_km: distKm,
+        elevation_gain_m: gain,
+        elevation_loss_m: gain,
+        gpx_data: buildGpx(coords, elevations, `LOOPS — ${Math.round(distKm)} km`, spec.discipline),
+        match_score: computeMatchScore(distKm, gain, spec, loop.quality_score),
+        waypoints_used: [spec.start_point, ...loop.waypoints_used, spec.start_point],
+        road_report: report,
+        // Not "… loop": the stem is ridden twice (a lollipop, said as such).
+        title: `${startName} – ${town ?? "inland"} – ${startName} · ${Math.round(distKm)} km`,
+        ride_note: `A loop ${town ? `from ${town}` : "inland"}, with the same ${stem.distance_km.toFixed(1)} km of road out of ${startName} and back — every loop straight from ${startName} doubled back on itself.`,
+      };
+      loopEngineData.set(ride, { edgeTags: tags, stops: [...(stem.stops ?? []), ...(data?.stops ?? [])] });
+      out.push(ride);
+    }
+    if (out.length >= 2) break;
+  }
+  genDebug(`lollipop: ${anchors.length} inland anchor(s), ${out.length} ride(s)`);
+  return out;
+}
+
 /** `via` inserted into a closed waypoint loop where it adds the least straight-line detour. */
 function withVia(ws: [number, number][], via: [number, number]): [number, number][] {
   let best = 1, bestCost = Infinity;
@@ -3001,6 +3100,8 @@ async function generateFreshRoutes(
   presetWaypointSets?: [number, number][][],
   /** Return every loop that passed (the caller ranks them), not the top three. */
   keepAll = false,
+  /** Inner loop of a lollipop: never recurse into another lollipop. */
+  noLollipop = false,
 ): Promise<GeneratedRoute[]> {
   const profile = DISCIPLINE_PROFILE[spec.discipline];
 
@@ -3328,7 +3429,7 @@ async function generateFreshRoutes(
   // best three overall.
   const offKm = (c: GeneratedRoute) => Math.abs(c.distance_km - spec.distance_km);
   const servedWell = candidates.filter((c) => offKm(c) <= Math.max(5, spec.distance_km * 0.15)).length;
-  const plan = !presetWaypointSets && Date.now() - t0 < 18_000
+  const plan = !presetWaypointSets && !noLollipop && Date.now() - t0 < 18_000
     ? planSecondPass(sizing, spec.distance_km, servedWell, candidates.length)
     : { kind: "none" as const };
   if (plan.kind === "recalibrate") {
@@ -3379,6 +3480,15 @@ async function generateFreshRoutes(
   let alternative: string | null = null;
   if (candidates.length === 0 && !presetWaypointSets && !spec.workout && Date.now() - t0 < 30_000) {
     alternative = await destinationAlternative(spec).catch(() => null);
+  }
+
+  // Coastal and headland starts: when no loop survived, a lollipop — one
+  // road out to an inland town, a loop from it, the same road home.
+  if (candidates.length === 0 && !presetWaypointSets && !noLollipop && Date.now() - t0 < 28_000) {
+    candidates = candidates.concat(await lollipopRides(spec).catch((e) => {
+      genDebug(`lollipop failed: ${e instanceof Error ? e.message : e}`);
+      return [] as GeneratedRoute[];
+    }));
   }
 
   if (candidates.length === 0) {

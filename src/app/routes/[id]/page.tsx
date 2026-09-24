@@ -1,5 +1,6 @@
 import { withAutoTitle } from "@/lib/route-title";
 import { withTrueClimb } from "@/lib/true-climb";
+import { preconnectMapTiles } from "@/lib/map-preconnect";
 import { notFound } from "next/navigation";
 import { getRouteOnce as getRoute } from "@/lib/db";
 import { initialRouteForPage } from "@/lib/public-route";
@@ -10,6 +11,7 @@ import RouteDetailView from "@/components/RouteDetailView";
 // refreshes quietly and keeps its own fail-soft retry when the DB is down.
 export default async function RouteDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  preconnectMapTiles();
   let initialRoute: Record<string, unknown> | null = null;
   // A route that definitively does not exist (the DB answered, no row) is a
   // real 404; a DB error is not.

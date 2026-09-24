@@ -1,5 +1,6 @@
 import { withAutoTitle } from "@/lib/route-title";
 import { withTrueClimb } from "@/lib/true-climb";
+import { preconnectMapTiles } from "@/lib/map-preconnect";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getRouteOnce as getRoute } from "@/lib/db";
@@ -24,6 +25,7 @@ const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) 
 
 export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
   const { id } = await params;
+  preconnectMapTiles();
   const sp = await searchParams;
   const t = one(sp.t);
   const when = formatRideWhen(t);

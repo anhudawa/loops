@@ -20,8 +20,8 @@ describe("despikeElevations", () => {
     const clean = despikeElevations(t);
     expect(Math.max(...clean.map((c) => c[2]))).toBeLessThanOrEqual(188.01);
     expect(clean.map((c) => [c[0], c[1]])).toEqual(t.map((c) => [c[0], c[1]]));
-    // …and the steep "climb" it made is gone.
-    expect(detectClimbs(t).some((c) => c.avgGradient > 25)).toBe(true);
+    // …and no steep "climb" comes out of it (the road-distance smoothing in
+    // detectClimbs already tames it; the cleanup removes the rest).
     expect(cleanClimbs(t, detectClimbs).climbs.some((c) => c.avgGradient > 25)).toBe(false);
   });
 });

@@ -153,7 +153,6 @@ export function detectClimbs(coordinates: [number, number, number][]): Climb[] {
   if (coordinates.length < 5) return [];
 
   const rawElevations = interpolateNaN(coordinates.map((c) => c[2]));
-  const smoothed = smoothElevations(rawElevations);
 
   // Build cumulative distance array
   const cumDist: number[] = [0];
@@ -163,26 +162,39 @@ export function detectClimbs(coordinates: [number, number, number][]): Climb[] {
     );
   }
 
+  // Work on the ROAD, not the points: heights averaged over ~300 m, read
+  // every ~100 m. Point-based steps (25 m apart on a dense track) ended a
+  // climb at every hairpin or 100 m false flat — Puig Major read as two
+  // Cat 4s. Indices below are into the step profile; `at[k]` maps back.
+  const smoothedAll = smoothByDistance(rawElevations, cumDist, SMOOTH_KM);
+  const at: number[] = [0];
+  for (let i = 1; i < cumDist.length; i++) {
+    if (cumDist[i] - cumDist[at[at.length - 1]] >= STEP_KM) at.push(i);
+  }
+  if (at[at.length - 1] !== cumDist.length - 1) at.push(cumDist.length - 1);
+  if (at.length < 5) return [];
+  const smoothed = at.map((i) => smoothedAll[i]);
+  const stepDist = at.map((i) => cumDist[i]);
+
   const n = smoothed.length;
   const climbs: Climb[] = [];
 
-  // Compute gradients between consecutive smoothed points
-  const gradients = computeGradients(smoothed, cumDist);
+  const gradients = computeGradients(smoothed, stepDist);
 
   let i = 0;
   const CLIMB_START_THRESHOLD = 2; // % gradient to start a climb
   const CLIMB_END_THRESHOLD = 1;   // % gradient to end a climb
-  const MIN_CONSECUTIVE_START = 3;  // consecutive points above threshold to start
-  const MIN_CONSECUTIVE_END = 5;    // consecutive points below threshold to end
+  const MIN_CONSECUTIVE_START = 3;  // ~300 m climbing to start
+  const MIN_CONSECUTIVE_END = 5;    // ~500 m not climbing to end
+  const MAX_DIP_M = 20;             // a descent this deep ends the climb
 
   while (i < n - 1) {
-    // Find start of climb: MIN_CONSECUTIVE_START points above CLIMB_START_THRESHOLD
     let consecutiveUp = 0;
     while (i < gradients.length) {
       if (gradients[i] >= CLIMB_START_THRESHOLD) {
         consecutiveUp++;
         if (consecutiveUp >= MIN_CONSECUTIVE_START) {
-          i = i - MIN_CONSECUTIVE_START + 1; // back to start of sequence
+          i = i - MIN_CONSECUTIVE_START + 1;
           break;
         }
       } else {
@@ -193,45 +205,39 @@ export function detectClimbs(coordinates: [number, number, number][]): Climb[] {
     if (i >= gradients.length) break;
 
     const climbStartIdx = i;
-    let climbEndIdx = i;
     let peakElev = smoothed[i];
     let peakIdx = i;
     let consecutiveBelow = 0;
 
-    // Walk the climb
     while (i < gradients.length) {
       i++;
       if (smoothed[i] > peakElev) {
         peakElev = smoothed[i];
         peakIdx = i;
       }
+      if (peakElev - smoothed[i] >= MAX_DIP_M) break;
       if (gradients[i - 1] < CLIMB_END_THRESHOLD) {
         consecutiveBelow++;
-        if (consecutiveBelow >= MIN_CONSECUTIVE_END) {
-          climbEndIdx = i - MIN_CONSECUTIVE_END;
-          break;
-        }
+        if (consecutiveBelow >= MIN_CONSECUTIVE_END) break;
       } else {
         consecutiveBelow = 0;
-        climbEndIdx = i;
       }
     }
-    if (i >= gradients.length) climbEndIdx = peakIdx;
+    // The climb ends at its top.
+    const climbEndIdx = peakIdx;
 
-    // Calculate stats
     const gain = smoothed[climbEndIdx] - smoothed[climbStartIdx];
-    const startKm = cumDist[climbStartIdx];
-    const endKm = cumDist[climbEndIdx];
+    const startKm = stepDist[climbStartIdx];
+    const endKm = stepDist[climbEndIdx];
     const distKm = endKm - startKm;
 
-    // Filter: min 30m gain, min 2% average, min distance
     if (gain >= 30 && distKm > 0.1) {
       const avgGrad = (gain / (distKm * 1000)) * 100;
       if (avgGrad >= 2) {
         const category = categoriseClimb(distKm, avgGrad);
         climbs.push({
-          startIndex: climbStartIdx,
-          endIndex: climbEndIdx,
+          startIndex: at[climbStartIdx],
+          endIndex: at[climbEndIdx],
           startKm,
           endKm,
           startElev: smoothed[climbStartIdx],
@@ -245,14 +251,30 @@ export function detectClimbs(coordinates: [number, number, number][]): Climb[] {
       }
     }
 
-    i = climbEndIdx + 1;
+    i = Math.max(climbEndIdx + 1, i);
   }
 
-  // Sort by start km ascending (natural route order)
   climbs.sort((a, b) => a.startKm - b.startKm);
-
-  // Only return categorised climbs (score >= 3)
   return climbs.filter((c) => c.category !== null);
+}
+
+/** Climb profile: heights averaged over this much road, read every STEP_KM. */
+const SMOOTH_KM = 0.3;
+const STEP_KM = 0.1;
+
+/** Heights averaged over `windowKm` of road centred on each point. */
+function smoothByDistance(elevations: number[], cumDist: number[], windowKm: number): number[] {
+  const n = elevations.length;
+  const pre = [0];
+  for (let i = 0; i < n; i++) pre.push(pre[i] + elevations[i]);
+  const out: number[] = new Array(n);
+  let lo = 0, hi = 0;
+  for (let i = 0; i < n; i++) {
+    while (cumDist[lo] < cumDist[i] - windowKm / 2) lo++;
+    while (hi < n && cumDist[hi] <= cumDist[i] + windowKm / 2) hi++;
+    out[i] = (pre[hi] - pre[lo]) / (hi - lo);
+  }
+  return out;
 }
 
 /**

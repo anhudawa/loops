@@ -911,13 +911,20 @@ export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
   // How many rows the page query returned BEFORE duplicates / hidden tracks
   // were dropped: a full page means there may be another (the list's
   // "load more"); the filtered length cannot say so.
-  Object.defineProperty(out, "rawCount", { value: rows.length, enumerable: false });
-  return out;
+  // The query reads one row past the page (limitVal) to learn whether there
+  // is a next page; that row is the next page's first and is never shown.
+  const pageLen = limitVal - 1;
+  const extraId = rows.length > pageLen ? String(rows[rows.length - 1].id) : null;
+  const page = extraId ? out.filter((r) => String(r.id) !== extraId) : out;
+  Object.defineProperty(page, "rawCount", { value: rows.length, enumerable: false });
+  Object.defineProperty(page, "pageLen", { value: pageLen, enumerable: false });
+  return page;
 }
 
-/** Rows the database returned for a getRoutes page before display filtering. */
-export function rawCountOf(rows: unknown[]): number {
-  return (rows as unknown as { rawCount?: number }).rawCount ?? rows.length;
+/** Whether a getRoutes page has a next page (counted before display filtering). */
+export function hasMoreRows(rows: unknown[]): boolean {
+  const r = rows as unknown as { rawCount?: number; pageLen?: number };
+  return r.rawCount != null && r.pageLen != null ? r.rawCount > r.pageLen : false;
 }
 
 export async function getRoute(id: string): Promise<(Route & { is_verified?: number; creator_name?: string | null; creator_avatar?: string | null; creator_rating?: number; creator_rating_count?: number }) | undefined> {

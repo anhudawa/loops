@@ -3,7 +3,7 @@ import { findPlaceByName } from "@/lib/map-labels";
 import { recommendableNow } from "@/lib/recommendable";
 import { NextRequest, NextResponse } from "next/server";
 import { publicRoute, thinCoordinates } from "@/lib/public-route";
-import { getRoutes, rawCountOf, insertRoute, getCounties, getRegions, getCountries, getUserBySession, recordEvent, ANALYTICS_EVENTS } from "@/lib/db";
+import { getRoutes, hasMoreRows, insertRoute, getCounties, getRegions, getCountries, getUserBySession, recordEvent, ANALYTICS_EVENTS } from "@/lib/db";
 import { parseRouteFile } from "@/lib/route-parser";
 import { fetchRideWithGPS } from "@/lib/ridewithgps";
 import { apiError, handleApiError } from "@/lib/api-utils";
@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
     // A full page from the database (before duplicates/hidden tracks were
     // dropped) means there may be more; the page itself is never padded
     // with the next page's first route.
-    const hasMore = rawCountOf(rows) >= pageSize;
+    const hasMore = hasMoreRows(rows);
     let routes = rows;
     // A place searched for ("Howth") also finds the routes that ride THROUGH
     // it, not only those named after it or starting there.

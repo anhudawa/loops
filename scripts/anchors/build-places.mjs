@@ -25,6 +25,11 @@ if (!dir) { console.error("usage: build-places.mjs <geonames-dir>"); process.exi
 
 const FULL_COUNTRIES = ["IE", "ES", "PT", "IT", "FR"];
 const EUROPE = { minLat: 34, maxLat: 62, minLng: -12, maxLng: 32 };
+// The Canaries (Tenerife, Gran Canaria, Lanzarote are launch destinations)
+// sit south-west of the Europe box.
+const CANARIES = { minLat: 27.5, maxLat: 29.5, minLng: -18.5, maxLng: -13.3 };
+const BOXES = [EUROPE, CANARIES];
+const inBox = (lat, lng) => BOXES.some((b) => lat >= b.minLat && lat <= b.maxLat && lng >= b.minLng && lng <= b.maxLng);
 // Not places a loop should aim at: sections of a place, abandoned/destroyed,
 // religious/farm sub-features.
 const SKIP_FCODES = new Set(["PPLX", "PPLQ", "PPLW", "PPLH", "PPLCH", "PPLF", "PPLR", "PPLS"]);
@@ -45,7 +50,7 @@ function ingest(file, onlyOutsideFull) {
     const cc = f[8];
     if (onlyOutsideFull && FULL_COUNTRIES.includes(cc)) continue;
     const lat = parseFloat(f[4]), lng = parseFloat(f[5]);
-    if (!(lat >= EUROPE.minLat && lat <= EUROPE.maxLat && lng >= EUROPE.minLng && lng <= EUROPE.maxLng)) continue;
+    if (!inBox(lat, lng)) continue;
     const latE4 = Math.round(lat * 1e4), lngE4 = Math.round(lng * 1e4);
     const key = `${Math.round(lat * 1e3)},${Math.round(lng * 1e3)}`; // ~100 m dedupe
     if (seen.has(key)) continue;

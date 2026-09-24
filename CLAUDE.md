@@ -299,8 +299,14 @@ node scripts/import-routes.mjs scripts/hub-data/girona-eat-sleep-cycle.json --dr
 - Dublin & Wicklow designed loops (2026-09-24): 16 loops (Clontarf ×3, Howth,
   Malahide, Skerries, Naul, Rathfarnham ×3, Enniskerry ×2, Bray, Greystones,
   Lucan, Kilcullen) routed on our engine, all meet the Road Standard →
-  src/data/hub-bundles/dublin-designed.json; /admin → Routes → "Import Dublin
-  & Wicklow loops" (insert, approved; skips names that exist).
+  src/data/hub-bundles/dublin-designed.json. They import themselves
+  (src/lib/designed-loops.ts, once per instance: Dublin/Wicklow guide and the
+  Dublin collection renders, the daily cron) and join the Dublin & Wicklow
+  collection; /admin → "Import Dublin & Wicklow loops" does the same by hand.
+- Road only in words (2026-09-24, owner: "remove mentions of gravel and
+  mtb"): guides, blog, notices, collections copy (roadOnlyCopy in db.ts drops
+  gravel/MTB/fire-road/towpath/canal sentences from stored text), road notes
+  say "unpaved". Parser keywords stay internal.
 - Rules v9 (2026-09-24): access=no + bicycle=yes/designated is a cycle path
   bikes may use (it was flagged "bikes not allowed"). Profiles: foot-only ways
   (push the bike) cost 40× not 5× — needs /admin → "Sync routing profiles".

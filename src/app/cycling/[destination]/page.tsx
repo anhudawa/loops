@@ -8,6 +8,7 @@ import { plural } from "@/lib/copy";
 import { estimateRideMinutes, formatRideTime } from "@/lib/ride-time";
 import { getDestinationBySlug, type Destination } from "@/content/destinations";
 import { getCollectionBySlug, getRoutesByRegionSlug } from "@/lib/db";
+import { ensureDesignedLoops } from "@/lib/designed-loops";
 import { listedRoutes, visibleRoutes } from "@/app/routes/country/library";
 
 interface Props {
@@ -71,6 +72,8 @@ export default async function DestinationPage({ params }: Props) {
   let hasRegion = false;
   let regionRouteCount = 0;
   let topRoutes: Array<{ id: string; name: string; distance_km: number; elevation_gain_m: number }> = [];
+  // Home turf: the designed Dublin & Wicklow loops are in the library before counting.
+  if (dest.slug === "dublin" || dest.slug === "wicklow") await ensureDesignedLoops().catch(() => null);
   if (dest.routesCountry && dest.routesRegion) {
     try {
       const routes = await getRoutesByRegionSlug(slugify(dest.routesCountry), slugify(dest.routesRegion));

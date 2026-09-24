@@ -5,6 +5,7 @@ import { routeCard } from "@/lib/public-route";
 import { placeLabel, plural } from "@/lib/copy";
 import { notFound } from "next/navigation";
 import { getCollectionBySlug, getCollections } from "@/lib/db";
+import { ensureDesignedLoops } from "@/lib/designed-loops";
 import RouteCard from "@/components/RouteCard";
 import JsonLd from "@/components/JsonLd";
 import { generateCollectionJsonLd, generateBreadcrumbJsonLd } from "@/lib/seo";
@@ -36,6 +37,7 @@ interface Props {
  * from this list. Shared by metadata and the page.
  */
 const loadCollection = cache(async (slug: string) => {
+  if (slug === "dublin") await ensureDesignedLoops().catch(() => null);
   const collection = await getCollectionBySlug(slug);
   if (!collection) return null;
   const routes = listedRoutes(collection.routes);

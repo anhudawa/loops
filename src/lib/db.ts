@@ -2206,6 +2206,11 @@ export async function insertCollection(data: {
   return rows[0] as Collection;
 }
 
+export async function getCollectionIdBySlug(slug: string): Promise<string | null> {
+  const { rows } = await sql`SELECT id FROM collections WHERE slug = ${slug} LIMIT 1`;
+  return rows[0]?.id ? String(rows[0].id) : null;
+}
+
 export async function addRouteToCollection(collectionId: string, routeId: string, displayOrder: number): Promise<void> {
   await sql`
     INSERT INTO collection_routes (collection_id, route_id, display_order)

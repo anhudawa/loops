@@ -30,6 +30,27 @@ export interface WindForecast {
   speed_kmh: number;
   /** ISO timestamp of the forecast hour used. */
   forecast_time: string;
+  /** When the rider said they ride ("tomorrow morning"); absent = now. */
+  when_label?: string;
+}
+
+/** A local ride day and hour ("tomorrow morning" → day 1, 09:00 at the start). */
+export interface RideTime {
+  day_offset: number;
+  hour: number;
+  label: string;
+}
+
+/**
+ * The departure instant for a local day and hour at a place whose clock is
+ * `utcOffsetSeconds` ahead of UTC. A time already past today is now.
+ */
+export function departureFor(when: RideTime, utcOffsetSeconds: number, now: Date = new Date()): Date {
+  const localNow = now.getTime() + utcOffsetSeconds * 1000;
+  const day = 86_400_000;
+  const localMidnight = Math.floor(localNow / day) * day;
+  const localStart = localMidnight + when.day_offset * day + when.hour * 3_600_000;
+  return new Date(Math.max(now.getTime(), localStart - utcOffsetSeconds * 1000));
 }
 
 export interface WindAnalysis {
@@ -187,7 +208,7 @@ export function analyzeWind(
   if (forecast.speed_kmh < MIN_WIND_KMH) {
     return {
       alignment_score: 50,
-      note: `Wind is light (${speed} km/h) — not worth planning around today.`,
+      note: `Wind is light (${speed} km/h) — not worth planning around ${forecast.when_label ?? "today"}.`,
       ...split,
     };
   }
@@ -216,6 +237,7 @@ export function analyzeWind(
     }
   }
 
+  if (forecast.when_label) note = `${note} (Forecast for ${forecast.when_label}.)`;
   return { alignment_score: score, note, ...split };
 }
 
@@ -234,20 +256,22 @@ export async function fetchWindForecast(
   point: [number, number],
   departure: Date,
   durationMinutes: number,
-  strategy: WindStrategy
+  strategy: WindStrategy,
+  /** The rider said when ("tomorrow morning"): departure is then, local time at the start (HV-12). */
+  when?: RideTime
 ): Promise<WindForecast | null> {
   try {
     const offsetMin =
       strategy === "tailwind_home" ? durationMinutes * 0.75 : durationMinutes * 0.25;
-    const target = new Date(departure.getTime() + offsetMin * 60_000);
 
     const params = new URLSearchParams({
       latitude: String(point[0]),
       longitude: String(point[1]),
       hourly: "wind_speed_10m,wind_direction_10m",
       wind_speed_unit: "kmh",
-      forecast_days: "2",
-      timezone: "UTC",
+      forecast_days: when ? "3" : "2",
+      // "auto": hourly times come in the place's local time, with its utc_offset_seconds.
+      timezone: when ? "auto" : "UTC",
     });
     const res = await fetch(`${OPEN_METEO_URL}?${params.toString()}`, {
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
@@ -258,12 +282,16 @@ export async function fetchWindForecast(
     const speeds: number[] = data?.hourly?.wind_speed_10m ?? [];
     const dirs: number[] = data?.hourly?.wind_direction_10m ?? [];
     if (times.length === 0 || speeds.length !== times.length) return null;
+    // With timezone=auto the hourly times are local wall-clock times.
+    const utcOffsetS = when && typeof data?.utc_offset_seconds === "number" ? data.utc_offset_seconds : 0;
+    const start = when ? departureFor(when, utcOffsetS) : departure;
+    const target = new Date(start.getTime() + offsetMin * 60_000);
 
     // Closest hourly slot to the target time.
     let best = 0;
     let bestDiff = Infinity;
     for (let i = 0; i < times.length; i++) {
-      const diff = Math.abs(new Date(times[i] + "Z").getTime() - target.getTime());
+      const diff = Math.abs(new Date(times[i] + "Z").getTime() - utcOffsetS * 1000 - target.getTime());
       if (diff < bestDiff) {
         bestDiff = diff;
         best = i;
@@ -275,6 +303,7 @@ export async function fetchWindForecast(
       direction_deg: dirs[best],
       speed_kmh: speeds[best],
       forecast_time: times[best],
+      ...(when ? { when_label: when.label } : {}),
     };
   } catch {
     return null;

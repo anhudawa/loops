@@ -1534,7 +1534,8 @@ export async function candidatesFromSpec(
           spec.start_point,
           new Date(),
           estimateDurationMinutes(spec, options.userSpeedKmh),
-          spec.wind_strategy
+          spec.wind_strategy,
+          spec.ride_when
         )
       : null;
   markPhase("wind");
@@ -2108,10 +2109,32 @@ const ZONE_LABEL: Record<string, string> = {
   z1: "recovery", z2: "endurance", z3: "tempo", z4: "threshold", z5: "VO2 max", z6: "anaerobic", z7: "sprint",
 };
 
+/**
+ * Laps, said plainly (CA-13): how much of the ride is this one stretch and
+ * how many U-turns that takes — "About 60 % of the ride is this stretch,
+ * back and forth (10 turnarounds)."
+ */
+export function lapsShareNote(lengths: number, stretchKm: number, rideKm: number): string {
+  if (lengths < 2 || rideKm <= 0) return "";
+  const pct = Math.min(100, Math.round((lengths * stretchKm / rideKm) * 100 / 5) * 5);
+  const turns = lengths - 1;
+  return `About ${pct} % of the ride is this one stretch, back and forth (${turns} turnaround${turns === 1 ? "" : "s"} on the road — pick a safe spot to turn). `;
+}
+
+/** A climb's top this close to a hill's summit road (km), or to its peak, is that hill. */
+const HILL_TOP_ROAD_KM = 0.8;
+const HILL_PEAK_KM = 1.2;
+
+/** The hill an effort climbs: its top at the hill's summit road or peak, else none (CA-11). */
+export function effortHillName(top: [number, number], summitRoads: Array<{ name: string; point: [number, number] }>, peaks: Array<{ name: string; point: [number, number] }>): string | undefined {
+  const near = (h: { point: [number, number] }) => haversineKm(top[0], top[1], h.point[0], h.point[1]);
+  return (summitRoads.find((h) => near(h) <= HILL_TOP_ROAD_KM) ?? peaks.find((h) => near(h) <= HILL_PEAK_KM))?.name;
+}
+
 /** "4 × 4 min VO2 max", "20 min threshold". */
 export function sessionLabel(workout: WorkoutSpec): string {
   return workout.intervals
-    .map((iv) => `${iv.count > 1 ? `${iv.count} × ` : ""}${iv.duration_minutes} min ${ZONE_LABEL[iv.zone] ?? iv.zone}`)
+    .map((iv) => `${iv.count > 1 ? `${iv.count} × ` : ""}${iv.duration_minutes} min ${iv.label ?? ZONE_LABEL[iv.zone] ?? iv.zone}`)
     .join(" + ");
 }
 
@@ -2197,7 +2220,10 @@ async function generateRepeatWorkoutRoutes(spec: RouteSpec, workout: WorkoutSpec
     });
   }
 
+  /** Rank cost of laps against a single stretch (≈ 35 % further off the asked length). */
+  const LAPS_PENALTY = 3;
   type Found = { loop: GeneratedRoute; stretch: EffortStretch; spreadStretches: EffortStretch[] | null; data: { edgeTags: EdgeTags | null; stops: RoadStop[] } };
+  const lapPrefs = [{ maxPasses: 2 }, {}, { maxPasses: 2, allowRolling: true }, { allowRolling: true }];
   const searchStretches = (pool: GeneratedRoute[]): Found[] => {
     const hits: Found[] = [];
     for (const loop of pool) {
@@ -2211,7 +2237,9 @@ async function generateRepeatWorkoutRoutes(spec: RouteSpec, workout: WorkoutSpec
       // Spread (the rider said no to repeating): each rep on its own stretch.
       const spreadStretches = spread && reps > 1 ? findSpreadStretches(loop.coordinates, loop.elevations, data.edgeTags, data.stops, workout, { avoid }) : null;
       const stretch = findEffortStretch(loop.coordinates, loop.elevations, data.edgeTags, data.stops, workout, { avoid, debug })
-        ?? (hill ? null : findEffortStretch(loop.coordinates, loop.elevations, data.edgeTags, data.stops, workout, { avoid, laps: true, allowRolling: true }));
+        // Laps: flat before rolling, and at most two lengths per effort before
+        // more — a U-turn every 2.5 km mid-effort is the last resort (CA-13).
+        ?? (hill ? null : lapPrefs.reduce<EffortStretch | null>((got, o) => got ?? findEffortStretch(loop.coordinates, loop.elevations, data.edgeTags, data.stops, workout, { avoid, laps: true, ...o }), null));
       genDebug(`repeat efforts: ${loop.distance_km} km (max ${Math.round(Math.max(...loop.elevations.filter(Number.isFinite)))} m) → ${stretch ? `${stretch.length_km} km at ${stretch.avg_gradient_pct}% ×${stretch.passes} (score ${stretch.score.toFixed(1)})` : `no stretch ${JSON.stringify(why)}`}`);
       if (spreadStretches) genDebug(`spread efforts: ${spreadStretches.length} stretches on the ${loop.distance_km} km loop`);
       if (stretch) hits.push({ loop, stretch, spreadStretches, data });
@@ -2228,7 +2256,11 @@ async function generateRepeatWorkoutRoutes(spec: RouteSpec, workout: WorkoutSpec
   // quieter roads (the ride then says it came out longer).
   // Only as much bigger as the ±35 % distance rule leaves room for (CA-04).
   const widerKm = Math.min(Math.max(loopSpec.distance_km * 1.6, 35), spec.distance_km + Math.max(8, spec.distance_km * 0.35) - (spread ? 0 : extraKm));
-  if (!hill && found.length === 0 && widerKm >= loopSpec.distance_km * 1.2 && Date.now() - (currentTimingsStart || Date.now()) < 25_000) {
+  // Also when every stretch found is laps: one stretch on a bigger loop beats
+  // riding one road back and forth for most of the ride (CA-13).
+  const onlyLaps = found.length > 0 && found.every((f) => f.stretch.kind === "laps");
+  const elapsedMs = Date.now() - (currentTimingsStart || Date.now());
+  if (!hill && (found.length === 0 ? elapsedMs < 25_000 : onlyLaps && elapsedMs < 18_000) && widerKm >= loopSpec.distance_km * 1.2) {
     const wider = await generateFreshRoutes({ ...loopSpec, distance_km: widerKm }, null, undefined, true).catch(() => [] as GeneratedRoute[]);
     markPhase("wider loops");
     found.push(...searchStretches(wider));
@@ -2250,9 +2282,11 @@ async function generateRepeatWorkoutRoutes(spec: RouteSpec, workout: WorkoutSpec
     Math.abs(f.loop.distance_km + lengthsOf(f.stretch) * f.stretch.length_km - spec.distance_km) / spec.distance_km;
   const lengthOf = (f: (typeof found)[number]) => f.spreadStretches ? f.loop.distance_km : f.loop.distance_km + lengthsOf(f.stretch) * f.stretch.length_km;
   const rideOffBy = (f: (typeof found)[number]) => Math.abs(lengthOf(f) - spec.distance_km) / spec.distance_km;
+  // Laps rank behind a single stretch that holds the effort (CA-13).
+  const rank = (f: (typeof found)[number]) =>
+    f.stretch.score - (f.spreadStretches ? rideOffBy(f) : rideOff(f)) * 8 - (!f.spreadStretches && f.stretch.kind === "laps" ? LAPS_PENALTY : 0);
   found.sort((a, b) =>
-    (b.spreadStretches ? 1 : 0) - (a.spreadStretches ? 1 : 0) ||
-    (b.stretch.score - (b.spreadStretches ? rideOffBy(b) : rideOff(b)) * 8) - (a.stretch.score - (a.spreadStretches ? rideOffBy(a) : rideOff(a)) * 8));
+    (b.spreadStretches ? 1 : 0) - (a.spreadStretches ? 1 : 0) || rank(b) - rank(a));
 
   // Distance honesty, as for any loop (CA-04: 42–49 km served for a 21 km
   // session): more than ±35 % (at least 8 km) off the ask is declined.
@@ -2272,6 +2306,7 @@ async function generateRepeatWorkoutRoutes(spec: RouteSpec, workout: WorkoutSpec
 
   const out: GeneratedRoute[] = [];
   const seen = new Set<string>();
+  let firstOff = Infinity;
   repeatTooLongKm = null;
   for (const f of found) {
     if (out.length >= 2) break;
@@ -2286,10 +2321,17 @@ async function generateRepeatWorkoutRoutes(spec: RouteSpec, workout: WorkoutSpec
       if (distKm > spec.distance_km) repeatTooLongKm = Math.min(repeatTooLongKm ?? Infinity, distKm);
       continue;
     }
+    // A second option well off the asked length is no option when the first fits (CLT-12).
+    const offShare = Math.abs(distKm - spec.distance_km) / spec.distance_km;
+    if (out.length > 0 && offShare > FIT_WIDE && offShare > firstOff) {
+      genDebug(`repeat efforts: ${distKm.toFixed(1)} km second option dropped (${Math.round(offShare * 100)} % off the ask)`);
+      continue;
+    }
     // The same ride found twice (two waypoint sets routed onto one loop): serve it once (CA-09).
     const key = `${Math.round(distKm * 2)}:${ride.coords[ride.reps[0][0]].map((x) => x.toFixed(3)).join(",")}`;
     if (seen.has(key)) continue;
     seen.add(key);
+    if (out.length === 0) firstOff = offShare;
     // Extra lengths: forward ones climb the stretch's climb, backward ones its climb less the net rise.
     const extra = spreadHere ? 0 : lengthsOf(stretch);
     const net = (loop.elevations[stretch.end] ?? 0) - (loop.elevations[stretch.start] ?? 0);
@@ -2304,8 +2346,12 @@ async function generateRepeatWorkoutRoutes(spec: RouteSpec, workout: WorkoutSpec
     // Name the place: the town it is at, and the road when the map knows it.
     const mid = loop.coordinates[Math.floor((stretch.start + stretch.end) / 2)];
     const town = placeNear(mid, 4);
-    // The named hill the loop was aimed at, when the effort is on it.
-    const hillName = hillsTried.find((h) => haversineKm(mid[0], mid[1], h.point[0], h.point[1]) < 3)?.name;
+    // The named hill the loop was aimed at, only when the effort climbs it:
+    // the top of the stretch at its summit road (or the peak itself). A hill
+    // 3 km away is not the climb (CA-11: Bray reps on Monastery Road were
+    // "on Carrickgollogan").
+    const top = loop.coordinates[stretch.end];
+    const hillName = stretch.kind === "climb" ? effortHillName(top, hillTops, hillsTried) : undefined;
     const probe = [{ kind: "main_road", start: stretch.start, end: stretch.end, meters: 0, highway: data.edgeTags![stretch.start]?.highway ?? "unclassified", at: mid }] as RoadReport["compromises"];
     await nameCompromises(loop.coordinates, probe).catch(() => {});
     const road = probe[0].name;
@@ -2370,7 +2416,7 @@ async function generateRepeatWorkoutRoutes(spec: RouteSpec, workout: WorkoutSpec
       note = `Each effort has its own stretch along the loop: ${at.join("; ")}. ${clean}${lengthMsg}`;
     } else {
       note = fallbackMsg + (stretch.kind === "laps"
-        ? `${reps > 1 ? allEfforts : "Your effort"} on ${where} (${lenText}, ${stretch.rolling ? `rolling, not flat — ${stretch.range_m} m between its low and high point` : "flat"}): ride it back and forth — ${stretch.passes} lengths per effort${reps > 1 ? ", one easy length between efforts" : ""} — then ride on home. ${clean}`
+        ? `${reps > 1 ? allEfforts : "Your effort"} on ${where} (${lenText}, ${stretch.rolling ? `rolling, not flat — ${stretch.range_m} m between its low and high point` : "flat"}): ride it back and forth — ${stretch.passes} lengths per effort${reps > 1 ? ", one easy length between efforts" : ""} — then ride on home. ${lapsShareNote(lengthsOf(stretch) + 1, stretch.length_km, distKm)}${clean}`
         : reps > 1
         ? `${allEfforts} on ${where} (${shape}): go hard ${stretch.kind === "climb" ? "up" : "along it"}, spin back ${stretch.kind === "climb" ? "down" : "easy"}, repeat — then ride on home. ${clean}`
         : `Your effort goes on ${where} (${shape}). ${clean}`) + lengthMsg;
@@ -2387,7 +2433,7 @@ async function generateRepeatWorkoutRoutes(spec: RouteSpec, workout: WorkoutSpec
       match_score: computeMatchScore(distKm, gain, spec, loop.quality_score),
       workout_fit: fit,
       road_report: report,
-      title: spreadHere ? `${label} from ${placeNear(spec.start_point, 4) ?? town ?? "home"}` : `${label} on ${hillName ?? road ?? town ?? "one stretch"}`,
+      title: spreadHere ? `${label} from ${placeNear(spec.start_point, 4) ?? town ?? "home"}` : `${label} ${hillName ?? road ? `on ${hillName ?? road}` : town ? `at ${town}` : "on one stretch"}`,
       ride_note: note,
     });
   }
@@ -3580,7 +3626,39 @@ async function generateFreshRoutes(
     return aDist - bDist;
   });
 
-  return keepAll ? candidates : candidates.slice(0, 3);
+  return keepAll ? candidates : pickByDistanceFit(candidates, spec.distance_km, spec.elevation_preference === "hilly" || spec.elevation_preference === "mountainous");
+}
+
+/** Within this share of the asked length a loop fits; beyond FIT_WIDE it is a poor fit (CLT-12). */
+const FIT_CLOSE = 0.1;
+const FIT_WIDE = 0.2;
+
+/**
+ * The loops to offer, from candidates already ranked (Road Standard first):
+ * loops within ±10 % of the ask ahead of the rest, then ±20 %; a loop more
+ * than 20 % off is offered only to make a second option, never a third, and
+ * never when two better-sized loops exist (CLT-12: "50 km from Malahide"
+ * offered 49, 61 and 37.5 km) — on a hilly ask, never when it is the longer
+ * way off. Its own note still says how far off it came.
+ */
+export function pickByDistanceFit<T extends { distance_km: number; road_report?: { standard_met: boolean } | null }>(ranked: T[], targetKm: number, hilly = false, max = 3): T[] {
+  const band = (c: T) => {
+    const off = Math.abs(c.distance_km - targetKm) / targetKm;
+    return off <= FIT_CLOSE ? 0 : off <= FIT_WIDE ? 1 : 2;
+  };
+  const std = (c: T) => (c.road_report?.standard_met ? 1 : 0);
+  const order = ranked
+    .map((c, i) => ({ c, i }))
+    .sort((a, b) => std(b.c) - std(a.c) || band(a.c) - band(b.c) || a.i - b.i)
+    .map((x) => x.c);
+  const fit = order.filter((c) => band(c) < 2);
+  // Hilly asks: a loop 20 % too long is also far more climbing — hours more
+  // riding (TRV-11: 131 km / +1942 m for "100 km hilly"). Never offered.
+  const poor = order.filter((c) => band(c) === 2 && !(hilly && c.distance_km > targetKm));
+  const out = fit.slice(0, max);
+  if (out.length < 2 && poor.length) out.push(poor[0]);
+  // Keep the Road Standard ordering among what is served.
+  return order.filter((c) => out.includes(c)).slice(0, max);
 }
 
 function summariseCompromises(compromises: RoadReport["compromises"]): string {

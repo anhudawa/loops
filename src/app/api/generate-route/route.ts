@@ -155,7 +155,7 @@ export async function POST(request: NextRequest) {
     ]);
 
     // Say when the length was ours, not the rider's ("No distance given — planned 50 km").
-    const lengthNotice = result.interpreted.destination ? null : defaultLengthNotice(trimmedPrompt, result.interpreted.distance_km);
+    const lengthNotice = result.interpreted.destination ? null : defaultLengthNotice(trimmedPrompt, result.interpreted.distance_km, origin);
     if (lengthNotice) {
       result.interpreted.notice = result.interpreted.notice ? `${result.interpreted.notice} ${lengthNotice}` : lengthNotice;
     }
@@ -273,7 +273,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (message.includes("host this workout") || message.includes("uninterrupted at that intensity")) {
+    if (message.includes("host this workout") || message.includes("uninterrupted at that intensity") || message.includes("can hold the session")) {
       return NextResponse.json(
         { error: message, code: "NO_WORKOUT_MATCH" },
         { status: 422 }
@@ -318,7 +318,7 @@ export async function POST(request: NextRequest) {
 function classifyErrorCode(message: string): string {
   if (message.includes("timed out")) return "TIMEOUT";
   if (message.includes("No valid routes")) return "NO_ROUTES_FOUND";
-  if (message.includes("host this workout") || message.includes("uninterrupted at that intensity")) return "NO_WORKOUT_MATCH";
+  if (message.includes("host this workout") || message.includes("uninterrupted at that intensity") || message.includes("can hold the session")) return "NO_WORKOUT_MATCH";
   if (isGeocodeFailure(message)) return "GEOCODE_FAILED";
   if (message.includes("Failed to parse LLM response")) return "PARSE_FAILED";
   if (message.includes("Overpass")) return "OVERPASS_ERROR";

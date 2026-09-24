@@ -1331,6 +1331,7 @@ function CandidateCard({
               // quality score, so they fall back to match.
               score={!isLibrary && candidate.quality_score !== undefined ? candidate.quality_score : candidate.match_score}
               qualityTier={!isLibrary ? candidate.quality_tier : undefined}
+              meetsStandard={candidate.road_report?.standard_met === true}
             />
             )}
           </div>
@@ -1619,16 +1620,20 @@ function SourceBadge({
   source,
   score,
   qualityTier,
+  meetsStandard,
 }: {
   source: "library" | "generated";
   score: number;
   qualityTier?: "excellent" | "good";
+  meetsStandard?: boolean;
 }) {
   let label: string;
   let accent: boolean;
   if (source === "library") {
-    label = "Verified";
-    accent = true;
+    // "Verified" only where the roads are (as on route cards): a library
+    // loop with 40 km of main road is from the library, not verified.
+    label = meetsStandard ? "Verified" : "Library";
+    accent = !!meetsStandard;
   } else if (qualityTier === "excellent") {
     label = "Excellent";
     accent = true;

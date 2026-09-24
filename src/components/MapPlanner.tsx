@@ -294,6 +294,14 @@ export default function MapPlanner() {
   const snapDoneRef = useRef(new Map<number, Promise<void>>());
 
   /** Roads the rest of the route already uses (other legs' snapped geometry). */
+  /** The last stretch of the snapped leg that ends at `point` (none for the start). */
+  function arrivingAt(point: LatLng, exceptId: number): LatLng[] | undefined {
+    const all = [...legsRef.current, ...(loopLegRef.current ? [loopLegRef.current] : [])];
+    const leg = all.find((l) => l.id !== exceptId && l.status === "snapped" &&
+      Math.abs(l.to[0] - point[0]) < 1e-5 && Math.abs(l.to[1] - point[1]) < 1e-5);
+    return leg && leg.coords.length >= 2 ? leg.coords.slice(-150) : undefined;
+  }
+
   function roadsInUse(exceptId: number): LatLng[][] {
     const live = new Set<number>([...legsRef.current.map((l) => l.id), ...(loopLegRef.current ? [loopLegRef.current.id] : [])]);
     const now = Date.now();
@@ -408,7 +416,9 @@ export default function MapPlanner() {
             headers: { "Content-Type": "application/json" },
             // Avoid the roads the rest of the route already uses, so a stop
             // like Blessington becomes part of a loop, not an out-and-back.
-            body: JSON.stringify({ waypoints: [from, to], discipline: disc, avoid: roadsInUse(id) }),
+            // …and the end of the leg arriving at `from`, so a pin in a town
+            // is ridden through, not turned round at (Ashbourne).
+            body: JSON.stringify({ waypoints: [from, to], discipline: disc, avoid: roadsInUse(id), arrive: arrivingAt(from, id) }),
           }).catch(() => null);
           if (r && (r.ok || r.status === 401 || r.status === 400 || r.status === 422)) break;
         }

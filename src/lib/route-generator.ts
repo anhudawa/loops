@@ -1028,9 +1028,9 @@ export interface RerouteResult {
  * the stretch within `clearKm` of this leg's own endpoints (legs must be
  * able to meet at the pins). Thinned to keep the engine URL bounded.
  */
-export function avoidPolylines(avoid: [number, number][][], legFrom: [number, number], legTo: [number, number], clearKm = 1.5, maxPoints = 240): string {
+export function avoidPolylines(avoid: [number, number][][], legFrom: [number, number], legTo: [number, number], clearKm = 1.5, maxPoints = 240, clearFromKm = clearKm, weight: number | null = PLANNER_AVOID_WEIGHT): string {
   const near = (p: [number, number]) =>
-    haversineKm(p[0], p[1], legFrom[0], legFrom[1]) < clearKm || haversineKm(p[0], p[1], legTo[0], legTo[1]) < clearKm;
+    haversineKm(p[0], p[1], legFrom[0], legFrom[1]) < clearFromKm || haversineKm(p[0], p[1], legTo[0], legTo[1]) < clearKm;
   const lines: [number, number][][] = [];
   let total = 0;
   for (const path of avoid) {
@@ -1048,7 +1048,8 @@ export function avoidPolylines(avoid: [number, number][][], legFrom: [number, nu
   const parts = lines
     .map((l) => l.filter((_, i) => i % step === 0 || i === l.length - 1))
     .filter((l) => l.length >= 2)
-    .map((l) => `${l.map(([lat, lng]) => `${lng.toFixed(5)},${lat.toFixed(5)}`).join(",")},${PLANNER_AVOID_WEIGHT}`);
+    // weight null = a hard no-go (BRouter: a polyline without a weight).
+    .map((l) => `${l.map(([lat, lng]) => `${lng.toFixed(5)},${lat.toFixed(5)}`).join(",")}${weight == null ? "" : `,${weight}`}`);
   return parts.length ? `&polylines=${parts.join("|")}` : "";
 }
 
@@ -1074,6 +1075,78 @@ function sharedShare(coords: [number, number][], paths: [number, number][][]): n
   return total > 0 ? shared / total : 0;
 }
 
+/** Bearing (°) of the stretch of `coords` from `fromKm` to `toKm` along it. */
+function bearingAlong(coords: [number, number][], fromKm: number, toKm: number): number | null {
+  let cum = 0, a: [number, number] | null = null, b: [number, number] | null = null;
+  for (let i = 0; i < coords.length; i++) {
+    if (i) cum += haversineKm(coords[i - 1][0], coords[i - 1][1], coords[i][0], coords[i][1]);
+    if (!a && cum >= fromKm) a = coords[i];
+    if (cum >= toKm) { b = coords[i]; break; }
+  }
+  b = b ?? coords[coords.length - 1];
+  return a && b && (a[0] !== b[0] || a[1] !== b[1]) ? bearingDegFrom(a, b) : null;
+}
+
+function angleDiff(a: number, b: number): number {
+  const d = Math.abs(a - b) % 360;
+  return d > 180 ? 360 - d : d;
+}
+
+/** A leg that starts by turning back this sharply at its pin is a U-turn. */
+const UTURN_DEG = 125;
+/** Carry-on points tried beyond the pin, in the direction the rider arrived (km). */
+const THROUGH_KM = [0.8, 1.5, 2.5];
+/** Riding through may cost at most this much more than turning round. */
+const THROUGH_MAX_STRETCH = 1.4;
+
+/**
+ * Owner (2026-09-24): "Ashbourne is part of the ride, not a self-contained
+ * loop and then a detour to Ashbourne." When the leg on from a pin starts
+ * by turning back the way the rider came, try a hidden via point beyond the
+ * pin in the direction of arrival (so the route rides through the town and
+ * out the other side) and keep the shortest that no longer turns round, no
+ * longer than THROUGH_MAX_STRETCH × and with no dead-end spur of its own.
+ */
+async function carryOnThrough(
+  path: RoutedPath,
+  waypoints: [number, number][],
+  arrive: [number, number][],
+  profile: string,
+  nogo: string,
+): Promise<RoutedPath | null> {
+  const arriveRev = arrive.slice().reverse();
+  const inBearing = bearingAlong(arriveRev, 0, 0.4);
+  const outBearing = bearingAlong(path.coords, 0, 0.5);
+  if (inBearing == null || outBearing == null) return null;
+  const heading = (inBearing + 180) % 360; // the way the rider was going when they reached the pin
+  if (angleDiff(heading, outBearing) < UTURN_DEG) return null;
+  const pin = waypoints[0];
+  const aims = [0, -35, 35].flatMap((off) => THROUGH_KM.map((km) => destination(pin, (heading + off + 360) % 360, km)));
+  const tries = await Promise.all(aims.map((t) => routeViaBRouter([pin, t, ...waypoints.slice(1)], profile, false, nogo)));
+  let best: RoutedPath | null = null;
+  for (const raw of tries) {
+    if (!raw || raw.coords.length < 2) continue;
+    // A carry-on point that fell up a side street leaves a stub: cut it.
+    const rep = repairSpurs(raw.coords);
+    const c: RoutedPath = rep.removedKm > 0.05
+      ? {
+          ...raw,
+          coords: rep.coords,
+          elevations: rep.keep.map((k) => raw.elevations[k]),
+          edgeTags: remapEdgeTags(raw.edgeTags, rep.keep),
+          distance_km: Math.round(pathDistanceKm(rep.coords) * 10) / 10,
+          elevation_gain_m: null,
+        }
+      : raw;
+    if (c.distance_km > path.distance_km * THROUGH_MAX_STRETCH + 1.5) continue;
+    const start = bearingAlong(c.coords, 0, 0.5);
+    if (start == null || angleDiff(heading, start) > 70) continue; // still turns round
+    if (!best || c.distance_km < best.distance_km) best = c;
+  }
+  if (best) genDebug(`reroute: rides on through the pin (+${(best.distance_km - path.distance_km).toFixed(1)} km instead of a U-turn)`);
+  return best;
+}
+
 /** Penalty on roads the drawn route already uses (50 left a Wicklow leg on
  *  the same road; 200 finds the parallel road; higher changes nothing). */
 const PLANNER_AVOID_WEIGHT = 200;
@@ -1083,9 +1156,13 @@ const AVOID_MAX_STRETCH = 1.35;
 export async function rerouteWaypoints(
   waypoints: [number, number][],
   discipline: Discipline,
-  opts: { avoid?: [number, number][][] } = {}
+  opts: {
+    avoid?: [number, number][][];
+    /** The end of the leg that arrives at waypoints[0] (the rider rides on from there). */
+    arrive?: [number, number][];
+  } = {}
 ): Promise<RerouteResult | null> {
-  if (waypoints.length < 2 || waypoints.length > 10) return null;
+  if (waypoints.length < 2 || waypoints.length > 9) return null;
   const profile = DISCIPLINE_PROFILE[discipline];
   const avoid = (opts.avoid ?? []).filter((p) => p.length >= 2);
   const nogo = avoid.length ? avoidPolylines(avoid, waypoints[0], waypoints[waypoints.length - 1]) : "";
@@ -1106,6 +1183,20 @@ export async function rerouteWaypoints(
     if (!direct || sharedShare(avoiding.coords, avoid) < directShared - 0.05) path = avoiding;
   }
   if (!path || path.coords.length < 2) return null;
+
+  // A pin in a town is a place the ride goes THROUGH: when the way on from
+  // it would turn the rider straight round, try carrying on through first.
+  if (opts.arrive && opts.arrive.length >= 2) {
+    // Riding through, the way in must not be the way out: its road is a
+    // no-go right up to 250 m from the pin (not the usual 1.5 km).
+    const parts = [
+      avoidPolylines([opts.arrive], waypoints[0], waypoints[waypoints.length - 1], 1.5, 120, 0.25, null),
+      avoidPolylines(avoid, waypoints[0], waypoints[waypoints.length - 1]),
+    ].map((q) => q.replace("&polylines=", "")).filter(Boolean);
+    const throughNogo = parts.length ? `&polylines=${parts.join("|")}` : "";
+    const through = await carryOnThrough(path, waypoints, opts.arrive, profile, throughNogo);
+    if (through) path = through;
+  }
 
   let elevations = path.elevations;
   let elevGain = path.elevation_gain_m;

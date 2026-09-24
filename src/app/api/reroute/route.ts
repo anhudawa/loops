@@ -30,6 +30,7 @@ export async function POST(request: NextRequest) {
   let waypoints: [number, number][];
   let discipline: "road" | "gravel" | "mtb";
   let avoid: [number, number][][] = [];
+  let arrive: [number, number][] = [];
   try {
     const body = await request.json();
     waypoints = body?.waypoints;
@@ -43,6 +44,11 @@ export async function POST(request: NextRequest) {
         .filter((p) => p.length >= 2);
     }
     discipline = ["road", "gravel", "mtb"].includes(body?.discipline) ? body.discipline : "road";
+    // The end of the leg arriving at the first waypoint (bounded).
+    if (Array.isArray(body?.arrive)) {
+      arrive = (body.arrive as unknown[]).slice(-200).filter((q): q is [number, number] =>
+        Array.isArray(q) && typeof q[0] === "number" && typeof q[1] === "number" && Math.abs(q[0]) <= 90 && Math.abs(q[1]) <= 180);
+    }
     if (
       !Array.isArray(waypoints) ||
       waypoints.length < 2 ||
@@ -64,7 +70,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const result = await rerouteWaypoints(waypoints, discipline, { avoid });
+    const result = await rerouteWaypoints(waypoints, discipline, { avoid, arrive });
     // Engine busy or slow (not "no road"): a 503 the planner retries.
     if (!result && /timeout|watchdog|network|http:5/.test(getLastBRouterFailure())) {
       return NextResponse.json({ error: "Routing is busy — trying again.", code: "ENGINE_BUSY" }, { status: 503 });

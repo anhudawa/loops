@@ -1,5 +1,6 @@
 import FitParser from "fit-file-parser";
 import { calculateStats } from "./geo-utils";
+import { alignElevations } from "./gpx";
 
 export interface FitData {
   name: string | null;
@@ -15,13 +16,14 @@ export async function parseFit(buffer: ArrayBuffer): Promise<FitData> {
   const parsed = await parser.parseAsync(buffer);
 
   const coordinates: [number, number][] = [];
-  const elevations: number[] = [];
+  const rawEle: (number | null)[] = [];
 
   const records = parsed.records || [];
   for (const rec of records) {
     if (rec.position_lat != null && rec.position_long != null) {
       coordinates.push([rec.position_lat, rec.position_long]);
-      elevations.push(rec.altitude ?? 0);
+      // Newer devices log enhanced_altitude; missing is unknown, not 0 m.
+      rawEle.push(rec.enhanced_altitude ?? rec.altitude ?? null);
     }
   }
 
@@ -29,6 +31,7 @@ export async function parseFit(buffer: ArrayBuffer): Promise<FitData> {
   const sessions = parsed.sessions || [];
   const name = sessions[0]?.sport ?? null;
 
+  const elevations = alignElevations(rawEle);
   const stats = calculateStats(coordinates, elevations);
 
   return {

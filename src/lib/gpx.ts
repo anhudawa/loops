@@ -9,9 +9,21 @@ export interface GpxData {
   elevation_loss_m: number;
 }
 
+/**
+ * One height per point, in step with the coordinates. Points without a
+ * height take the nearest known one (never 0 m, never a shifted array);
+ * a file with no heights at all gives [] (backfilled from the DEM later).
+ */
+export function alignElevations(raw: (number | null)[]): number[] {
+  const firstKnown = raw.find((v): v is number => v != null && Number.isFinite(v));
+  if (firstKnown === undefined) return [];
+  let last = firstKnown;
+  return raw.map((v) => (v != null && Number.isFinite(v) ? (last = v) : last));
+}
+
 export function parseGpx(xml: string): GpxData {
   const coordinates: [number, number][] = [];
-  const elevations: number[] = [];
+  const rawEle: (number | null)[] = [];
 
   // Extract track name
   const nameMatch = xml.match(/<name>([^<]*)<\/name>/);
@@ -26,9 +38,7 @@ export function parseGpx(xml: string): GpxData {
     coordinates.push([lat, lng]);
 
     const eleMatch = match[3].match(/<ele>([^<]+)<\/ele>/);
-    if (eleMatch) {
-      elevations.push(parseFloat(eleMatch[1]));
-    }
+    rawEle.push(eleMatch ? parseFloat(eleMatch[1]) : null);
   }
 
   // Also try route points if no track points found
@@ -40,12 +50,11 @@ export function parseGpx(xml: string): GpxData {
       coordinates.push([lat, lng]);
 
       const eleMatch = match[3].match(/<ele>([^<]+)<\/ele>/);
-      if (eleMatch) {
-        elevations.push(parseFloat(eleMatch[1]));
-      }
+      rawEle.push(eleMatch ? parseFloat(eleMatch[1]) : null);
     }
   }
 
+  const elevations = alignElevations(rawEle);
   const stats = calculateStats(coordinates, elevations);
 
   return {

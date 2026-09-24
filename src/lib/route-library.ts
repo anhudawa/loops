@@ -12,6 +12,7 @@
 import type { RouteSpec, WorkoutSpec } from "./route-intent";
 import { validRoadReport } from "./library-road-report";
 import { checkTrack } from "./track-shape";
+import { isClosedLoop, nearestIndex } from "./loop-geometry";
 import { compromiseAcceptable } from "./road-segments";
 import { LIBRARY_ROAD_POLICY } from "@/config/constants";
 import { getRoutes, getRouteProof, type Route } from "./db";
@@ -192,6 +193,21 @@ export function libraryRoutePassesPolicy(route: { road_report?: unknown; distanc
   return compromiseAcceptable(report, Number(route.distance_km) || 0);
 }
 
+/** km from `home` to the nearest point of a closed stored loop; null for an open track or bad data. */
+function nearestJoinKm(route: Route, home: [number, number]): number | null {
+  try {
+    const stored = route.coordinates as unknown;
+    const raw = (typeof stored === "string" ? JSON.parse(stored) : stored) as number[][];
+    if (!Array.isArray(raw) || raw.length < 3) return null;
+    const coords: [number, number][] = raw.map(([lat, lng]) => [lat, lng]);
+    if (!isClosedLoop(coords)) return null;
+    const p = coords[nearestIndex(coords, home)];
+    return haversineKm(home[0], home[1], p[0], p[1]);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Query the library for route candidates and return those that score above
  * the match threshold, ranked by score.
@@ -230,13 +246,17 @@ export async function matchLibraryRoutes(
       Number(route.start_lat),
       Number(route.start_lng)
     );
+    // A closed loop can be joined anywhere (rideFromHome rotates it to its
+    // point nearest home), so judge it by that point: a Girona loop through
+    // Banyoles is a Banyoles loop. Open tracks keep their stored start.
+    const joinKm = nearestJoinKm(route, spec.start_point) ?? distFromStart;
     // Every route starts from home (owner rule): judge a loop by the whole
     // ride — the loop plus an estimated ride out and back (roads ≈1.3× the
     // straight line) — not by the loop alone. Otherwise a loop 18 km away
     // with a nicer headline distance outranks the one starting in town.
-    const approachKm = distFromStart > 1 ? distFromStart * 1.3 : 0;
+    const approachKm = joinKm > 1 ? joinKm * 1.3 : 0;
     const asRidden = { ...route, distance_km: route.distance_km + 2 * approachKm } as Route;
-    const score = scoreLibraryRoute(asRidden, spec, distFromStart);
+    const score = scoreLibraryRoute(asRidden, spec, joinKm);
     if (score < LIBRARY_MATCH_THRESHOLD) continue;
     // One malformed stored track must never sink the whole match (it used
     // to throw here and the rider got no library loops at all).

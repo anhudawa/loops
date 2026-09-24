@@ -1,4 +1,5 @@
 import { calculateStats } from "./geo-utils";
+import { alignElevations } from "./gpx";
 
 export interface TcxData {
   name: string | null;
@@ -11,7 +12,7 @@ export interface TcxData {
 
 export function parseTcx(xml: string): TcxData {
   const coordinates: [number, number][] = [];
-  const elevations: number[] = [];
+  const rawEle: (number | null)[] = [];
 
   // Extract activity name
   const nameMatch = xml.match(/<Activity\s+Sport="([^"]+)"/);
@@ -31,12 +32,11 @@ export function parseTcx(xml: string): TcxData {
       coordinates.push([parseFloat(latMatch[1]), parseFloat(lngMatch[1])]);
 
       const eleMatch = block.match(/<AltitudeMeters>([^<]+)<\/AltitudeMeters>/);
-      if (eleMatch) {
-        elevations.push(parseFloat(eleMatch[1]));
-      }
+      rawEle.push(eleMatch ? parseFloat(eleMatch[1]) : null);
     }
   }
 
+  const elevations = alignElevations(rawEle);
   const stats = calculateStats(coordinates, elevations);
 
   return {

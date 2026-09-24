@@ -93,10 +93,21 @@ export default function ShareRide({ route, ride }: ShareRideProps) {
     return () => window.removeEventListener("popstate", onPop);
   }, [open]);
 
-  // Esc closes the sheet.
+  // Esc closes the sheet; Tab stays inside it (a modal must not let focus
+  // wander to the page behind).
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") closeSheet(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { closeSheet(); return; }
+      if (e.key !== "Tab") return;
+      const dialog = document.querySelector<HTMLElement>('[aria-labelledby="share-ride-title"]');
+      if (!dialog) return;
+      const items = Array.from(dialog.querySelectorAll<HTMLElement>("button:not([disabled]), input, a[href], [tabindex]:not([tabindex='-1'])"));
+      if (items.length === 0) return;
+      const first = items[0], last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && (document.activeElement === last || !dialog.contains(document.activeElement))) { e.preventDefault(); first.focus(); }
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);

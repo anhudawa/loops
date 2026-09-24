@@ -234,7 +234,7 @@ export class NoValidRoutesError extends Error {
   constructor(
     public readonly candidateCount: number,
     public readonly dropped: Record<string, number>,
-    public readonly spec: { distance_km: number; discipline: string; elevation_preference: string; region?: string | null; alternative?: string | null }
+    public readonly spec: { distance_km: number; discipline: string; elevation_preference: string; region?: string | null; alternative?: string | null; start_point?: [number, number] }
   ) {
     const d = declineFromDrops(dropped, spec);
     super(d.message);
@@ -250,7 +250,7 @@ export class NoValidRoutesError extends Error {
  */
 export function declineFromDrops(
   dropped: Record<string, number>,
-  spec: { distance_km: number; region?: string | null; alternative?: string | null },
+  spec: { distance_km: number; region?: string | null; alternative?: string | null; start_point?: [number, number] },
 ): { code: "NO_MAP_DATA" | "NO_ROUTES_FOUND"; message: string } {
   const reasons = Object.entries(dropped).filter(([k, v]) => typeof v === "number" && v > 0 && !k.startsWith("_"));
   const where = spec.region ? ` around ${spec.region}` : "";
@@ -3124,16 +3124,23 @@ function withVia(ws: [number, number][], via: [number, number]): [number, number
  * distance away (straight line), routed out on the Road Standard profile
  * and within the serving policy. Phrased for the decline, or null.
  */
-async function destinationAlternative(spec: RouteSpec): Promise<string | null> {
+/** Towns a ride out and back could aim at, best distance fit first. */
+function outAndBackTowns(spec: { distance_km: number; start_point: [number, number] }) {
   const d = spec.distance_km;
   const start = spec.start_point;
-  const towns = placesNear(start, d * 0.45)
+  return placesNear(start, d * 0.45)
     .map((p) => ({ ...p, km: haversineKm(start[0], start[1], p.lat, p.lng) }))
     // Not a city or its suburbs: a ride out to a town, not to traffic.
     .filter((p) => p.km >= d * 0.12 && p.pop >= 500 && !CITY_CORES.some((c) => haversineKm(p.lat, p.lng, c.center[0], c.center[1]) < c.radius_km + CITY_EDGE_KM))
     // Closest to the ask first (roads run ~1.3× the straight line).
     .sort((a, b) => Math.abs(a.km * 2.6 - d) - Math.abs(b.km * 2.6 - d))
     .slice(0, 6);
+}
+
+async function destinationAlternative(spec: RouteSpec): Promise<string | null> {
+  const d = spec.distance_km;
+  const start = spec.start_point;
+  const towns = outAndBackTowns(spec);
   genDebug(`decline alternative: trying ${towns.map((t) => `${t.name} ${t.km.toFixed(1)} km`).join(", ") || "no towns"}`);
   if (!towns.length) return null;
   const profile = DISCIPLINE_PROFILE[spec.discipline];
@@ -3144,12 +3151,18 @@ async function destinationAlternative(spec: RouteSpec): Promise<string | null> {
     if (!compromiseAcceptable(report, out.distance_km * 2)) return null;
     const km = out.distance_km * 2;
     genDebug(`decline alternative: ${t.name} and back ${Math.round(km)} km`);
-    if (Math.abs(km - d) > Math.max(8, d * 0.35)) return null;
+    // Checked on the engine; its real length is said, so a shorter ride
+    // (Puerto de la Cruz: every checked ride ~40 km for an 80 km ask) is
+    // still worth naming — within half to one-and-a-half the ask.
+    if (km < d * 0.5 || km > d * 1.5) return null;
     return { name: t.name, km };
   }));
   const ok = tries.filter((x): x is { name: string; km: number } => !!x).sort((a, b) => Math.abs(a.km - d) - Math.abs(b.km - d))[0];
   if (!ok) return null;
-  return `A ride that works from here: "${spec.region ?? "here"} to ${ok.name} and back" (about ${Math.round(ok.km)} km).`;
+  const fits = Math.abs(ok.km - d) <= Math.max(8, d * 0.35);
+  return fits
+    ? `A ride that works from here: "${spec.region ?? "here"} to ${ok.name} and back" (about ${Math.round(ok.km)} km).`
+    : `The nearest ride that works from here is shorter: "${spec.region ?? "here"} to ${ok.name} and back" (about ${Math.round(ok.km)} km).`;
 }
 
 /** Climbing a "flat" loop may have per km (mirrors delivery-note's flat ceiling)… */
@@ -3636,8 +3649,14 @@ async function generateFreshRoutes(
   // Before declining: one concrete ride that does work here — out to a
   // town at about the right distance and back, checked on the engine.
   let alternative: string | null = null;
-  if (candidates.length === 0 && !presetWaypointSets && !spec.workout && Date.now() - t0 < 30_000) {
-    alternative = await destinationAlternative(spec).catch(() => null);
+  if (candidates.length === 0 && !presetWaypointSets && !spec.workout && Date.now() - t0 < 50_000) {
+    // Only a ride checked on the engine is suggested; bounded so the decline
+    // still lands inside the 60 s function limit (Tenerife declines at ~44 s).
+    const left = Math.max(1000, 54_000 - (Date.now() - t0));
+    alternative = await Promise.race([
+      destinationAlternative(spec).catch(() => null),
+      new Promise<null>((r) => setTimeout(() => r(null), left)),
+    ]);
   }
 
 
@@ -3651,6 +3670,7 @@ async function generateFreshRoutes(
       elevation_preference: spec.elevation_preference,
       region: spec.region ?? null,
       alternative,
+      start_point: spec.start_point,
     });
   }
 

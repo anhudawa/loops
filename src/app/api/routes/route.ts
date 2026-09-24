@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
       duration: searchParams.get("duration") || undefined,
       homeCountryBias: searchParams.get("homeBias") || undefined,
       avgSpeedKmh: userSpeed,
-      limit: pageSize,
+      limit: pageSize + 1, // one extra row says whether there is a next page
       offset: (page - 1) * pageSize,
     };
 

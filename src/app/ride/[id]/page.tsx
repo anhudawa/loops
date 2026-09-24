@@ -1,4 +1,5 @@
 import { withAutoTitle } from "@/lib/route-title";
+import { withTrueClimb } from "@/lib/true-climb";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getRouteOnce as getRoute } from "@/lib/db";
@@ -31,7 +32,7 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   let route: Awaited<ReturnType<typeof getRoute>> = undefined;
   try {
     route = await getRoute(id);
-    if (route) route = withAutoTitle(route);
+    if (route) route = withTrueClimb(withAutoTitle(route));
   } catch {
     return { title: "Group ride | LOOPS" };
   }
@@ -72,7 +73,7 @@ export default async function RidePage({ params, searchParams }: Props) {
   let initialRoute: Record<string, unknown> | null = null;
   try {
     const r0 = await getRoute(id);
-    const r = r0 ? withAutoTitle(await withBundleCorrection(r0)) : r0;
+    const r = r0 ? withTrueClimb(withAutoTitle(await withBundleCorrection(r0))) : r0;
     missing = r === undefined;
     if (r) initialRoute = initialRouteForPage(r as unknown as Record<string, unknown>);
   } catch {

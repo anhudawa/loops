@@ -1,9 +1,10 @@
 import { measureRoute } from "@/lib/measure-route";
 import { withAutoTitle } from "@/lib/route-title";
+import { trueClimb } from "@/lib/true-climb";
 import { checkRecommendable, needsRecommendCheck } from "@/lib/recommend-check";
 import { NextRequest, NextResponse, after } from "next/server";
 import { publicRoute } from "@/lib/public-route";
-import { renameRoute, getRoute, updateRouteElevation, updateRouteGeometry, storeRouteRoadReport, recordEvent, ANALYTICS_EVENTS } from "@/lib/db";
+import { renameRoute, getRoute, updateRouteClimb, updateRouteElevation, updateRouteGeometry, storeRouteRoadReport, recordEvent, ANALYTICS_EVENTS } from "@/lib/db";
 import { apiError, handleApiError } from "@/lib/api-utils";
 import { fetchElevations } from "@/lib/elevation";
 import { rerouteWaypoints } from "@/lib/route-generator";
@@ -219,6 +220,12 @@ export async function GET(
     }
     route = await repairElevationIfFlat(route);
     route = await repairGapsIfAny(route);
+    const climb = trueClimb(route);
+    if (climb) {
+      const rid = route.id;
+      after(() => updateRouteClimb(rid, climb.gain, climb.loss).catch(() => {}));
+      route = { ...route, elevation_gain_m: climb.gain, elevation_loss_m: climb.loss };
+    }
     scheduleRoadTrace(route);
     scheduleRecommendCheck(route);
 

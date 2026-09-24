@@ -1,6 +1,7 @@
 import { ImageResponse } from "next/og";
 import { getRoute } from "@/lib/db";
 import { withAutoTitle } from "@/lib/route-title";
+import { withTrueClimb } from "@/lib/true-climb";
 import { estimateRideMinutes, formatRideTime } from "@/lib/ride-time";
 import { formatRideWhen, cleanMeet } from "@/lib/ride-invite";
 import { getOgFonts } from "@/lib/og-fonts";
@@ -54,7 +55,7 @@ export async function GET(
   try {
     const { id } = await params;
     const stored = await getRoute(id);
-    const route = stored ? withAutoTitle(stored) : stored;
+    const route = stored ? withTrueClimb(withAutoTitle(stored)) : stored;
 
     if (!route) {
       return fallbackImage("Route not found");

@@ -309,6 +309,11 @@ node scripts/import-routes.mjs scripts/hub-data/girona-eat-sleep-cycle.json --dr
   corridor — the coast is the GC-1 motorway). Corrections apply on view AND
   by the daily measure cron / admin "Measure unmeasured routes"
   (applyBundleCorrections); replacing a track clears recommend_status.
+- Climbing (2026-09-24): climbStats (geo-utils) = heights smoothed over
+  300 m then a 3 m threshold — matches the engine's filtered ascent (spin:
+  engine 324 m, this 327; stored was 554. Rupit: engine 2,675, this ~2,800;
+  stored 6,191). Uploads use it; stored totals > 15 % off are corrected on
+  view (true-climb.ts, stored by the route API) and by /admin "Tidy library data".
 - No CSRF tokens; cookie-only sessions; locale hardcoded en-IE
 
 ## Conventions

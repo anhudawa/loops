@@ -1003,6 +1003,11 @@ export async function replaceRouteTrack(r: {
   return rowCount ?? 0;
 }
 
+/** Store recomputed climbing totals (true-climb.ts) — once, when the stored ones were inflated. */
+export async function updateRouteClimb(id: string, gain: number, loss: number): Promise<void> {
+  await sql`UPDATE routes SET elevation_gain_m = ${gain}, elevation_loss_m = ${loss} WHERE id = ${id}`;
+}
+
 /** Routes by exact name within a country (bundle corrections sweep). */
 export async function getRoutesByName(name: string, country: string): Promise<Array<{ id: string }>> {
   const { rows } = await sql`SELECT id FROM routes WHERE name = ${name} AND country = ${country}`;
@@ -2472,10 +2477,10 @@ export async function storeRecommendStatus(routeId: string, status: string, evid
 }
 
 /** Every route with its track (admin batch check). */
-export async function getAllRoutesForRecommendCheck(): Promise<Array<{ id: string; name: string; coordinates: string; distance_km: number; recommend_status: string | null; recommend_checked: { v?: number } | null }>> {
+export async function getAllRoutesForRecommendCheck(): Promise<Array<{ id: string; name: string; coordinates: string; distance_km: number; elevation_gain_m: number; elevation_loss_m: number; recommend_status: string | null; recommend_checked: { v?: number } | null }>> {
   await ensureRecommendColumn();
-  const { rows } = await sql`SELECT id, name, coordinates, distance_km, recommend_status, recommend_checked FROM routes`;
-  return rows as Array<{ id: string; name: string; coordinates: string; distance_km: number; recommend_status: string | null; recommend_checked: { v?: number } | null }>;
+  const { rows } = await sql`SELECT id, name, coordinates, distance_km, elevation_gain_m, elevation_loss_m, recommend_status, recommend_checked FROM routes`;
+  return rows as Array<{ id: string; name: string; coordinates: string; distance_km: number; elevation_gain_m: number; elevation_loss_m: number; recommend_status: string | null; recommend_checked: { v?: number } | null }>;
 }
 
 /** Store an automatic title over a generic one (never over a name a rider typed). */

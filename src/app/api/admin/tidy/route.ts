@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin";
-import { tidyLibraryData, hideTestUploads, getAllRoutesForRecommendCheck, renameRoute } from "@/lib/db";
+import { tidyLibraryData, hideTestUploads, getAllRoutesForRecommendCheck, renameRoute, updateRouteClimb } from "@/lib/db";
 import { withAutoTitle } from "@/lib/route-title";
+import { trueClimb } from "@/lib/true-climb";
 import { applyBundleCorrections } from "@/lib/bundle-corrections";
 import { measureUnmeasured } from "@/lib/measure-route";
 import { checkRecommendable, needsRecommendCheck } from "@/lib/recommend-check";
@@ -23,12 +24,15 @@ export async function POST(request: NextRequest) {
       const data: Record<string, number> = await tidyLibraryData();
       // Names that say nothing about the ride ("Sunday Social", "Flat long
       // route", "Planned road route — 116.9 km") → start – far point – end · km.
-      let renamed = 0;
+      let renamed = 0, climbFixed = 0;
       for (const r of await getAllRoutesForRecommendCheck()) {
         const t = withAutoTitle(r);
         if (t.renamed && t.name !== r.name) { await renameRoute(r.id, t.name, r.name); renamed++; }
+        // Climbing summed from noisy heights (6,191 m for ~2,700) → the track's own.
+        const c = trueClimb(r);
+        if (c) { await updateRouteClimb(r.id, c.gain, c.loss); climbFixed++; }
       }
-      return NextResponse.json({ data: { ...data, names_renamed: renamed } });
+      return NextResponse.json({ data: { ...data, names_renamed: renamed, climbing_fixed: climbFixed } });
     }
     if (body?.action === "hide-tests") return NextResponse.json({ data: { hidden: await hideTestUploads() } });
     if (body?.action === "measure") {

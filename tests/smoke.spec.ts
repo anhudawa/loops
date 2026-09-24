@@ -257,3 +257,24 @@ test.describe("login wall says the right thing", () => {
     await expect(page.getByRole("link", { name: /create a free account/i })).toHaveAttribute("href", /mode=signup/);
   });
 });
+
+// WCAG 2 A/AA (axe-core): contrast, labels, landmarks on the pages riders
+// reach first. Serious or critical violations fail.
+test.describe("accessibility (axe, WCAG AA)", () => {
+  const AXE = require("fs").readFileSync(require.resolve("axe-core/axe.min.js"), "utf8") as string;
+  for (const path of ["/", RIDE_PATH, "/login", "/cycling/dublin"]) {
+    test(`no serious violations on ${path.split("?")[0]}`, async ({ page }) => {
+      await open(page, path);
+      await page.waitForLoadState("networkidle").catch(() => {});
+      await page.addScriptTag({ content: AXE });
+      const violations = await page.evaluate(async () => {
+        const w = window as unknown as { axe: { run: (d: Document, o: unknown) => Promise<{ violations: Array<{ id: string; impact: string; nodes: Array<{ html: string }> }> }> } };
+        const r = await w.axe.run(document, { runOnly: ["wcag2a", "wcag2aa"] });
+        return r.violations
+          .filter((v) => v.impact === "serious" || v.impact === "critical")
+          .map((v) => `${v.id} ×${v.nodes.length}: ${v.nodes[0]?.html.slice(0, 120)}`);
+      });
+      expect(violations).toEqual([]);
+    });
+  }
+});

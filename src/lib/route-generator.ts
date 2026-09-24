@@ -1306,8 +1306,13 @@ export async function rerouteWaypoints(
     elevations = interpolateToFullPath(path.coords, sampled.sampled_coords, sampled.elevations);
     elevGain = sampled.gain_m;
     elevLoss = sampled.loss_m;
-  } else if (elevGain === null) {
-    elevGain = elevationGainFromSeries(elevations);
+  } else {
+    // Climbing of the track actually served, gain and loss by one measure
+    // (the engine's ascent is for the path it routed; two different Wicklow
+    // loops both read 718 m / 719 m).
+    const c = climbStats(path.coords, elevations);
+    elevGain = c.gain_m;
+    elevLoss = c.loss_m;
   }
   // Loss by the same filter as the gain (DRAW-12: raw per-point loss
   // counted every metre of noise the filtered gain ignores).
@@ -3365,6 +3370,14 @@ async function generateFreshRoutes(
         genDebug(`candidate repaired: removed ${Math.round(repair.removedKm * 1000)} m of via-point spur`);
       }
 
+      // One climbing measure across LOOPS (climbStats: 300 m smoothing, 3 m
+      // threshold — tracks the engine's ascent): the per-point series read
+      // 718 m where the engine said 608.
+      if (elevations.length === path.coords.length && elevations.every((e) => Number.isFinite(e))) {
+        const c = climbStats(path.coords, elevations);
+        elevGain = Math.round(c.gain_m);
+        elevLoss = Math.round(c.loss_m);
+      }
       if (elevLoss === null) elevLoss = lossFromGain(elevGain ?? 0, elevations);
       if (elevLoss === null) {
         let loss = 0;

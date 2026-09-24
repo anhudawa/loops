@@ -55,7 +55,7 @@ import { track } from "@/lib/track";
 import { ANALYTICS_EVENTS } from "@/lib/metrics";
 import { locationIfAllowed, requestLocation } from "@/lib/location";
 import LocationHelp from "@/components/LocationHelp";
-import { describeCompromise, type Compromise } from "@/lib/road-segments";
+import { describeCompromise, mergeCompromises, type Compromise } from "@/lib/road-segments";
 import { useAuth } from "@/components/AuthProvider";
 import { KNOWN_PLACES, lookupKnownPlace } from "@/lib/places-known";
 import { readDraft, writeDraft, clearDraft, type PlanSnapshot } from "@/app/plan/plan-draft";
@@ -259,6 +259,9 @@ function SafeAttribution() {
   useEffect(() => { map.attributionControl?.setPrefix(false); }, [map]);
   return null;
 }
+
+/** A pin further than this from the road its leg snapped to is moved onto that road (km). */
+const PIN_TO_ROAD_KM = 0.15;
 
 function RecenterOnce({ target }: { target: LatLng | null }) {
   const map = useMap();
@@ -487,6 +490,15 @@ export default function MapPlanner() {
         return;
       }
       const data = body.data as RerouteResult;
+      // A pin tapped off the roads (the sea off Bray, a field, a cut-off
+      // path) is moved onto the road the leg really starts/ends on, so the
+      // line stays attached to its pin (found by the Draw UI test runs).
+      const route = data.coordinates.map(([lat, lng]) => [lat, lng] as LatLng);
+      if (route.length >= 2) {
+        const first = route[0], last = route[route.length - 1];
+        if (haversineKm(from, first) > PIN_TO_ROAD_KM) queueMicrotask(() => settlePin(from, first, id));
+        if (haversineKm(to, last) > PIN_TO_ROAD_KM) queueMicrotask(() => settlePin(to, last, id));
+      }
       applyLegResult(id, seq, {
         coords: data.coordinates.map(([lat, lng]) => [lat, lng] as LatLng),
         elevations: data.elevations,
@@ -612,6 +624,33 @@ export default function MapPlanner() {
         void resnapLeg(existing, latlng, first, discipline, newDone);
       } else {
         setLoopLeg(makeLeg(latlng, first, discipline, newDone));
+      }
+    }
+  }
+
+  /**
+   * Move a pin onto the road its leg snapped to (no undo step: it is the
+   * snap finishing, not an edit). The leg that just snapped already starts
+   * there; any other leg touching the pin re-snaps from the road point.
+   */
+  function settlePin(oldPt: LatLng, roadPt: LatLng, snappedId: number) {
+    const same = (a: LatLng, b: LatLng) => Math.abs(a[0] - b[0]) < 1e-6 && Math.abs(a[1] - b[1]) < 1e-6;
+    const idx = anchorsRef.current.findIndex((p) => same(p, oldPt));
+    if (idx < 0) return;
+    const next = anchorsRef.current.map((p, i) => (i === idx ? roadPt : p)) as LatLng[];
+    anchorsRef.current = next;
+    setAnchors(next);
+    const touch = (l: PlanLeg) => same(l.from, oldPt) || same(l.to, oldPt);
+    const moved = (l: PlanLeg): [LatLng, LatLng] => [same(l.from, oldPt) ? roadPt : l.from, same(l.to, oldPt) ? roadPt : l.to];
+    for (const l of [...legsRef.current, ...(loopLegRef.current ? [loopLegRef.current] : [])]) {
+      if (!touch(l)) continue;
+      const [f, t] = moved(l);
+      if (l.id === snappedId) {
+        // Already on the road: only its end labels change.
+        setLegs((prev) => prev.map((x) => (x.id === l.id ? { ...x, from: f, to: t } : x)));
+        setLoopLeg((prev) => (prev && prev.id === l.id ? { ...prev, from: f, to: t } : prev));
+      } else {
+        void resnapLeg(l, f, t, discipline);
       }
     }
   }
@@ -822,6 +861,7 @@ export default function MapPlanner() {
   );
   /** The Road Standard is met, said in the elevation row (a strip of its own only when there is a compromise). */
   const roadStandardClean = standardKnown && compromises.length === 0 && hasElevation;
+  const mergedCompromises = mergeCompromises(compromises);
 
   async function downloadGpx() {
     // Signed out: the banner above already says why — the tap goes to sign
@@ -1345,8 +1385,8 @@ export default function MapPlanner() {
           <span>
             {compromises.length === 0
               ? "Every leg meets the Loops road standard."
-              : `Compromise: ${(allCompromisesShown ? compromises : compromises.slice(0, 2)).map(describeCompromise).join("; ")}.`}
-            {compromises.length > 2 && (
+              : `Compromise: ${[...new Set((allCompromisesShown ? mergedCompromises : mergedCompromises.slice(0, 2)).map(describeCompromise))].join("; ")}.`}
+            {mergedCompromises.length > 2 && (
               <button
                 type="button"
                 onClick={() => setAllCompromisesShown((v) => !v)}
@@ -1354,7 +1394,7 @@ export default function MapPlanner() {
                 className="ml-1 px-1 py-3 -my-3 font-bold underline"
                 style={{ color: "#f5a524" }}
               >
-                {allCompromisesShown ? "Show fewer" : `+${compromises.length - 2} more`}
+                {allCompromisesShown ? "Show fewer" : `+${mergedCompromises.length - 2} more`}
               </button>
             )}
           </span>

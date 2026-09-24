@@ -633,9 +633,12 @@ export function mergeOutAndBack(coords: [number, number][], compromises: Comprom
  * pass counted as one ("9.3 km of city streets through Dublin city centre"),
  * and "(+N more)".
  */
-export function summaryParts(compromises: Compromise[]): string {
-  // Stretches of the same kind on the same road read as one, with their
-  // total ("769 m on the R122…", not "636 m on the R122…; 133 m on the R122…").
+/**
+ * Stretches of the same kind on the same road as one, with their total
+ * ("769 m on the R122…", not "636 m on the R122…; 133 m on the R122…";
+ * one Galway city centre, not two).
+ */
+export function mergeCompromises(compromises: Compromise[]): Compromise[] {
   const groups = new Map<string, Compromise>();
   for (const c of compromises) {
     const k = c.kind === "city_streets"
@@ -644,7 +647,11 @@ export function summaryParts(compromises: Compromise[]): string {
     const g = groups.get(k);
     groups.set(k, g ? { ...g, meters: g.meters + c.meters } : { ...c });
   }
-  const items: Compromise[] = [...groups.values()].sort((a, b) => b.meters - a.meters);
+  return [...groups.values()].sort((a, b) => b.meters - a.meters);
+}
+
+export function summaryParts(compromises: Compromise[]): string {
+  const items = mergeCompromises(compromises);
   // The same stretch ridden out and back reads once, not "624 m on a road
   // that is dirt; 624 m on a road that is dirt".
   const lines = [...new Set(items.map(describeCompromise))];

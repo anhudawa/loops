@@ -141,6 +141,8 @@ export interface FindStretchOptions {
   firstFit?: boolean;
   /** Laps: accept a stretch that is flat on average but rolls (marked `rolling`). */
   allowRolling?: boolean;
+  /** Laps: the most lengths one effort may take (default LAP_MAX_PASSES). */
+  maxPasses?: number;
 }
 
 /** Shortest stretch worth lapping, and the most lengths one effort may take. */
@@ -231,7 +233,7 @@ export function findEffortStretch(
       const len = cum[j] - cum[i];
       const avg = len > 0 ? ((elev[j] - elev[i]) / (len * 1000)) * 100 : 0;
       const need = repKm(rep.zone, rep.duration_minutes, Math.max(0, avg));
-      if (len >= (opts.laps ? Math.max(LAP_MIN_KM, need / LAP_MAX_PASSES) : need)) break;
+      if (len >= (opts.laps ? Math.max(LAP_MIN_KM, need / (opts.maxPasses ?? LAP_MAX_PASSES)) : need)) break;
     }
     if (!ok) {
       // Every start before the block runs into it too (windows only grow).

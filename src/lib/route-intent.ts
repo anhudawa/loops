@@ -24,6 +24,8 @@ export interface WorkoutInterval {
   duration_seconds?: number;
   zone: IntensityZone;
   recovery_minutes?: number;
+  /** The rider's own zone word when it is not the zone's name ("sweet spot" is z3, not "tempo"). */
+  label?: string;
 }
 
 export interface WorkoutSpec {
@@ -67,6 +69,17 @@ export interface RouteSpec {
    * default — hill repeats on Howth) or must they be spread along the ride?
    */
   effort_layout?: "repeat" | "spread";
+  /** When the rider said they ride ("tomorrow morning", "at 9am"): the wind is judged for then. */
+  ride_when?: RideWhen;
+}
+
+/** A ride day and local hour the rider named: "tomorrow morning" → { day_offset: 1, hour: 9 }. */
+export interface RideWhen {
+  day_offset: 0 | 1;
+  /** Local hour at the start (0–23). */
+  hour: number;
+  /** How the rider said it, for the notes: "tomorrow morning", "this afternoon". */
+  label: string;
 }
 
 /**
@@ -298,6 +311,7 @@ function sanitizeWorkout(w: WorkoutSpec | null | undefined): WorkoutSpec | undef
         typeof iv.recovery_minutes === "number" && iv.recovery_minutes >= 0
           ? Math.round(iv.recovery_minutes)
           : Math.round(iv.duration_minutes / 2),
+      ...(typeof iv.label === "string" && iv.label.trim() ? { label: iv.label.trim().slice(0, 20) } : {}),
     });
   }
   if (intervals.length === 0) return undefined;
@@ -700,13 +714,18 @@ function inferZone(text: string, minutes: number): IntensityZone {
 }
 
 const ZONE_LABEL: Record<IntensityZone, string> = {
-  z1: "recovery", z2: "endurance", z3: "tempo", z4: "threshold", z5: "vo2max", z6: "anaerobic", z7: "sprint",
+  z1: "recovery", z2: "endurance", z3: "tempo", z4: "threshold", z5: "VO2 max", z6: "anaerobic", z7: "sprint",
 };
+
+/** The rider's zone word when it names the zone differently ("3x10 sweet spot" is z3 but not "tempo"). */
+function zoneLabelOf(text: string): string | undefined {
+  return /\bsweet\s*spot\b/.test(text) ? "sweet spot" : undefined;
+}
 
 /** "2 × 20 min threshold", "10 × 30 s sprint" — the session as the rider asked it. */
 export function workoutSummary(w: WorkoutSpec): string {
   return w.intervals
-    .map((iv) => `${iv.count} × ${iv.duration_seconds ? `${iv.duration_seconds} s` : `${iv.duration_minutes} min`} ${ZONE_LABEL[iv.zone]}`)
+    .map((iv) => `${iv.count} × ${iv.duration_seconds ? `${iv.duration_seconds} s` : `${iv.duration_minutes} min`} ${iv.label ?? ZONE_LABEL[iv.zone]}`)
     .join(", then ");
 }
 
@@ -736,7 +755,8 @@ export function parseBasicWorkout(prompt: string): { workout: WorkoutSpec; strip
   for (const m of text.matchAll(reps)) {
     const minutes = toMin(parseFloat(m[2]), m[3]);
     const zone = zoneOf(m[4] ?? "") ?? zoneOf(text) ?? inferZone(text, minutes);
-    intervals.push({ count: parseInt(m[1], 10), duration_minutes: minutes, ...secs(parseFloat(m[2]), m[3]), zone });
+    const label = zone === "z3" ? zoneLabelOf(m[4] || text) : undefined;
+    intervals.push({ count: parseInt(m[1], 10), duration_minutes: minutes, ...secs(parseFloat(m[2]), m[3]), zone, ...(label ? { label } : {}) });
     stripped = stripped.replace(m[0], " ");
   }
   // "20 mins threshold", "a 20 minute ftp effort", "30 min of tempo".
@@ -745,7 +765,8 @@ export function parseBasicWorkout(prompt: string): { workout: WorkoutSpec; strip
     for (const m of text.matchAll(single)) {
       const zone = zoneOf(m[3]);
       if (!zone) continue;
-      intervals.push({ count: 1, duration_minutes: toMin(parseFloat(m[1]), m[2]), ...secs(parseFloat(m[1]), m[2]), zone });
+      const label = zone === "z3" ? zoneLabelOf(m[3]) : undefined;
+      intervals.push({ count: 1, duration_minutes: toMin(parseFloat(m[1]), m[2]), ...secs(parseFloat(m[1]), m[2]), zone, ...(label ? { label } : {}) });
       stripped = stripped.replace(m[0], " ");
     }
   }
@@ -756,7 +777,8 @@ export function parseBasicWorkout(prompt: string): { workout: WorkoutSpec; strip
     for (const m of text.matchAll(zoneFirst)) {
       const zone = zoneOf(m[1]);
       if (!zone) continue;
-      intervals.push({ count: 1, duration_minutes: toMin(parseFloat(m[2]), m[3]), ...secs(parseFloat(m[2]), m[3]), zone });
+      const label = zone === "z3" ? zoneLabelOf(m[1]) : undefined;
+      intervals.push({ count: 1, duration_minutes: toMin(parseFloat(m[2]), m[3]), ...secs(parseFloat(m[2]), m[3]), zone, ...(label ? { label } : {}) });
       stripped = stripped.replace(m[0], " ");
     }
   }
@@ -775,6 +797,7 @@ export function parseBasicWorkout(prompt: string): { workout: WorkoutSpec; strip
       ...(iv.duration_seconds ? { duration_seconds: iv.duration_seconds } : {}),
       zone: iv.zone,
       recovery_minutes: rec ? Math.round(parseFloat(rec[1])) : Math.max(1, Math.round(iv.duration_minutes / 2)),
+      ...(iv.label ? { label: iv.label } : {}),
     })),
     warmup_minutes: 15,
     cooldown_minutes: 10,
@@ -802,6 +825,13 @@ const LENGTH_UNIT = "(?:hours?|hrs?|minutes?|mins?|km|kms|kilometres?|kilometers
  */
 export function normaliseLengths(text: string): string {
   let t = text.toLowerCase().replace(/[–—]/g, "-");
+  // Spanish lengths ("vuelta de 3 horas desde Calpe", HV-10).
+  t = t.replace(/\b(?:una\s+)?hora\s+y\s+media\b/g, "1.5 hours");
+  t = t.replace(/\buna\s+hora\b/g, "1 hour");
+  t = t.replace(/\b(\d+)\s+horas?\s+y\s+media\b/g, (_m, n: string) => `${parseInt(n, 10) + 0.5} hours`);
+  t = t.replace(/\b(\d+(?:[.,]\d+)?)\s*horas?\b/g, (_m, n: string) => `${n.replace(",", ".")} hours`);
+  t = t.replace(/\b(\d+)\s*minutos\b/g, "$1 min");
+  t = t.replace(/\b(\d+)\s*kil[oó]metros\b/g, "$1 km");
   t = t.replace(/\b(?:an?|one)\s+hour\s+and\s+a\s+half\b|\bhour\s+and\s+a\s+half\b|\bone\s+and\s+a\s+half\s+hours?\b/g, "1.5 hours");
   t = t.replace(/\bhalf\s+an\s+hour\b/g, "30 min");
   t = t.replace(/\ban?\s+hour\b/g, "1 hour");
@@ -861,7 +891,7 @@ function findStartPlace(text: string): string | "self" | null {
   }
   const andBack = text.match(new RegExp(String.raw`^(?:(?:a|an|the)\s+)?${PLACE_TEXT}\s+(?:and|&)\s+back\b`, "i"));
   if (andBack && looksLikePlace(trimPlace(andBack[1]))) return trimPlace(andBack[1]);
-  const at = new RegExp(String.raw`\b(?:starting\s+(?:at|in|from)|start\s+(?:at|in)|based\s+(?:in|at)|staying\s+(?:in|at)|desde|in|at|near|around)\s+${PLACE_TEXT}${PLACE_END}`, "gi");
+  const at = new RegExp(String.raw`\b(?:starting\s+(?:at|in|from)|start\s+(?:at|in)|based\s+(?:in|at)|staying\s+(?:in|at)|desde|(?:partiendo|saliendo)\s+de|in|at|near|around)\s+${PLACE_TEXT}${PLACE_END}`, "gi");
   for (const m of text.matchAll(at)) {
     const place = trimPlace(m[1]);
     if (place && looksLikePlace(place)) return place;
@@ -881,6 +911,50 @@ function looksLikePlaceOrKnown(s: string): boolean {
   return !NOT_A_PLACE_WORD.has(first) && !DESCRIPTION_WORD.test(s);
 }
 
+/** Emoji and pictographs ("🚴‍♂️☀️ 2h from Malaga 🙏") carry no ask: dropped before parsing (HV-10). */
+export function stripSymbols(prompt: string): string {
+  return prompt.replace(/\p{Extended_Pictographic}|\p{Emoji_Modifier}|[\u{FE0F}\u{200D}\u{20E3}]/gu, " ").replace(/\s+/g, " ").trim();
+}
+
+/** Asking for a ride at all — with the phone's location, enough to plan one (HV-11). */
+const RIDE_ASK = /\b(?:ride|rides|loop|loops|route|routes|spin|cycle|vuelta|ruta|salida)\b/;
+
+/**
+ * When the rider said they ride — "tomorrow morning", "this afternoon",
+ * "tomorrow at 8", "at 7am" — as a local day and hour, so the wind is judged
+ * for then and not for now (HV-12). Null when they named no time ("today",
+ * or nothing: the ride is now).
+ */
+export function parseRideWhen(prompt: string): RideWhen | null {
+  const t = prompt.toLowerCase().replace(/\s+/g, " ");
+  const tomorrow = /\b(?:tomorrow|tmrw|tmr)\b|(?<!\bla\s)\bma[ñn]ana\b/.test(t);
+  const part = t.match(/\b(morning|afternoon|evening|tonight|lunchtime)\b/)?.[1];
+  // "at 9", "at 9am", "at 7.30", "at 18:00", "9am" — never "at 400w", "at 95%" or "at 30 km/h".
+  const clock = t.match(/\bat\s+(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm|o'?clock)?(?![\d%]|\.\d|\s*(?:km|k\b|kms|w\b|watts|bpm|mins?\b|minutes|x\b|×|s\b|secs?|%))/)
+    ?? t.match(/\b(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm)\b/);
+  let hour: number | null = null;
+  let minutes = "00";
+  if (clock) {
+    let h = parseInt(clock[1], 10);
+    const ampm = clock[3]?.startsWith("a") ? "am" : clock[3]?.startsWith("p") ? "pm" : null;
+    if (ampm === "pm" && h < 12) h += 12;
+    else if (ampm === "am" && h === 12) h = 0;
+    // "at 6" with no am/pm and no morning said: an evening ride.
+    else if (!ampm && h >= 1 && h <= 6 && part !== "morning") h += 12;
+    if (h >= 0 && h <= 23) { hour = h; minutes = clock[2] ?? "00"; }
+  }
+  const thisPart = /\bthis\s+(?:morning|afternoon|evening)\b|\btonight\b/.test(t);
+  if (!tomorrow && hour === null && !thisPart) return null;
+  const partHour = part === "morning" ? 9 : part === "afternoon" ? 14 : part === "lunchtime" ? 12 : part ? 18 : null;
+  const day = tomorrow ? "tomorrow" : "today";
+  const label = hour !== null
+    ? `${day} at ${String(hour).padStart(2, "0")}:${minutes}`
+    : part === "tonight" ? "tonight"
+    : part ? `${tomorrow ? "tomorrow" : "this"} ${part}`
+    : "tomorrow";
+  return { day_offset: tomorrow ? 1 : 0, hour: hour ?? partHour ?? 9, label };
+}
+
 /**
  * Deterministic fallback parser — no LLM. Handles the structured-form
  * prompt format and free text the way riders type it (and say it: number
@@ -888,7 +962,8 @@ function looksLikePlaceOrKnown(s: string): boolean {
  * outage degrades to "plain requests still work" instead of "the product
  * is down".
  */
-export function parseBasicIntent(prompt: string): ParsedIntent | null {
+export function parseBasicIntent(rawPrompt: string, options: { origin?: [number, number] } = {}): ParsedIntent | null {
+  const prompt = stripSymbols(rawPrompt);
   const p = normaliseLengths(prompt);
 
   // Structured efforts ("20 mins threshold", "4x4 min VO2 max") are parsed
@@ -937,8 +1012,10 @@ export function parseBasicIntent(prompt: string): ParsedIntent | null {
   // A destination ride's length is the road there and back.
   let distanceDefaulted = false;
   if (duration === null && distance === null && !dest && !session) {
-    // Truly vague ("give me a ride") — no distance, no time, no place.
-    if (!region && found !== "self") return null;
+    // Truly vague ("give me a ride") — no distance, no time, no place, and
+    // no phone location either. With the location, a ride ask ("ride a
+    // loop please") is planned from there at the default length (HV-11).
+    if (!region && found !== "self" && !(options.origin && RIDE_ASK.test(p))) return null;
     // A place is named ("gravel loop from Dublin") — default the distance
     // rather than declining a perfectly reasonable ask, and say so.
     distance = DEFAULT_DISTANCE_KM;
@@ -998,8 +1075,8 @@ export function parseBasicIntent(prompt: string): ParsedIntent | null {
  * length (and no session or destination set one) so the 50 km is never
  * passed off as their ask.
  */
-export function defaultLengthNotice(prompt: string, distanceKm: number): string | null {
-  const basic = parseBasicIntent(prompt);
+export function defaultLengthNotice(prompt: string, distanceKm: number, origin?: [number, number]): string | null {
+  const basic = parseBasicIntent(prompt, { origin });
   return basic?.distance_defaulted && distanceKm === DEFAULT_DISTANCE_KM
     ? `No distance given — planned ${DEFAULT_DISTANCE_KM} km`
     : null;
@@ -1048,7 +1125,7 @@ export async function parseRouteIntent(
     // LLM unavailable or returned garbage: try the deterministic parser
     // for simple requests (and the structured form's format) so a model
     // outage never takes the whole product down.
-    const basic = parseBasicIntent(prompt);
+    const basic = parseBasicIntent(prompt, { origin });
     if (!basic) {
       throw err instanceof Error && err.message.startsWith("Failed to parse LLM response")
         ? err
@@ -1065,6 +1142,11 @@ export async function parseRouteIntent(
   const discipline = sanitizeDiscipline(parsed.discipline);
   const elevationPref = sanitizeElevationPreference(parsed.elevation_preference);
   const workout = sanitizeWorkout(parsed.workout);
+  // "3x10 sweet spot" is z3 to the planner but never "tempo" to the rider (CA-10).
+  const riderZone = zoneLabelOf(prompt.toLowerCase());
+  if (workout && riderZone && !/\btempo\b/i.test(prompt)) {
+    for (const iv of workout.intervals) if (iv.zone === "z3" && !iv.label) iv.label = riderZone;
+  }
 
   let distanceKm =
     typeof parsed.distance_km === "number" && Number.isFinite(parsed.distance_km)
@@ -1121,6 +1203,9 @@ export async function parseRouteIntent(
       }
     : undefined;
 
+  // "tomorrow morning": the wind is judged for then, not now (HV-12).
+  const rideWhen = parseRideWhen(prompt);
+
   return {
     distance_km: distanceKm,
     distance_tolerance_km: distanceToleranceKm,
@@ -1141,6 +1226,7 @@ export async function parseRouteIntent(
     cafe_stop: parsed.cafe_stop === true,
     parser,
     start_source: resolved.source,
+    ...(rideWhen ? { ride_when: rideWhen } : {}),
     ...(destination ? { destination } : {}),
   };
 }

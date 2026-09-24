@@ -105,13 +105,13 @@ export default function HeroSection({ onExplore }: { onExplore: () => void }) {
         <div className="flex items-center justify-center gap-3 mb-8 md:mb-14">
           <Link
             href="/generate"
-            className="btn-accent px-5 md:px-8 py-3 md:py-3.5 rounded-xl font-bold text-xs md:text-sm uppercase tracking-wider whitespace-nowrap"
+            className="btn-accent px-5 md:px-8 py-3 md:py-3.5 min-h-[44px] inline-flex items-center rounded-xl font-bold text-xs md:text-sm uppercase tracking-wider whitespace-nowrap"
           >
             Plan a Ride
           </Link>
           <button
             onClick={onExplore}
-            className="px-5 md:px-8 py-3 md:py-3.5 rounded-xl font-bold text-xs md:text-sm uppercase tracking-wider transition-all hover:border-[rgba(200,255,0,0.5)] whitespace-nowrap"
+            className="px-5 md:px-8 py-3 md:py-3.5 min-h-[44px] rounded-xl font-bold text-xs md:text-sm uppercase tracking-wider transition-all hover:border-[rgba(200,255,0,0.5)] whitespace-nowrap"
             style={{
               border: "1px solid var(--border-light)",
               color: "var(--text-secondary)",

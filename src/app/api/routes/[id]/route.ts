@@ -165,14 +165,18 @@ function scheduleRoadTrace(route: NonNullable<Awaited<ReturnType<typeof getRoute
 const nameFillAt = new Map<string, number>();
 function scheduleNameFill(route: NonNullable<Awaited<ReturnType<typeof getRoute>>>) {
   const rr = route.road_report as RoadReport | null | undefined;
-  if (!rr || !rr.compromises?.length || rr.compromises.some((c) => c.name)) return;
+  // Any stretch still unnamed (not just a report with no names at all):
+  // the Where list names every stretch it can.
+  const unnamed = (rr?.compromises ?? []).filter((c) => !c.name && c.kind !== "city_streets").length;
+  if (!rr || unnamed === 0) return;
   const last = nameFillAt.get(route.id);
   if (last && Date.now() - last < TRACE_RETRY_MS) return;
   nameFillAt.set(route.id, Date.now());
   after(async () => {
     try {
-      await nameCompromises([], rr.compromises, fetch, { timeoutMs: 8000, max: 3 });
-      if (rr.compromises.some((c) => c.name)) {
+      // One batched lookup for every stretch the Where list shows.
+      await nameCompromises([], rr.compromises, fetch, { timeoutMs: 8000, max: 12 });
+      if (rr.compromises.filter((c) => !c.name && c.kind !== "city_streets").length < unnamed) {
         rr.summary = summariseReport(rr);
         await storeRouteRoadReport(route.id, rr);
         console.log(JSON.stringify({ evt: "route_road_named", route_id: route.id, named: rr.compromises.filter((c) => c.name).length }));

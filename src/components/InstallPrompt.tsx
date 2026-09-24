@@ -163,6 +163,7 @@ export default function InstallPrompt() {
               border: "none",
               borderRadius: "6px",
               padding: "8px 16px",
+              minHeight: "44px",
               fontSize: "14px",
               fontWeight: 600,
               cursor: "pointer",
@@ -184,6 +185,13 @@ export default function InstallPrompt() {
             cursor: "pointer",
             padding: "4px",
             lineHeight: 1,
+            // A thumb-sized target (44 px), the glyph stays small.
+            minWidth: "44px",
+            minHeight: "44px",
+            margin: "-8px -8px -8px 0",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
           }}
         >
           &#x2715;

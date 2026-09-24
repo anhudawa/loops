@@ -243,7 +243,7 @@ export default function SwitchPage() {
                     {s.cta && (
                       <Link
                         href={s.cta.href}
-                        className="btn-accent inline-flex items-center justify-center font-bold text-xs uppercase tracking-wider px-4 py-2.5 rounded-lg mt-3"
+                        className="btn-accent inline-flex items-center justify-center min-h-[44px] font-bold text-xs uppercase tracking-wider px-4 py-2.5 rounded-lg mt-3"
                       >
                         {s.cta.label}
                       </Link>

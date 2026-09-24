@@ -130,6 +130,12 @@ describe("buildRoadReport", () => {
     expect(r.summary).toMatch(/^Compromise: /);
   });
 
+  it("names what a non-road stretch is (cycle path, pedestrian street), not \"a road\"", () => {
+    const base = { start: 0, end: 1, meters: 4180, near_start: false } as const;
+    expect(describeCompromise({ ...base, kind: "unpaved", highway: "cycleway", surface: "unpaved" })).toBe("4.2 km on a cycle path that is unpaved");
+    expect(describeCompromise({ ...base, meters: 312, kind: "unsuitable", highway: "living_street" })).toBe("312 m on a pedestrian street tagged unsuitable for bikes");
+  });
+
   it("ignores a junction crossing (< 40 m) and merges stretches split by a short gap", () => {
     const coords = line(101);
     const tags = edges([[QUIET, 50], [PRIMARY, 1], [QUIET, 49]]); // 20 m of primary = crossing

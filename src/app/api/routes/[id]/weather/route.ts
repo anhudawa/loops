@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getRoute } from "@/lib/db";
 import { apiError, handleApiError } from "@/lib/api-utils";
 import { estimateRideMinutes } from "@/lib/ride-time";
-import type { ForecastHour } from "@/lib/ride-wind";
+import { nextRidingHour, type ForecastHour } from "@/lib/ride-wind";
 
 const cache = new Map<string, { data: unknown; timestamp: number }>();
 const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
@@ -81,28 +81,40 @@ export async function GET(
     const hourly = raw.hourly ?? {};
     const times: string[] = hourly.time ?? [];
 
+    /** The forecast for a start at hourly index i, with the ride's hours. */
+    const forecastAt = (i: number) => ({
+      temperature: hourly.temperature_2m[i],
+      humidity: hourly.relative_humidity_2m[i],
+      precipitation: hourly.precipitation[i],
+      precipitationProbability: hourly.precipitation_probability?.[i] ?? null,
+      weatherCode: hourly.weather_code[i],
+      windSpeed: hourly.wind_speed_10m[i],
+      windDirection: hourly.wind_direction_10m[i],
+      windGusts: hourly.wind_gusts_10m?.[i] ?? null,
+      forecastFor: times[i],
+      hours: rideHours(hourly, i, windowHours),
+    });
+
     if (rideHour) {
       const i = times.indexOf(rideHour);
       if (i >= 0) {
-        const hours = rideHours(hourly, i, windowHours);
-        const data = {
-          temperature: hourly.temperature_2m[i],
-          humidity: hourly.relative_humidity_2m[i],
-          precipitation: hourly.precipitation[i],
-          precipitationProbability: hourly.precipitation_probability?.[i] ?? null,
-          weatherCode: hourly.weather_code[i],
-          windSpeed: hourly.wind_speed_10m[i],
-          windDirection: hourly.wind_direction_10m[i],
-          windGusts: hourly.wind_gusts_10m?.[i] ?? null,
-          forecastFor: rideHour,
-          hours,
-        };
+        const data = forecastAt(i);
         cache.set(cacheKey, { data, timestamp: Date.now() });
         return NextResponse.json(data);
       }
     }
 
     const current = raw.current;
+    // No time picked and it is night where the ride starts: plan the next
+    // morning (8:00 local) instead of a strip of 2 am hours.
+    const morning = t ? null : nextRidingHour(typeof current?.time === "string" ? current.time : null);
+    const mi = morning ? times.indexOf(morning.hour) : -1;
+    if (morning && mi >= 0 && hourly.temperature_2m?.[mi] != null) {
+      const data = { ...forecastAt(mi), plannedFor: morning.label };
+      cache.set(id, { data, timestamp: Date.now() });
+      return NextResponse.json(data);
+    }
+
     // "If you left now": the strip starts at the current local hour.
     const nowHour = typeof current?.time === "string" ? `${current.time.slice(0, 13)}:00` : null;
     const ni = nowHour ? times.indexOf(nowHour) : -1;

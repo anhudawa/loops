@@ -1,5 +1,8 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import AppHeader from "@/components/AppHeader";
+
+export const metadata: Metadata = { title: "Route not found — LOOPS", robots: { index: false } };
 
 /** A route link that leads nowhere: say so, and keep the header (log in, plan, routes). */
 export default function RouteNotFound() {
@@ -13,7 +16,7 @@ export default function RouteNotFound() {
         </p>
         <Link
           href="/"
-          className="btn-accent px-8 py-3 rounded-xl font-bold text-sm uppercase tracking-wider"
+          className="btn-accent px-8 py-3 min-h-[44px] inline-flex items-center rounded-xl font-bold text-sm uppercase tracking-wider"
         >
           Back to exploring
         </Link>

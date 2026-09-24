@@ -2,6 +2,8 @@ import Link from "next/link";
 import { getCountries, getRoutes } from "@/lib/db";
 import { slugify, generateItemListJsonLd } from "@/lib/seo";
 import JsonLd from "@/components/JsonLd";
+import { ENABLED_DISCIPLINES } from "@/config/constants";
+import { disciplineList } from "@/app/routes/country/library";
 
 export default async function HomeSeoContent() {
   // Fail soft: a DB outage degrades this SEO section to its static copy
@@ -25,7 +27,7 @@ export default async function HomeSeoContent() {
       </h2>
       <p className="text-sm leading-relaxed mb-6" style={{ color: "var(--text-secondary)" }}>
         LOOPS is a cycling route discovery platform: a curated library of the world&apos;s best
-        cycling roads plus wind-aware route generation. Browse gravel, road, and MTB routes,
+        cycling roads plus wind-aware route generation. Browse {disciplineList([...ENABLED_DISCIPLINES])} routes,
         download GPX files, and find your next ride. Routes and GPX are free forever. Pro
         (coming) adds training intelligence.
         Works with Strava, Komoot, Wahoo, and Garmin.

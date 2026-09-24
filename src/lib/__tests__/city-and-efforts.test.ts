@@ -78,10 +78,12 @@ describe("Irish regional roads are 80 km/h roads (CA-01)", () => {
     expect(irishDefaults({ highway: "secondary", maxspeed: "50" }).maxspeed).toBe("50");
     expect(irishDefaults({ highway: "tertiary" }).maxspeed).toBeUndefined();
   });
-  it("an unsigned R-road with no traffic estimate is named in the Irish road report", () => {
+  it("the road report judges an unsigned Irish R-road by its tags (the effort finder alone assumes 80)", () => {
     const coords = between([53.16, -6.167], [53.15, -6.163]);
     const r = buildRoadReport(coords, new Array(coords.length - 1).fill({ highway: "secondary", surface: "asphalt" }), "road");
-    expect(r.compromises[0]?.kind).toBe("fast_road");
+    expect(r.standard_met).toBe(true);
+    const signed = buildRoadReport(coords, new Array(coords.length - 1).fill({ highway: "secondary", surface: "asphalt", maxspeed: "80" }), "road");
+    expect(signed.compromises[0]?.kind).toBe("fast_road"); // signed 80, traffic unknown: still named
     expect(isFastRoad({ highway: "secondary" })).toBe(false); // outside Ireland: unknown stays unknown
   });
   it("never puts an effort on an 80 km/h regional road", () => {

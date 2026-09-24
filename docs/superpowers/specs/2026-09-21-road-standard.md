@@ -177,3 +177,14 @@ to take is served however long it is (it was capped at 2.5 km per stretch and
 the GPX. Roads closed to bikes (bicycle=no/use_sidepath, access=no) and
 motorways stay impossible in both routing profiles and are rejected by the
 serving policy. Mid-ride allowances are unchanged.
+
+## Rules v8 (2026-09-24) — unsigned Irish regional roads
+
+Rules v7 filled every Irish regional road with no `maxspeed` tag with the
+80 km/h rural default, in the road report too. That turned R-roads the engine
+has no traffic estimate for into "fast road" compromises and flipped the
+Roadman spin (ridden, owner-endorsed) to 34 km of compromise on the Saturday
+ride link. v8 keeps the Rule 2 interpretation above for the report — a road
+is judged by what the map says (signed 80/90 regional roads with unknown or
+busy traffic stay compromises) — while the effort finder alone assumes the
+80 km/h default: interval reps are never placed on an R-road.

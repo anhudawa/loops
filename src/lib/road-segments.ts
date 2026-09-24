@@ -240,8 +240,8 @@ export function maxspeedKmh(raw: string | undefined): number | null {
  * with no routable loop at all.
  */
 export function isFastRoad(t: WayTags): boolean {
-  // (A missing maxspeed on an Irish regional road is filled in with the
-  // 80 km/h default by irishDefaults() before the report asks this.)
+  // (The effort finder fills a missing maxspeed on an Irish regional road
+  // with the 80 km/h default via effectiveMaxspeedKmh; the report does not.)
   const kmh = maxspeedKmh(t.maxspeed);
   if (kmh === null || kmh < 80 || hasSegregatedTrack(t)) return false;
   if (kmh >= 100) return true;
@@ -413,7 +413,7 @@ export interface RoadReport {
  * Bump when the classification rules change: stored reports with an older
  * (or missing) version are re-traced on next view (api/routes/[id]).
  */
-export const ROAD_RULES_VERSION = 7;
+export const ROAD_RULES_VERSION = 8;
 
 // "Unsuitable" by surface is discipline-aware: smoothness=bad is a hazard on
 // a road bike and the whole point of a gravel ride; class:bicycle −2 is
@@ -462,7 +462,6 @@ function buildRoadReportInner(
 
   // Raw per-edge kinds, then run-length into stretches.
   const kinds: Array<CompromiseKind | null> = new Array(n).fill(null);
-  const ireland = inIreland(coords[0]);
   // City centre per edge (its own kind: a road rule on the same edge wins).
   const city: Array<CityCore | null> = new Array(n).fill(null);
   let cityM = 0;
@@ -475,7 +474,11 @@ function buildRoadReportInner(
     const L = lens[i];
     total += L;
     const raw = edgeTags[i];
-    const t = raw && ireland ? irishDefaults(raw) : raw;
+    // The road report judges a road by what the map says (spec, Rule 2): an
+    // Irish regional road with no speed tag is not assumed to be 80 km/h
+    // here — the Roadman spin rides quiet R-roads and meets the standard.
+    // The effort finder alone applies the 80 km/h default (no reps on them).
+    const t = raw;
     if (!t || !t.highway) { unknown += L; if (city[i]) kinds[i] = "city_streets"; continue; }
     known += L;
     classM[t.highway] = (classM[t.highway] ?? 0) + L;
@@ -498,7 +501,7 @@ function buildRoadReportInner(
       last.end = i + 1;
       last.meters += lens[i];
     } else {
-      runs.push({ kind: k, start: i, end: i + 1, meters: lens[i], tags: (ireland && edgeTags[i] ? irishDefaults(edgeTags[i]!) : edgeTags[i]) ?? {} });
+      runs.push({ kind: k, start: i, end: i + 1, meters: lens[i], tags: edgeTags[i] ?? {} });
     }
   }
   // Merge same-kind runs separated by a short gap (a junction, a bridge deck).

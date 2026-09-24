@@ -191,7 +191,12 @@ export function inFlightTimings(): Record<string, number> | null {
 }
 function markPhase(label: string): void {
   if (!currentTimings) return;
-  currentTimings[label] = Math.round((Date.now() - currentTimingsStart) / 100) / 10;
+  // A phase reached again (pass 2, a lollipop's inner loop) gets its own key
+  // ("routing_2"): overwriting made pass 1 look slow (Belfast "waypoints 25 s"
+  // was the lollipop's inner run starting at 25 s).
+  let key = label;
+  for (let n = 2; key in currentTimings && label !== "total" && label !== "fresh"; n++) key = `${label}_${n}`;
+  currentTimings[key] = Math.round((Date.now() - currentTimingsStart) / 100) / 10;
 }
 
 interface BRouterFeatureCollection {

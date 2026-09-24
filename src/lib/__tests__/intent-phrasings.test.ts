@@ -71,6 +71,17 @@ describe("CLT-02: the ', Co. X' qualifier stays with the place", () => {
     await resolveStartPoint("Ballinastoe", "Ireland", [53.35, -6.26], geocode);
     expect(seen[0]).toEqual([53.35, -6.26]);
   });
+
+  it("a big city is found where it is, not as a townland in the guessed country ('3 hours from Manchester')", async () => {
+    const geocode: Geocoder = async (_q, cc, near) => {
+      if (near && Math.abs(near[0] - 53.48) < 0.1) return { point: [53.479, -2.244], country: "United Kingdom" };
+      if (cc === "ie") return { point: [52.64, -9.48], country: "Ireland" };
+      return null;
+    };
+    const r = await resolveStartPoint("Manchester", "Ireland", undefined, geocode);
+    expect(r.country).toBe("United Kingdom");
+    expect(r.point[0]).toBeCloseTo(53.479, 2);
+  });
 });
 
 describe("CLT-03/HV-01: 'here', 'my hotel' are not place names", () => {

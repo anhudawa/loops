@@ -99,6 +99,9 @@ export default function HeroSection({ onExplore }: { onExplore: () => void }) {
           style={{ color: "var(--text-muted)" }}
         >
           Stop riding the same loops.
+          <span className="block mt-2 text-xs md:text-base font-semibold" style={{ color: "var(--text-secondary)" }}>
+            Say where and how long — get a road loop on quiet roads. Free.
+          </span>
         </p>
 
         {/* CTAs */}

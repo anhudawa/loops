@@ -8,7 +8,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { lookupKnownPlace, findKnownPlaceIn, nearestKnownPlace, displayPlaceName } from "./places-known";
-import { findPlaceNear } from "./map-labels";
+import { findPlaceNear, findPlaceByName } from "./map-labels";
 import { mentionsEfforts } from "./session-words";
 import type { IntensityZone } from "./intensity";
 import { ZONES } from "./intensity";
@@ -436,6 +436,9 @@ export const MAX_START_FROM_ORIGIN_KM = 300;
  *      parsed country is a guess when the prompt did not name one.
  *   4. No place named ("from here", "from my hotel") → the rider's location.
  */
+/** A named place this big is the one riders mean, whatever the parsed country. */
+const BIG_CITY_POP = 50_000;
+
 export async function resolveStartPoint(
   region: string | undefined,
   country: string,
@@ -452,14 +455,22 @@ export async function resolveStartPoint(
       const town = findPlaceNear(named, origin, MAX_START_FROM_ORIGIN_KM);
       if (town) return { point: [town.lat, town.lng], country, source: "geocoded" };
     }
+    // A city everyone means ("Manchester", 570,000 people) is searched for
+    // where it is before the parsed country, which is only a guess when the
+    // rider did not name one — an Irish townland called Manchester is not it.
+    const city = qualified ? null : findPlaceByName(named);
+    const bigCity: [number, number] | null = city && city.pop >= BIG_CITY_POP ? [city.lat, city.lng] : null;
     const attempts: Array<{ cc?: string; near?: [number, number] }> = [
       ...(origin ? [{ near: origin }] : []),
+      ...(bigCity ? [{ near: bigCity }] : []),
       { cc: countryToCode(country) },
       {},
     ];
     let far: GeocodeHit | null = null;
     for (const { cc, near } of attempts) {
       const hit = await geocode(named, cc, near, origin);
+      // Geocoder down: the bundled city itself is still the right start.
+      if (!hit && bigCity && near === bigCity && !origin) return { point: bigCity, country, source: "geocoded" };
       if (!hit) continue;
       if (origin && !qualified && kmBetween(origin, hit.point) > MAX_START_FROM_ORIGIN_KM) {
         far ??= hit;

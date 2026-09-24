@@ -88,7 +88,7 @@ export async function GET() {
             position: "relative",
           }}
         >
-          Discover & share gravel, road & MTB routes worldwide
+          Road loops on quiet roads — ready to ride
         </span>
       </div>
     ),

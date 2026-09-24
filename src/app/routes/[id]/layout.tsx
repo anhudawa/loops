@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { getRouteOnce as getRoute, getRouteRating } from "@/lib/db";
+import { withAutoTitle } from "@/lib/route-title";
 import {
   generateRouteJsonLd,
   generateBreadcrumbJsonLd,
@@ -20,6 +21,7 @@ export async function generateMetadata({
   let route: Awaited<ReturnType<typeof getRoute>> = undefined;
   try {
     route = await getRoute(id);
+    if (route) route = withAutoTitle(route);
   } catch {
     return { title: "Cycling Route | LOOPS" };
   }
@@ -72,6 +74,7 @@ export default async function RouteLayout({
   let rating = { average: 0, count: 0 };
   try {
     route = await getRoute(id);
+    if (route) route = withAutoTitle(route);
     if (route) rating = await getRouteRating(id);
   } catch {
     return children;

@@ -107,7 +107,7 @@ export const destinations: Destination[] = [
     riding: [
       "Mallorca set the template for the European cycling camp. Every February, thousands of riders from northern Europe descend on the island to escape the dark and log volume on wide, well-surfaced roads with almost no traffic outside Palma. The Serra de Tramuntana mountain range that runs along the northwest coast provides the drama: a 90 km spine of twisting cliff roads, deep descents, and cols that would not look out of place in a Grand Tour.",
       "The central plain (Es Pla) offers flatter, faster riding for recovery days or tempo work, with long straight roads cutting through almond orchards and small farming villages. The east coast and southeast are rolling, with punchy climbs of 2-5 km that suit interval work. Whichever direction you ride, the road quality is excellent and drivers are used to cyclists.",
-      "The island is compact enough that you can design a ride from Palma in almost any direction and make it back without retracing. A 100 km loop might include flat motorway-adjacent bike paths, a col in the Tramuntana, a coastal descent, and a recovery stretch across the plain. That density of variety is what brings the pro teams here every year.",
+      "The island is compact enough that you can design a ride from Palma in almost any direction and make it back without retracing. A 100 km loop might include the flat quiet lanes of the plain, a col in the Tramuntana, a coastal descent, and a recovery stretch across the plain. That density of variety is what brings the pro teams here every year.",
     ],
     climbs: [
       "Sa Calobra (9.5 km, avg 7%) — the iconic island climb with 26 hairpins descending to a remote cove; most riders do it in reverse, climbing out",
@@ -167,7 +167,7 @@ export const destinations: Destination[] = [
     rainfall: "Rain is possible any day; the driest stretch is April to June. Always bring a gilet",
     riding: [
       "Dublin is not an obvious cycling destination, but it punches above its weight. Within 30 minutes of the city centre you reach the Wicklow Mountains, the coastal road south through Killiney and Bray, and the flat rolling farmland of Meath and Kildare to the west. The variety is genuine: you can ride a 100 km loop from Dublin that includes a serious mountain pass, a coastal stretch, and quiet country lanes.",
-      "The south Dublin corridor is where most road riders head. The R115 (Military Road) cuts across the top of the Dublin Mountains and connects to the Sally Gap, one of the most photogenic passes in Ireland. Heading further south, the N11 cycle path links Dublin to Bray and the coastal road continues to Greystones and beyond into Wicklow. Heading north, the coast road through Howth Head is a classic short loop with one sharp climb.",
+      "The south Dublin corridor is where most road riders head. The R115 (Military Road) cuts across the top of the Dublin Mountains and connects to the Sally Gap, one of the most photogenic passes in Ireland. Heading further south, quiet roads through Enniskerry and over Windgates link Dublin to Bray, Greystones and on into Wicklow. Heading north, the coast road through Howth Head is a classic short loop with one sharp climb.",
       "Wind is the dominant weather factor, not rain. A southwesterly breeze is the norm, which means rides heading south into Wicklow often have a tailwind on the outbound leg and a headwind coming home. Route planning with the wind makes a significant difference to ride quality. The Irish cycling community is strong and growing, with group rides leaving from multiple clubs across the city every weekend.",
     ],
     climbs: [
@@ -199,12 +199,12 @@ export const destinations: Destination[] = [
       {
         question: "What is the best cycling route from Dublin?",
         answer:
-          "The classic loop runs south through Dundrum, over the Dublin Mountains via the R115 to the Sally Gap, down into Roundwood, and back via Enniskerry and the N11 cycle path. It covers about 80-100 km with around 1200 m of climbing and takes in moorland, mountain passes, and forest descents.",
+          "The classic loop runs south through Dundrum, over the Dublin Mountains via the R115 to the Sally Gap, down into Roundwood, and back over Calary and the Old Long Hill to Enniskerry. It covers about 80-100 km with around 1200 m of climbing and takes in moorland, mountain passes, and forest descents.",
       },
       {
         question: "Can I cycle to Wicklow from Dublin?",
         answer:
-          "Yes. The Wicklow Mountains are directly accessible from south Dublin. You can ride from the city centre to the Sally Gap in about 25 km. The N11 cycle path and the R116 through Enniskerry provide traffic-free or low-traffic routes into the mountains.",
+          "Yes. The Wicklow Mountains are directly accessible from south Dublin. You can ride from the city centre to the Sally Gap in about 25 km. Quiet roads through Rathfarnham, Kilmashogue and Enniskerry take you into the mountains without main roads.",
       },
       {
         question: "Is it safe to cycle in Dublin?",
@@ -278,7 +278,7 @@ export const destinations: Destination[] = [
 
   {
     slug: "wicklow",
-    plannerPlace: "Wicklow",
+    plannerPlace: "Enniskerry",
     routesCountry: "Ireland",
     routesRegion: "Wicklow",
     name: "Wicklow",

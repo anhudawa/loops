@@ -15,7 +15,7 @@ export function generateStaticParams() {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { destination } = await params;
   const dest = getDestinationBySlug(destination);
-  if (!dest) return {};
+  if (!dest) return { title: "Page not found — LOOPS", robots: { index: false } };
 
   const title = `Cycling in ${dest.name} — Routes, Climbs & Practical Guide | LOOPS`;
   const description = `Plan your cycling trip to ${dest.name}, ${dest.country}. Best months, key climbs, road conditions, bike hire, and route suggestions from riders who know the roads.`;

@@ -6,6 +6,7 @@
  */
 import { placeNear } from "./map-labels";
 import { KNOWN_PLACES } from "./places-known";
+import { tidyRouteName } from "./public-route";
 
 const KM_PER_DEG = 111.32;
 function km(a: [number, number], b: [number, number]): number {
@@ -91,7 +92,10 @@ export function autoTitle(
  * store it.
  */
 export function withAutoTitle<T extends { name: string; coordinates: string; distance_km: number | string }>(route: T): T & { renamed?: boolean } {
-  if (!isGenericName(route.name)) return route;
+  // The display title everywhere (lists, page, <title>, share card): the
+  // imported name cleaned, or a place-based title when it says nothing.
+  const tidy = tidyRouteName(route.name);
+  if (!isGenericName(tidy)) return tidy === route.name ? route : { ...route, name: tidy };
   try {
     const coords = (JSON.parse(route.coordinates) as number[][]).map((c) => [Number(c[0]), Number(c[1])] as [number, number]);
     return { ...route, name: autoTitle(coords, Number(route.distance_km)), renamed: true };

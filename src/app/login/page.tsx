@@ -246,6 +246,10 @@ function LoginPage() {
                   <>New to LOOPS? The same button creates your free account.</>
                 )}
               </p>
+              <p className="text-[11px] mt-2" style={{ color: "var(--text-muted)" }}>
+                By continuing you agree to the <Link href="/terms" className="underline">Terms</Link> and{" "}
+                <Link href="/privacy" className="underline">Privacy policy</Link>.
+              </p>
             </>)}
           </div>
         </div>

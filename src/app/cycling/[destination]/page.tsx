@@ -142,7 +142,8 @@ export default async function DestinationPage({ params }: Props) {
                 {regionRouteCount} {dest.name} loops →
               </Link>
             )}
-            {dest.collectionSlug && hasCollection && (
+            {/* The collection is usually the same routes: one button when the counts match. */}
+            {dest.collectionSlug && hasCollection && !(hasRegion && collectionRouteCount === regionRouteCount) && (
               <Link
                 href={`/collections/${dest.collectionSlug}`}
                 className="inline-flex items-center justify-center min-h-[44px] font-bold text-sm px-4 rounded-lg"

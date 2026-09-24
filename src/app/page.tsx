@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   ...pageMeta({
     path: "/",
     title: "LOOPS — Routes Worth Riding",
-    description: "Discover and share the best gravel, road & MTB loops worldwide. Built by riders, for riders.",
+    description: "Road cycling loops on quiet roads — tell it where and how long, get a loop. Free. Built by riders, for riders.",
   }),
 };
 import HomeSeoContent from "./_components/HomeSeoContent";

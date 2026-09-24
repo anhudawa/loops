@@ -10,6 +10,7 @@ import {
 } from "@/lib/metrics";
 
 import { withPublicDescription, tidyRouteName } from "@/lib/public-route";
+import { withAutoTitle } from "@/lib/route-title";
 import { recommendableNow } from "@/lib/recommendable";
 import { POINT_TO_POINT_KM } from "@/lib/track-shape";
 import { lookupKnownPlace } from "@/lib/places-known";
@@ -27,7 +28,9 @@ export { ANALYTICS_EVENTS } from "@/lib/metrics";
 function publicRows<T extends Record<string, unknown>>(rows: T[]): T[] {
   return rows.map((r) => {
     let out = withPublicDescription(r);
-    if (typeof out.name === "string" && tidyRouteName(out.name) !== out.name) out = { ...out, name: tidyRouteName(out.name) };
+    if (typeof out.name === "string" && typeof out.coordinates === "string" && out.distance_km != null) {
+      out = withAutoTitle(out as T & { name: string; coordinates: string; distance_km: number | string }) as typeof out;
+    } else if (typeof out.name === "string" && tidyRouteName(out.name) !== out.name) out = { ...out, name: tidyRouteName(out.name) };
     return typeof out.region === "string" ? { ...out, region: canonicalRegion(out.region) } : out;
   });
 }
@@ -764,7 +767,7 @@ export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
   // Build HAVING clauses
   const havingClauses: string[] = [];
   if (filters.verified) {
-    havingClauses.push("(bool_or(r.verified) = true OR (COUNT(rt.id) >= 3 AND COALESCE(AVG(rt.score), 0) >= 3.0))");
+    havingClauses.push("(bool_or(r.verified) = true OR (COUNT(rt.id) >= 3 AND COALESCE(AVG(rt.score), 0) >= 3.0)) AND bool_or(COALESCE(r.road_report->>'standard_met', 'false') = 'true')");
   }
   // Great-circle distance, with the parameters cast explicitly (a bare $n
   // inside radians() leaves the driver to guess the type) and the acos
@@ -826,7 +829,10 @@ export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
         COALESCE(AVG(rt.score), 0) as avg_rating,
         COUNT(rt.id) as rating_count,
         (SELECT p.filename FROM photos p WHERE p.route_id = r.id ORDER BY p.created_at LIMIT 1) as cover_photo,
-        CASE WHEN r.verified = true OR (COUNT(rt.id) >= 3 AND COALESCE(AVG(rt.score), 0) >= 3.0) THEN 1 ELSE 0 END as is_verified,
+        -- "Verified" only on a route that meets the Road Standard: a green tick
+        -- beside 40 km of main road would contradict the road report.
+        CASE WHEN (r.verified = true OR (COUNT(rt.id) >= 3 AND COALESCE(AVG(rt.score), 0) >= 3.0))
+          AND COALESCE(r.road_report->>'standard_met', 'false') = 'true' THEN 1 ELSE 0 END as is_verified,
         u.name as creator_name, u.avatar_url as creator_avatar,
         COALESCE((SELECT AVG(rt2.score) FROM routes r2 JOIN ratings rt2 ON rt2.route_id = r2.id WHERE r2.created_by = r.created_by), 0) as creator_rating,
         COALESCE((SELECT COUNT(rt2.id) FROM routes r2 JOIN ratings rt2 ON rt2.route_id = r2.id WHERE r2.created_by = r.created_by), 0) as creator_rating_count,
@@ -865,9 +871,10 @@ export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
 export async function getRoute(id: string): Promise<(Route & { is_verified?: number; creator_name?: string | null; creator_avatar?: string | null; creator_rating?: number; creator_rating_count?: number }) | undefined> {
   const { rows } = await sql`
     SELECT r.*,
-      CASE WHEN r.verified = true
+      CASE WHEN (r.verified = true
         OR ((SELECT COUNT(*) FROM ratings WHERE route_id = r.id) >= 3
-            AND (SELECT COALESCE(AVG(score), 0) FROM ratings WHERE route_id = r.id) >= 3.0)
+            AND (SELECT COALESCE(AVG(score), 0) FROM ratings WHERE route_id = r.id) >= 3.0))
+        AND COALESCE(r.road_report->>'standard_met', 'false') = 'true'
         THEN 1 ELSE 0 END as is_verified,
       u.name as creator_name, u.avatar_url as creator_avatar,
       COALESCE((SELECT AVG(rt2.score) FROM routes r2 JOIN ratings rt2 ON rt2.route_id = r2.id WHERE r2.created_by = r.created_by), 0) as creator_rating,
@@ -876,7 +883,11 @@ export async function getRoute(id: string): Promise<(Route & { is_verified?: num
     LEFT JOIN users u ON u.id = r.created_by
     WHERE r.id = ${id}
   `;
-  return (rows[0] ? withPublicDescription(rows[0]) : undefined) as (Route & { is_verified?: number; creator_name?: string | null; creator_avatar?: string | null; creator_rating?: number; creator_rating_count?: number }) | undefined;
+  // Raw name (bundle corrections match on it); the region reads as riders say it.
+  const row = rows[0] ? withPublicDescription(rows[0]) : undefined;
+  if (row && typeof row.region === "string") row.region = canonicalRegion(row.region);
+  if (row && typeof row.county === "string") row.county = row.county.trim();
+  return row as (Route & { is_verified?: number; creator_name?: string | null; creator_avatar?: string | null; creator_rating?: number; creator_rating_count?: number }) | undefined;
 }
 
 /** getRoute once per server request: metadata, layout and page share one read. */

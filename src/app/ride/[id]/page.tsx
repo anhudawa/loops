@@ -31,6 +31,7 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   let route: Awaited<ReturnType<typeof getRoute>> = undefined;
   try {
     route = await getRoute(id);
+    if (route) route = withAutoTitle(route);
   } catch {
     return { title: "Group ride | LOOPS" };
   }

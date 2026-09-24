@@ -1,5 +1,7 @@
 import { ImageResponse } from "next/og";
 import { getRoute } from "@/lib/db";
+import { withAutoTitle } from "@/lib/route-title";
+import { estimateRideMinutes, formatRideTime } from "@/lib/ride-time";
 import { formatRideWhen, cleanMeet } from "@/lib/ride-invite";
 import { getOgFonts } from "@/lib/og-fonts";
 
@@ -51,7 +53,8 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const route = await getRoute(id);
+    const stored = await getRoute(id);
+    const route = stored ? withAutoTitle(stored) : stored;
 
     if (!route) {
       return fallbackImage("Route not found");
@@ -215,8 +218,8 @@ export async function GET(
                 <span style={{ color: "#a0a0a0" }}>
                   {`${route.elevation_gain_m} m climbing`}
                 </span>
-                <span style={{ color: "#a0a0a0", textTransform: "capitalize" as const }}>
-                  {route.surface_type}
+                <span style={{ color: "#a0a0a0" }}>
+                  {`${formatRideTime(estimateRideMinutes({ distance_km: Number(route.distance_km), elevation_gain_m: Number(route.elevation_gain_m), discipline: route.discipline }), { style: "card" })} riding`}
                 </span>
               </div>
             </div>

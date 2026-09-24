@@ -18,6 +18,7 @@ import ShareRide from "@/components/ShareRide";
 import { describeCompromise, type Compromise } from "@/lib/road-segments";
 import WeatherCard from "@/components/WeatherCard";
 import { useAuth } from "@/components/AuthProvider";
+import { estimateRideMinutes, formatRideTime } from "@/lib/ride-time";
 import { useToast } from "@/components/Toast";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import AppHeader from "@/components/AppHeader";
@@ -687,7 +688,8 @@ export default function RouteDetailView({ ride, initialRoute }: { ride?: RideInv
             {[
               { label: "Distance", value: `${route.distance_km} km` },
               { label: "Gain", value: `${route.elevation_gain_m} m` },
-              { label: "Loss", value: `${route.elevation_loss_m} m` },
+              // A loop loses what it gains: riding time tells a rider more.
+              { label: "Time", value: formatRideTime(estimateRideMinutes({ distance_km: Number(route.distance_km), elevation_gain_m: Number(route.elevation_gain_m), discipline: route.discipline, avgSpeedKmh: (user as { avg_speed_kmh?: number | null } | null)?.avg_speed_kmh ?? null }), { style: "card" }) },
               { label: "Surface", value: route.surface_type },
             ].map((stat) => (
               <div key={stat.label} className="text-center">

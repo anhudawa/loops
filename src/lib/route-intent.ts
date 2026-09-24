@@ -9,6 +9,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { lookupKnownPlace, findKnownPlaceIn, nearestKnownPlace, displayPlaceName } from "./places-known";
 import { findPlaceNear } from "./map-labels";
+import { mentionsEfforts } from "./session-words";
 import type { IntensityZone } from "./intensity";
 import { ZONES } from "./intensity";
 import type { WindStrategy } from "./wind";
@@ -722,7 +723,8 @@ const UNIT = String.raw`(?:(?:secs?|seconds?|s|mins?|minutes?|m)(?![a-z])|'|’)
  * minutes are never read as the ride's length.
  */
 export function parseBasicWorkout(prompt: string): { workout: WorkoutSpec; stripped: string } | null {
-  const text = prompt.toLowerCase().replace(/[–—]/g, "-");
+  // "4 by 4 minute efforts" is 4x4.
+  const text = prompt.toLowerCase().replace(/[–—]/g, "-").replace(/(\d)\s+by\s+(\d)/g, "$1x$2");
   const intervals: WorkoutInterval[] = [];
   let stripped = text;
   const toMin = (n: number, unit: string | undefined) => (/^s/.test(unit ?? "") ? n / 60 : n);
@@ -896,8 +898,7 @@ export function parseBasicIntent(prompt: string): ParsedIntent | null {
   // intensity word we cannot turn into a session is declined (never served
   // as a plain ride that silently drops the efforts).
   const session = parseBasicWorkout(p);
-  const mentionsEfforts = /\d\s*[x×]\s*\d|\binterval|\bthreshold\b|\bftp\b|\btempo\b|\bvo2|sweet\s*spot|\banaerobic\b|\bsprints?\b|\bzone\s*[3-7]\b|\bz[3-7]\b|\brepeats\b|\bover[\s-]?unders?\b/.test(p);
-  if (mentionsEfforts && !session) return null;
+  if (mentionsEfforts(p) && !session) return null;
   // The session's own minutes are not the ride's length: "20 mins
   // threshold … 4 hour ride" is a 4-hour ride.
   const pNoSession = session ? session.stripped.toLowerCase() : p;

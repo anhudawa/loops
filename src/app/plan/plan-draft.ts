@@ -11,6 +11,14 @@ import type { LatLng, PlanLeg } from "@/lib/plan-legs";
 export const DRAFT_KEY = "loops:plan:draft";
 export const DRAFT_TTL_MS = 12 * 60 * 60 * 1000;
 
+/** The drawing before one edit — what Undo puts back. */
+export interface PlanSnapshot {
+  anchors: LatLng[];
+  legs: PlanLeg[];
+  loopLeg: PlanLeg | null;
+  loopBack: boolean;
+}
+
 export interface PlanDraft {
   anchors: LatLng[];
   legs: PlanLeg[];
@@ -18,6 +26,50 @@ export interface PlanDraft {
   loopBack: boolean;
   discipline: string;
   at: number;
+  /** Undo history, oldest first (a reload keeps Undo working). */
+  undo?: PlanSnapshot[];
+}
+
+/** Undo steps kept with the draft (the page keeps more in memory). */
+export const DRAFT_UNDO_KEEP = 20;
+
+/**
+ * Snapshots share most legs, so the stored history lists each leg once
+ * (`pool`) and a snapshot names its legs by index there.
+ */
+type StoredSnapshot = { anchors: LatLng[]; legs: number[]; loopLeg: number | null; loopBack: boolean };
+
+function packUndo(undo: PlanSnapshot[]): { pool: PlanLeg[]; steps: StoredSnapshot[] } {
+  const pool: PlanLeg[] = [];
+  const index = new Map<PlanLeg, number>();
+  const ref = (l: PlanLeg) => {
+    let i = index.get(l);
+    if (i === undefined) { i = pool.length; pool.push(l); index.set(l, i); }
+    return i;
+  };
+  const steps = undo.slice(-DRAFT_UNDO_KEEP).map((u) => ({
+    anchors: u.anchors,
+    legs: u.legs.map(ref),
+    loopLeg: u.loopLeg ? ref(u.loopLeg) : null,
+    loopBack: u.loopBack,
+  }));
+  return { pool, steps };
+}
+
+function unpackUndo(raw: unknown): PlanSnapshot[] {
+  const r = raw as { pool?: unknown; steps?: unknown } | null;
+  if (!r || !Array.isArray(r.pool) || !Array.isArray(r.steps) || !r.pool.every(isLeg)) return [];
+  const pool = r.pool as PlanLeg[];
+  const out: PlanSnapshot[] = [];
+  for (const st of r.steps as StoredSnapshot[]) {
+    if (!st || !Array.isArray(st.anchors) || !st.anchors.every(isLatLng) || !Array.isArray(st.legs)) return [];
+    const legs = st.legs.map((i) => pool[i]);
+    const loopLeg = st.loopLeg === null ? null : pool[st.loopLeg];
+    if (legs.some((l) => !l) || loopLeg === undefined) return [];
+    if (legs.length !== Math.max(0, st.anchors.length - 1)) return [];
+    out.push({ anchors: st.anchors, legs, loopLeg, loopBack: st.loopBack !== false });
+  }
+  return out;
 }
 
 type StorageLike = Pick<Storage, "getItem" | "setItem" | "removeItem">;
@@ -58,6 +110,8 @@ export function readDraft(s: StorageLike | null = store(), now = Date.now()): Pl
       loopBack: d.loopBack !== false,
       discipline: typeof d.discipline === "string" ? d.discipline : "road",
       at: d.at,
+      // A history that does not read back is dropped — never the drawing.
+      undo: unpackUndo((d as unknown as { history?: unknown }).history),
     };
   } catch {
     return null;
@@ -65,10 +119,16 @@ export function readDraft(s: StorageLike | null = store(), now = Date.now()): Pl
 }
 
 export function writeDraft(d: Omit<PlanDraft, "at">, s: StorageLike | null = store(), now = Date.now()): void {
+  const { undo, ...drawing } = d;
   try {
-    s?.setItem(DRAFT_KEY, JSON.stringify({ ...d, at: now }));
+    s?.setItem(DRAFT_KEY, JSON.stringify({ ...drawing, at: now, ...(undo?.length ? { history: packUndo(undo) } : {}) }));
   } catch {
-    /* quota / private mode — the drawing just isn't kept */
+    // Too big with the history (quota): keep the drawing without it.
+    try {
+      s?.setItem(DRAFT_KEY, JSON.stringify({ ...drawing, at: now }));
+    } catch {
+      /* quota / private mode — the drawing just isn't kept */
+    }
   }
 }
 

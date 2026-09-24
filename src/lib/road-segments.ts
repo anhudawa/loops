@@ -373,6 +373,20 @@ export interface Compromise {
   at?: [number, number];
   /** The same stretch ridden out and back (a destination ride): `meters` is one way. */
   both_ways?: boolean;
+  /** Why an "unsuitable" stretch is (so a cycle path is not just "unsuitable for bikes"). */
+  why?: UnsuitableWhy;
+}
+
+export type UnsuitableWhy = "no_bikes" | "rough" | "ford" | "poor_for_bikes";
+
+/** The reason classifyEdge called a way "unsuitable" (checked in the same order). */
+export function unsuitableWhy(t: WayTags, discipline: Discipline): UnsuitableWhy | undefined {
+  if (t.ford === "yes") return "ford";
+  if (isRestrictedForBikes(t)) return "no_bikes";
+  if (UNSUITABLE_SMOOTHNESS[discipline].has(t.smoothness ?? "")) return "rough";
+  const cb = parseInt(t["class:bicycle"] ?? "", 10);
+  if (!Number.isNaN(cb) && cb <= CLASS_BICYCLE_FLOOR[discipline]) return "poor_for_bikes";
+  return undefined;
 }
 
 export interface RoadReport {
@@ -534,6 +548,7 @@ function buildRoadReportInner(
         ...(r.tags.maxspeed ? { maxspeed: r.tags.maxspeed } : {}),
         ...(r.tags.surface ? { surface: r.tags.surface } : {}),
         ...(nearStart ? { near_start: true } : {}),
+        ...(r.kind === "unsuitable" && unsuitableWhy(r.tags, discipline) ? { why: unsuitableWhy(r.tags, discipline) } : {}),
       };
     })
     .sort((a, b) => b.meters - a.meters);
@@ -629,13 +644,24 @@ export function describeCompromise(c: Compromise): string {
     case "main_road": return `${dist} ${where}${near} (main road)`;
     case "fast_road": return `${dist} ${where}${near} signed ${c.maxspeed ?? "80+"} km/h with no cycle track`;
     case "unpaved":   return `${dist} ${where}${near} that is ${c.surface ?? "unpaved"}`;
-    case "unsuitable": return `${dist} ${where}${near} tagged unsuitable for bikes`;
+    case "unsuitable": return `${dist} ${where}${near} ${UNSUITABLE_WORDS[c.why ?? ""] ?? "tagged unsuitable for bikes"}`;
     default: return `${dist} ${where}${near}`;
   }
 }
 
+const UNSUITABLE_WORDS: Record<string, string> = {
+  no_bikes: "where bikes are not allowed",
+  rough: "with a rough surface (tagged bad for bikes)",
+  ford: "with a ford",
+  poor_for_bikes: "rated poor for bikes",
+};
+
 function roadWord(hw: string): string {
   switch (hw) {
+    case "cycleway": return "cycle path";
+    case "footway": case "pedestrian": return "footpath";
+    case "bridleway": return "bridleway";
+    case "steps": return "steps";
     case "motorway": case "motorway_link": return "motorway";
     case "trunk": case "trunk_link": return "national road";
     case "primary": case "primary_link": return "primary road";

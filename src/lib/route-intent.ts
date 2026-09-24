@@ -567,6 +567,9 @@ const NOT_A_PLACE_WORD = new Set([
   "some", "any", "all", "lots", "plenty", "few", "one", "two", "three", "four", "five", "six", "for", "to",
   "up", "down", "over", "under", "about", "around", "near", "at", "in", "on", "by", "of", "with", "without",
   "no", "not", "nothing", "please", "just", "out", "i", "i'm", "im", "we", "our", "your", "their", "there", "here",
+  // Contractions, both apostrophes (iPhones type ’): "I’ve 20 mins threshold…" is not a place.
+  "i've", "i’ve", "ive", "i’m", "i'd", "i’d", "id", "i'll", "i’ll", "we've", "we’ve", "we're", "we’re", "let's", "let’s",
+  "me", "my", "can", "could", "would", "what", "how", "got", "have", "has",
   "hill", "climbs", "climbing", "roads", "road", "lanes", "lane", "gravel", "tarmac", "quiet", "back",
   "today", "tomorrow", "tonight", "morning", "afternoon", "evening", "weekend", "monday", "tuesday",
   "wednesday", "thursday", "friday", "saturday", "sunday", "threshold", "tempo", "sweet", "zone", "vo2",

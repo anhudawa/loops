@@ -157,3 +157,10 @@ describe("findHills", () => {
     expect(hills.map((h) => h.name)).toContain("Ben of Howth");
   });
 });
+
+describe("a contraction is not a place", () => {
+  it("\"I’ve 20 mins threshold to do in. 4 hour ride\" names no start (the phone location is used)", () => {
+    expect(parseBasicIntent("I’ve 20 mins threshold to do in. 4 hour ride")?.region ?? null).toBeNull();
+    expect(parseBasicIntent("I've 20 mins threshold to do in. 4 hour ride")?.region ?? null).toBeNull();
+  });
+});

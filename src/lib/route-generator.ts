@@ -20,7 +20,7 @@
 import type { RouteSpec, Discipline, WorkoutSpec } from "./route-intent";
 import { estimateRideMinutes } from "./ride-time";
 import { mergeLoopReport } from "./library-road-report";
-import { parseRouteIntent, durationToDistanceKm } from "./route-intent";
+import { parseRouteIntent, durationToDistanceKm, workoutSummary } from "./route-intent";
 import {
   generateWaypointSets,
   DIRECTIONS_WIDE,
@@ -1462,20 +1462,7 @@ async function reverseGeocode(lat: number, lng: number): Promise<string | null> 
 async function summariseIntent(spec: RouteSpec, userSpeedKmh?: number): Promise<InterpretedIntent> {
   let workout_summary: string | undefined;
   if (spec.workout) {
-    workout_summary = spec.workout.intervals
-      .map((iv) => {
-        const zoneName = ({
-          z1: "recovery",
-          z2: "endurance",
-          z3: "tempo",
-          z4: "threshold",
-          z5: "vo2max",
-          z6: "anaerobic",
-          z7: "sprint",
-        } as const)[iv.zone];
-        return `${iv.count} × ${iv.duration_minutes} min ${zoneName}`;
-      })
-      .join(", then ");
+    workout_summary = workoutSummary(spec.workout);
   }
 
   // When the start point came from browser GPS (no region in prompt),

@@ -224,7 +224,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ data: result, timings: result.timings ?? null });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
-    const code = err instanceof NoValidRoutesError ? "NO_ROUTES_FOUND" : classifyErrorCode(message);
+    const code = err instanceof NoValidRoutesError ? err.code : classifyErrorCode(message);
 
     // Funnel: generation declined/failed — code distinguishes an honest
     // decline (no routes / no workout match) from an infra error.
@@ -258,7 +258,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: message,
-          code: "NO_ROUTES_FOUND",
+          code: err.code,
           details: { candidates: err.candidateCount, dropped: err.dropped },
           interpreted: err.spec,
         },

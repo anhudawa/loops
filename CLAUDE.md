@@ -258,6 +258,14 @@ node scripts/import-routes.mjs scripts/hub-data/girona-eat-sleep-cycle.json --dr
   BEEHIIV_AUTOMATION_ID, the autoresponder) once BEEHIIV_API_KEY +
   BEEHIIV_PUBLICATION_ID are set; /admin → "Check Beehiiv" and "Send
   opted-in riders to Beehiiv" (backfill).
+- Rider-journey pass (2026-09-24, six personas + triage + 3 fixers, merged):
+  basic parser reads loops-to-self, qualifiers ("Laragh, Co. Wicklow"),
+  "from my hotel in X", places without "from", named climbs/café stops as
+  destinations, typos (fuzzy known places), negated hills, number words;
+  Canaries added to places-eu.json; effort stretches report side roads from
+  a map lookup (no claim when it fails); loops-road/relaxed profiles cost
+  quiet secondary roads (traffic class ≤ 3) 1.5× not 3× — needs
+  POST /api/engine/sync-profiles (admin) after deploy.
 - No CSRF tokens; cookie-only sessions; locale hardcoded en-IE
 
 ## Conventions

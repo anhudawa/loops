@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useId } from "react";
+import { estimateRideMinutes, formatRideTime } from "@/lib/ride-time";
 import { createPortal } from "react-dom";
 import { formatRideWhen, cleanMeet, rideUrl, parseRideTime } from "@/lib/ride-invite";
 
@@ -122,7 +123,7 @@ export default function ShareRide({ route, ride }: ShareRideProps) {
     `🚴 *${route.name}*`,
     `🕐 ${when ?? "Pick a day and time"}`,
     `📍 ${cleanMeet(meetingPoint) ?? "Meeting point TBC"}`,
-    `📊 ${route.distance_km} km · ${route.elevation_gain_m} m climbing · ${surface}`,
+    `📊 ${route.distance_km} km · ${route.elevation_gain_m} m climbing · ${surface} · ${formatRideTime(estimateRideMinutes({ distance_km: Number(route.distance_km), elevation_gain_m: Number(route.elevation_gain_m), discipline: "road" }), { style: "card" })} riding`,
     "",
     rideUrl(origin, route.id, startTime, meetingPoint), // last line → WhatsApp shows the ride preview card
   ].join("\n");

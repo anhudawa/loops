@@ -463,6 +463,9 @@ export default function RouteDetailView({ ride, initialRoute }: { ride?: RideInv
     ? { lat: fullCoordinates[hoverIndex][0], lng: fullCoordinates[hoverIndex][1] }
     : null;
 
+  // One riding-time figure for the header, banner and stats (rider's own speed when signed in).
+  const rideTimeLabel = formatRideTime(estimateRideMinutes({ distance_km: Number(route.distance_km), elevation_gain_m: Number(route.elevation_gain_m), discipline: route.discipline, avgSpeedKmh: (user as { avg_speed_kmh?: number | null } | null)?.avg_speed_kmh ?? null }), { style: "card" });
+
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
       <AppHeader />
@@ -481,7 +484,7 @@ export default function RouteDetailView({ ride, initialRoute }: { ride?: RideInv
           )}
           <h1 className="text-lg font-extrabold leading-tight mt-0.5" style={{ color: "var(--text)" }}>{route.name}</h1>
           <p className="text-sm mt-1" style={{ color: "var(--text)" }}>
-            {route.distance_km} km · +{route.elevation_gain_m} m{track ? ` · ${shapeLabel(track)}` : ""}
+            {route.distance_km} km · +{route.elevation_gain_m} m · {rideTimeLabel}{track ? ` · ${shapeLabel(track)}` : ""}
             {ride.meet ? <> · Meet: <strong>{ride.meet}</strong></> : null}
           </p>
           {/* Always the route's first point: a typed meeting point can't be
@@ -504,7 +507,7 @@ export default function RouteDetailView({ ride, initialRoute }: { ride?: RideInv
         <div className="px-4 py-2.5 border-b md:hidden" style={{ background: "var(--bg-raised)", borderColor: "var(--border)" }}>
           <p className="text-base font-extrabold leading-tight truncate" style={{ color: "var(--text)" }}>{route.name}</p>
           <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-            {route.distance_km} km · +{route.elevation_gain_m} m · {route.region || route.county}{track ? ` · ${shapeLabel(track)}` : ""}
+            {route.distance_km} km · +{route.elevation_gain_m} m · {rideTimeLabel} · {route.region || route.county}{track ? ` · ${shapeLabel(track)}` : ""}
           </p>
         </div>
       )}
@@ -695,7 +698,7 @@ export default function RouteDetailView({ ride, initialRoute }: { ride?: RideInv
               { label: "Distance", value: `${route.distance_km} km` },
               { label: "Gain", value: `${route.elevation_gain_m} m` },
               // A loop loses what it gains: riding time tells a rider more.
-              { label: "Time", value: formatRideTime(estimateRideMinutes({ distance_km: Number(route.distance_km), elevation_gain_m: Number(route.elevation_gain_m), discipline: route.discipline, avgSpeedKmh: (user as { avg_speed_kmh?: number | null } | null)?.avg_speed_kmh ?? null }), { style: "card" }) },
+              { label: "Time", value: rideTimeLabel },
               { label: "Surface", value: route.surface_type },
             ].map((stat) => (
               <div key={stat.label} className="text-center">

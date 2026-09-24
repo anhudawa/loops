@@ -684,6 +684,14 @@ export function parseDestination(prompt: string): { start: string | null; destin
     return result(startIn(text.replace(climb[0], " ")), clean(climb[1]));
   }
 
+  // "3 hours from Bray with the Sally Gap", "including Glendalough", "taking
+  // in Coll de Rates": only a KNOWN place (a climb, a landmark) — "with a
+  // café stop" / "with friends" are not destinations. Never dropped silently.
+  const withKnown = text.match(new RegExp(`\\b(?:with|including|incl\\.?|taking\\s+in|through)\\s+(?:the\\s+)?(${PLACE})${DEST_END}`, "i"));
+  if (withKnown && lookupKnownPlace(clean(withKnown[1]))) {
+    return result(startIn(text.replace(withKnown[0], " ")), clean(withKnown[1]));
+  }
+
   // "coffee in Banyoles", "café stop at Roundwood", "lunch in Deià".
   const cafe = text.match(new RegExp(`\\b(?:coffee|caf[eé]|cake|lunch|brunch|tea)\\s+(?:stop\\s+)?(?:in|at)\\s+(${PLACE})${DEST_END}`, "i"));
   if (cafe && looksLikePlace(clean(cafe[1]))) {

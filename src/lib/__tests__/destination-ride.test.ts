@@ -11,6 +11,8 @@ describe("parseDestination", () => {
     ["3 hour ride to Sa Calobra from Port de Pollença", "Port de Pollença", "Sa Calobra"],
     ["from Bray to Glendalough, 80km", "Bray", "Glendalough"],
     ["out and back to Cap de Formentor", null, "Cap de Formentor"],
+    ["3 hour ride from Bray with the Sally Gap", "Bray", "Sally Gap"],
+    ["80km from Enniskerry including Glendalough", "Enniskerry", "Glendalough"],
   ])("%s", (prompt, start, destination) => {
     expect(parseDestination(prompt)).toEqual({ start, destination });
   });
@@ -21,6 +23,8 @@ describe("parseDestination", () => {
     "60 km loop from Dublin to include Howth",
     "I want to ride 50km from Girona",
     "loop from Skerries with a tailwind home",
+    "2 hour loop from Howth with a café stop",
+    "loop from Bray with friends",
   ])("no destination in %s", (prompt) => {
     expect(parseDestination(prompt)).toBeNull();
   });

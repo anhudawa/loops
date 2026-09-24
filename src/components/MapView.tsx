@@ -172,7 +172,19 @@ export default function MapView({
       `);
 
       if (startLabel && isSelected) {
-        marker.bindTooltip(startLabel, { permanent: true, direction: "top", offset: [0, -8], className: "start-label" });
+        // On the side of the start the loop does not use (it leaves and comes
+        // back through it): "Meet here" must not sit on the route's first km.
+        const s0: [number, number] = [route.start_lat, route.start_lng];
+        const side = { top: 0, bottom: 0, left: 0, right: 0 };
+        const kx = Math.cos((s0[0] * Math.PI) / 180);
+        for (const c of coords as [number, number][]) {
+          const dy = (c[0] - s0[0]) * 111.32, dx = (c[1] - s0[1]) * 111.32 * kx;
+          if (dx * dx + dy * dy > 2.25) continue; // within 1.5 km
+          if (Math.abs(dy) >= Math.abs(dx)) side[dy > 0 ? "top" : "bottom"]++; else side[dx > 0 ? "right" : "left"]++;
+        }
+        const direction = (["top", "right", "left", "bottom"] as const).reduce((a, b) => (side[b] < side[a] ? b : a));
+        const offset: [number, number] = direction === "top" ? [0, -8] : direction === "bottom" ? [0, 8] : direction === "left" ? [-8, 0] : [8, 0];
+        marker.bindTooltip(startLabel, { permanent: true, direction, offset, className: "start-label" });
       }
 
       if (onRouteSelect) {

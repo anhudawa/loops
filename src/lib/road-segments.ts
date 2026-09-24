@@ -640,8 +640,11 @@ export function summaryParts(compromises: Compromise[]): string {
     items.push({ ...city[0], meters: city.reduce((a, c) => a + c.meters, 0) });
     items.sort((a, b) => b.meters - a.meters);
   }
-  const top = items.slice(0, 2).map(describeCompromise);
-  const more = items.length > 2 ? ` (+${items.length - 2} more)` : "";
+  // The same stretch ridden out and back reads once, not "624 m on a road
+  // that is dirt; 624 m on a road that is dirt".
+  const lines = [...new Set(items.map(describeCompromise))];
+  const top = lines.slice(0, 2);
+  const more = lines.length > 2 ? ` (+${lines.length - 2} more)` : "";
   return `${top.join("; ")}${more}`;
 }
 

@@ -183,7 +183,12 @@ export default function RouteCard({ route, showDistance }: RouteCardProps) {
               {/* One surface chip: the discipline when known, else the raw surface
                   (never "Road · Road" or "Mixed · Gravel" side by side). */}
               <span aria-hidden="true" style={{ color: "var(--border-light)" }}>·</span>
-              {discipline ? (
+              {/* Riding time says more than "Road" (v1 is road only). */}
+              {route.estimated_minutes !== undefined && route.estimated_minutes > 0 ? (
+                <span className="font-bold" style={{ color: "var(--accent)" }} aria-label={`Riding time ${formatRideTime(route.estimated_minutes, { style: "card", approx: false })}`}>
+                  {formatRideTime(route.estimated_minutes, { style: "card" })}
+                </span>
+              ) : discipline ? (
                 <span style={{ color: "var(--text-secondary)" }}>{discipline.icon} {discipline.label}</span>
               ) : (
                 <span className="capitalize" style={{ color: "var(--text-secondary)" }}>{route.surface_type}</span>

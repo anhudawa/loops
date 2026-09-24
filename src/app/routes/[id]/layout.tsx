@@ -50,7 +50,7 @@ export async function generateMetadata({
       siteName: "LOOPS",
       type: "article",
       locale: "en_IE",
-      images: [`/api/og/${id}`],
+      images: [{ url: `/api/og/${id}`, width: 1200, height: 630 }],
     },
     twitter: {
       card: "summary_large_image",

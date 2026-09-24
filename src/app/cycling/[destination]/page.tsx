@@ -5,6 +5,7 @@ import JsonLd from "@/components/JsonLd";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import { generateBreadcrumbJsonLd, generateFaqJsonLd, slugify } from "@/lib/seo";
 import { plural } from "@/lib/copy";
+import { estimateRideMinutes, formatRideTime } from "@/lib/ride-time";
 import { getDestinationBySlug, type Destination } from "@/content/destinations";
 import { getCollectionBySlug, getRoutesByRegionSlug } from "@/lib/db";
 import { listedRoutes, visibleRoutes } from "@/app/routes/country/library";
@@ -69,11 +70,16 @@ export default async function DestinationPage({ params }: Props) {
   // the SQL total, so "8 Gran Canaria loops" opens 8 cards.
   let hasRegion = false;
   let regionRouteCount = 0;
+  let topRoutes: Array<{ id: string; name: string; distance_km: number; elevation_gain_m: number }> = [];
   if (dest.routesCountry && dest.routesRegion) {
     try {
       const routes = await getRoutesByRegionSlug(slugify(dest.routesCountry), slugify(dest.routesRegion));
-      regionRouteCount = visibleRoutes(routes).length;
+      const shown = visibleRoutes(routes);
+      regionRouteCount = shown.length;
       hasRegion = regionRouteCount > 1;
+      // A few loops right on the guide (server-rendered links: riders and
+      // crawlers reach routes without the list page).
+      topRoutes = shown.slice(0, 6).map((r) => ({ id: r.id, name: r.name, distance_km: Number(r.distance_km), elevation_gain_m: Number(r.elevation_gain_m) }));
     } catch {
       hasRegion = false;
     }
@@ -406,6 +412,24 @@ export default async function DestinationPage({ params }: Props) {
             <p className="text-sm mb-3" style={{ color: "var(--text-muted)" }}>
               {plural(regionRouteCount, `${dest.name} loop`)} in the library — elevation profile and climbs for each.
             </p>
+            {topRoutes.length > 0 && (
+              <ul className="text-left mb-4 grid gap-2">
+                {topRoutes.map((r) => (
+                  <li key={r.id}>
+                    <Link
+                      href={`/routes/${r.id}`}
+                      className="flex items-baseline justify-between gap-3 min-h-[44px] px-3 py-2 rounded-lg"
+                      style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+                    >
+                      <span className="text-sm font-bold truncate" style={{ color: "var(--text)" }}>{r.name}</span>
+                      <span className="text-xs shrink-0 tabular-nums" style={{ color: "var(--text-secondary)" }}>
+                        {Math.round(r.distance_km)} km · +{r.elevation_gain_m} m · {formatRideTime(estimateRideMinutes({ distance_km: r.distance_km, elevation_gain_m: r.elevation_gain_m, discipline: "road" }), { style: "card" })}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
             <Link
               href={`/routes/country/${slugify(dest.routesCountry)}/${slugify(dest.routesRegion)}`}
               className="inline-flex items-center justify-center font-bold text-sm px-5 min-h-[44px] rounded-lg"

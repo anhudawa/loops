@@ -25,6 +25,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: "https://www.loops.ie/switch", changeFrequency: "monthly", priority: 0.9 },
     { url: "https://www.loops.ie/pricing", changeFrequency: "monthly", priority: 0.8 },
     { url: "https://www.loops.ie/collections", changeFrequency: "weekly", priority: 0.9 },
+    { url: "https://www.loops.ie/cycling", changeFrequency: "weekly", priority: 0.9 },
+    { url: "https://www.loops.ie/feedback", changeFrequency: "yearly", priority: 0.1 },
     { url: "https://www.loops.ie/blog", changeFrequency: "weekly", priority: 0.8 },
     { url: "https://www.loops.ie/login", changeFrequency: "monthly", priority: 0.3 },
     { url: "https://www.loops.ie/about", changeFrequency: "monthly", priority: 0.2 },

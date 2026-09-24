@@ -978,7 +978,18 @@ export async function replaceRouteTrack(r: {
         quality_score = NULL, quality_breakdown = NULL, quality_surface = NULL, quality_scored_at = NULL
     WHERE name = ${r.name} AND country = ${r.country}
   `;
+  // A new track needs a fresh verdict: a redesigned "broken" route must be
+  // re-checked (NULL = not judged yet), not stay hidden forever.
+  try {
+    await sql`UPDATE routes SET recommend_status = NULL, recommend_checked = NULL WHERE name = ${r.name} AND country = ${r.country}`;
+  } catch { /* column not created yet — nothing to reset */ }
   return rowCount ?? 0;
+}
+
+/** Routes by exact name within a country (bundle corrections sweep). */
+export async function getRoutesByName(name: string, country: string): Promise<Array<{ id: string }>> {
+  const { rows } = await sql`SELECT id FROM routes WHERE name = ${name} AND country = ${country}`;
+  return rows as Array<{ id: string }>;
 }
 
 /**

@@ -8,7 +8,7 @@ import girona from "@/data/hub-bundles/girona-rebuild.json";
 // the lighthouse, Rocacorba stopping on the summit): the ride as ridden,
 // there and back, routed on our engine.
 import library from "@/data/hub-bundles/library-corrections.json";
-import { replaceRouteTrack, getRoute } from "@/lib/db";
+import { replaceRouteTrack, getRoute, getRoutesByName } from "@/lib/db";
 
 type Entry = Omit<Parameters<typeof replaceRouteTrack>[0], "country">;
 const BY_KEY = new Map<string, Entry>([
@@ -33,4 +33,23 @@ export async function withBundleCorrection(route: StoredRoute): Promise<StoredRo
     console.error("[bundle-correction] failed:", err instanceof Error ? err.message : err);
   }
   return route;
+}
+
+/**
+ * Apply every pending redesign now (daily cron, admin "measure"): a route
+ * hidden as broken is never opened, so it would never be corrected on view.
+ * Returns the names corrected.
+ */
+export async function applyBundleCorrections(): Promise<string[]> {
+  const done: string[] = [];
+  for (const key of BY_KEY.keys()) {
+    const [country, name] = [key.slice(0, key.indexOf("|")), key.slice(key.indexOf("|") + 1)];
+    for (const { id } of await getRoutesByName(name, country)) {
+      const r = await getRoute(id);
+      if (!r) continue;
+      const after = await withBundleCorrection(r);
+      if (after !== r) done.push(name);
+    }
+  }
+  return done;
 }

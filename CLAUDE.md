@@ -301,6 +301,14 @@ node scripts/import-routes.mjs scripts/hub-data/girona-eat-sleep-cycle.json --dr
 - Rules v9 (2026-09-24): access=no + bicycle=yes/designated is a cycle path
   bikes may use (it was flagged "bikes not allowed"). Profiles: foot-only ways
   (push the bike) cost 40× not 5× — needs /admin → "Sync routing profiles".
+- Broken library redesigns (2026-09-24): Cruz Grande (real loop, 98 km, via
+  Cazadores/Agüimes; GC-60 named) and Bay of Pollensa (46 km, inland out, bay
+  home) are in library-corrections.json. Torre del Mar Flat Loop and Puerto de
+  Mogán Loop stay hidden: no honest version exists (the flat coast road is a
+  main road; Puerto de Mogán is reachable by bike only up and over one valley
+  corridor — the coast is the GC-1 motorway). Corrections apply on view AND
+  by the daily measure cron / admin "Measure unmeasured routes"
+  (applyBundleCorrections); replacing a track clears recommend_status.
 - No CSRF tokens; cookie-only sessions; locale hardcoded en-IE
 
 ## Conventions

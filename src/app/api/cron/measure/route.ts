@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { apiError, handleApiError } from "@/lib/api-utils";
 import { measureUnmeasured } from "@/lib/measure-route";
+import { applyBundleCorrections } from "@/lib/bundle-corrections";
 
 export const maxDuration = 60;
 
@@ -15,7 +16,8 @@ export async function GET(request: NextRequest) {
     if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) {
       return apiError("Unauthorized", "UNAUTHORIZED", 401);
     }
-    const result = await measureUnmeasured(50_000);
+    const corrected = await applyBundleCorrections().catch(() => [] as string[]);
+    const result = { corrected, ...(await measureUnmeasured(45_000)) };
     console.log(JSON.stringify({ evt: "routes_measured", ...result }));
     return NextResponse.json({ data: result });
   } catch (err) {

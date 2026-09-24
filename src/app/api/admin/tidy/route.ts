@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin";
 import { tidyLibraryData, hideTestUploads, getAllRoutesForRecommendCheck, renameRoute } from "@/lib/db";
 import { withAutoTitle } from "@/lib/route-title";
+import { applyBundleCorrections } from "@/lib/bundle-corrections";
 import { measureUnmeasured } from "@/lib/measure-route";
 import { checkRecommendable, needsRecommendCheck } from "@/lib/recommend-check";
 import { handleApiError } from "@/lib/api-utils";
@@ -32,7 +33,8 @@ export async function POST(request: NextRequest) {
     if (body?.action === "hide-tests") return NextResponse.json({ data: { hidden: await hideTestUploads() } });
     if (body?.action === "measure") {
       // Unmeasured routes stay off every list: measure them now (time-boxed; press again to go on).
-      return NextResponse.json({ data: await measureUnmeasured(45_000) });
+      const corrected = await applyBundleCorrections().catch(() => [] as string[]);
+      return NextResponse.json({ data: { corrected, ...(await measureUnmeasured(40_000)) } });
     }
     if (body?.action === "recommend-check") {
       // Loops and one-road out-and-backs may be recommended; out-and-backs

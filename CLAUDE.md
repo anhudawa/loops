@@ -285,6 +285,14 @@ node scripts/import-routes.mjs scripts/hub-data/girona-eat-sleep-cycle.json --dr
   "Tidy library data"); (4) main roads near the start/finish are used however
   long when unavoidable (named), never motorways or roads closed to bikes —
   see the road-standard spec.
+- Admin access: users.role = 'admin'. Grant it with ADMIN_EMAILS (Vercel env,
+  comma-separated; applied at sign-in and by requireAdmin, then stored) or
+  from /admin → Users → "Make admin" / "Remove admin" (you cannot remove
+  your own). anthony@roadmancycling.com is admin (set 2026-09-24).
+- Routing profiles: after a profile change is deployed, /admin → "Sync
+  routing profiles" (POST /api/engine/sync-profiles) updates the engine's
+  custom ids in place (BROUTER_ROAD_PROFILE / BROUTER_ROAD_RELAXED_PROFILE are
+  set on Vercel since the first sync, 2026-09-24).
 - No CSRF tokens; cookie-only sessions; locale hardcoded en-IE
 
 ## Conventions

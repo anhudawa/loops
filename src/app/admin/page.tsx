@@ -254,6 +254,33 @@ export default function AdminPage() {
     }
   };
 
+  const handleAdmin = async (userId: string, make: boolean) => {
+    try {
+      const res = await fetch(`/api/admin/users/${userId}/admin`, { method: make ? "POST" : "DELETE" });
+      if (!res.ok) throw new Error();
+      fetchUsers();
+    } catch {
+      setActionError("Action failed. Please try again.");
+      setTimeout(() => setActionError(""), 3000);
+    }
+  };
+
+  const syncProfiles = async () => {
+    setImporting("sync-profiles");
+    setImportMsg(null);
+    try {
+      const res = await fetch("/api/engine/sync-profiles", { method: "POST" });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d?.error ?? "Failed");
+      const r = (d.data?.results ?? []) as Array<{ name: string; id?: string; verified?: boolean; created?: boolean }>;
+      setImportMsg(`${r.map((x) => `${x.name}: ${x.verified ? "✓ verified" : "✗ failed"}${x.created ? " (new id " + x.id + ")" : ""}`).join(" · ")} — ${d.data?.next ?? ""}`);
+    } catch (e) {
+      setImportMsg(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setImporting(null);
+    }
+  };
+
   const handleDeleteRoute = async (routeId: string) => {
     try {
       const res = await fetch(`/api/admin/routes/${routeId}`, { method: "DELETE" });
@@ -503,6 +530,15 @@ export default function AdminPage() {
                         {new Date(u.created_at + "Z").toLocaleDateString("en-IE")}
                       </td>
                       <td className="p-3 text-right">
+                        {u.id !== user.id && u.role !== "banned" && (
+                          <button
+                            onClick={() => handleAdmin(u.id, u.role !== "admin")}
+                            className="text-xs font-bold hover:opacity-80 mr-3"
+                            style={{ color: "var(--text-secondary)" }}
+                          >
+                            {u.role === "admin" ? "Remove admin" : "Make admin"}
+                          </button>
+                        )}
                         {u.id !== user.id && u.role !== "admin" && (
                           u.role === "banned" ? (
                             <button
@@ -541,6 +577,9 @@ export default function AdminPage() {
                 </button>
                 <button onClick={() => runTidy("hide-tests")} disabled={importing !== null} className="px-3 py-2 rounded-lg text-xs font-bold disabled:opacity-40" style={{ background: "var(--bg)", color: "var(--text)", border: "1px solid var(--border)" }} title="Oregon Karoo, Battersea, Redhill, Windsor — hidden from the public library, not deleted">
                   {importing === "hide-tests" ? "Working…" : "Hide test uploads (4)"}
+                </button>
+                <button onClick={syncProfiles} disabled={importing !== null} className="px-3 py-2 rounded-lg text-xs font-bold disabled:opacity-40" style={{ background: "var(--bg)", color: "var(--text)", border: "1px solid var(--border)" }} title="Uploads the Road Standard routing profiles (scripts/routing/profiles) to the engine and checks each with a test leg. Press after a profile change is deployed.">
+                  {importing === "sync-profiles" ? "Syncing…" : "Sync routing profiles"}
                 </button>
                 <button onClick={() => runTidy("measure")} disabled={importing !== null} className="px-3 py-2 rounded-lg text-xs font-bold disabled:opacity-40" style={{ background: "var(--bg)", color: "var(--text)", border: "1px solid var(--border)" }} title="Routes without a Road Standard check stay off every list until measured. This measures them now (also runs daily). Press again if some are left.">
                   {importing === "measure" ? "Measuring…" : "Measure unmeasured routes"}

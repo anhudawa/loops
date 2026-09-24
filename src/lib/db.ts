@@ -2460,3 +2460,8 @@ export async function getUnmeasuredRoutes(limit = 200): Promise<Array<{ id: stri
   `;
   return rows as Array<{ id: string; coordinates: string; discipline: string | null }>;
 }
+
+/** Grant or remove admin (never touches a banned rider). */
+export async function setAdminRole(id: string, admin: boolean): Promise<void> {
+  await sql`UPDATE users SET role = ${admin ? "admin" : "user"} WHERE id = ${id} AND role != 'banned'`;
+}

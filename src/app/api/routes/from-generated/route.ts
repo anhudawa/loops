@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
+import { checkRecommendable } from "@/lib/recommend-check";
 import { v4 as uuidv4 } from "uuid";
 import { insertRoute, getUserBySession, recordEvent, ANALYTICS_EVENTS, storeRouteQuality, storeRouteRoadReport } from "@/lib/db";
 import { apiError, handleApiError, stripHtml } from "@/lib/api-utils";
@@ -199,6 +200,9 @@ export async function POST(request: NextRequest) {
     // "Did you ride it? How was it?" — asked the day after. The answer
     // decides whether this route is ever offered to other riders.
     await bookCheckIn(id, user.id, true);
+    // Loop or out-and-back with another road home? Decides whether it can
+    // ever be recommended (it always stays on the rider's profile).
+    after(() => checkRecommendable({ id, name, coordinates: JSON.stringify(coordsWithElevation) }).then(() => undefined, () => undefined));
 
     // Funnel: a generated/drawn route was saved (fire-and-forget, no PII).
     // Separate the draw milestone from a generated save via the description

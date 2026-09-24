@@ -572,6 +572,7 @@ export type ActivityItem = {
 
 // ──── Routes ────
 export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
+  await ensureRecommendColumn();
   const conditions: string[] = [];
   const params: unknown[] = [];
   let idx = 1;
@@ -599,7 +600,7 @@ export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
   }
 
   // Only show approved routes (or legacy routes without a quality_status yet)
-  conditions.push(`(r.quality_status = 'approved' OR r.quality_status IS NULL) AND r.discipline IN ('road')`);
+  conditions.push(`(r.quality_status = 'approved' OR r.quality_status IS NULL) AND r.discipline IN ('road') AND (r.recommend_status IS NULL OR r.recommend_status IN ('ok','only-road'))`);
   // v1 lists only the disciplines LOOPS plans (road): ENABLED_DISCIPLINES.
   conditions.push(`r.discipline IN (${ENABLED_DISCIPLINES.map((d) => `'${d}'`).join(", ")})`);
 
@@ -1322,21 +1323,24 @@ export async function getUserStats(userId: string): Promise<UserStats> {
 }
 
 export async function getCounties(): Promise<string[]> {
-  const { rows } = await sql`SELECT DISTINCT county FROM routes WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') ORDER BY county`;
+  await ensureRecommendColumn();
+  const { rows } = await sql`SELECT DISTINCT county FROM routes WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road')) ORDER BY county`;
   return rows.map((r) => r.county);
 }
 
 export async function getRegions(country?: string): Promise<string[]> {
+  await ensureRecommendColumn();
   if (country) {
-    const { rows } = await sql`SELECT DISTINCT region FROM routes WHERE country = ${country} AND region IS NOT NULL AND (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') ORDER BY region`;
+    const { rows } = await sql`SELECT DISTINCT region FROM routes WHERE country = ${country} AND region IS NOT NULL AND (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road')) ORDER BY region`;
     return rows.map((r) => r.region);
   }
-  const { rows } = await sql`SELECT DISTINCT region FROM routes WHERE region IS NOT NULL AND (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') ORDER BY region`;
+  const { rows } = await sql`SELECT DISTINCT region FROM routes WHERE region IS NOT NULL AND (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road')) ORDER BY region`;
   return rows.map((r) => r.region);
 }
 
 export async function getCountries(): Promise<string[]> {
-  const { rows } = await sql`SELECT DISTINCT country FROM routes WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') ORDER BY country`;
+  await ensureRecommendColumn();
+  const { rows } = await sql`SELECT DISTINCT country FROM routes WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road')) ORDER BY country`;
   return rows.map((r) => r.country);
 }
 
@@ -1403,7 +1407,8 @@ export async function getAllRoutes(page = 1, limit = 50): Promise<{ routes: Rout
 // ──── SEO Queries ────
 
 export async function getAllRoutesForSitemap(): Promise<{ id: string; created_at: string }[]> {
-  const { rows } = await sql`SELECT id, created_at FROM routes WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') ORDER BY created_at DESC`;
+  await ensureRecommendColumn();
+  const { rows } = await sql`SELECT id, created_at FROM routes WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road')) ORDER BY created_at DESC`;
   return rows as { id: string; created_at: string }[];
 }
 
@@ -1427,11 +1432,12 @@ function slugSql(col: string): string {
 }
 
 export async function getRoutesByCountrySlug(slug: string): Promise<Route[]> {
+  await ensureRecommendColumn();
   const { rows } = await sql.query(
     `SELECT r.*, COALESCE(AVG(rt.score), 0) as avg_score, COUNT(rt.id) as rating_count
      FROM routes r
      LEFT JOIN ratings rt ON rt.route_id = r.id
-     WHERE ${slugSql("r.country")} = $1 AND (r.quality_status = 'approved' OR r.quality_status IS NULL) AND r.discipline IN ('road')
+     WHERE ${slugSql("r.country")} = $1 AND (r.quality_status = 'approved' OR r.quality_status IS NULL) AND r.discipline IN ('road') AND (r.recommend_status IS NULL OR r.recommend_status IN ('ok','only-road'))
      GROUP BY r.id
      ORDER BY COALESCE(AVG(rt.score), 0) DESC, r.created_at DESC`,
     [slug]
@@ -1440,11 +1446,12 @@ export async function getRoutesByCountrySlug(slug: string): Promise<Route[]> {
 }
 
 export async function getRoutesByRegionSlug(countrySlug: string, regionSlug: string): Promise<Route[]> {
+  await ensureRecommendColumn();
   const { rows } = await sql.query(
     `SELECT r.*, COALESCE(AVG(rt.score), 0) as avg_score, COUNT(rt.id) as rating_count
      FROM routes r
      LEFT JOIN ratings rt ON rt.route_id = r.id
-     WHERE ${slugSql("r.country")} = $1 AND (r.quality_status = 'approved' OR r.quality_status IS NULL) AND r.discipline IN ('road')
+     WHERE ${slugSql("r.country")} = $1 AND (r.quality_status = 'approved' OR r.quality_status IS NULL) AND r.discipline IN ('road') AND (r.recommend_status IS NULL OR r.recommend_status IN ('ok','only-road'))
        AND ${slugSql("r.region")} = $2
      GROUP BY r.id
      ORDER BY COALESCE(AVG(rt.score), 0) DESC, r.created_at DESC`,
@@ -1461,6 +1468,7 @@ export async function getCountryStats(countrySlug: string): Promise<{
   displayName: string;
   regions: { name: string; routeCount: number }[];
 } | null> {
+  await ensureRecommendColumn();
   const { rows } = await sql.query(
     `SELECT
        COUNT(*) as route_count,
@@ -1468,21 +1476,21 @@ export async function getCountryStats(countrySlug: string): Promise<{
        COALESCE((SELECT AVG(rt.score) FROM ratings rt JOIN routes r2 ON rt.route_id = r2.id WHERE ${slugSql("r2.country")} = $1), 0) as avg_rating,
        MIN(country) as display_name
      FROM routes
-     WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND ${slugSql("country")} = $1`,
+     WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road')) AND ${slugSql("country")} = $1`,
     [countrySlug]
   );
 
   if (!rows[0] || Number(rows[0].route_count) === 0) return null;
 
   const { rows: disciplineRows } = await sql.query(
-    `SELECT DISTINCT discipline FROM routes WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND ${slugSql("country")} = $1 ORDER BY discipline`,
+    `SELECT DISTINCT discipline FROM routes WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road')) AND ${slugSql("country")} = $1 ORDER BY discipline`,
     [countrySlug]
   );
 
   const { rows: regionRows } = await sql.query(
     `SELECT region as name, COUNT(*) as route_count
      FROM routes
-     WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND ${slugSql("country")} = $1 AND region IS NOT NULL
+     WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road')) AND ${slugSql("country")} = $1 AND region IS NOT NULL
      GROUP BY region
      ORDER BY region`,
     [countrySlug]
@@ -1506,6 +1514,7 @@ export async function getRegionStats(countrySlug: string, regionSlug: string): P
   displayName: string;
   countryDisplayName: string;
 } | null> {
+  await ensureRecommendColumn();
   const { rows } = await sql.query(
     `SELECT
        COUNT(*) as route_count,
@@ -1514,7 +1523,7 @@ export async function getRegionStats(countrySlug: string, regionSlug: string): P
        MIN(region) as display_name,
        MIN(country) as country_display_name
      FROM routes
-     WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND ${slugSql("country")} = $1
+     WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road')) AND ${slugSql("country")} = $1
        AND ${slugSql("region")} = $2`,
     [countrySlug, regionSlug]
   );
@@ -1522,7 +1531,7 @@ export async function getRegionStats(countrySlug: string, regionSlug: string): P
   if (!rows[0] || Number(rows[0].route_count) === 0) return null;
 
   const { rows: disciplineRows } = await sql.query(
-    `SELECT DISTINCT discipline FROM routes WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND ${slugSql("country")} = $1 AND ${slugSql("region")} = $2 ORDER BY discipline`,
+    `SELECT DISTINCT discipline FROM routes WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road')) AND ${slugSql("country")} = $1 AND ${slugSql("region")} = $2 ORDER BY discipline`,
     [countrySlug, regionSlug]
   );
 
@@ -1542,16 +1551,17 @@ export async function getRelatedRoutes(
   region: string | null,
   limit: number
 ): Promise<Route[]> {
+  await ensureRecommendColumn();
   if (region) {
     const { rows } = await sql.query(
-      `SELECT * FROM routes WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND country = $1 AND region = $2 AND id != $3 ORDER BY created_at DESC LIMIT $4`,
+      `SELECT * FROM routes WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road')) AND country = $1 AND region = $2 AND id != $3 ORDER BY created_at DESC LIMIT $4`,
       [country, region, routeId, limit]
     );
     if (rows.length > 0) return publicRows(rows) as Route[];
   }
   // Fall back to same country
   const { rows } = await sql.query(
-    `SELECT * FROM routes WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND country = $1 AND id != $2 ORDER BY created_at DESC LIMIT $3`,
+    `SELECT * FROM routes WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road')) AND country = $1 AND id != $2 ORDER BY created_at DESC LIMIT $3`,
     [country, routeId, limit]
   );
   return publicRows(rows) as Route[];
@@ -1902,6 +1912,7 @@ export async function getFeaturedCollections(): Promise<Collection[]> {
 }
 
 export async function getCollectionBySlug(slug: string): Promise<CollectionWithRoutes | null> {
+  await ensureRecommendColumn();
   const { rows: collRows } = await sql`
     SELECT * FROM collections WHERE slug = ${slug} LIMIT 1
   `;
@@ -1912,7 +1923,7 @@ export async function getCollectionBySlug(slug: string): Promise<CollectionWithR
     SELECT r.*, cr.display_order
     FROM routes r
     JOIN collection_routes cr ON cr.route_id = r.id
-    WHERE cr.collection_id = ${collection.id}
+    WHERE cr.collection_id = ${collection.id} AND (r.recommend_status IS NULL OR r.recommend_status IN ('ok','only-road'))
     ORDER BY cr.display_order ASC, r.created_at ASC
   `;
 
@@ -2270,4 +2281,34 @@ export async function deleteWebPushSubscription(endpoint: string): Promise<void>
 export async function getNewsletterOptInEmails(): Promise<string[]> {
   const { rows } = await sql`SELECT email FROM users WHERE newsletter_opt_in = TRUE AND role != 'banned' ORDER BY created_at`;
   return rows.map((r) => r.email as string);
+}
+
+// ── Recommendable? (src/lib/recommendable.ts) ───────────────────────────────
+
+let recommendColumnReady: Promise<void> | null = null;
+/** The recommend_status column every public list filters on (added once per instance). */
+function ensureRecommendColumn(): Promise<void> {
+  if (!recommendColumnReady) {
+    recommendColumnReady = (async () => {
+      await sql`ALTER TABLE routes ADD COLUMN IF NOT EXISTS recommend_status TEXT`;
+      await sql`ALTER TABLE routes ADD COLUMN IF NOT EXISTS recommend_checked JSONB`;
+    })().catch((err) => {
+      recommendColumnReady = null;
+      throw err;
+    });
+  }
+  return recommendColumnReady;
+}
+
+/** Store whether a route may be recommended, with the evidence. */
+export async function storeRecommendStatus(routeId: string, status: string, evidence: Record<string, unknown>): Promise<void> {
+  await ensureRecommendColumn();
+  await sql`UPDATE routes SET recommend_status = ${status}, recommend_checked = ${JSON.stringify(evidence)}::jsonb WHERE id = ${routeId}`;
+}
+
+/** Every route with its track (admin batch check). */
+export async function getAllRoutesForRecommendCheck(): Promise<Array<{ id: string; name: string; coordinates: string; distance_km: number; recommend_status: string | null; recommend_checked: { v?: number } | null }>> {
+  await ensureRecommendColumn();
+  const { rows } = await sql`SELECT id, name, coordinates, distance_km, recommend_status, recommend_checked FROM routes`;
+  return rows as Array<{ id: string; name: string; coordinates: string; distance_km: number; recommend_status: string | null; recommend_checked: { v?: number } | null }>;
 }

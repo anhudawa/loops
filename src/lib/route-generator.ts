@@ -2945,3 +2945,28 @@ export async function engineTrace(
   const path = await routeViaBRouter(waypoints, profile);
   return path ? { coords: path.coords, edgeTags: path.edgeTags, distance_km: path.distance_km } : null;
 }
+
+/**
+ * Is there another sensible road home from an out-and-back's turnaround?
+ * Route out on the Road Standard profile, then home with the way out as a
+ * weighted no-go (the destination-ride test). "only-road" when the way home
+ * stays on the way out (a cape, a summit road), "alternative" when a
+ * different road exists without an absurd detour, "unknown" when the engine
+ * cannot route it (no map data — never recommended).
+ */
+export async function outAndBackAlternative(
+  start: [number, number],
+  far: [number, number],
+): Promise<{ status: "only-road" | "alternative" | "unknown"; out_km?: number; home_km?: number; shared_pct?: number }> {
+  const profile = DISCIPLINE_PROFILE.road;
+  const out = await routeWithFallback([start, far], profile);
+  if (!out || out.coords.length < 2) return { status: "unknown" };
+  const nogo = avoidPolylines([out.coords], far, start);
+  const home = nogo ? await routeViaBRouter([far, start], profile, false, nogo) : null;
+  if (!home || home.coords.length < 2) return { status: "only-road", out_km: out.distance_km };
+  const shared = sharedShare(home.coords, [out.coords]);
+  const r = { out_km: Math.round(out.distance_km * 10) / 10, home_km: Math.round(home.distance_km * 10) / 10, shared_pct: Math.round(shared * 100) };
+  return shared < DEST_MAX_SHARED_HOME && home.distance_km <= out.distance_km * DEST_MAX_HOME_STRETCH + 2
+    ? { status: "alternative", ...r }
+    : { status: "only-road", ...r };
+}

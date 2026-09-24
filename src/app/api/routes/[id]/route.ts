@@ -1,3 +1,4 @@
+import { checkRecommendable, needsRecommendCheck } from "@/lib/recommend-check";
 import { NextRequest, NextResponse, after } from "next/server";
 import { publicRoute } from "@/lib/public-route";
 import { getRoute, updateRouteElevation, updateRouteGeometry, storeRouteRoadReport, recordEvent, ANALYTICS_EVENTS } from "@/lib/db";
@@ -181,6 +182,26 @@ function scheduleNameFill(route: NonNullable<Awaited<ReturnType<typeof getRoute>
   });
 }
 
+/**
+ * Store whether this route may be recommended (a loop, or an out-and-back
+ * with no other road home) after the response — lists read the verdict.
+ */
+const recommendChecking = new Set<string>();
+function scheduleRecommendCheck(route: NonNullable<Awaited<ReturnType<typeof getRoute>>>) {
+  if (!needsRecommendCheck(route as unknown as { recommend_checked?: unknown }) || recommendChecking.has(route.id)) return;
+  recommendChecking.add(route.id);
+  after(async () => {
+    try {
+      const status = await checkRecommendable(route);
+      console.log(JSON.stringify({ evt: "route_recommend_checked", route_id: route.id, status }));
+    } catch (e) {
+      console.error("[recommend] check failed:", e instanceof Error ? e.message : e);
+    } finally {
+      recommendChecking.delete(route.id);
+    }
+  });
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -197,6 +218,7 @@ export async function GET(
     route = await repairElevationIfFlat(route);
     route = await repairGapsIfAny(route);
     scheduleRoadTrace(route);
+    scheduleRecommendCheck(route);
 
     // Funnel: route detail viewed (fire-and-forget, no PII).
     void recordEvent(ANALYTICS_EVENTS.ROUTE_VIEWED, {

@@ -1,3 +1,4 @@
+import { recommendableNow } from "./recommendable";
 import { checkTrack } from "./track-shape";
 import { SOCIAL_FEATURES_ENABLED } from "@/config/constants";
 
@@ -11,6 +12,8 @@ import { SOCIAL_FEATURES_ENABLED } from "@/config/constants";
  */
 const PRIVATE_ROUTE_FIELDS = [
   "operator_name",
+  // Internal evidence behind recommend_status (engine distances).
+  "recommend_checked",
   "operator_url",
   // The uploader's user id: attribution, and a user identifier.
   "created_by",
@@ -122,7 +125,8 @@ export function routeCard<T extends Record<string, unknown>>(route: T): Record<s
   if (SOCIAL_FEATURES_ENABLED) for (const k of CARD_SOCIAL_FIELDS) if (k in clean) out[k] = clean[k];
   const rs = roadStandardStatus(clean.road_report);
   if (rs) out.road_standard = rs;
-  if (hasBrokenTrack(route)) out.track_broken = true;
+  // Not fit to ride, or an out-and-back with another road home: never listed.
+  if (!recommendableNow(route)) out.track_broken = true;
   return out;
 }
 

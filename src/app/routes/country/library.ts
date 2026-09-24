@@ -1,5 +1,6 @@
+import { recommendableNow } from "@/lib/recommendable";
 import { ENABLED_DISCIPLINES, disciplineEnabled } from "@/config/constants";
-import { hasBrokenTrack, roadStandardStatus } from "@/lib/public-route";
+import { roadStandardStatus } from "@/lib/public-route";
 import { slugify } from "@/lib/seo";
 
 /**
@@ -20,7 +21,7 @@ export function disciplineList(ds: string[]): string {
 
 /** The routes a rider can actually open: broken stored tracks are hidden by RouteCard. */
 export function visibleRoutes<T>(routes: T[]): T[] {
-  return routes.filter((r) => !hasBrokenTrack(r as unknown as Record<string, unknown>));
+  return routes.filter((r) => recommendableNow(r as unknown as Record<string, unknown>));
 }
 
 /**

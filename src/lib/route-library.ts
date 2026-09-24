@@ -16,6 +16,7 @@ import { compromiseAcceptable } from "./road-segments";
 import { LIBRARY_ROAD_POLICY } from "@/config/constants";
 import { getRoutes, getRouteProof, type Route } from "./db";
 import { provenLabel } from "./ride-check";
+import { recommendableNow } from "./recommendable";
 import {
   detectIntervalSegments,
   segmentsForInterval,
@@ -220,6 +221,9 @@ export async function matchLibraryRoutes(
   for (const route of pool) {
     if (route.coordinates == null) continue;
     if (!libraryRoutePassesPolicy(route)) continue;
+    // Never suggest an out-and-back that has another road home (or a track
+    // not fit to ride) — it stays on its rider's profile only.
+    if (!recommendableNow(route as unknown as Record<string, unknown>)) continue;
     const distFromStart = haversineKm(
       startLat,
       startLng,

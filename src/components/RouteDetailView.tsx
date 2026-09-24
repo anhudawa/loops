@@ -567,7 +567,8 @@ export default function RouteDetailView({ ride, initialRoute }: { ride?: RideInv
               ...(route.region
                 ? [{ label: route.region, href: `/routes/country/${slugify(route.country)}/${slugify(route.region)}` }]
                 : []),
-              { label: route.name },
+              // The route's name is the heading just below: repeating it made
+              // the trail wrap onto two lines on a phone.
             ]}
           />
         </div>

@@ -225,7 +225,7 @@ function LoginPage() {
                 )
               )}
               {offerNewsletter && (
-                <label className="flex items-start gap-2 mt-4 cursor-pointer select-none">
+                <label className="flex items-start gap-2 mt-3 py-1.5 min-h-[44px] cursor-pointer select-none">
                   <input
                     type="checkbox"
                     checked={newsletterOptIn}

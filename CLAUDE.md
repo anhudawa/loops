@@ -213,8 +213,13 @@ node scripts/import-routes.mjs scripts/hub-data/girona-eat-sleep-cycle.json --dr
 - Track integrity (src/lib/track-shape.ts): every stored track is measured
   (loop / lollipop / out-and-back, retrace %, gaps). "Loop" > 50 % ridden
   twice or a > 2 km gap = broken: banner, hidden from lists, never offered.
-  Verified redesigns (src/data/hub-bundles/girona-rebuild.json) replace the
-  stored track on first view (src/lib/bundle-corrections.ts).
+  Verified redesigns (src/data/hub-bundles/girona-rebuild.json, and
+  library-corrections.json: Cap Formentor and Rocacorba as there-and-back
+  rides, 2026-09-24) replace the stored track on first view
+  (src/lib/bundle-corrections.ts). No "Verified" badge on a point-to-point
+  or broken track. Imported names read cleaned (tidyRouteName in
+  public-route.ts: grade tags, Majorca → Mallorca); /admin "Tidy library
+  data" stores the same.
 - Strava connect/import HIDDEN for v1 (STRAVA_IMPORT_ENABLED=false in
   constants.ts): production Strava app credentials were never set up; the
   "Open in Strava" button is hidden too (Strava's upload page is for

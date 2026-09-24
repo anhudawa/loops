@@ -142,3 +142,27 @@ export function rideVerdict(
     light,
   };
 }
+
+/** Local hours treated as night for "if you left now": before 6:00, or from 20:00. */
+export const NIGHT_FROM_HOUR = 20;
+export const NIGHT_UNTIL_HOUR = 6;
+/** The start hour a night-time view plans for instead. */
+export const MORNING_START_HOUR = 8;
+
+/**
+ * The hour the weather card plans for when nobody picked a time. Daytime:
+ * null (the ride starts now). At night nobody heads out at 2 am, so plan
+ * the next morning at 8:00, local to the route's start. `localNow` is the
+ * start's wall clock, "2026-09-25T02:15".
+ */
+export function nextRidingHour(localNow: string | null | undefined): { hour: string; label: string } | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):\d{2}/.exec(localNow ?? "");
+  if (!m) return null;
+  const h = Number(m[4]);
+  if (h >= NIGHT_UNTIL_HOUR && h < NIGHT_FROM_HOUR) return null;
+  const tomorrow = h >= NIGHT_FROM_HOUR;
+  const day = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + (tomorrow ? 1 : 0)));
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const hour = `${day.getUTCFullYear()}-${pad(day.getUTCMonth() + 1)}-${pad(day.getUTCDate())}T${pad(MORNING_START_HOUR)}:00`;
+  return { hour, label: `${tomorrow ? "Tomorrow" : "This morning"} · ${MORNING_START_HOUR}:00` };
+}

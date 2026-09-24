@@ -1,5 +1,12 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import AppHeader from "@/components/AppHeader";
+
+// Its own tab title (not the home page's), and kept out of search results.
+export const metadata: Metadata = {
+  title: "Page not found — LOOPS",
+  robots: { index: false },
+};
 
 export default function NotFound() {
   return (

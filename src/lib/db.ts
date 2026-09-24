@@ -8,7 +8,7 @@ import {
   type UsageMetrics,
 } from "@/lib/metrics";
 
-import { withPublicDescription } from "@/lib/public-route";
+import { withPublicDescription, tidyRouteName } from "@/lib/public-route";
 import { recommendableNow } from "@/lib/recommendable";
 import { POINT_TO_POINT_KM } from "@/lib/track-shape";
 import { lookupKnownPlace } from "@/lib/places-known";
@@ -20,12 +20,13 @@ export { ANALYTICS_EVENTS } from "@/lib/metrics";
  * Every route row read for display passes through here once: descriptions
  * lose operator attribution sentences ("Curated by Eat Sleep Cycle") —
  * owner decision, no public route attribution — and a region stored under
- * another name ("Majorca") reads as the one riders see ("Mallorca").
- * Admin listings read raw.
+ * another name ("Majorca") reads as the one riders see ("Mallorca"), and an
+ * imported name reads cleaned (tidyRouteName). Admin listings read raw.
  */
 function publicRows<T extends Record<string, unknown>>(rows: T[]): T[] {
   return rows.map((r) => {
-    const out = withPublicDescription(r);
+    let out = withPublicDescription(r);
+    if (typeof out.name === "string" && tidyRouteName(out.name) !== out.name) out = { ...out, name: tidyRouteName(out.name) };
     return typeof out.region === "string" ? { ...out, region: canonicalRegion(out.region) } : out;
   });
 }
@@ -1011,6 +1012,13 @@ export async function tidyLibraryData(): Promise<Record<string, number>> {
       AND (region IN ('Majorca', 'Balearic Islands', 'Islas Baleares') OR county IN ('Majorca', 'Balearic Islands', 'Islas Baleares'))`);
   out.girona = n(await sql`
     UPDATE routes SET region = 'Girona' WHERE country = 'Spain' AND region = 'Cataluña'`);
+  // Names: the same rule the public pages apply at display (tidyRouteName).
+  out.names = 0;
+  const { rows: named } = await sql`SELECT id, name FROM routes`;
+  for (const r of named as Array<{ id: string; name: string }>) {
+    const clean = tidyRouteName(r.name);
+    if (clean !== r.name) out.names += n(await sql`UPDATE routes SET name = ${clean} WHERE id = ${r.id} AND name = ${r.name}`);
+  }
   out.featured_collections = n(await sql`
     UPDATE collections SET featured = TRUE WHERE slug IN ('mallorca', 'calpe', 'dublin') AND featured = FALSE`);
   return out;

@@ -95,6 +95,30 @@ export function stripOperatorAttribution(
   return out.length > 0 ? out : null;
 }
 
+/**
+ * Imported names, cleaned the way a person would write them: the importing
+ * site's "(Road - Intermediate)" grade tag dropped (difficulty is its own
+ * field), "Majorca" spelt Mallorca as everywhere else, filename underscores
+ * and "!!" gone, spaces collapsed. A clean name comes back unchanged, so the
+ * rule can run at display time and in the admin tidy alike.
+ */
+const NAME_FIXES: Record<string, string> = {
+  "Battersea to Surrey Hills _ Feel the burn!!": "Battersea to the Surrey Hills",
+  "Coffee and Cake day - Majorca": "Coffee and Cake Day, Mallorca",
+  "Great Girona ride": "Great Girona Ride",
+  "Les Serres + Mas Lunes (Road - Intermediate)": "Les Serres and Mas Llunes",
+};
+export function tidyRouteName(name: string): string {
+  const n = name.replace(/\s+/g, " ").trim();
+  if (NAME_FIXES[n]) return NAME_FIXES[n];
+  return n
+    .replace(/\s*\((?:Road|Gravel|MTB)\s*[-–]\s*[A-Za-z ]+\)$/i, "")
+    .replace(/\bMajorca\b/g, "Mallorca")
+    .replace(/\s+_\s+/g, " – ")
+    .replace(/!{2,}$/, "")
+    .trim() || n;
+}
+
 /** Apply stripOperatorAttribution to a route row's description in place-safe copy. */
 export function withPublicDescription<T extends Record<string, unknown>>(route: T): T {
   if (!route || typeof route.description !== "string") return route;

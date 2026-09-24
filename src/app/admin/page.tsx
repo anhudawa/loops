@@ -536,7 +536,7 @@ export default function AdminPage() {
                 Library tidy-up. Safe to press twice. Nothing is deleted.
               </p>
               <div className="flex flex-wrap gap-2">
-                <button onClick={() => runTidy("tidy")} disabled={importing !== null} className="px-3 py-2 rounded-lg text-xs font-bold disabled:opacity-40" style={{ background: "var(--accent)", color: "var(--bg)" }} title="Trim names/regions, one spelling for Mallorca and Girona, London capitalised, feature the Mallorca, Calpe and Dublin collections">
+                <button onClick={() => runTidy("tidy")} disabled={importing !== null} className="px-3 py-2 rounded-lg text-xs font-bold disabled:opacity-40" style={{ background: "var(--accent)", color: "var(--bg)" }} title="Trim names/regions, tidy imported names (grade tags, Majorca → Mallorca), one spelling for Mallorca and Girona, London capitalised, feature the Mallorca, Calpe and Dublin collections">
                   {importing === "tidy" ? "Working…" : "Tidy library data"}
                 </button>
                 <button onClick={() => runTidy("hide-tests")} disabled={importing !== null} className="px-3 py-2 rounded-lg text-xs font-bold disabled:opacity-40" style={{ background: "var(--bg)", color: "var(--text)", border: "1px solid var(--border)" }} title="Oregon Karoo, Battersea, Redhill, Windsor — hidden from the public library, not deleted">

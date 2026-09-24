@@ -33,6 +33,7 @@ export default function MapView({
   compromiseMarkers,
   hoverPosition,
   highlightSection,
+  focus,
   onPolylineClick,
   onMapClick,
   detailsLink = true,
@@ -53,6 +54,8 @@ export default function MapView({
   compromiseMarkers?: Array<{ at: [number, number]; label: string }> | null;
   hoverPosition?: { lat: number; lng: number } | null;
   highlightSection?: { coords: [number, number][]; color: string } | null;
+  /** A stretch picked from the "Where" list: zoom to it and name it (n changes per tap). */
+  focus?: { at: [number, number]; label: string; n: number } | null;
   onPolylineClick?: (latlng: { lat: number; lng: number }) => void;
   onMapClick?: () => void;
 }) {
@@ -71,6 +74,10 @@ export default function MapView({
   const hoverMarkerRef = useRef<L.CircleMarker | null>(null);
   const highlightLayerRef = useRef<L.Polyline | null>(null);
   const onMapClickRef = useRef(onMapClick);
+  // The track the view was last fitted to: a parent re-render (weather,
+  // sign-in, quality arriving) must not restart the fit — each restart
+  // re-flew the map and kept the line from settling for seconds.
+  const fittedRef = useRef<string | null>(null);
 
   // Keep the ref current
   useEffect(() => { onMapClickRef.current = onMapClick; }, [onMapClick]);
@@ -81,6 +88,9 @@ export default function MapView({
     mapRef.current = L.map("map", {
       center: [53.5, -7.5],
       zoom: 7,
+      // Quarter steps: a loop fills the map instead of sitting small in the
+      // middle because the next whole zoom level would clip it.
+      zoomSnap: 0.25,
       zoomControl: true,
       scrollWheelZoom: false,
     });
@@ -116,6 +126,7 @@ export default function MapView({
       highlightLayerRef.current?.remove();
       mapRef.current?.remove();
       mapRef.current = null;
+      fittedRef.current = null; // a new map starts unfitted
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps -- the map is built once
 
@@ -177,15 +188,27 @@ export default function MapView({
       }
     });
 
+    const fitKey = selectedRouteId
+      ? `${selectedRouteId}:${routes.find((r) => r.id === selectedRouteId)?.coordinates.length ?? 0}`
+      : routes.map((r) => r.id).join(",");
+    if (fittedRef.current === fitKey) return;
+    fittedRef.current = fitKey;
     if (selectedRouteId) {
       const selected = routes.find((r) => r.id === selectedRouteId);
       if (selected) {
         const coords: [number, number][] = JSON.parse(selected.coordinates);
-        mapRef.current.flyToBounds(L.latLngBounds(coords), {
-          padding: [60, 60],
-          duration: 0.8,
-          maxZoom: 13,
-        });
+        // Straight onto the loop, no fly-in from the default view: the line
+        // is there the moment the map is. The bottom padding clears the
+        // weather card and fade that overlap the map's lower edge.
+        mapRef.current.invalidateSize();
+        if (coords.length > 0) {
+          mapRef.current.fitBounds(L.latLngBounds(coords), {
+            paddingTopLeft: [40, 40],
+            paddingBottomRight: [40, 80],
+            maxZoom: 13,
+            animate: false,
+          });
+        }
       }
     } else if (routes.length > 0) {
       const allCoords = routes.flatMap((r) => JSON.parse(r.coordinates) as [number, number][]);
@@ -238,6 +261,17 @@ export default function MapView({
       });
     }
   }, [highlightSection]);
+
+  // A "Where" stretch tapped: centre on it, close enough to read the road.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !focus) return;
+    map.setView(focus.at, Math.max(map.getZoom(), 14), { animate: true });
+    L.popup({ closeButton: false, className: "compromise-popup", offset: [0, -4] })
+      .setLatLng(focus.at)
+      .setContent(focus.label.replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]!))
+      .openOn(map);
+  }, [focus]);
 
   // Helper: bearing between two lat/lng points in degrees
   const bearing = (a: [number, number], b: [number, number]) => {

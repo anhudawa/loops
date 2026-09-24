@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { rideVerdict, type ForecastHour } from "../ride-wind";
+import { rideVerdict, nextRidingHour, type ForecastHour } from "../ride-wind";
 
 // A rectangle loop ridden clockwise: 20 km north, 10 km east, 20 km south, 10 km west.
 function loop(): [number, number][] {
@@ -44,5 +44,24 @@ describe("rideVerdict", () => {
     const v = rideVerdict(loop(), [hour(9), hour(10, { precipitationProbability: 70, precipitation: 1.2, windGusts: 55 })])!;
     expect(v.detail).toMatch(/Rain likely around 10:00 \(70%\)/);
     expect(v.detail).toMatch(/Gusts to 55 km\/h/);
+  });
+});
+
+describe("nextRidingHour (no ride time picked)", () => {
+  it("daytime: plans for now", () => {
+    expect(nextRidingHour("2026-09-25T06:00")).toBeNull();
+    expect(nextRidingHour("2026-09-25T13:45")).toBeNull();
+    expect(nextRidingHour("2026-09-25T19:59")).toBeNull();
+  });
+  it("small hours: this morning at 8:00, not a 2 am ride", () => {
+    expect(nextRidingHour("2026-09-25T02:15")).toEqual({ hour: "2026-09-25T08:00", label: "This morning · 8:00" });
+  });
+  it("late evening: tomorrow at 8:00, across a month end", () => {
+    expect(nextRidingHour("2026-09-30T21:10")).toEqual({ hour: "2026-10-01T08:00", label: "Tomorrow · 8:00" });
+    expect(nextRidingHour("2026-12-31T23:00")?.hour).toBe("2027-01-01T08:00");
+  });
+  it("no clock: no plan", () => {
+    expect(nextRidingHour(undefined)).toBeNull();
+    expect(nextRidingHour("garbage")).toBeNull();
   });
 });

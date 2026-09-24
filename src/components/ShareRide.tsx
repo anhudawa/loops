@@ -219,7 +219,7 @@ export default function ShareRide({ route, ride }: ShareRideProps) {
                     type="text"
                     value={meetingPoint}
                     onChange={(e) => setMeetingPoint(e.target.value)}
-                    placeholder="e.g. Lidl car park, Fermoy"
+                    placeholder="e.g. the café by the start"
                     className="w-full rounded-lg px-4 py-2.5 text-sm focus:outline-none"
                     style={{ ...inputStyle, transition: "border-color 0.15s" }}
                   />
@@ -228,6 +228,9 @@ export default function ShareRide({ route, ride }: ShareRideProps) {
                 <div>
                   <label htmlFor={timeId} className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>
                     <span aria-hidden="true">🕐</span> Start time
+                    {/* The picker shows the phone's own date format (09/25/2026 on a
+                        US-set phone): say the day the way the message will. */}
+                    {when && <span className="normal-case tracking-normal font-bold" style={{ color: "var(--text-secondary)" }} data-testid="invite-when">· {when}</span>}
                   </label>
                   <input
                     id={timeId}

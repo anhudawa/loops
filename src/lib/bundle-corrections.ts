@@ -4,10 +4,17 @@
  * self-healing: read, notice, fix, persist once. Server-only.
  */
 import girona from "@/data/hub-bundles/girona-rebuild.json";
+// Library tracks a rider would read as broken (Cap Formentor stopping at
+// the lighthouse, Rocacorba stopping on the summit): the ride as ridden,
+// there and back, routed on our engine.
+import library from "@/data/hub-bundles/library-corrections.json";
 import { replaceRouteTrack, getRoute } from "@/lib/db";
 
 type Entry = Omit<Parameters<typeof replaceRouteTrack>[0], "country">;
-const BY_KEY = new Map<string, Entry>((girona as Entry[]).map((e) => [`Spain|${e.name}`, e]));
+const BY_KEY = new Map<string, Entry>([
+  ...(girona as Entry[]).map((e): [string, Entry] => [`Spain|${e.name}`, e]),
+  ...(library as (Entry & { country: string })[]).map((e): [string, Entry] => [`${e.country}|${e.name}`, e]),
+]);
 
 type StoredRoute = NonNullable<Awaited<ReturnType<typeof getRoute>>>;
 

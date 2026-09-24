@@ -113,6 +113,8 @@ export default function RouteDetailView({ ride, initialRoute }: { ride?: RideInv
   const ridePassed = useSyncExternalStore(noSubscribe, () => rideDayPassed(ride?.t), () => false);
   const mapWrapRef = useRef<HTMLDivElement>(null);
   const [showAllStretches, setShowAllStretches] = useState(false);
+  // A "Where" entry tapped: the map zooms to that stretch and names it.
+  const [focusStretch, setFocusStretch] = useState<{ at: [number, number]; label: string; n: number } | null>(null);
   // The server passes the route it already fetched, so the banner, title and
   // Road Standard card paint with the HTML instead of after a second fetch.
   const [route, setRoute] = useState<Route | null>(initialRoute ?? null);
@@ -523,6 +525,7 @@ export default function RouteDetailView({ ride, initialRoute }: { ride?: RideInv
             .map((c) => ({ at: c.at as [number, number], label: describeCompromise(c) }))}
           hoverPosition={hoverPosition}
           highlightSection={highlightSection}
+          focus={focusStretch}
           onPolylineClick={handlePolylineClick}
           onMapClick={() => setHighlightSection(null)}
         />
@@ -585,7 +588,9 @@ export default function RouteDetailView({ ride, initialRoute }: { ride?: RideInv
                 ) : (
                   <h1 className="text-lg md:text-2xl font-extrabold tracking-tight" style={{ color: "var(--text)" }}>{route.name}</h1>
                 )}
-                {route.is_verified === 1 && (
+                {/* Not on a one-way track with no way home, nor on a broken one:
+                    "verified" would vouch for a ride nobody can do as served. */}
+                {route.is_verified === 1 && track?.shape !== "point_to_point" && !track?.broken && (
                   <span className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-lg shrink-0" style={{ color: "var(--success)", background: "rgba(0, 255, 136, 0.1)" }}>
                     <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
@@ -732,15 +737,38 @@ export default function RouteDetailView({ ride, initialRoute }: { ride?: RideInv
               </p>
               {/* Every stretch, named where we could: the rider decides. */}
               {!!route.road_report.compromises?.length && (
-                <details className="mt-2">
+                <details
+                  className="mt-2"
+                  style={{ scrollMarginBottom: 112 }}
+                  onToggle={(e) => {
+                    // Opened: bring the whole list clear of the sticky sign-up bar.
+                    const el = e.currentTarget;
+                    if (el.open) requestAnimationFrame(() => el.scrollIntoView({ block: "nearest", behavior: "smooth" }));
+                  }}
+                >
                   <summary className="text-xs font-bold cursor-pointer select-none py-3.5 -my-2.5" style={{ color: "var(--text-secondary)" }}>
                     Where ({compromiseCount} {compromiseCount === 1 ? "stretch" : "stretches"})
                   </summary>
-                  <ul className="mt-1.5 space-y-1 text-xs" style={{ color: "var(--text-secondary)" }}>
+                  <ul className="mt-1.5 text-xs" style={{ color: "var(--text-secondary)" }}>
                     {route.road_report.compromises.slice(0, showAllStretches ? undefined : WHERE_LIST_SHOWN).map((c, i) => (
                       <li key={i} className="flex gap-1.5">
-                        <span aria-hidden="true" style={{ color: "#f5a524" }}>·</span>
-                        <span>{describeCompromise(c)}</span>
+                        <span aria-hidden="true" className="py-3" style={{ color: "#f5a524" }}>·</span>
+                        {Array.isArray(c.at) ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFocusStretch((f) => ({ at: c.at as [number, number], label: describeCompromise(c), n: (f?.n ?? 0) + 1 }));
+                              mapWrapRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                            }}
+                            className="text-left min-h-[44px] py-3 underline decoration-dotted underline-offset-2"
+                            style={{ color: "var(--text-secondary)" }}
+                            title="Show on the map"
+                          >
+                            {describeCompromise(c)}
+                          </button>
+                        ) : (
+                          <span className="py-3">{describeCompromise(c)}</span>
+                        )}
                       </li>
                     ))}
                     {!showAllStretches && compromiseCount > WHERE_LIST_SHOWN && (

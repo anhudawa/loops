@@ -14,6 +14,8 @@ interface WeatherData {
   windGusts?: number | null;
   /** Set when this is the forecast for a ride time, not current conditions. */
   forecastFor?: string | null;
+  /** Night where the ride starts, no time picked: the morning planned for ("Tomorrow · 8:00"). */
+  plannedFor?: string | null;
   windDirection: number;
   /** Hour-by-hour for the ride window (start hour first). */
   hours?: ForecastHour[];
@@ -190,7 +192,7 @@ export default function WeatherCard({ routeId, windOverlayEnabled, onWindToggle,
     <div className="rounded-2xl p-5 md:p-6" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
         <h2 className="text-xs font-extrabold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
-          {weather.forecastFor && rideWhen ? `Forecast · ${rideWhen}` : "Weather now"}
+          {weather.forecastFor && rideWhen ? `Forecast · ${rideWhen}` : weather.plannedFor ? `Forecast · ${weather.plannedFor}` : "Weather now"}
         </h2>
         <div className="flex items-center gap-2">
           {directionToggle}

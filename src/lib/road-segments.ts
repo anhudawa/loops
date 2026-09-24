@@ -643,6 +643,10 @@ function roadWord(hw: string): string {
     case "tertiary": case "tertiary_link": return "tertiary road";
     case "track": return "track";
     case "path": return "path";
+    // Not roads: a rider reading "on a road that is unpaved" for a
+    // gravel cycle path would picture the wrong thing.
+    case "cycleway": return "cycle path";
+    case "pedestrian": case "living_street": case "footway": return "pedestrian street";
     default: return "road";
   }
 }

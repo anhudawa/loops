@@ -1,5 +1,5 @@
 import { measureRoute } from "@/lib/measure-route";
-import { withAutoTitle } from "@/lib/route-title";
+import { withAutoTitle, nameAt } from "@/lib/route-title";
 import { trueClimb } from "@/lib/true-climb";
 import { checkRecommendable, needsRecommendCheck } from "@/lib/recommend-check";
 import { NextRequest, NextResponse, after } from "next/server";
@@ -241,6 +241,8 @@ export async function GET(
     try {
       const raw = JSON.parse(route.coordinates);
       pub.track_check = checkTrack(raw.map((c: number[]) => [Number(c[0]), Number(c[1])] as [number, number]), storedName);
+      // The town the ride starts in ("Ride something like this" asks the planner from it).
+      pub.start_place = nameAt([Number(raw[0][0]), Number(raw[0][1])], 6);
     } catch { /* client measures */ }
     return NextResponse.json(pub);
   } catch (err) {

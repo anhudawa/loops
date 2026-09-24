@@ -1,4 +1,5 @@
 import { SOCIAL_FEATURES_ENABLED } from "@/config/constants";
+import { estimateRideMinutes } from "./ride-time";
 import { freeGpxPhrase, gpxIsPublic } from "@/lib/copy";
 import { rideTimeSentence } from "@/lib/ride-time";
 // ============================================================
@@ -169,10 +170,13 @@ function beginnerSuitability(input: RouteFaqInput): string {
   if (techDiscipline) {
     return `${input.name} is an MTB route, so it suits riders comfortable with off-road and technical terrain rather than complete beginners. New mountain bikers should walk the harder sections until confident.`;
   }
-  if (input.distance_km <= 40 && climbPerKm < 10) {
+  // Tiers by riding time (the one ride-time model) and steepness, not
+  // distance alone: the 83 km / 319 m Roadman spin (~3½ h) is moderate.
+  const minutes = estimateRideMinutes({ distance_km: input.distance_km, elevation_gain_m: input.elevation_gain_m, discipline: input.discipline });
+  if (minutes <= 120 && climbPerKm < 10) {
     return `Yes. At ${input.distance_km}km with only ${input.elevation_gain_m}m of climbing, ${input.name} is a manageable ${input.discipline} route for beginners and anyone building fitness. Ride at your own pace and take breaks on the climbs.`;
   }
-  if (input.distance_km <= 80 && climbPerKm < 15) {
+  if (minutes <= 240 && climbPerKm < 15) {
     return `${input.name} is a moderate ${input.distance_km}km ${input.discipline} route with ${input.elevation_gain_m}m of climbing. Beginners can complete it with a little base fitness — allow extra time and pace the climbs.`;
   }
   return `${input.name} is a challenging ${input.distance_km}km ${input.discipline} route with ${input.elevation_gain_m}m of climbing, better suited to experienced riders with good endurance. Beginners should build up to it on shorter routes first.`;
@@ -181,7 +185,7 @@ function beginnerSuitability(input: RouteFaqInput): string {
 function bikeRecommendation(input: RouteFaqInput): string {
   switch (input.discipline) {
     case "road":
-      return `A road bike with road tyres (25-32mm) is ideal for ${input.name}. The surface is ${input.surface_type}, so a gravel or endurance bike works well too if you prefer wider tyres.`;
+      return `A road bike with road tyres (25-32mm) is ideal for ${input.name}; an endurance bike with wider tyres suits it too.`;
     case "gravel":
       return `A gravel bike with 35-45mm tyres is best for ${input.name}. A mountain bike or a road bike with wide, durable tyres can also handle the ${input.surface_type} surface.`;
     case "mtb":
@@ -219,9 +223,9 @@ export function generateOrganizationJsonLd() {
   return {
     "@context": "https://schema.org",
     "@type": "Organization",
-    name: "Loops.ie",
+    name: "LOOPS",
     url: "https://www.loops.ie",
-    description: "Discover cycling routes across Ireland",
+    description: "Road cycling loops on quiet roads — in Ireland and ten of Europe's best riding destinations.",
   };
 }
 

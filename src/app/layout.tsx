@@ -27,7 +27,7 @@ export const metadata: Metadata = {
   // GPX copy follows the GPX_ACCESS owner switch — never promise more.
   title: `LOOPS — Cycling Routes Worldwide | ${freeGpxPhrase({ title: true })}`,
   description: `Discover cycling routes worldwide. ${freeGpxPhrase({ title: true })}, elevation profiles and road-quality notes. Road routes from real riders.`,
-  keywords: ["cycling routes", "gravel cycling", "GPX", "bike routes", "MTB trails", "road cycling", "route sharing", "cycling community"],
+  keywords: ["road cycling routes", "cycling loops", "GPX", "route planner", "quiet roads", "Roadman Cycling", "Ireland cycling", "cycling holidays"],
   verification: {
     google: "0-mGmMRQK6Iu8na6wuEcwzm1I7RO2uT3-XJ3T8C5wys",
   },

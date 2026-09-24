@@ -61,7 +61,8 @@ function hourAt(km: number, speedKmh: number, n: number): number {
 }
 
 function score(segs: Seg[], total: number, hours: ForecastHour[], speedKmh: number) {
-  let head = 0, tail = 0, cross = 0, outW = 0, outL = 0, homeW = 0, homeL = 0;
+  let head = 0, tail = 0, cross = 0, calm = 0, beyond = 0, outW = 0, outL = 0, homeW = 0, homeL = 0;
+  const forecastKm = hours.length * speedKmh;
   for (const s of segs) {
     const b = s.b;
     const mid = s.at + s.len / 2;
@@ -70,14 +71,15 @@ function score(segs: Seg[], total: number, hours: ForecastHour[], speedKmh: numb
     // Weight by strength: a 30 km/h headwind matters more than a 9 km/h one.
     const strength = Math.min(1, h.windSpeed / 25);
     const c = Math.cos(((b - windTo) * Math.PI) / 180);
-    if (h.windSpeed >= MIN_WIND_KMH) {
+    if (mid > forecastKm) beyond += s.len; // after the last forecast hour
+    else if (h.windSpeed >= MIN_WIND_KMH) {
       if (c > 0.34) tail += s.len; else if (c < -0.34) head += s.len; else cross += s.len;
-    }
+    } else calm += s.len;
     if (mid <= total / 2) { outW += c * strength * s.len; outL += s.len; }
     else { homeW += c * strength * s.len; homeL += s.len; }
   }
   return {
-    head, tail, cross,
+    head, tail, cross, calm, beyond,
     out: outL ? outW / outL : 0,
     home: homeL ? homeW / homeL : 0,
   };
@@ -121,15 +123,22 @@ export function rideVerdict(
     headline = `${wind}: mostly a crosswind on this loop.`;
   } else {
     // Every km accounted for: the rest of the loop is crosswind.
-    const cross = Math.round(fwd.cross);
-    headline = `${wind}: about ${Math.round(fwd.head)} km into it and ${Math.round(fwd.tail)} km with it at your back${cross >= 5 ? `; the other ${cross} km a crosswind` : ""}.`;
+    // Every km accounted for: crosswind, light air, and past the forecast.
+    const rest: string[] = [];
+    if (Math.round(fwd.cross) >= 5) rest.push(`${Math.round(fwd.cross)} km a crosswind`);
+    if (Math.round(fwd.calm) >= 5) rest.push(`${Math.round(fwd.calm)} km in light air`);
+    if (Math.round(fwd.beyond) >= 5) rest.push(`the last ${Math.round(fwd.beyond)} km after the forecast ends`);
+    headline = `${wind}: about ${Math.round(fwd.head)} km into it and ${Math.round(fwd.tail)} km with it at your back${rest.length ? `; ${rest.join(", ")}` : ""}.`;
   }
 
   // Rain and gusts across the ride window.
   const notes: string[] = [];
   const wet = rideHours.find((h) => (h.precipitationProbability ?? 0) >= 50 || h.precipitation >= 0.5);
   if (wet) notes.push(`Rain likely around ${hhmm(wet.time)}${wet.precipitationProbability != null ? ` (${Math.round(wet.precipitationProbability)}%)` : ""}.`);
-  else if (rideHours.every((h) => (h.precipitationProbability ?? 0) < 20 && h.precipitation < 0.1)) notes.push("Dry for the ride.");
+  else if (rideHours.every((h) => (h.precipitationProbability ?? 0) < 20 && h.precipitation < 0.1)) notes.push(
+    // Said for the hours the forecast covers, not a 14-hour ride's first 8.
+    rideHours.length * speedKmh < total ? `Dry until ${hhmm(rideHours[rideHours.length - 1].time)}, as far as the forecast goes.` : "Dry for the ride.",
+  );
   const gust = Math.max(...rideHours.map((h) => h.windGusts ?? 0));
   if (gust >= 45) notes.push(`Gusts to ${Math.round(gust)} km/h — take care on exposed roads.`);
 

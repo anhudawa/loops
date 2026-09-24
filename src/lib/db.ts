@@ -1733,7 +1733,9 @@ export async function getRegionStats(countrySlug: string, regionSlug: string): P
        COUNT(*) as route_count,
        COALESCE(SUM(distance_km), 0) as total_distance,
        COALESCE((SELECT AVG(rt.score) FROM ratings rt JOIN routes r2 ON rt.route_id = r2.id WHERE ${slugSql("r2.country")} = $1 AND ${slugSql("r2.region")} = ANY($2::text[])), 0) as avg_rating,
-       MIN(region) as display_name,
+       -- The page's own name: a route matched by county ("Girona") beats the
+       -- wider region it was stored under ("Cataluña").
+       COALESCE(MIN(CASE WHEN ${slugSql("region")} = ANY($2::text[]) THEN region END), MIN(CASE WHEN ${slugSql("county")} = ANY($2::text[]) THEN county END), MIN(region)) as display_name,
        MIN(country) as country_display_name
      FROM routes
      WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road')) AND road_report IS NOT NULL AND ${slugSql("country")} = $1

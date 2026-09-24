@@ -440,7 +440,10 @@ export default function RouteDetailView({ ride, initialRoute }: { ride?: RideInv
   // "Ride something like this": the generator needs an account, so a
   // signed-out rider goes to sign-up carrying the ask (no prefetch: a cached
   // /generate redirect would drop the query).
-  const likeThisHref = `/generate?q=${encodeURIComponent(`${route.distance_km}km ${route.discipline} loop from ${route.region || route.county}`)}`;
+  // From the town the ride starts in (a region name like "Cataluña" is not a
+  // start the planner can use), at a length the planner plans (≤ 200 km).
+  const likeFrom = (route as { start_place?: string | null }).start_place || route.region || route.county;
+  const likeThisHref = `/generate?q=${encodeURIComponent(`${Math.min(200, Math.round(Number(route.distance_km)))}km ${route.discipline} loop from ${likeFrom}`)}`;
   const likeThisLink = !user && !authUnknown ? loginHrefFor(likeThisHref, { signup: true }) : likeThisHref;
   const compromiseCount = route.road_report?.compromises?.length ?? 0;
 

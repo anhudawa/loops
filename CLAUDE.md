@@ -331,6 +331,18 @@ node scripts/import-routes.mjs scripts/hub-data/girona-eat-sleep-cycle.json --dr
   /api/routes/quality takes stored routes only, cached 30 days; place
   searches match name/county/region only; unjudged out-and-backs are judged
   by the daily cron (Cap Formentor was hidden until opened).
+- Planner honesty (2026-09-24 evening): a served loop > 15 % off the ask says
+  by how much; hilly asks rank climbing before the distance band and flag
+  loops under 12 m/km; titles name a far town only if the ride passes within
+  1.5 km (autoTitle); road notes merge same-road stretches (summaryParts);
+  "easy spin"/"recovery" = flat; declines name an engine-checked ride even
+  if shorter (with its km); library loops survive a fresh search's decline;
+  Generate's library badge is "Verified" only when the standard is met.
+  Scenery Overpass falls back to the maps.mail.ru mirror. Smoke suite has
+  axe WCAG AA checks (home, ride link, login, Dublin guide).
+- Shipping: scratchpad ship.sh runs tsc, eslint, vitest and next build by
+  exit code and only then commits/pushes (a grep-filtered build once let a
+  broken build through; Vercel kept the previous deploy).
 - No CSRF tokens; cookie-only sessions; locale hardcoded en-IE
 
 ## Conventions

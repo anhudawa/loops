@@ -907,7 +907,17 @@ export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
   `;
 
   const { rows } = await sql.query(query, params);
-  return publicRows(rows) as Route[];
+  const out = publicRows(rows) as Route[];
+  // How many rows the page query returned BEFORE duplicates / hidden tracks
+  // were dropped: a full page means there may be another (the list's
+  // "load more"); the filtered length cannot say so.
+  Object.defineProperty(out, "rawCount", { value: rows.length, enumerable: false });
+  return out;
+}
+
+/** Rows the database returned for a getRoutes page before display filtering. */
+export function rawCountOf(rows: unknown[]): number {
+  return (rows as unknown as { rawCount?: number }).rawCount ?? rows.length;
 }
 
 export async function getRoute(id: string): Promise<(Route & { is_verified?: number; creator_name?: string | null; creator_avatar?: string | null; creator_rating?: number; creator_rating_count?: number }) | undefined> {

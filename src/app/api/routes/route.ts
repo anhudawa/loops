@@ -3,7 +3,7 @@ import { findPlaceByName } from "@/lib/map-labels";
 import { recommendableNow } from "@/lib/recommendable";
 import { NextRequest, NextResponse } from "next/server";
 import { publicRoute, thinCoordinates } from "@/lib/public-route";
-import { getRoutes, insertRoute, getCounties, getRegions, getCountries, getUserBySession, recordEvent, ANALYTICS_EVENTS } from "@/lib/db";
+import { getRoutes, rawCountOf, insertRoute, getCounties, getRegions, getCountries, getUserBySession, recordEvent, ANALYTICS_EVENTS } from "@/lib/db";
 import { parseRouteFile } from "@/lib/route-parser";
 import { fetchRideWithGPS } from "@/lib/ridewithgps";
 import { apiError, handleApiError } from "@/lib/api-utils";
@@ -62,13 +62,16 @@ export async function GET(request: NextRequest) {
       duration: searchParams.get("duration") || undefined,
       homeCountryBias: searchParams.get("homeBias") || undefined,
       avgSpeedKmh: userSpeed,
-      limit: pageSize + 1, // one extra row says whether there is a next page
+      limit: pageSize,
       offset: (page - 1) * pageSize,
     };
 
     const rows = await getRoutes(filters);
-    const hasMore = rows.length > pageSize;
-    let routes = hasMore ? rows.slice(0, pageSize) : rows;
+    // A full page from the database (before duplicates/hidden tracks were
+    // dropped) means there may be more; the page itself is never padded
+    // with the next page's first route.
+    const hasMore = rawCountOf(rows) >= pageSize;
+    let routes = rows;
     // A place searched for ("Howth") also finds the routes that ride THROUGH
     // it, not only those named after it or starting there.
     if (filters.search && page === 1 && routes.length < pageSize) {

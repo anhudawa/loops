@@ -584,6 +584,8 @@ export interface RouteFilters {
   discipline?: string;
   surface_type?: string;
   search?: string;
+  /** The search is a place name: match name/county/region only, not descriptions. */
+  searchIsPlace?: boolean;
   sort?: string;
   verified?: boolean;
   lat?: number;
@@ -695,7 +697,11 @@ export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
   }
   if (filters.search) {
     const s = filters.search.trim();
-    const matches = [`r.name ILIKE $${idx}`, `r.description ILIKE $${idx}`, `r.county ILIKE $${idx}`, `r.region ILIKE $${idx}`];
+    // A place searched for ("Cork") matches place fields, not prose: "cork
+    // oak" in a Spanish route's description is not Cork.
+    const matches = filters.searchIsPlace
+      ? [`r.name ILIKE $${idx}`, `r.county ILIKE $${idx}`, `r.region ILIKE $${idx}`]
+      : [`r.name ILIKE $${idx}`, `r.description ILIKE $${idx}`, `r.county ILIKE $${idx}`, `r.region ILIKE $${idx}`];
     params.push(`%${s}%`);
     idx++;
     // "Mallorca" also finds the routes stored under "Majorca" / "Balearic Islands".

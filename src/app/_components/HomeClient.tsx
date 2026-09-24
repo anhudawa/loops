@@ -651,12 +651,13 @@ function HomeContent() {
             Clear filters
           </button>
         )}
+        {/* A town with no library loops yet: the planner builds one from it. */}
         <Link
-          href="/generate"
-          className="text-sm font-bold px-4 min-h-[44px] inline-flex items-center rounded-lg hover:opacity-80"
-          style={{ color: "var(--text-secondary)", border: "1px solid var(--border)" }}
+          href={isSearching ? `/generate?q=${encodeURIComponent(`A 2 hour road loop from ${filters.search.trim()}`)}` : "/generate"}
+          className={isSearching ? "btn-accent text-sm font-bold px-4 min-h-[44px] inline-flex items-center rounded-lg" : "text-sm font-bold px-4 min-h-[44px] inline-flex items-center rounded-lg hover:opacity-80"}
+          style={isSearching ? undefined : { color: "var(--text-secondary)", border: "1px solid var(--border)" }}
         >
-          Ask the planner
+          {isSearching ? `Plan a loop from ${filters.search.trim()}` : "Ask the planner"}
         </Link>
         <Link
           href="/collections"

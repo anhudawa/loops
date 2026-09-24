@@ -51,6 +51,10 @@ export async function GET(request: NextRequest) {
       discipline: searchParams.get("discipline") || undefined,
       surface_type: searchParams.get("surface_type") || undefined,
       search: searchParams.get("search") || undefined,
+      searchIsPlace: (() => {
+        const q = searchParams.get("search");
+        return !!q && (!!lookupKnownPlace(q) || !!findPlaceByName(q));
+      })(),
       sort: searchParams.get("sort") || undefined,
       verified: searchParams.get("verified") === "true" ? true : undefined,
       lat: searchParams.get("lat") ? Number(searchParams.get("lat")) : undefined,

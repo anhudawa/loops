@@ -87,3 +87,38 @@ export function retraceSummary(coords: [number, number][]): { km: number; pct: n
   const retraceKm = Math.round(((total * c.retracePct) / 100) * 10) / 10;
   return { km: retraceKm, pct: c.retracePct, warn: c.retracePct > 15 || retraceKm > 3 };
 }
+
+/** Share (0–1) of `a`'s points within `tolKm` of some point of `b`. */
+export function trackOverlap(a: [number, number][], b: [number, number][], tolKm = 0.1): number {
+  if (a.length === 0 || b.length === 0) return 0;
+  const cy = 0.001, cx = 0.0015; // ~110 m cells
+  const cell = (p: [number, number]) => `${Math.floor(p[0] / cy)},${Math.floor(p[1] / cx)}`;
+  const grid = new Map<string, [number, number][]>();
+  for (const p of b) { const k = cell(p); (grid.get(k) ?? grid.set(k, []).get(k)!).push(p); }
+  let near = 0;
+  for (const p of a) {
+    const [y, x] = cell(p).split(",").map(Number);
+    let hit = false;
+    for (let i = -1; i <= 1 && !hit; i++) for (let j = -1; j <= 1 && !hit; j++) {
+      for (const q of grid.get(`${y + i},${x + j}`) ?? []) if (km(p, q) <= tolKm) { hit = true; break; }
+    }
+    if (hit) near++;
+  }
+  return near / a.length;
+}
+
+/**
+ * Near-duplicate library routes (the same ride imported twice under two
+ * names: "Els Àngels Loop" / "Els Àngels Loop, Girona"): starts within 3 km
+ * and 70 %+ of each track on the other. Keeps the first (the list's order).
+ */
+export function dedupeRoutes<T>(routes: T[], coordsOf: (r: T) => [number, number][] | null): T[] {
+  const kept: Array<{ r: T; c: [number, number][] }> = [];
+  for (const r of routes) {
+    const c = coordsOf(r);
+    if (!c || c.length < 2) { kept.push({ r, c: [] }); continue; }
+    const dup = kept.some((k) => k.c.length > 1 && km(k.c[0], c[0]) <= 3 && trackOverlap(c, k.c) >= 0.7 && trackOverlap(k.c, c) >= 0.7);
+    if (!dup) kept.push({ r, c });
+  }
+  return kept.map((k) => k.r);
+}

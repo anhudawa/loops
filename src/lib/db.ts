@@ -11,6 +11,7 @@ import {
 
 import { withPublicDescription, tidyRouteName } from "@/lib/public-route";
 import { withAutoTitle } from "@/lib/route-title";
+import { dedupeRoutes } from "@/lib/track-shape";
 import { recommendableNow } from "@/lib/recommendable";
 import { POINT_TO_POINT_KM } from "@/lib/track-shape";
 import { lookupKnownPlace } from "@/lib/places-known";
@@ -26,6 +27,16 @@ export { ANALYTICS_EVENTS } from "@/lib/metrics";
  * imported name reads cleaned (tidyRouteName). Admin listings read raw.
  */
 function publicRows<T extends Record<string, unknown>>(rows: T[]): T[] {
+  // The same ride imported twice under two names shows once (the first in
+  // the list's order): starts within 3 km, 70 %+ of each track on the other.
+  rows = dedupeRoutes(rows, (r) => {
+    if (typeof r.coordinates !== "string") return null;
+    try {
+      const c = JSON.parse(r.coordinates) as number[][];
+      const step = Math.max(1, Math.floor(c.length / 400));
+      return c.filter((_, i) => i % step === 0).map((p) => [Number(p[0]), Number(p[1])] as [number, number]);
+    } catch { return null; }
+  });
   return rows.map((r) => {
     let out = withPublicDescription(r);
     if (typeof out.name === "string" && typeof out.coordinates === "string" && out.distance_km != null) {

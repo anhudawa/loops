@@ -7,6 +7,10 @@
 import { placeNear } from "./map-labels";
 import { KNOWN_PLACES } from "./places-known";
 import { tidyRouteName } from "./public-route";
+import { checkTrack } from "./track-shape";
+
+/** A track riding this much of itself twice is not titled "… Loop". */
+const NOT_A_LOOP_RETRACE_PCT = 30;
 
 const KM_PER_DEG = 111.32;
 function km(a: [number, number], b: [number, number]): number {
@@ -94,7 +98,16 @@ export function autoTitle(
 export function withAutoTitle<T extends { name: string; coordinates: string; distance_km: number | string }>(route: T): T & { renamed?: boolean } {
   // The display title everywhere (lists, page, <title>, share card): the
   // imported name cleaned, or a place-based title when it says nothing.
-  const tidy = tidyRouteName(route.name);
+  let tidy = tidyRouteName(route.name);
+  // "Mare de Déu del Mont Loop" that rides 41 % of itself twice is not
+  // called a loop: the trailing word goes when the track is not one.
+  if (/\sloop$/i.test(tidy)) {
+    try {
+      const c = (JSON.parse(route.coordinates) as number[][]).map((p) => [Number(p[0]), Number(p[1])] as [number, number]);
+      const t = checkTrack(c);
+      if (t && (t.shape === "out-and-back" || t.retracePct >= NOT_A_LOOP_RETRACE_PCT)) tidy = tidy.replace(/\s+loop$/i, "");
+    } catch { /* keep the name */ }
+  }
   if (!isGenericName(tidy)) return tidy === route.name ? route : { ...route, name: tidy };
   try {
     const coords = (JSON.parse(route.coordinates) as number[][]).map((c) => [Number(c[0]), Number(c[1])] as [number, number]);

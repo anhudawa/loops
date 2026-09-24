@@ -271,6 +271,12 @@ node scripts/import-routes.mjs scripts/hub-data/girona-eat-sleep-cycle.json --dr
   a map lookup (no claim when it fails); loops-road/relaxed profiles cost
   quiet secondary roads (traffic class ≤ 3) 1.5× not 3× — needs
   POST /api/engine/sync-profiles (admin) after deploy.
+- Coastal/headland starts (2026-09-24): when pass 1 keeps no loop, a
+  lollipop runs alongside pass 2 (lollipopRides: stem to an inland town whose
+  road is direct, full-pipeline loop from it, same stem home; said on the
+  card, never titled "loop"). Galway/Maspalomas served; Sóller declines
+  honestly (only main roads out). Destination + asked distance: loops OVER
+  the place (loopsOverDestination) built in parallel with there-and-back.
 - No CSRF tokens; cookie-only sessions; locale hardcoded en-IE
 
 ## Conventions

@@ -1290,6 +1290,31 @@ export async function rerouteWaypoints(
       direct = general;
     }
   }
+  // A pin that snapped onto a piece of path cut off from the network (the
+  // Bull Wall, a park or estate path — "no track found") is nudged towards
+  // the other pin until the leg reaches connected roads.
+  if (!direct && !/timeout|watchdog|network|http:5/.test(lastBRouterFailure) && waypoints.length === 2) {
+    const [a, b] = waypoints;
+    const legKm = haversineKm(a[0], a[1], b[0], b[1]);
+    const toward = (p: [number, number], q: [number, number], km: number): [number, number] => {
+      const f = Math.min(0.45, km / Math.max(legKm, 0.001));
+      return [p[0] + (q[0] - p[0]) * f, p[1] + (q[1] - p[1]) * f];
+    };
+    const tries: [number, number][][] = [];
+    for (const d of [0.15, 0.4, 0.8]) {
+      if (legKm < d * 2.2) break;
+      tries.push([toward(a, b, d), b], [a, toward(b, a, d)], [toward(a, b, d), toward(b, a, d)]);
+    }
+    for (const w of tries) {
+      const p = await routeWithFallback(w, profile);
+      if (p && p.coords.length >= 2) {
+        genDebug(`[reroute] leg reached the road network with a nudged pin (${lastBRouterFailure || "no track"})`);
+        direct = p;
+        break;
+      }
+      if (/timeout|watchdog|network|http:5/.test(lastBRouterFailure)) break;
+    }
+  }
   if (!direct) console.error(`[reroute] no route ${JSON.stringify(waypoints)}: ${lastBRouterFailure}`);
   const directShared = direct && nogo ? sharedShare(direct.coords, avoid) : 0;
   const avoiding = nogo && budgetLeft() && (!direct || directShared > 0.15) ? await routeViaBRouter(waypoints, profile, false, nogo) : null;

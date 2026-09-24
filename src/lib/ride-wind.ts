@@ -120,7 +120,9 @@ export function rideVerdict(
   } else if (fwd.cross > fwd.head + fwd.tail) {
     headline = `${wind}: mostly a crosswind on this loop.`;
   } else {
-    headline = `${wind}: about ${Math.round(fwd.head)} km into it and ${Math.round(fwd.tail)} km with it at your back.`;
+    // Every km accounted for: the rest of the loop is crosswind.
+    const cross = Math.round(fwd.cross);
+    headline = `${wind}: about ${Math.round(fwd.head)} km into it and ${Math.round(fwd.tail)} km with it at your back${cross >= 5 ? `; the other ${cross} km a crosswind` : ""}.`;
   }
 
   // Rain and gusts across the ride window.

@@ -164,3 +164,16 @@ for library loops in Generate is the owner switch `LIBRARY_ROAD_POLICY`
 ("name" default — offered with the compromise named, clean loops first;
 "enforce" — dropped). Recommendation on record: keep "name": routes are
 facts, and the rider sees exactly which metres are on which road.
+
+## Owner decision 2026-09-24 — main roads to get back to the start
+
+> "If the main road is unavoidable to get back to Bray use it. Just make sure
+> it's a road cyclists are allowed on. Never motorways no matter what."
+
+Applied in `compromiseAcceptable` (src/lib/road-segments.ts): within
+EXIT_ZONE_KM (6 km) of the start or finish, a main/fast road the engine had
+to take is served however long it is (it was capped at 2.5 km per stretch and
+4 km in total), always named "near the start/finish" on the card, the map and
+the GPX. Roads closed to bikes (bicycle=no/use_sidepath, access=no) and
+motorways stay impossible in both routing profiles and are rejected by the
+serving policy. Mid-ride allowances are unchanged.

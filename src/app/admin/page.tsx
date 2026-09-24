@@ -129,7 +129,7 @@ export default function AdminPage() {
   useEffect(() => {
     fetch("/api/admin/import-bundle").then((r) => (r.ok ? r.json() : null)).then((d) => d?.data && setBundles(d.data)).catch(() => {});
   }, []);
-  const runTidy = async (action: "tidy" | "hide-tests" | "recommend-check") => {
+  const runTidy = async (action: "tidy" | "hide-tests" | "recommend-check" | "measure") => {
     setImporting(action);
     setImportMsg(null);
     try {
@@ -541,6 +541,9 @@ export default function AdminPage() {
                 </button>
                 <button onClick={() => runTidy("hide-tests")} disabled={importing !== null} className="px-3 py-2 rounded-lg text-xs font-bold disabled:opacity-40" style={{ background: "var(--bg)", color: "var(--text)", border: "1px solid var(--border)" }} title="Oregon Karoo, Battersea, Redhill, Windsor — hidden from the public library, not deleted">
                   {importing === "hide-tests" ? "Working…" : "Hide test uploads (4)"}
+                </button>
+                <button onClick={() => runTidy("measure")} disabled={importing !== null} className="px-3 py-2 rounded-lg text-xs font-bold disabled:opacity-40" style={{ background: "var(--bg)", color: "var(--text)", border: "1px solid var(--border)" }} title="Routes without a Road Standard check stay off every list until measured. This measures them now (also runs daily). Press again if some are left.">
+                  {importing === "measure" ? "Measuring…" : "Measure unmeasured routes"}
                 </button>
                 <button onClick={() => runTidy("recommend-check")} disabled={importing !== null} className="px-3 py-2 rounded-lg text-xs font-bold disabled:opacity-40" style={{ background: "var(--bg)", color: "var(--text)", border: "1px solid var(--border)" }} title="Checks every route's shape: loops and out-and-backs with no other road (Formentor) can be recommended; out-and-backs with another road home stay on their rider's profile only. Press again if it says some are still to check.">
                   {importing === "recommend-check" ? "Checking…" : "Check out-and-back routes"}

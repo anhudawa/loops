@@ -277,6 +277,14 @@ node scripts/import-routes.mjs scripts/hub-data/girona-eat-sleep-cycle.json --dr
   card, never titled "loop"). Galway/Maspalomas served; Sóller declines
   honestly (only main roads out). Destination + asked distance: loops OVER
   the place (loopsOverDestination) built in parallel with there-and-back.
+- Owner decisions 2026-09-24: (1) routes with no road report are hidden from
+  every list and suggestion (SQL gate road_report IS NOT NULL) — measured by
+  the daily cron /api/cron/measure and /admin "Measure unmeasured routes";
+  (2) Draw on phones: one-row header, nav in a menu; (3) weak names ("Sunday
+  Social") → start – far point – end · km (isWeakName, renamed on open and by
+  "Tidy library data"); (4) main roads near the start/finish are used however
+  long when unavoidable (named), never motorways or roads closed to bikes —
+  see the road-standard spec.
 - No CSRF tokens; cookie-only sessions; locale hardcoded en-IE
 
 ## Conventions

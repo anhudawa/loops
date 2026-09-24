@@ -33,8 +33,27 @@ const LOOP_KM = 1.5;
 /** Names a generator/planner gave a route before this existed (safe to replace). */
 export const GENERIC_NAME = /^(?:planned|generated|edited)(?: (?:road|gravel|mtb))? (?:route|loop)(?: — [\d.]+ ?km| — [\d.]+km)?$|^generated [\d.]+ km route$|^planned (?:road|gravel|mtb) route — [\d.]+ km$/i;
 
+/** Words that say nothing about where a ride goes ("Sunday Social", "Flat long route"). */
+const NOTHING_WORDS = new Set([
+  "sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "weekend", "weekday", "morning",
+  "evening", "afternoon", "night", "day", "social", "club", "group", "spin", "ride", "rides", "route", "routes",
+  "loop", "loops", "lap", "laps", "cycle", "cycling", "bike", "road", "roads", "flat", "hilly", "rolling", "long",
+  "short", "big", "little", "small", "easy", "hard", "quick", "fast", "slow", "steady", "gentle", "classic", "the",
+  "a", "an", "my", "our", "and", "with", "of", "for", "in", "on", "to", "km", "k", "mile", "miles", "hour", "hours",
+  "min", "mins", "coffee", "cafe", "café", "training", "recovery", "tempo", "endurance", "new", "test", "untitled",
+  "planned", "generated", "edited", "favourite", "favorite", "nice", "good", "great", "lovely",
+]);
+
+/** A name that tells a rider nothing about where the ride goes. */
+export function isWeakName(name: string | null | undefined): boolean {
+  if (!name) return true;
+  const words = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ").trim().split(" ").filter((w) => w && !/^\d+(?:km|k|mi)?$/.test(w));
+  return words.length === 0 || words.every((w) => NOTHING_WORDS.has(w));
+}
+
 export function isGenericName(name: string | null | undefined): boolean {
-  return !name || GENERIC_NAME.test(name.trim());
+  return !name || GENERIC_NAME.test(name.trim()) || isWeakName(name);
 }
 
 /**

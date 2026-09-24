@@ -696,14 +696,13 @@ export function compromiseAcceptable(report: RoadReport, distanceKm: number): bo
   // Main/fast roads: a short, unavoidable link (a bridge, a bypass crossing)
   // is served WITH the warning; anything longer is not our route.
   const roadM = report.compromises.filter((c) => c.kind === "main_road" || c.kind === "fast_road");
-  // Exit allowance: the way in/out of the start town. A valley or island
-  // town may have no exit that meets the standard (Sóller: 1.6 km of the
-  // Ma-11 is how every rider leaves). Up to 2.5 km per stretch and 4 km in
-  // total there, always named "near the start/finish"; it does not eat the
-  // mid-ride allowance.
-  const exitM = roadM.filter((c) => c.near_start);
-  const exitTotal = exitM.reduce((s, c) => s + c.meters, 0);
-  if (exitM.some((c) => c.meters > 2500) || exitTotal > 4000) return false;
+  // Exit allowance (owner, 2026-09-24): "If the main road is unavoidable to
+  // get back to Bray use it. Just make sure it's a road cyclists are allowed
+  // on. Never motorways no matter what." Within EXIT_ZONE_KM of the start or
+  // finish a main/fast road the engine had to take is served, however long,
+  // always named "near the start/finish". Motorways and roads closed to bikes
+  // never pass (above, and forbidden in both routing profiles). It does not
+  // eat the mid-ride allowance.
   const midM = roadM.filter((c) => !c.near_start);
   const totalM = midM.reduce((s, c) => s + c.meters, 0);
   const longest = midM.reduce((m, c) => Math.max(m, c.meters), 0);

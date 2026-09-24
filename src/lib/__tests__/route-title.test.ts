@@ -34,3 +34,12 @@ describe("isGenericName", () => {
     expect(isGenericName(n)).toBe(false);
   });
 });
+
+describe("weak names get a real title", () => {
+  it.each(["Sunday Social", "Flat long route", "  Flat  long route ", "Easy 50km spin", "Saturday Club Ride"])("%s is weak", (n) => {
+    expect(isGenericName(n)).toBe(true);
+  });
+  it.each(["Roadman Group Spin (Saturday Route)", "Sally Gap loop", "Coll de Rates Classic Loop", "Els Àngels Loop, Girona"])("%s is kept", (n) => {
+    expect(isGenericName(n)).toBe(false);
+  });
+});

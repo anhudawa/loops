@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin";
-import { tidyLibraryData, hideTestUploads, getAllRoutesForRecommendCheck } from "@/lib/db";
+import { tidyLibraryData, hideTestUploads, getAllRoutesForRecommendCheck, renameRoute } from "@/lib/db";
+import { withAutoTitle } from "@/lib/route-title";
+import { measureUnmeasured } from "@/lib/measure-route";
 import { checkRecommendable, needsRecommendCheck } from "@/lib/recommend-check";
 import { handleApiError } from "@/lib/api-utils";
 
@@ -16,8 +18,22 @@ export async function POST(request: NextRequest) {
     const auth = await requireAdmin(request);
     if (auth instanceof NextResponse) return auth;
     const body = await request.json().catch(() => ({}));
-    if (body?.action === "tidy") return NextResponse.json({ data: await tidyLibraryData() });
+    if (body?.action === "tidy") {
+      const data: Record<string, number> = await tidyLibraryData();
+      // Names that say nothing about the ride ("Sunday Social", "Flat long
+      // route", "Planned road route — 116.9 km") → start – far point – end · km.
+      let renamed = 0;
+      for (const r of await getAllRoutesForRecommendCheck()) {
+        const t = withAutoTitle(r);
+        if (t.renamed && t.name !== r.name) { await renameRoute(r.id, t.name, r.name); renamed++; }
+      }
+      return NextResponse.json({ data: { ...data, names_renamed: renamed } });
+    }
     if (body?.action === "hide-tests") return NextResponse.json({ data: { hidden: await hideTestUploads() } });
+    if (body?.action === "measure") {
+      // Unmeasured routes stay off every list: measure them now (time-boxed; press again to go on).
+      return NextResponse.json({ data: await measureUnmeasured(45_000) });
+    }
     if (body?.action === "recommend-check") {
       // Loops and one-road out-and-backs may be recommended; out-and-backs
       // with another road home never are. Time-boxed: press again to go on.

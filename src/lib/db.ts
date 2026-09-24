@@ -115,7 +115,7 @@ async function namesWithOpenableRoutes(rows: { id: string; name: string }[]): Pr
 }
 
 /** The public-list gate every list query repeats (approved, road, recommendable, a loop). */
-const LISTED_SQL = `(quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road'))`;
+const LISTED_SQL = `(quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road')) AND road_report IS NOT NULL`;
 
 // ──── Init ────
 export async function initDb() {
@@ -719,7 +719,7 @@ export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
   conditions.push(loopTrackSql("r"));
 
   // Only show approved routes (or legacy routes without a quality_status yet)
-  conditions.push(`(r.quality_status = 'approved' OR r.quality_status IS NULL) AND r.discipline IN ('road') AND (r.recommend_status IS NULL OR r.recommend_status IN ('ok','only-road'))`);
+  conditions.push(`(r.quality_status = 'approved' OR r.quality_status IS NULL) AND r.discipline IN ('road') AND (r.recommend_status IS NULL OR r.recommend_status IN ('ok','only-road')) AND r.road_report IS NOT NULL`);
   // v1 lists only the disciplines LOOPS plans (road): ENABLED_DISCIPLINES.
   conditions.push(`r.discipline IN (${ENABLED_DISCIPLINES.map((d) => `'${d}'`).join(", ")})`);
 
@@ -1450,7 +1450,7 @@ export async function getUserStats(userId: string): Promise<UserStats> {
 
 export async function getCounties(): Promise<string[]> {
   await ensureRecommendColumn();
-  const { rows } = await sql`SELECT DISTINCT county FROM routes WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road')) ORDER BY county`;
+  const { rows } = await sql`SELECT DISTINCT county FROM routes WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road')) AND road_report IS NOT NULL ORDER BY county`;
   return rows.map((r) => r.county);
 }
 
@@ -1537,7 +1537,7 @@ export async function getAllRoutes(page = 1, limit = 50): Promise<{ routes: Rout
 
 export async function getAllRoutesForSitemap(): Promise<{ id: string; created_at: string }[]> {
   await ensureRecommendColumn();
-  const { rows } = await sql`SELECT id, created_at FROM routes WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road')) ORDER BY created_at DESC`;
+  const { rows } = await sql`SELECT id, created_at FROM routes WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road')) AND road_report IS NOT NULL ORDER BY created_at DESC`;
   return rows as { id: string; created_at: string }[];
 }
 
@@ -1566,7 +1566,7 @@ export async function getRoutesByCountrySlug(slug: string): Promise<Route[]> {
     `SELECT r.*, COALESCE(AVG(rt.score), 0) as avg_score, COUNT(rt.id) as rating_count
      FROM routes r
      LEFT JOIN ratings rt ON rt.route_id = r.id
-     WHERE ${slugSql("r.country")} = $1 AND (r.quality_status = 'approved' OR r.quality_status IS NULL) AND r.discipline IN ('road') AND (r.recommend_status IS NULL OR r.recommend_status IN ('ok','only-road'))
+     WHERE ${slugSql("r.country")} = $1 AND (r.quality_status = 'approved' OR r.quality_status IS NULL) AND r.discipline IN ('road') AND (r.recommend_status IS NULL OR r.recommend_status IN ('ok','only-road')) AND r.road_report IS NOT NULL
        AND ${loopTrackSql("r")}
      GROUP BY r.id
      ORDER BY COALESCE(AVG(rt.score), 0) DESC, r.created_at DESC`,
@@ -1581,7 +1581,7 @@ export async function getRoutesByRegionSlug(countrySlug: string, regionSlug: str
     `SELECT r.*, COALESCE(AVG(rt.score), 0) as avg_score, COUNT(rt.id) as rating_count
      FROM routes r
      LEFT JOIN ratings rt ON rt.route_id = r.id
-     WHERE ${slugSql("r.country")} = $1 AND (r.quality_status = 'approved' OR r.quality_status IS NULL) AND r.discipline IN ('road') AND (r.recommend_status IS NULL OR r.recommend_status IN ('ok','only-road'))
+     WHERE ${slugSql("r.country")} = $1 AND (r.quality_status = 'approved' OR r.quality_status IS NULL) AND r.discipline IN ('road') AND (r.recommend_status IS NULL OR r.recommend_status IN ('ok','only-road')) AND r.road_report IS NOT NULL
        AND ${slugSql("r.region")} = ANY($2::text[]) AND ${loopTrackSql("r")}
      GROUP BY r.id
      ORDER BY COALESCE(AVG(rt.score), 0) DESC, r.created_at DESC`,
@@ -1606,21 +1606,21 @@ export async function getCountryStats(countrySlug: string): Promise<{
        COALESCE((SELECT AVG(rt.score) FROM ratings rt JOIN routes r2 ON rt.route_id = r2.id WHERE ${slugSql("r2.country")} = $1), 0) as avg_rating,
        MIN(country) as display_name
      FROM routes
-     WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road')) AND ${slugSql("country")} = $1`,
+     WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road')) AND road_report IS NOT NULL AND ${slugSql("country")} = $1`,
     [countrySlug]
   );
 
   if (!rows[0] || Number(rows[0].route_count) === 0) return null;
 
   const { rows: disciplineRows } = await sql.query(
-    `SELECT DISTINCT discipline FROM routes WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road')) AND ${slugSql("country")} = $1 ORDER BY discipline`,
+    `SELECT DISTINCT discipline FROM routes WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road')) AND road_report IS NOT NULL AND ${slugSql("country")} = $1 ORDER BY discipline`,
     [countrySlug]
   );
 
   const { rows: regionRows } = await sql.query(
     `SELECT region as name, COUNT(*) as route_count
      FROM routes
-     WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road')) AND ${slugSql("country")} = $1 AND region IS NOT NULL
+     WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road')) AND road_report IS NOT NULL AND ${slugSql("country")} = $1 AND region IS NOT NULL
      GROUP BY region
      ORDER BY region`,
     [countrySlug]
@@ -1653,7 +1653,7 @@ export async function getRegionStats(countrySlug: string, regionSlug: string): P
        MIN(region) as display_name,
        MIN(country) as country_display_name
      FROM routes
-     WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road')) AND ${slugSql("country")} = $1
+     WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road')) AND road_report IS NOT NULL AND ${slugSql("country")} = $1
        AND ${slugSql("region")} = ANY($2::text[])`,
     [countrySlug, regionSlugVariants(regionSlug)]
   );
@@ -1661,7 +1661,7 @@ export async function getRegionStats(countrySlug: string, regionSlug: string): P
   if (!rows[0] || Number(rows[0].route_count) === 0) return null;
 
   const { rows: disciplineRows } = await sql.query(
-    `SELECT DISTINCT discipline FROM routes WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road')) AND ${slugSql("country")} = $1 AND ${slugSql("region")} = ANY($2::text[]) ORDER BY discipline`,
+    `SELECT DISTINCT discipline FROM routes WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road')) AND road_report IS NOT NULL AND ${slugSql("country")} = $1 AND ${slugSql("region")} = ANY($2::text[]) ORDER BY discipline`,
     [countrySlug, regionSlugVariants(regionSlug)]
   );
 
@@ -1684,14 +1684,14 @@ export async function getRelatedRoutes(
   await ensureRecommendColumn();
   if (region) {
     const { rows } = await sql.query(
-      `SELECT * FROM routes WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road')) AND country = $1 AND region = $2 AND id != $3 ORDER BY created_at DESC LIMIT $4`,
+      `SELECT * FROM routes WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road')) AND road_report IS NOT NULL AND country = $1 AND region = $2 AND id != $3 ORDER BY created_at DESC LIMIT $4`,
       [country, region, routeId, limit]
     );
     if (rows.length > 0) return publicRows(rows) as Route[];
   }
   // Fall back to same country
   const { rows } = await sql.query(
-    `SELECT * FROM routes WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road')) AND country = $1 AND id != $2 ORDER BY created_at DESC LIMIT $3`,
+    `SELECT * FROM routes WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road')) AND road_report IS NOT NULL AND country = $1 AND id != $2 ORDER BY created_at DESC LIMIT $3`,
     [country, routeId, limit]
   );
   return publicRows(rows) as Route[];
@@ -2054,7 +2054,7 @@ export async function getCollectionBySlug(slug: string): Promise<CollectionWithR
     `SELECT r.*, cr.display_order
      FROM routes r
      JOIN collection_routes cr ON cr.route_id = r.id
-     WHERE cr.collection_id = $1 AND (r.recommend_status IS NULL OR r.recommend_status IN ('ok','only-road'))
+     WHERE cr.collection_id = $1 AND (r.recommend_status IS NULL OR r.recommend_status IN ('ok','only-road')) AND r.road_report IS NOT NULL
        AND ${loopTrackSql("r")}
      ORDER BY cr.display_order ASC, r.created_at ASC`,
     [collection.id]
@@ -2449,4 +2449,14 @@ export async function getAllRoutesForRecommendCheck(): Promise<Array<{ id: strin
 /** Store an automatic title over a generic one (never over a name a rider typed). */
 export async function renameRoute(routeId: string, name: string, onlyIfName: string): Promise<void> {
   await sql`UPDATE routes SET name = ${name} WHERE id = ${routeId} AND name = ${onlyIfName}`;
+}
+
+/** Library routes with no road report yet (hidden from lists until measured). */
+export async function getUnmeasuredRoutes(limit = 200): Promise<Array<{ id: string; coordinates: string; discipline: string | null }>> {
+  const { rows } = await sql`
+    SELECT id, coordinates, discipline FROM routes
+    WHERE road_report IS NULL AND (quality_status = 'approved' OR quality_status IS NULL)
+    ORDER BY created_at DESC LIMIT ${limit}
+  `;
+  return rows as Array<{ id: string; coordinates: string; discipline: string | null }>;
 }

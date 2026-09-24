@@ -193,12 +193,16 @@ describe("compromiseAcceptable", () => {
     expect(describeCompromise(r.compromises[0])).toMatch(/near the start\/finish \(main road\)$/);
     expect(compromiseAcceptable(r, 50)).toBe(true);
   });
-  it("…but the same 2 km mid-ride is refused, and the exit allowance has limits", () => {
+  it("…but the same 2 km mid-ride is refused; at the start a longer main road is used, a motorway never", () => {
     const mid = edges([[QUIET, 1200], [PRIMARY, 100], [QUIET, 1200]]);
     expect(buildRoadReport(coords, mid, "road").compromises[0].near_start).toBeUndefined();
     expect(compromiseAcceptable(buildRoadReport(coords, mid, "road"), 50)).toBe(false);
-    const tooLong = edges([[PRIMARY, 150], [QUIET, 2350]]);         // 3 km at the start
-    expect(compromiseAcceptable(buildRoadReport(coords, tooLong, "road"), 50)).toBe(false);
+    // Owner, 2026-09-24: an unavoidable main road back to the start is used (and named)…
+    const longExit = edges([[PRIMARY, 150], [QUIET, 2350]]);        // 3 km at the start
+    expect(compromiseAcceptable(buildRoadReport(coords, longExit, "road"), 50)).toBe(true);
+    // …never a motorway, no matter what.
+    const motorway = edges([[{ highway: "motorway" }, 50], [QUIET, 2450]]);
+    expect(compromiseAcceptable(buildRoadReport(coords, motorway, "road"), 50)).toBe(false);
   });
   it("refuses when the compromises add up past 3% of the ride", () => {
     const runs: Array<[Record<string, string>, number]> = [];
@@ -212,10 +216,10 @@ describe("fixedPartBreaksPolicy", () => {
   const coords = line(2501); // 2500 edges ≈ 50 km
   const whole: Array<[number, number]> = [[0, 2500]];
   it("judges only the edges inside the ranges", () => {
-    const tags = edges([[PRIMARY, 150], [QUIET, 2350]]);              // 3 km main road leaving the start
+    const tags = edges([[QUIET, 1200], [PRIMARY, 100], [QUIET, 1200]]); // 2 km main road mid-ride
     expect(fixedPartBreaksPolicy(coords, tags, "road", whole)).toBe(true);
-    expect(fixedPartBreaksPolicy(coords, tags, "road", [[1000, 2500]])).toBe(false); // the stretch lies outside
-    expect(fixedPartBreaksPolicy(coords, tags, "road", [[0, 100]])).toBe(false);    // only 2 km of it inside → within the exit allowance
+    expect(fixedPartBreaksPolicy(coords, tags, "road", [[0, 1000]])).toBe(false);    // the stretch lies outside
+    expect(fixedPartBreaksPolicy(coords, tags, "road", [[1200, 1250]])).toBe(false); // only 1 km of it inside → under the single-stretch cap
   });
   it("applies the distance-independent rules only", () => {
     const longMid = edges([[QUIET, 1200], [PRIMARY, 100], [QUIET, 1200]]);   // one 2 km stretch mid-ride

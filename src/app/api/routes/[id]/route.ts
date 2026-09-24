@@ -1,3 +1,4 @@
+import { measureRoute } from "@/lib/measure-route";
 import { withAutoTitle } from "@/lib/route-title";
 import { checkRecommendable, needsRecommendCheck } from "@/lib/recommend-check";
 import { NextRequest, NextResponse, after } from "next/server";
@@ -5,9 +6,8 @@ import { publicRoute } from "@/lib/public-route";
 import { renameRoute, getRoute, updateRouteElevation, updateRouteGeometry, storeRouteRoadReport, recordEvent, ANALYTICS_EVENTS } from "@/lib/db";
 import { apiError, handleApiError } from "@/lib/api-utils";
 import { fetchElevations } from "@/lib/elevation";
-import { rerouteWaypoints, engineTrace } from "@/lib/route-generator";
-import { traceRoadReport, traceProfileChain, summariseReport } from "@/lib/road-trace";
-import { ensureTraceProfile } from "@/lib/engine-profiles";
+import { rerouteWaypoints } from "@/lib/route-generator";
+import { summariseReport } from "@/lib/road-trace";
 import { withBundleCorrection } from "@/lib/bundle-corrections";
 import { checkTrack } from "@/lib/track-shape";
 import { ROAD_RULES_VERSION, nameCompromises, type RoadReport } from "@/lib/road-segments";
@@ -122,7 +122,6 @@ async function repairGapsIfAny(route: NonNullable<Awaited<ReturnType<typeof getR
 const tracing = new Set<string>();
 const traceFailedAt = new Map<string, number>();
 const TRACE_RETRY_MS = 60 * 60 * 1000;
-const TRACE_BUDGET_MS = 20_000;
 
 function scheduleRoadTrace(route: NonNullable<Awaited<ReturnType<typeof getRoute>>>) {
   const stored = route.road_report as { rules_version?: number } | null | undefined;
@@ -135,17 +134,8 @@ function scheduleRoadTrace(route: NonNullable<Awaited<ReturnType<typeof getRoute
   after(async () => {
     const started = Date.now();
     try {
-      const coords: [number, number][] = JSON.parse(route.coordinates).map((c: number[]) => [c[0], c[1]]);
-      const discipline = route.discipline === "gravel" || route.discipline === "mtb" ? route.discipline : "road";
-      // After the response, names can take their time: three stretches, 2.5 s each.
-      const namer = (c: [number, number][], comps: Parameters<typeof nameCompromises>[1]) => nameCompromises(c, comps, fetch, { timeoutMs: 8000, max: 3 });
-      const permissive = await ensureTraceProfile(process.env.BROUTER_URL!);
-      const chain = traceProfileChain(discipline, permissive);
-      const engine = (wps: [number, number][], profile: string) => engineTrace(wps, profile);
-      const report = await traceRoadReport(coords, discipline, engine, TRACE_BUDGET_MS, namer, chain);
-      if (report) {
-        await storeRouteRoadReport(route.id, report);
-        console.log(JSON.stringify({ evt: "route_road_traced", route_id: route.id, standard_met: report.standard_met, compromises: report.compromises.length, ms: Date.now() - started }));
+      if (await measureRoute(route)) {
+        console.log(JSON.stringify({ evt: "route_road_traced", route_id: route.id, ms: Date.now() - started }));
       } else {
         traceFailedAt.set(route.id, Date.now());
         console.log(JSON.stringify({ evt: "route_road_trace_unknown", route_id: route.id, ms: Date.now() - started }));

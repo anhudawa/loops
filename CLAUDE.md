@@ -179,6 +179,9 @@ node scripts/import-routes.mjs scripts/hub-data/girona-eat-sleep-cycle.json --dr
   token (works from Gmail/Outlook in-app browsers).
 - GPX access is one switch: GPX_ACCESS in src/config/constants.ts
   ("signed-in" default | "ride-links" | "everyone"); copy derives from it.
+  Owner decision 2026-09-24: keep "signed-in" (also on ride links). The
+  ride-link CTA "Sign Up to Download GPX" returns to the ride with gpx=1 and
+  downloads on arrival (verified live).
 - Library Road Standard tally (2026-09-23, 107 routes): rules v2 8 meet /
   86 notes / 13 unknown; rules v3 (crossings < 100 m ignored, gravel-aware)
   10 / 86 / 11; rules v5 (per-chunk trace, names, positions) 11 / 91 / 5 —

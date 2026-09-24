@@ -286,6 +286,8 @@ function anyWayWithin(
 // ──── Overpass API ───────────────────────────────────────────────────────────
 
 const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
+/** Public Overpass mirror, used when the main server refuses or times out. */
+const OVERPASS_MIRROR_URL = "https://maps.mail.ru/osm/tools/overpass/api/interpreter";
 
 /**
  * Overpass etiquette gate: the public API allows ~2 concurrent requests
@@ -554,14 +556,17 @@ out body;
 out skel qt;
 `.trim();
 
-  const resp = await overpassGate(async () =>
-    fetch(OVERPASS_URL, {
+  // Main server first; when it refuses or times out (rate limits hit shared
+  // cloud IPs), one public mirror — free, same data.
+  const post = (url: string, ms: number) =>
+    fetch(url, {
       method: "POST",
       headers: { "User-Agent": "loops.ie route generator (https://www.loops.ie)", "Content-Type": "application/x-www-form-urlencoded" },
       body: `data=${encodeURIComponent(query)}`,
-      signal: AbortSignal.timeout(18_000),
-    })
-  );
+      signal: AbortSignal.timeout(ms),
+    });
+  let resp = await overpassGate(async () => post(OVERPASS_URL, 12_000)).catch(() => null);
+  if (!resp || !resp.ok) resp = await post(OVERPASS_MIRROR_URL, 12_000);
   if (!resp.ok) throw new Error(`Overpass API error: ${resp.status} ${resp.statusText}`);
   const json = await resp.json() as { elements: OsmElement[] };
   const elements = json.elements ?? [];

@@ -16,7 +16,8 @@
     "smoke": "playwright test tests/smoke.spec.ts",
     "golden": "tsx scripts/run-golden-routes.mts",
     "utterances": "tsx scripts/run-utterance-suite.mts",
-    "sweep": "node scripts/qa/sweep.mjs"
+    "sweep": "node scripts/qa/sweep.mjs",
+    "draw-stress": "DRAW_STRESS=1 vitest run src/lib/__tests__/draw-stress.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",

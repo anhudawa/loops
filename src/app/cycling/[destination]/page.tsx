@@ -99,7 +99,7 @@ export default async function DestinationPage({ params }: Props) {
       {/* Header */}
       <AppHeader />
 
-      <main className="max-w-3xl mx-auto px-4 pt-4 pb-10">
+      <main id="main-content" className="max-w-3xl mx-auto px-4 pt-4 pb-10">
         <Breadcrumbs items={[{ label: "Destinations", href: "/cycling" }, { label: dest.name }]} />
 
         {/* Hero */}

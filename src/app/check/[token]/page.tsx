@@ -21,7 +21,7 @@ export default async function CheckPage({
   return (
     <>
       <AppHeader />
-      <main className="max-w-lg mx-auto px-4 py-8">
+      <main id="main-content" className="max-w-lg mx-auto px-4 py-8">
         <div className="rounded-2xl p-5" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
           {!check ? (
             <p className="text-sm" style={{ color: "var(--text)" }}>This link has expired or was already used.</p>

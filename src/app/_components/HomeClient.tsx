@@ -778,7 +778,7 @@ function HomeContent() {
       )}
 
       {/* Main Content */}
-      <main className="max-w-3xl mx-auto w-full px-4 md:px-6 pb-20">
+      <main id="main-content" className="max-w-3xl mx-auto w-full px-4 md:px-6 pb-20">
         {/* Search — the biggest discovery lever. Queries the routes API's
             `search` param (name/description/county/region), debounced. */}
         <div className="pt-6">
@@ -906,7 +906,7 @@ function HomeFallback() {
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)" }}>
       <div aria-hidden="true" className="min-h-[60vh] md:min-h-[85vh]" />
-      <main className="max-w-3xl mx-auto w-full px-4 md:px-6 pb-20 pt-6 space-y-2" aria-busy="true">
+      <main id="main-content" className="max-w-3xl mx-auto w-full px-4 md:px-6 pb-20 pt-6 space-y-2" aria-busy="true">
         {[...Array(3)].map((_, i) => <SkeletonCard key={i} />)}
       </main>
     </div>

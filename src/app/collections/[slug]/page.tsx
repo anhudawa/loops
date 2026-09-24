@@ -95,7 +95,7 @@ export default async function CollectionPage({ params }: Props) {
   } catch {
     // DB outage is not a 404 — show an honest degraded state.
     return (
-      <main className="min-h-screen flex items-center justify-center px-4" style={{ background: "var(--bg)" }}>
+      <main id="main-content" className="min-h-screen flex items-center justify-center px-4" style={{ background: "var(--bg)" }}>
         <div className="text-center max-w-md">
           <h1 className="text-xl font-bold mb-2" style={{ color: "var(--text)" }}>
             This collection is taking a breather
@@ -146,7 +146,7 @@ export default async function CollectionPage({ params }: Props) {
         </div>
       )}
 
-      <main className="max-w-5xl mx-auto px-4 py-10">
+      <main id="main-content" className="max-w-5xl mx-auto px-4 py-10">
         {/* Title block */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-2">

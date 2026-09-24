@@ -94,7 +94,7 @@ export default function SwitchPage() {
       <JsonLd data={howToJsonLd()} />
       <AppHeader />
 
-      <main className="flex-1">
+      <main id="main-content" className="flex-1">
         {/* Hero */}
         <section className="px-4 md:px-6 pt-12 pb-10">
           <div className="max-w-2xl mx-auto">

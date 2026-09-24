@@ -139,7 +139,7 @@ function LoginPage() {
         </div>
       </nav>
 
-      <main className="flex-1 px-4 pt-10 pb-16">
+      <main id="main-content" className="flex-1 px-4 pt-10 pb-16">
         <div className="max-w-sm mx-auto">
           <h1 className="font-extrabold tracking-tight text-3xl" style={{ color: "var(--text)" }}>
             {heading}

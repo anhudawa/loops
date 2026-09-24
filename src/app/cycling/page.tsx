@@ -22,7 +22,7 @@ export default function CyclingIndexPage() {
   const homeTurf = destinations.filter((d) => !launchSet.has(d.slug));
 
   return (
-    <main className="min-h-screen" style={{ background: "var(--bg)" }}>
+    <main id="main-content" className="min-h-screen" style={{ background: "var(--bg)" }}>
       <AppHeader />
 
       <div className="max-w-5xl mx-auto px-4 md:px-6 py-10">

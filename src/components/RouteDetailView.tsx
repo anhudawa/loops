@@ -459,6 +459,7 @@ export default function RouteDetailView({ ride, initialRoute }: { ride?: RideInv
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
       <AppHeader />
+      <main id="main-content" tabIndex={-1} className="outline-none">
 
       {/* Group-ride invite banner (the /ride/<id> link from WhatsApp) */}
       {ride && (ride.when || ride.meet) && (
@@ -1012,6 +1013,7 @@ export default function RouteDetailView({ ride, initialRoute }: { ride?: RideInv
           </div>
         </div>
       )}
+      </main>
     </div>
   );
 }

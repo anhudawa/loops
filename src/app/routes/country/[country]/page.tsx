@@ -231,7 +231,7 @@ export default async function CountryPage({
 
 function RoutesUnavailable() {
   return (
-    <main className="min-h-screen flex items-center justify-center px-4" style={{ background: "var(--bg)" }}>
+    <main id="main-content" className="min-h-screen flex items-center justify-center px-4" style={{ background: "var(--bg)" }}>
       <div className="text-center max-w-md">
         <h1 className="text-xl font-bold mb-2" style={{ color: "var(--text)" }}>
           Routes are taking a breather

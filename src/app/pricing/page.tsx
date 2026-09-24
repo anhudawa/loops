@@ -86,7 +86,7 @@ export default function PricingPage() {
     <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)" }}>
       <AppHeader />
 
-      <main className="flex-1">
+      <main id="main-content" className="flex-1">
         {/* Hero + promise */}
         <section className="px-4 md:px-6 pt-12 pb-8">
           <div className="max-w-3xl mx-auto text-center">

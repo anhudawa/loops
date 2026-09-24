@@ -31,7 +31,7 @@ export default async function CollectionsPage() {
       {/* Header */}
       <AppHeader />
 
-      <main className="max-w-5xl mx-auto px-4 py-10">
+      <main id="main-content" className="max-w-5xl mx-auto px-4 py-10">
         <div className="mb-8">
           <h1 className="text-3xl font-black tracking-tight mb-2" style={{ color: "var(--text)" }}>Collections</h1>
           <p className="text-base" style={{ color: "var(--text-muted)" }}>

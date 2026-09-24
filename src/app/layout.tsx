@@ -66,6 +66,9 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
       </head>
       <body className="antialiased">
+        <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[2000] focus:px-4 focus:py-2 focus:rounded-lg focus:font-bold" style={{ background: "var(--accent)", color: "#0a0a0a" }}>
+          Skip to content
+        </a>
         <JsonLd data={generateWebSiteJsonLd()} />
         <JsonLd data={generateOrganizationJsonLd()} />
         <ErrorBoundary>

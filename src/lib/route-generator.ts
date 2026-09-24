@@ -3126,6 +3126,9 @@ async function destinationAlternative(spec: RouteSpec): Promise<string | null> {
 
 /** Climbing a "flat" loop may have per km (mirrors delivery-note's flat ceiling)… */
 const FLAT_M_PER_KM = 5;
+/** Climbing a "hilly" / "mountainous" ask promises (m per km). */
+const HILLY_M_PER_KM = 12;
+const MOUNTAIN_M_PER_KM = 20;
 /** …and how far over it a loop may go before it is not flat any more. */
 const FLAT_TOLERANCE = 1.6;
 
@@ -3640,12 +3643,27 @@ async function generateFreshRoutes(
     }
   }
 
-  // Rank: routes that fully meet the road standard first, then world-class
-  // tier, then match accuracy, quality, distance fit.
+  // "Hilly" is a promise too: a loop that climbs as asked ranks above a
+  // flatter one ("60km hilly from Enniskerry" put a 590 m city loop ahead of
+  // the Sally Gap); when none does, every ride says so.
+  const wantsClimbing = spec.elevation_preference === "hilly" || spec.elevation_preference === "mountainous";
+  const climbFloor = spec.elevation_preference === "mountainous" ? MOUNTAIN_M_PER_KM : HILLY_M_PER_KM;
+  const climbsAsAsked = (c: GeneratedRoute) => !wantsClimbing || c.elevation_gain_m >= c.distance_km * climbFloor;
+  if (wantsClimbing && candidates.length > 0 && !candidates.some(climbsAsAsked)) {
+    for (const c of candidates) {
+      c.ride_note = [c.ride_note, `Flatter than you asked: ${Math.round(c.elevation_gain_m)} m of climbing — the hilliest loop we could route from here.`].filter(Boolean).join(" ");
+    }
+  }
+
+  // Rank: routes that fully meet the road standard first, then the climbing
+  // asked for, then world-class tier, then match accuracy, quality, distance fit.
   candidates.sort((a, b) => {
     const aStd = a.road_report ? (a.road_report.standard_met ? 1 : 0) : 0;
     const bStd = b.road_report ? (b.road_report.standard_met ? 1 : 0) : 0;
     if (bStd !== aStd) return bStd - aStd;
+    const aClimb = climbsAsAsked(a) ? 1 : 0;
+    const bClimb = climbsAsAsked(b) ? 1 : 0;
+    if (bClimb !== aClimb) return bClimb - aClimb;
     const aTier = a.quality_tier === "excellent" ? 1 : 0;
     const bTier = b.quality_tier === "excellent" ? 1 : 0;
     if (bTier !== aTier) return bTier - aTier;

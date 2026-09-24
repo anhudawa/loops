@@ -975,9 +975,10 @@ function scoreScenic(
   // Peak nodes
   const peakNodes = peakNodesOf(elements);
 
-  let bonusPoints = 0;
-  const foundFeatures = new Set<string>();
-
+  // A highlight is a real share of the ride, not one sample point within
+  // 150 m of a wood's edge: every result used to read "coastal, forest,
+  // mountain" (a flat loop through west Dublin included).
+  const hits = { coast: 0, water: 0, forest: 0, meadow: 0, peak: 0 };
   for (const coord of sampledCoords) {
     const pt: [number, number] = [coord[0], coord[1]];
 
@@ -985,33 +986,24 @@ function scoreScenic(
     const nearby = anyWayWithin(pt, scenicWays, 0.15);
     if (nearby) {
       const t = nearby.tags;
-      if (t.natural === "coastline" && !foundFeatures.has("coast")) {
-        foundFeatures.add("coast");
-        bonusPoints += 20;
-        flags.push("Coastal route");
-      } else if ((t.natural === "water" || t.waterway) && !foundFeatures.has("water")) {
-        foundFeatures.add("water");
-        bonusPoints += 15;
-        flags.push("Route near water");
-      } else if ((t.natural === "forest" || t.natural === "wood" || t.landuse === "forest") && !foundFeatures.has("forest")) {
-        foundFeatures.add("forest");
-        bonusPoints += 10;
-        flags.push("Route through forest");
-      } else if ((t.landuse === "grass" || t.landuse === "meadow") && !foundFeatures.has("meadow")) {
-        foundFeatures.add("meadow");
-        bonusPoints += 5;
-      }
+      if (t.natural === "coastline") hits.coast++;
+      else if (t.natural === "water" || t.waterway) hits.water++;
+      else if (t.natural === "forest" || t.natural === "wood" || t.landuse === "forest") hits.forest++;
+      else if (t.landuse === "grass" || t.landuse === "meadow") hits.meadow++;
     }
 
-    // Check peaks within 1km
-    for (const peak of peakNodes) {
-      if (!foundFeatures.has("peak") && haversineKm(pt, peak) < 1) {
-        foundFeatures.add("peak");
-        bonusPoints += 20;
-        flags.push("Mountain / peak terrain");
-      }
-    }
+    // Mountain terrain: near a peak AND up high (a named hillock by a city
+    // road is not mountains). Without heights, near a peak is enough.
+    const high = typeof coord[2] !== "number" || coord[2] >= 300;
+    if (high && peakNodes.some((peak) => haversineKm(pt, peak) < 1)) hits.peak++;
   }
+  const enough = (n: number) => n >= Math.max(3, sampledCoords.length * 0.1);
+  let bonusPoints = 0;
+  if (enough(hits.coast)) { bonusPoints += 20; flags.push("Coastal route"); }
+  if (enough(hits.water)) { bonusPoints += 15; flags.push("Route near water"); }
+  if (enough(hits.forest)) { bonusPoints += 10; flags.push("Route through forest"); }
+  if (enough(hits.meadow)) bonusPoints += 5;
+  if (enough(hits.peak)) { bonusPoints += 20; flags.push("Mountain / peak terrain"); }
 
   void bbox; // bbox available for future use (e.g. elevation data)
 

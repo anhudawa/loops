@@ -167,6 +167,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // "Excellent" never sits beside a named compromise, whatever path built the ride.
+    for (const c of result.candidates) {
+      const g = c as { road_report?: { standard_met?: boolean } | null; quality_tier?: string };
+      if (g.road_report?.standard_met === false && g.quality_tier === "excellent") g.quality_tier = "good";
+    }
+
     const librarySources = result.candidates.filter((r) => r.source === "library").length;
     const generatedSources = result.candidates.filter((r) => r.source === "generated").length;
     // Structured log — greppable in Vercel logs, pipe-safe for later

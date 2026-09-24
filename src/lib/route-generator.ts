@@ -1861,7 +1861,14 @@ async function candidatesFromSpecInner(
   }
 
   // ── Fresh generation ───────────────────────────────────────────────────────
-  const generated = await generateFreshRoutes(spec, windForecast);
+  // With library loops in hand, a fresh search that finds nothing must not
+  // throw them away (Maspalomas: its verified loop was lost to a decline).
+  const generated = fromHome.length > 0
+    ? await generateFreshRoutes(spec, windForecast).catch((e) => {
+        if (e instanceof NoValidRoutesError) return [] as GeneratedRoute[];
+        throw e;
+      })
+    : await generateFreshRoutes(spec, windForecast);
   markPhase("fresh");
 
   if (fromHome.length > 0) {

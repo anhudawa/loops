@@ -12,6 +12,7 @@ import {
 import { withPublicDescription, tidyRouteName } from "@/lib/public-route";
 import { withAutoTitle } from "@/lib/route-title";
 import { dedupeRoutes } from "@/lib/track-shape";
+import { trueClimb } from "@/lib/true-climb";
 import { recommendableNow } from "@/lib/recommendable";
 import { POINT_TO_POINT_KM } from "@/lib/track-shape";
 import { lookupKnownPlace } from "@/lib/places-known";
@@ -36,15 +37,36 @@ function publicRows<T extends Record<string, unknown>>(rows: T[]): T[] {
       const step = Math.max(1, Math.floor(c.length / 400));
       return c.filter((_, i) => i % step === 0).map((p) => [Number(p[0]), Number(p[1])] as [number, number]);
     } catch { return null; }
-  });
+  }, (r) => String(r.name ?? ""));
   return rows.map((r) => {
     let out = withPublicDescription(r);
+    // Climbing summed from noisy imported heights → the track's own (as on the
+    // route page), and the riding time with it.
+    if (typeof out.coordinates === "string" && out.elevation_gain_m != null) {
+      const t = trueClimb(out as unknown as { coordinates: string; elevation_gain_m: number; elevation_loss_m: number });
+      if (t) {
+        const km = Number(out.distance_km) || 0, old = Number(out.elevation_gain_m) || 0;
+        const mins = Number(out.estimated_minutes);
+        out = { ...out, elevation_gain_m: t.gain, elevation_loss_m: t.loss, ...(mins > 0 && km > 0 ? { estimated_minutes: Math.round((mins * (km + t.gain / 100)) / (km + old / 100)) } : {}) };
+      }
+    }
     if (typeof out.name === "string" && typeof out.coordinates === "string" && out.distance_km != null) {
       out = withAutoTitle(out as T & { name: string; coordinates: string; distance_km: number | string }) as typeof out;
     } else if (typeof out.name === "string" && tidyRouteName(out.name) !== out.name) out = { ...out, name: tidyRouteName(out.name) };
-    return typeof out.region === "string" ? { ...out, region: canonicalRegion(out.region) } : out;
+    if (typeof out.region !== "string") return out;
+    // A route stored under the wide region ("Cataluña") but in a county that
+    // is itself a LOOPS region page ("Girona") reads as the county, so the
+    // Girona guide, list and cards agree.
+    const county = typeof out.county === "string" ? out.county.trim() : "";
+    const region = COUNTY_REGIONS.has(county.toLowerCase()) && WIDE_REGIONS.has(out.region.trim().toLowerCase()) ? county : canonicalRegion(out.region);
+    return { ...out, region };
   });
 }
+
+/** Counties that are LOOPS destinations in their own right. */
+const COUNTY_REGIONS = new Set(["girona"]);
+/** Regions wider than a destination. */
+const WIDE_REGIONS = new Set(["cataluña", "catalunya", "catalonia", "cataluna"]);
 
 // ──── Region names ────
 // Imports spelled one island four ways; lists, pages and filters show one.
@@ -1630,7 +1652,7 @@ export async function getRoutesByRegionSlug(countrySlug: string, regionSlug: str
      FROM routes r
      LEFT JOIN ratings rt ON rt.route_id = r.id
      WHERE ${slugSql("r.country")} = $1 AND (r.quality_status = 'approved' OR r.quality_status IS NULL) AND r.discipline IN ('road') AND (r.recommend_status IS NULL OR r.recommend_status IN ('ok','only-road')) AND r.road_report IS NOT NULL
-       AND ${slugSql("r.region")} = ANY($2::text[]) AND ${loopTrackSql("r")}
+       AND (${slugSql("r.region")} = ANY($2::text[]) OR ${slugSql("r.county")} = ANY($2::text[])) AND ${loopTrackSql("r")}
      GROUP BY r.id
      ORDER BY COALESCE(AVG(rt.score), 0) DESC, r.created_at DESC`,
     [countrySlug, regionSlugVariants(regionSlug)]
@@ -1702,14 +1724,14 @@ export async function getRegionStats(countrySlug: string, regionSlug: string): P
        MIN(country) as country_display_name
      FROM routes
      WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road')) AND road_report IS NOT NULL AND ${slugSql("country")} = $1
-       AND ${slugSql("region")} = ANY($2::text[])`,
+       AND (${slugSql("region")} = ANY($2::text[]) OR ${slugSql("county")} = ANY($2::text[]))`,
     [countrySlug, regionSlugVariants(regionSlug)]
   );
 
   if (!rows[0] || Number(rows[0].route_count) === 0) return null;
 
   const { rows: disciplineRows } = await sql.query(
-    `SELECT DISTINCT discipline FROM routes WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road')) AND road_report IS NOT NULL AND ${slugSql("country")} = $1 AND ${slugSql("region")} = ANY($2::text[]) ORDER BY discipline`,
+    `SELECT DISTINCT discipline FROM routes WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road')) AND road_report IS NOT NULL AND ${slugSql("country")} = $1 AND (${slugSql("region")} = ANY($2::text[]) OR ${slugSql("county")} = ANY($2::text[])) ORDER BY discipline`,
     [countrySlug, regionSlugVariants(regionSlug)]
   );
 

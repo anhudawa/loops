@@ -82,7 +82,7 @@ export const destinations: Destination[] = [
       {
         question: "Can I ride gravel in Girona?",
         answer:
-          "Yes. The volcanic zone around Olot and the Garrotxa natural park has excellent gravel tracks. The coastal paths along the Costa Brava and the forest tracks through the Gavarres massif are also popular. Many Girona-based pros train on gravel year-round.",
+          "Yes. The volcanic zone around Olot and the Garrotxa natural park has excellent gravel tracks. The coastal paths along the Costa Brava and the forest tracks through the Gavarres massif are also popular. Many Girona-based pros train on gravel year-round. LOOPS plans road rides for now, so these tracks are not in our routes yet.",
       },
       {
         question: "What are the must-ride climbs near Girona?",
@@ -270,7 +270,7 @@ export const destinations: Destination[] = [
       {
         question: "Can I ride gravel near Calpe?",
         answer:
-          "There is some gravel in the mountains behind Calpe, particularly around the Sierra de Bernia and in the Jalon Valley. However, Calpe is primarily a road cycling destination. The gravel is rougher and less developed than Girona's or Mallorca's off-road options.",
+          "There is some gravel in the mountains behind Calpe, particularly around the Sierra de Bernia and in the Jalon Valley. However, Calpe is primarily a road cycling destination. The gravel is rougher and less developed than Girona's or Mallorca's off-road options. LOOPS plans road rides for now, so these tracks are not in our routes yet.",
       },
     ],
     collectionSlug: "calpe",
@@ -326,7 +326,7 @@ export const destinations: Destination[] = [
       {
         question: "Can I do gravel riding in Wicklow?",
         answer:
-          "Yes. The Wicklow Mountains National Park has an extensive network of forest fireroads and tracks. The Ballinastoe MTB trails are purpose-built. For gravel bikes, the fireroads in Glendalough, Laragh, and the Devil's Glen offer long off-road loops. Surface quality varies from smooth gravel to rough forestry track.",
+          "Yes. The Wicklow Mountains National Park has an extensive network of forest fireroads and tracks. The Ballinastoe MTB trails are purpose-built. For gravel bikes, the fireroads in Glendalough, Laragh, and the Devil's Glen offer long off-road loops. Surface quality varies from smooth gravel to rough forestry track. LOOPS plans road rides for now, so these tracks are not in our routes yet.",
       },
       {
         question: "What is the best cycling loop in Wicklow?",
@@ -351,7 +351,7 @@ export const destinations: Destination[] = [
     riding: [
       "Tenerife is where cyclists go to climb. The island is dominated by Mount Teide, a 3718 m volcano with a paved road reaching 2100 m. That single fact shapes everything: from almost any point on the coast, you can ride uphill for 2-3 hours on a continuously ascending road. The gradients are steady (4-7%), the surfaces are superb, and the landscape shifts from subtropical coastal scrub through pine forest to lunar volcanic terrain above the treeline.",
       "The island is increasingly popular with WorldTour teams for altitude camps. The Teide ascent from the south (Vilaflor) or southwest (Chio) provides sustained climbing at altitude that is hard to replicate anywhere in mainland Europe without going to the high Alps. At 2100 m you are training at genuine altitude while sleeping at sea level - the perfect altitude camp protocol.",
-      "Beyond Teide, Tenerife has excellent riding throughout the Anaga mountains in the northeast (steep, narrow, technical roads through laurel forest) and the quieter western coast. The TF-28 and TF-21 roads in the south are wide, smooth, and purpose-built for climbing. The north coast is greener but cloudier. Tenerife is not a flat-riding destination: even the coastal roads have constant undulation. Come here to climb.",
+      "Beyond Teide, Tenerife has excellent riding throughout the Anaga mountains in the northeast (steep, narrow, technical roads through laurel forest) and the quieter western coast. The TF-28 and TF-21 in the south are wide and smooth; the TF-21 up Teide is a main road (primary), and LOOPS names it on every route that uses it. The north coast is greener but cloudier. Tenerife is not a flat-riding destination: even the coastal roads have constant undulation. Come here to climb.",
     ],
     climbs: [
       "Mount Teide via Vilaflor (35 km, avg 5.2%) — the big one, from sea level to 2100 m through three climate zones",
@@ -692,7 +692,7 @@ export const destinations: Destination[] = [
       {
         question: "Can I ride gravel near Lucca?",
         answer:
-          "Yes. The hills around Lucca hide plenty of strade bianche-style white roads, and the famous gravel country of the Crete Senesi and Chianti is within a 1-2 hour transfer for a day trip.",
+          "Yes. The hills around Lucca hide plenty of strade bianche-style white roads, and the famous gravel country of the Crete Senesi and Chianti is within a 1-2 hour transfer for a day trip. LOOPS plans road rides for now, so these tracks are not in our routes yet.",
       },
       {
         question: "How do I get to Lucca with a bike?",

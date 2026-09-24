@@ -112,13 +112,30 @@ export function trackOverlap(a: [number, number][], b: [number, number][], tolKm
  * names: "Els Àngels Loop" / "Els Àngels Loop, Girona"): starts within 3 km
  * and 70 %+ of each track on the other. Keeps the first (the list's order).
  */
-export function dedupeRoutes<T>(routes: T[], coordsOf: (r: T) => [number, number][] | null): T[] {
-  const kept: Array<{ r: T; c: [number, number][] }> = [];
+export function dedupeRoutes<T>(routes: T[], coordsOf: (r: T) => [number, number][] | null, nameOf: (r: T) => string = () => ""): T[] {
+  const kept: Array<{ r: T; c: [number, number][]; key: string }> = [];
   for (const r of routes) {
     const c = coordsOf(r);
-    if (!c || c.length < 2) { kept.push({ r, c: [] }); continue; }
-    const dup = kept.some((k) => k.c.length > 1 && km(k.c[0], c[0]) <= 3 && trackOverlap(c, k.c) >= 0.7 && trackOverlap(k.c, c) >= 0.7);
-    if (!dup) kept.push({ r, c });
+    const key = rideKey(nameOf(r));
+    if (!c || c.length < 2) { kept.push({ r, c: [], key }); continue; }
+    const dup = kept.some((k) => k.c.length > 1 && (
+      // The same ride under two spellings ("Cap Formentor" / "Cap de
+      // Formentor", "Els Àngels Loop" / "Els Àngels Loop, Girona")…
+      (key !== "" && k.key === key && km(k.c[0], c[0]) <= 10) ||
+      // …or two names on one track.
+      (km(k.c[0], c[0]) <= 3 && trackOverlap(c, k.c) >= 0.7 && trackOverlap(k.c, c) >= 0.7)
+    ));
+    if (!dup) kept.push({ r, c, key });
   }
   return kept.map((k) => k.r);
+}
+
+const FILLER = new Set(["loop", "the", "de", "del", "d", "la", "el", "les", "los", "and", "y", "i", "a", "girona", "mallorca", "majorca", "spain"]);
+
+/** "Els Àngels Loop, Girona" → "angels"; "Cap de Formentor" → "cap formentor". Empty when nothing is left. */
+export function rideKey(name: string): string {
+  return name
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().replace(/\(.*?\)/g, " ").replace(/[^a-z0-9]+/g, " ")
+    .split(" ").filter((w) => w && !FILLER.has(w) && w !== "els").join(" ");
 }

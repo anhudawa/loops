@@ -212,12 +212,15 @@ export async function GET(
 
     route = await withBundleCorrection(route);
     // "Planned road route — 116.9 km" → "Clontarf – Ashbourne – Clontarf · 117 km", stored once.
+    const storedName = route.name; // integrity checks judge the name as stored
     const titled = withAutoTitle(route);
     if (titled.renamed) {
       const from = route.name, to = titled.name, rid = route.id;
       after(() => renameRoute(rid, to, from).catch(() => {}));
-      route = { ...route, name: to };
     }
+    // The display title (tidied, no "Loop" on an out-and-back): the page's
+    // quiet refetch put the raw imported name back in the heading.
+    if (titled.name !== route.name) route = { ...route, name: titled.name };
     route = await repairElevationIfFlat(route);
     route = await repairGapsIfAny(route);
     const climb = trueClimb(route);
@@ -237,7 +240,7 @@ export async function GET(
     const pub = publicRoute(route as unknown as Record<string, unknown>) as Record<string, unknown>;
     try {
       const raw = JSON.parse(route.coordinates);
-      pub.track_check = checkTrack(raw.map((c: number[]) => [Number(c[0]), Number(c[1])] as [number, number]), route.name);
+      pub.track_check = checkTrack(raw.map((c: number[]) => [Number(c[0]), Number(c[1])] as [number, number]), storedName);
     } catch { /* client measures */ }
     return NextResponse.json(pub);
   } catch (err) {

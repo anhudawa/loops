@@ -813,6 +813,9 @@ export default function MapPlanner() {
   const roadStandardClean = standardKnown && compromises.length === 0 && hasElevation;
 
   async function downloadGpx() {
+    // Signed out: the banner above already says why — the tap goes to sign
+    // in (the drawing is kept) instead of stacking a second banner.
+    if (needsAuth && anchors.length > 0) { window.location.href = "/login?redirect=/plan"; return; }
     const blocked = exportBlockedReason({ anchors: anchors.length, needsAuth, snapping, failed: failedCount, allSnapped }, "export");
     if (blocked) { setBlockedNote(blocked); return; }
     const { coords, elevations } = concatLegGeometry(allLegs);
@@ -869,6 +872,9 @@ export default function MapPlanner() {
   // Save asks for a name prefilled with that title; the generic name shows
   // only until it answers (or if it can't).
   function openNaming() {
+    // Signed out: the banner above already says why — the tap goes to sign
+    // in (the drawing is kept) instead of stacking a second banner.
+    if (needsAuth && anchors.length > 0) { window.location.href = "/login?redirect=/plan"; return; }
     const blocked = exportBlockedReason({ anchors: anchors.length, needsAuth, snapping, failed: failedCount, allSnapped }, "save");
     if (blocked) { setBlockedNote(blocked); return; }
     setSaveError(null);
@@ -1071,7 +1077,7 @@ export default function MapPlanner() {
                   {totals.approx ? "~" : ""}{totals.distance_km.toFixed(1)} km
                 </span>
                 <span className="block text-[11px] tabular-nums" style={{ color: "#d4d4d4" }}>
-                  +{totals.gain_m} m{loopLeg ? ` · incl. ${loopLeg.distance_km.toFixed(1)} km back to start` : ""}
+                  {needsAuth ? "climb after sign-in" : totals.approx && totals.gain_m === 0 ? "climb unknown" : `+${totals.gain_m} m`}{loopLeg ? ` · incl. ${loopLeg.distance_km.toFixed(1)} km back to start` : ""}
                 </span>
               </div>
             </div>
@@ -1214,7 +1220,7 @@ export default function MapPlanner() {
               />
               <button
                 type="submit"
-                className="min-h-[44px] px-3 text-xs font-bold"
+                className="min-h-[44px] min-w-[44px] px-3 text-xs font-bold"
                 style={{ background: "var(--bg-raised)", color: "var(--accent)" }}
               >
                 Go

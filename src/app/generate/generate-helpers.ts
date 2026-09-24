@@ -6,6 +6,18 @@
 /** Shortest prompt the generate API accepts (src/app/api/generate-route). */
 export const MIN_PROMPT_CHARS = 10;
 
+/** "40km loop", "2h", "90 min spin" — a length is enough to plan from. */
+const HAS_LENGTH = /\d+(?:[.,]\d+)?\s*(?:km|k|h|hrs?|hours?|mins?|minutes?)\b/i;
+
+/**
+ * Enough to plan from: the usual minimum, or any shorter ask that says how
+ * long ("40km loop" with the location on is a complete request).
+ */
+export function promptLongEnough(prompt: string): boolean {
+  const q = prompt.trim();
+  return q.length >= MIN_PROMPT_CHARS || HAS_LENGTH.test(q);
+}
+
 /**
  * Plain-English message for a response that carried no JSON error (a proxy
  * or platform error page). Riders never see a parser message.

@@ -9,17 +9,112 @@ import {
 } from "@/lib/metrics";
 
 import { withPublicDescription } from "@/lib/public-route";
+import { recommendableNow } from "@/lib/recommendable";
+import { POINT_TO_POINT_KM } from "@/lib/track-shape";
+import { lookupKnownPlace } from "@/lib/places-known";
+import { slugify } from "@/lib/seo";
 
 export { ANALYTICS_EVENTS } from "@/lib/metrics";
 
 /**
  * Every route row read for display passes through here once: descriptions
  * lose operator attribution sentences ("Curated by Eat Sleep Cycle") —
- * owner decision, no public route attribution. Admin listings read raw.
+ * owner decision, no public route attribution — and a region stored under
+ * another name ("Majorca") reads as the one riders see ("Mallorca").
+ * Admin listings read raw.
  */
 function publicRows<T extends Record<string, unknown>>(rows: T[]): T[] {
-  return rows.map((r) => withPublicDescription(r));
+  return rows.map((r) => {
+    const out = withPublicDescription(r);
+    return typeof out.region === "string" ? { ...out, region: canonicalRegion(out.region) } : out;
+  });
 }
+
+// ──── Region names ────
+// Imports spelled one island four ways; lists, pages and filters show one.
+const REGION_ALIASES: Record<string, string[]> = {
+  Mallorca: ["Majorca", "Islas Baleares", "Balearic Islands", "Illes Balears", "Baleares"],
+};
+
+/** "Majorca" / "Islas Baleares" / "Balearic Islands" → "Mallorca"; anything else trimmed. */
+export function canonicalRegion(region: string): string {
+  const r = region.trim();
+  const k = r.toLowerCase();
+  for (const [name, aliases] of Object.entries(REGION_ALIASES)) {
+    if (k === name.toLowerCase() || aliases.some((a) => a.toLowerCase() === k)) return name;
+  }
+  return r;
+}
+
+/** Every stored spelling of a region (for SQL matching): the name and its aliases. */
+export function regionSpellings(region: string): string[] {
+  const name = canonicalRegion(region);
+  return [name, ...(REGION_ALIASES[name] ?? [])];
+}
+
+/** A search naming a known start place finds routes starting within this of it. */
+const SEARCH_PLACE_KM = 5;
+
+/** A region page's slug and the slugs of its other spellings (/mallorca also reads "Majorca" routes). */
+function regionSlugVariants(slug: string): string[] {
+  for (const [name, aliases] of Object.entries(REGION_ALIASES)) {
+    const all = [name, ...aliases].map(slugify);
+    if (all.includes(slug)) return [...new Set(all)];
+  }
+  return [slug];
+}
+
+// ──── Loops, not A to B ────
+// A route whose ends are more than POINT_TO_POINT_KM apart is a commute or
+// a traverse, not a training loop: lists and duration chips leave it out
+// (owner, 2026-09-24). Measured in SQL from the stored track's text — the
+// first and last [lat, lng] — so pagination stays exact; an unreadable
+// track is judged elsewhere (recommendableNow), never dropped here.
+const NUM = String.raw`(-?[0-9]+(?:\.[0-9]+)?)`;
+const HEAD_RE = String.raw`^\s*\[\s*\[\s*` + NUM + String.raw`\s*,\s*` + NUM;
+const TAIL_RE = String.raw`\[\s*` + NUM + String.raw`\s*,\s*` + NUM + String.raw`[^\[\]]*\]\s*\]\s*$`;
+
+/** SQL: straight-line km between a stored track's first and last point (NULL when unreadable). */
+export function endsApartKmSql(col: string): string {
+  const h = `regexp_match(left(${col}, 200), '${HEAD_RE}')`;
+  const t = `regexp_match(right(${col}, 200), '${TAIL_RE}')`;
+  return `sqrt(power(((${t})[1]::float8 - (${h})[1]::float8) * 111.32, 2) + power(((${t})[2]::float8 - (${h})[2]::float8) * 111.32 * cos(radians((${h})[1]::float8)), 2))`;
+}
+
+/** SQL condition: the route's track ends where it starts (a loop, lollipop or out-and-back). */
+function loopTrackSql(alias: string): string {
+  return `COALESCE(${endsApartKmSql(`${alias}.coordinates`)}, 0) <= ${POINT_TO_POINT_KM}`;
+}
+
+/**
+ * The names (countries, regions) with at least one route a rider can open
+ * — the same test the pages count with (recommendableNow) — so a list never
+ * offers a page that says "0 routes". Tracks are loaded a few at a time per
+ * name and only until one passes (usually the first).
+ */
+async function namesWithOpenableRoutes(rows: { id: string; name: string }[]): Promise<string[]> {
+  const byName = new Map<string, string[]>();
+  for (const r of rows) {
+    if (!r.name) continue;
+    const ids = byName.get(r.name) ?? [];
+    ids.push(r.id);
+    byName.set(r.name, ids);
+  }
+  const keep = await Promise.all([...byName].map(async ([name, ids]) => {
+    for (let i = 0; i < ids.length; i += 5) {
+      const { rows: tracks } = await sql.query(
+        `SELECT id, name, coordinates, recommend_status FROM routes WHERE id = ANY($1::text[])`,
+        [ids.slice(i, i + 5)]
+      );
+      if (tracks.some((t) => recommendableNow(t))) return name;
+    }
+    return null;
+  }));
+  return keep.filter((n): n is string => !!n).sort((a, b) => a.localeCompare(b));
+}
+
+/** The public-list gate every list query repeats (approved, road, recommendable, a loop). */
+const LISTED_SQL = `(quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road'))`;
 
 // ──── Init ────
 export async function initDb() {
@@ -594,10 +689,33 @@ export async function getRoutes(filters: RouteFilters = {}): Promise<Route[]> {
     params.push(filters.surface_type);
   }
   if (filters.search) {
-    conditions.push(`(r.name ILIKE $${idx} OR r.description ILIKE $${idx} OR r.county ILIKE $${idx} OR r.region ILIKE $${idx})`);
-    params.push(`%${filters.search}%`);
+    const s = filters.search.trim();
+    const matches = [`r.name ILIKE $${idx}`, `r.description ILIKE $${idx}`, `r.county ILIKE $${idx}`, `r.region ILIKE $${idx}`];
+    params.push(`%${s}%`);
     idx++;
+    // "Mallorca" also finds the routes stored under "Majorca" / "Balearic Islands".
+    const spellings = regionSpellings(s);
+    if (spellings.length > 1) {
+      matches.push(`LOWER(TRIM(r.region)) = ANY($${idx}::text[])`);
+      params.push(spellings.map((x) => x.toLowerCase()));
+      idx++;
+    }
+    // A known start place ("Clontarf", "Howth") finds the routes that start
+    // there, though no name or description spells it.
+    const place = lookupKnownPlace(s);
+    if (place) {
+      matches.push(`(6371 * acos(LEAST(1::double precision, GREATEST(-1::double precision,
+        cos(radians($${idx}::double precision)) * cos(radians(r.start_lat::double precision)) *
+        cos(radians(r.start_lng::double precision) - radians($${idx + 1}::double precision)) +
+        sin(radians($${idx}::double precision)) * sin(radians(r.start_lat::double precision))
+      )))) <= ${SEARCH_PLACE_KM}`);
+      params.push(place.point[0], place.point[1]);
+      idx += 2;
+    }
+    conditions.push(`(${matches.join(" OR ")})`);
   }
+  // Lists hold loops: point-to-point tracks (a traverse, a commute) stay out.
+  conditions.push(loopTrackSql("r"));
 
   // Only show approved routes (or legacy routes without a quality_status yet)
   conditions.push(`(r.quality_status = 'approved' OR r.quality_status IS NULL) AND r.discipline IN ('road') AND (r.recommend_status IS NULL OR r.recommend_status IN ('ok','only-road'))`);
@@ -1328,20 +1446,23 @@ export async function getCounties(): Promise<string[]> {
   return rows.map((r) => r.county);
 }
 
+/**
+ * Regions with a loop a rider can open, one name per region ("Majorca",
+ * "Balearic Islands" and "Mallorca" are one: Mallorca).
+ */
 export async function getRegions(country?: string): Promise<string[]> {
   await ensureRecommendColumn();
-  if (country) {
-    const { rows } = await sql`SELECT DISTINCT region FROM routes WHERE country = ${country} AND region IS NOT NULL AND (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road')) ORDER BY region`;
-    return rows.map((r) => r.region);
-  }
-  const { rows } = await sql`SELECT DISTINCT region FROM routes WHERE region IS NOT NULL AND (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road')) ORDER BY region`;
-  return rows.map((r) => r.region);
+  const { rows } = country
+    ? await sql.query(`SELECT id, region FROM routes WHERE country = $1 AND region IS NOT NULL AND ${LISTED_SQL} AND ${loopTrackSql("routes")} ORDER BY created_at`, [country])
+    : await sql.query(`SELECT id, region FROM routes WHERE region IS NOT NULL AND ${LISTED_SQL} AND ${loopTrackSql("routes")} ORDER BY created_at`);
+  return namesWithOpenableRoutes(rows.map((r) => ({ id: r.id, name: canonicalRegion(String(r.region)) })));
 }
 
+/** Countries with a loop a rider can open — never one whose page would say "0 routes". */
 export async function getCountries(): Promise<string[]> {
   await ensureRecommendColumn();
-  const { rows } = await sql`SELECT DISTINCT country FROM routes WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road')) ORDER BY country`;
-  return rows.map((r) => r.country);
+  const { rows } = await sql.query(`SELECT id, country FROM routes WHERE ${LISTED_SQL} AND ${loopTrackSql("routes")} ORDER BY created_at`);
+  return namesWithOpenableRoutes(rows.map((r) => ({ id: r.id, name: String(r.country ?? "") })));
 }
 
 // ──── Admin ────
@@ -1438,6 +1559,7 @@ export async function getRoutesByCountrySlug(slug: string): Promise<Route[]> {
      FROM routes r
      LEFT JOIN ratings rt ON rt.route_id = r.id
      WHERE ${slugSql("r.country")} = $1 AND (r.quality_status = 'approved' OR r.quality_status IS NULL) AND r.discipline IN ('road') AND (r.recommend_status IS NULL OR r.recommend_status IN ('ok','only-road'))
+       AND ${loopTrackSql("r")}
      GROUP BY r.id
      ORDER BY COALESCE(AVG(rt.score), 0) DESC, r.created_at DESC`,
     [slug]
@@ -1452,10 +1574,10 @@ export async function getRoutesByRegionSlug(countrySlug: string, regionSlug: str
      FROM routes r
      LEFT JOIN ratings rt ON rt.route_id = r.id
      WHERE ${slugSql("r.country")} = $1 AND (r.quality_status = 'approved' OR r.quality_status IS NULL) AND r.discipline IN ('road') AND (r.recommend_status IS NULL OR r.recommend_status IN ('ok','only-road'))
-       AND ${slugSql("r.region")} = $2
+       AND ${slugSql("r.region")} = ANY($2::text[]) AND ${loopTrackSql("r")}
      GROUP BY r.id
      ORDER BY COALESCE(AVG(rt.score), 0) DESC, r.created_at DESC`,
-    [countrySlug, regionSlug]
+    [countrySlug, regionSlugVariants(regionSlug)]
   );
   return publicRows(rows) as Route[];
 }
@@ -1519,20 +1641,20 @@ export async function getRegionStats(countrySlug: string, regionSlug: string): P
     `SELECT
        COUNT(*) as route_count,
        COALESCE(SUM(distance_km), 0) as total_distance,
-       COALESCE((SELECT AVG(rt.score) FROM ratings rt JOIN routes r2 ON rt.route_id = r2.id WHERE ${slugSql("r2.country")} = $1 AND ${slugSql("r2.region")} = $2), 0) as avg_rating,
+       COALESCE((SELECT AVG(rt.score) FROM ratings rt JOIN routes r2 ON rt.route_id = r2.id WHERE ${slugSql("r2.country")} = $1 AND ${slugSql("r2.region")} = ANY($2::text[])), 0) as avg_rating,
        MIN(region) as display_name,
        MIN(country) as country_display_name
      FROM routes
      WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road')) AND ${slugSql("country")} = $1
-       AND ${slugSql("region")} = $2`,
-    [countrySlug, regionSlug]
+       AND ${slugSql("region")} = ANY($2::text[])`,
+    [countrySlug, regionSlugVariants(regionSlug)]
   );
 
   if (!rows[0] || Number(rows[0].route_count) === 0) return null;
 
   const { rows: disciplineRows } = await sql.query(
-    `SELECT DISTINCT discipline FROM routes WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road')) AND ${slugSql("country")} = $1 AND ${slugSql("region")} = $2 ORDER BY discipline`,
-    [countrySlug, regionSlug]
+    `SELECT DISTINCT discipline FROM routes WHERE (quality_status = 'approved' OR quality_status IS NULL) AND discipline IN ('road') AND (recommend_status IS NULL OR recommend_status IN ('ok','only-road')) AND ${slugSql("country")} = $1 AND ${slugSql("region")} = ANY($2::text[]) ORDER BY discipline`,
+    [countrySlug, regionSlugVariants(regionSlug)]
   );
 
   return {
@@ -1540,7 +1662,7 @@ export async function getRegionStats(countrySlug: string, regionSlug: string): P
     totalDistanceKm: Math.round(Number(rows[0].total_distance)),
     avgRating: Number(Number(rows[0].avg_rating).toFixed(1)),
     disciplines: disciplineRows.map((r) => r.discipline),
-    displayName: rows[0].display_name,
+    displayName: canonicalRegion(String(rows[0].display_name ?? "")),
     countryDisplayName: rows[0].country_display_name,
   };
 }
@@ -1889,7 +2011,7 @@ export interface CollectionWithRoutes extends Collection {
 // without updating it) + a representative route for the card thumbnail.
 const COLLECTION_SELECT = `
   SELECT c.*,
-    (SELECT COUNT(*) FROM collection_routes cr JOIN routes rr ON rr.id = cr.route_id WHERE cr.collection_id = c.id AND rr.discipline IN ('road')) AS total_routes_count,
+    (SELECT COUNT(*) FROM collection_routes cr JOIN routes rr ON rr.id = cr.route_id WHERE cr.collection_id = c.id AND rr.discipline IN ('road') AND ${loopTrackSql("rr")}) AS total_routes_count,
     (SELECT cr.route_id FROM collection_routes cr
        JOIN routes r2 ON r2.id = cr.route_id
        WHERE cr.collection_id = c.id
@@ -1919,13 +2041,16 @@ export async function getCollectionBySlug(slug: string): Promise<CollectionWithR
   if (collRows.length === 0) return null;
   const collection = collRows[0] as Collection;
 
-  const { rows: routeRows } = await sql`
-    SELECT r.*, cr.display_order
-    FROM routes r
-    JOIN collection_routes cr ON cr.route_id = r.id
-    WHERE cr.collection_id = ${collection.id} AND (r.recommend_status IS NULL OR r.recommend_status IN ('ok','only-road'))
-    ORDER BY cr.display_order ASC, r.created_at ASC
-  `;
+  // Loops only: a point-to-point track (a traverse) is not a training ride.
+  const { rows: routeRows } = await sql.query(
+    `SELECT r.*, cr.display_order
+     FROM routes r
+     JOIN collection_routes cr ON cr.route_id = r.id
+     WHERE cr.collection_id = $1 AND (r.recommend_status IS NULL OR r.recommend_status IN ('ok','only-road'))
+       AND ${loopTrackSql("r")}
+     ORDER BY cr.display_order ASC, r.created_at ASC`,
+    [collection.id]
+  );
 
   // Use the live linked-route count, not the stored total_routes_count (which
   // the seed scripts don't keep in sync) — otherwise the detail header reads

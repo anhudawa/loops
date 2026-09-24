@@ -29,6 +29,7 @@ import { slugify } from "@/lib/seo";
 import { parseRideTime } from "@/lib/ride-invite";
 import { SOCIAL_FEATURES_ENABLED } from "@/config/constants";
 import { detectClimbs, haversine, CATEGORY_COLORS, type Climb } from "@/lib/climb-detection";
+import { cleanClimbs } from "@/lib/climb-cleanup";
 
 
 
@@ -381,10 +382,15 @@ export default function RouteDetailView({ ride, initialRoute }: { ride?: RideInv
   } catch {
     rawCoords = [];
   }
-  const fullCoordinates: [number, number, number][] = rawCoords.map((c) => [c[0], c[1], c[2] ?? 0]);
+  // The profile and the climb cards read the track with elevation spikes
+  // taken out (a DEM spike once showed Cap Formentor as a 43.5 % "climb")
+  // and a climb broken by a short dip read as one.
+  const { coords: fullCoordinates, climbs } = cleanClimbs(
+    rawCoords.map((c) => [c[0], c[1], c[2] ?? 0] as [number, number, number]),
+    detectClimbs
+  );
   const coordinates: [number, number][] = rawCoords.map((c) => [c[0], c[1]]);
   const elevations: number[] = rawCoords.map((c) => c[2] ?? 0);
-  const climbs = detectClimbs(fullCoordinates);
   // Measured on the full track by the server; the client measures only as a fallback.
   const track = (route as Route & { track_check?: TrackCheck | null }).track_check ?? cachedTrackCheck(route.id, coordinates, route.name);
 

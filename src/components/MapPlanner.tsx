@@ -59,6 +59,8 @@ import { describeCompromise, type Compromise } from "@/lib/road-segments";
 import { useAuth } from "@/components/AuthProvider";
 import { KNOWN_PLACES, lookupKnownPlace } from "@/lib/places-known";
 import { readDraft, writeDraft, clearDraft } from "@/app/plan/plan-draft";
+import { planCompromises, detourLegs } from "@/app/plan/plan-checks";
+import { retraceSummary } from "@/lib/track-shape";
 
 interface RerouteResult {
   coordinates: [number, number][];
@@ -70,7 +72,12 @@ interface RerouteResult {
     standard_met: boolean;
     compromises: Compromise[];
   };
+  /** Road km ÷ straight-line km for the leg, when the server measures it. */
+  detour_ratio?: number | null;
 }
+
+/** A leg plus what the planner keeps beside it (not stored in the draft's schema). */
+type DrawnLeg = PlanLeg & { detour_ratio?: number | null };
 
 type Discipline = "road" | "gravel" | "mtb";
 
@@ -114,11 +121,28 @@ interface Snapshot {
 }
 const MAX_UNDO = 50;
 
+/**
+ * A tap on a pin's popup ("Remove this point") must never also drop a new
+ * pin where the button was: map clicks are ignored briefly after one.
+ */
+let ignoreMapClicksUntil = 0;
+const POPUP_ACTION_GUARD_MS = 400;
+
 function ClickToAdd({ onAdd }: { onAdd: (latlng: LatLng) => void }) {
   useMapEvents({
     click(e) {
+      if (Date.now() < ignoreMapClicksUntil) return;
       onAdd([e.latlng.lat, e.latlng.lng]);
     },
+  });
+  return null;
+}
+
+/** Tells the planner while a pin's popup is open (the live-distance chip makes way for it). */
+function PopupWatch({ onChange }: { onChange: (open: boolean) => void }) {
+  useMapEvents({
+    popupopen() { onChange(true); },
+    popupclose() { onChange(false); },
   });
   return null;
 }
@@ -207,15 +231,22 @@ function AnchorMarker({ position, icon, onMove, onRemove }: {
       }}
     >
       <Popup closeButton={false} className="pin-popup">
+        <div ref={(el) => { if (el) L.DomEvent.disableClickPropagation(el); }}>
         <button
           type="button"
-          onClick={() => { markerRef.current?.closePopup(); onRemove(); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            ignoreMapClicksUntil = Date.now() + POPUP_ACTION_GUARD_MS;
+            markerRef.current?.closePopup();
+            onRemove();
+          }}
           className="min-h-[44px] px-3 rounded-lg text-xs font-bold"
           style={{ background: "#f5a524", color: "#0a0a0a" }}
         >
           Remove this point
         </button>
         <p className="text-[11px] mt-1.5" style={{ color: "#b9bdb0" }}>{coarse ? "Press and hold a pin to move it." : "Drag a pin to move it."}</p>
+        </div>
       </Popup>
     </Marker>
   );
@@ -240,7 +271,7 @@ async function snapQueue<T>(run: () => Promise<T>): Promise<T> {
 }
 
 export default function MapPlanner() {
-  // A drawing left in this tab (nav tap, Back, reload, sign-in) comes back.
+  // A drawing left on this device (nav tap, Back, reload, sign-in in a new tab) comes back.
   const [draft] = useState(() => readDraft());
   const [anchors, setAnchors] = useState<LatLng[]>(draft?.anchors ?? []);
   /** legs[i] connects anchors[i] → anchors[i+1]. */
@@ -264,6 +295,8 @@ export default function MapPlanner() {
   const [naming, setNaming] = useState<string | null>(null);
   const [locBlocked, setLocBlocked] = useState(false);
   const [locating, setLocating] = useState(false);
+  const [popupOpen, setPopupOpen] = useState(false);
+  const [allCompromisesShown, setAllCompromisesShown] = useState(false);
   // On a phone the elevation panel + controls left the map as a thin strip
   // mid-draw, so it starts collapsed there (one tap to open) and is shorter.
   const compact = typeof window !== "undefined" && window.innerWidth < 768;
@@ -352,7 +385,7 @@ export default function MapPlanner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Keep the drawing for this tab while it changes.
+  // Keep the drawing on this device while it changes (plan-draft.ts).
   useEffect(() => {
     if (savedRef.current) return;
     if (anchors.length === 0) clearDraft();
@@ -375,7 +408,7 @@ export default function MapPlanner() {
   // ── Per-leg snapping ───────────────────────────────────────────────────────
 
   /** Apply a result to the leg with this id, only if seq is still current. */
-  function applyLegResult(id: number, seq: number, patch: Partial<PlanLeg>) {
+  function applyLegResult(id: number, seq: number, patch: Partial<DrawnLeg>) {
     if (patch.status === "snapped" && patch.coords) snappedCoordsRef.current.set(id, patch.coords as LatLng[]);
     else if (patch.status && patch.status !== "pending") snappedCoordsRef.current.delete(id);
     setLegs((prev) =>
@@ -451,6 +484,7 @@ export default function MapPlanner() {
         error: undefined,
         standard_met: data.road_report?.standard_met,
         compromises: data.road_report?.compromises ?? [],
+        detour_ratio: typeof data.detour_ratio === "number" ? data.detour_ratio : undefined,
       });
     } catch {
       applyLegResult(id, seq, {
@@ -750,7 +784,17 @@ export default function MapPlanner() {
   // Road Standard across the drawn route (trust rule: a compromise is shown
   // while drawing, never discovered on the road).
   const standardKnown = allSnapped && allLegs.every((l) => l.standard_met !== undefined);
-  const compromises = allLegs.flatMap((l) => l.compromises ?? []).sort((a, b) => b.meters - a.meters);
+  // Worst first (a fast N-road before a long quiet primary); "near the
+  // start" measured from the ride's start, not each leg's own ends.
+  const compromises = planCompromises(allLegs, anchors, !!loopLeg);
+  // The same road twice (two pins with Loop back on is an out-and-back):
+  // measured on the whole snapped ride, as stored tracks are.
+  const retrace = useMemo(
+    () => (allSnapped ? retraceSummary(concatLegGeometry(allLegs).coords) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [legs, loopLeg, allSnapped]
+  );
+  const longWayLegs = allSnapped ? detourLegs(allLegs as DrawnLeg[]) : [];
 
   // Live elevation profile: rebuild the [lat,lng,ele] track whenever a leg's
   // geometry changes. ElevationProfile renders its own empty state when the
@@ -968,7 +1012,10 @@ export default function MapPlanner() {
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
           <RecenterOnce target={geoCenter} />
-          {allLegs.length > 0 && (
+          <PopupWatch onChange={setPopupOpen} />
+          {/* Hidden while a pin's popup is open: on a phone the chip (z 1000)
+              sat over "Remove this point". */}
+          {allLegs.length > 0 && !popupOpen && (
             // Live distance where the eyes are while plotting: every tap
             // updates it (straight-line until a leg snaps, marked "~").
             <div className="leaflet-top w-full flex justify-center pointer-events-none" style={{ zIndex: 1000 }}>
@@ -1078,13 +1125,19 @@ export default function MapPlanner() {
           {locating ? "Locating…" : "Use my location"}
         </button>
         {locBlocked && (
-          <div className="absolute bottom-16 right-3 left-3 z-[500] sm:left-auto sm:w-96">
-            <LocationHelp onRetry={async () => { const p = await requestLocation(); if (p) { setGeoCenter([p.lat, p.lng]); setHere([p.lat, p.lng]); setLocBlocked(false); } }} onDismiss={() => setLocBlocked(false)} />
+          <div className="absolute bottom-16 right-3 left-3 z-[600] sm:left-auto sm:w-96">
+            <LocationHelp
+              onRetry={async () => { const p = await requestLocation(); if (p) { setGeoCenter([p.lat, p.lng]); setHere([p.lat, p.lng]); setLocBlocked(false); } }}
+              onDismiss={() => setLocBlocked(false)}
+              alternative="Or just pan the map and tap where you start."
+            />
           </div>
         )}
 
-        {/* Go to a place — riders abroad need not pan from Dublin. */}
-        {anchors.length === 0 && (
+        {/* Go to a place — riders abroad need not pan from Dublin. Out of the
+            way while the location help is open (on a phone its Go button sat
+            over the help's Close). */}
+        {anchors.length === 0 && !locBlocked && (
           <form
             onSubmit={goToPlace}
             className="absolute top-3 right-3 z-[500] flex flex-col items-end gap-1"
@@ -1198,9 +1251,48 @@ export default function MapPlanner() {
           <span>
             {compromises.length === 0
               ? "Every leg meets the Loops road standard."
-              : `Compromise: ${compromises.slice(0, 2).map(describeCompromise).join("; ")}${compromises.length > 2 ? ` (+${compromises.length - 2} more)` : ""}.`}
+              : `Compromise: ${(allCompromisesShown ? compromises : compromises.slice(0, 2)).map(describeCompromise).join("; ")}.`}
+            {compromises.length > 2 && (
+              <button
+                type="button"
+                onClick={() => setAllCompromisesShown((v) => !v)}
+                aria-expanded={allCompromisesShown}
+                className="ml-1 px-1 py-3 -my-3 font-bold underline"
+                style={{ color: "#f5a524" }}
+              >
+                {allCompromisesShown ? "Show fewer" : `+${compromises.length - 2} more`}
+              </button>
+            )}
           </span>
         </div>
+      )}
+
+      {/* The same road twice — said while drawing, not found on the ride. */}
+      {retrace?.warn && (
+        <p
+          className="px-3 py-1.5 border-t text-xs flex items-start gap-1.5 z-20"
+          style={{ background: "var(--bg-raised)", borderColor: "var(--border)", color: "#f5a524" }}
+          data-testid="plan-retrace"
+        >
+          <span aria-hidden="true">⚠</span>
+          <span>
+            {retrace.km < 1 ? `${Math.round(retrace.km * 1000)} m` : `${retrace.km.toFixed(1)} km`} of this ride is the same road twice ({retrace.pct}%).
+            {" "}Add a pin on another road to make it a loop.
+          </span>
+        </p>
+      )}
+      {longWayLegs.length > 0 && (
+        <p
+          className="px-3 py-1.5 border-t text-xs flex items-start gap-1.5 z-20"
+          style={{ background: "var(--bg-raised)", borderColor: "var(--border)", color: "var(--text-secondary)" }}
+          data-testid="plan-detour"
+        >
+          <span aria-hidden="true">↪</span>
+          <span>
+            {longWayLegs.length === 1 ? `Leg ${longWayLegs[0] + 1} goes` : `Legs ${longWayLegs.map((i) => i + 1).join(", ")} go`} the long way round
+            {" "}— the nearest suitable road between those pins. Move a pin or add one to steer it.
+          </span>
+        </p>
       )}
 
       {/* Bottom control bar — mobile-first, ≥44px targets */}

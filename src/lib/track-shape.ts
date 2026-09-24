@@ -5,7 +5,13 @@
  * tracks are flagged so pages can warn and Generate can skip them.
  */
 
-export type TrackShape = "loop" | "lollipop" | "out-and-back";
+export type TrackShape = "loop" | "lollipop" | "out-and-back" | "point_to_point";
+
+/**
+ * Ends further apart than this are A to B (a commute, a traverse), not a
+ * training loop — lists and duration chips leave them out (db.ts).
+ */
+export const POINT_TO_POINT_KM = 1;
 
 export interface TrackCheck {
   shape: TrackShape;
@@ -13,7 +19,7 @@ export interface TrackCheck {
   retracePct: number;
   /** Largest straight-line jump between consecutive points (km) — a gap in the data. */
   maxJumpKm: number;
-  /** Start-to-finish distance (km); > 5 km means point-to-point. */
+  /** Start-to-finish distance (km); > POINT_TO_POINT_KM means point-to-point. */
   endsApartKm: number;
   /** Not fit to ride as served, with the reason. */
   broken: string | null;
@@ -51,7 +57,9 @@ export function checkTrack(coords: [number, number][], name = ""): TrackCheck | 
   }
   const retracePct = Math.round((shared / total) * 100);
   const endsApartKm = Math.round(km(coords[0], coords[coords.length - 1]) * 10) / 10;
-  const shape: TrackShape = retracePct >= 75 ? "out-and-back" : retracePct >= 25 ? "lollipop" : "loop";
+  const shape: TrackShape =
+    endsApartKm > POINT_TO_POINT_KM ? "point_to_point"
+    : retracePct >= 75 ? "out-and-back" : retracePct >= 25 ? "lollipop" : "loop";
   let broken: string | null = null;
   if (maxJump > 2) broken = `the track has a ${maxJump.toFixed(1)} km gap`;
   else if (/\bloop\b/i.test(name) && retracePct > 50) broken = `it is called a loop but ${retracePct}% of it rides the same roads twice`;
@@ -60,8 +68,22 @@ export function checkTrack(coords: [number, number][], name = ""): TrackCheck | 
 
 /** "Loop", "Out and back · 94% ridden both ways", "Loop with an out-and-back section · 41% …". */
 export function shapeLabel(c: TrackCheck): string {
-  if (c.endsApartKm > 5) return "Point to point";
+  if (c.shape === "point_to_point") return "Point to point";
   if (c.shape === "loop") return "Loop";
   if (c.shape === "out-and-back") return `Out and back · ${c.retracePct}% ridden both ways`;
   return `Loop with an out-and-back section · ${c.retracePct}% ridden both ways`;
+}
+
+/**
+ * How much of a drawn ride is the same road twice: km and share of the
+ * distance (the checkTrack measurement). `warn` when it is worth telling
+ * the rider — more than 15 % or more than 3 km.
+ */
+export function retraceSummary(coords: [number, number][]): { km: number; pct: number; warn: boolean } | null {
+  const c = checkTrack(coords);
+  if (!c) return null;
+  let total = 0;
+  for (let i = 1; i < coords.length; i++) total += km(coords[i - 1], coords[i]);
+  const retraceKm = Math.round(((total * c.retracePct) / 100) * 10) / 10;
+  return { km: retraceKm, pct: c.retracePct, warn: c.retracePct > 15 || retraceKm > 3 };
 }

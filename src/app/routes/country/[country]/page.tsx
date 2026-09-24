@@ -25,6 +25,8 @@ const loadCountry = cache(async (countrySlug: string) => {
   const stats = await getCountryStats(countrySlug);
   if (!stats) return null;
   const routes = visibleRoutes(await getRoutesByCountrySlug(countrySlug));
+  // No route a rider can open: no page ("all 0 routes in USA…").
+  if (routes.length === 0) return null;
   return {
     ...stats,
     routes,

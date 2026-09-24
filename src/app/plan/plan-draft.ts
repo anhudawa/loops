@@ -1,7 +1,9 @@
 /**
- * The drawing in progress on /plan, kept for this tab (sessionStorage) so a
- * nav tap, Back, a reload or a sign-in round-trip never wipes it. Snapped
- * legs come back exactly as drawn — no re-routing, no different roads.
+ * The drawing in progress on /plan, kept on this device (localStorage, for
+ * DRAFT_TTL_MS) so a nav tap, Back, a reload or a sign-in round-trip never
+ * wipes it — including the magic link, which opens in a NEW tab (a
+ * per-tab sessionStorage draft was lost there). Snapped legs come back
+ * exactly as drawn — no re-routing, no different roads.
  */
 
 import type { LatLng, PlanLeg } from "@/lib/plan-legs";
@@ -22,7 +24,7 @@ type StorageLike = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
 function store(): StorageLike | null {
   try {
-    return typeof window === "undefined" ? null : window.sessionStorage;
+    return typeof window === "undefined" ? null : window.localStorage;
   } catch {
     return null;
   }

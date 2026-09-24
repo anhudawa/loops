@@ -3,6 +3,7 @@ import { generateRouteCandidates, NoValidRoutesError, inFlightTimings } from "@/
 import { getUserBySession, recordEvent, ANALYTICS_EVENTS } from "@/lib/db";
 import { DEFAULT_SPEED_KMH } from "@/config/constants";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { defaultLengthNotice, parseBasicIntent, parseBasicWorkout, workoutSummary } from "@/lib/route-intent";
 
 /** Allow up to 60s on Vercel (fluid compute / Pro); clamped lower on hobby. */
 export const maxDuration = 60;
@@ -105,7 +106,11 @@ export async function POST(request: NextRequest) {
   }
 
   const trimmedPrompt = prompt.trim();
-  if (trimmedPrompt.length < 10) {
+  // "40km loop", "2h" or "deia 60km" is a whole ask when we know where it
+  // starts (the phone's location, or a place named).
+  const shortButComplete = /\d\s*(?:km|kms|k|mi|miles?|h|hrs?|hours?|mins?|minutes?)\b/i.test(trimmedPrompt) &&
+    (!!origin || !!parseBasicIntent(trimmedPrompt)?.region);
+  if (trimmedPrompt.length < 10 && !shortButComplete) {
     return NextResponse.json(
       { error: "Prompt is too short — please describe the route you want", code: "PROMPT_TOO_SHORT" },
       { status: 400 }
@@ -148,6 +153,19 @@ export async function POST(request: NextRequest) {
       }),
       timeoutPromise,
     ]);
+
+    // Say when the length was ours, not the rider's ("No distance given — planned 50 km").
+    const lengthNotice = result.interpreted.destination ? null : defaultLengthNotice(trimmedPrompt, result.interpreted.distance_km);
+    if (lengthNotice) {
+      result.interpreted.notice = result.interpreted.notice ? `${result.interpreted.notice} ${lengthNotice}` : lengthNotice;
+    }
+    // The session as the rider asked it: "10 × 30 s sprint", not the 1-minute stretch it is sized as.
+    if (result.interpreted.parser === "basic" && result.interpreted.is_workout) {
+      const session = parseBasicWorkout(trimmedPrompt);
+      if (session?.workout.intervals.some((iv) => iv.duration_seconds)) {
+        result.interpreted.workout_summary = workoutSummary(session.workout);
+      }
+    }
 
     const librarySources = result.candidates.filter((r) => r.source === "library").length;
     const generatedSources = result.candidates.filter((r) => r.source === "generated").length;
@@ -261,7 +279,7 @@ export async function POST(request: NextRequest) {
         { status: 422 }
       );
     }
-    if (message.includes("geocode") || message.includes("location") || message.includes("too far to ride")) {
+    if (isGeocodeFailure(message)) {
       return NextResponse.json(
         { error: message, code: "GEOCODE_FAILED" },
         { status: 422 }
@@ -271,7 +289,7 @@ export async function POST(request: NextRequest) {
     if (message.includes("Failed to parse LLM response")) {
       return NextResponse.json(
         {
-          error: /\binterval|\beffort|\bthreshold\b|\bftp\b|\btempo\b|\bvo2|sweet\s*spot|\bsprints?\b|\bzone\s*[3-7]\b/i.test(trimmedPrompt)
+          error: /\binterval|\beffort|\bthreshold\b|\bftp\b|\btempo\b|\bvo2|sweet\s*spot|\bsprints?\b|\bzone\s*[3-7]\b|\brepeats?\b|\bover[\s-]?unders?\b|\bhill\b|\bhard\b|\bsession\b|\bworkout\b/i.test(trimmedPrompt)
             ? "Tell me the efforts and I'll place them — e.g. \"4x4 min VO2 max\", \"2x20 min threshold\" or \"20 min tempo\", plus how long you want to ride."
             : "I couldn't fully understand that — use the quick form below and I'll take it from there.",
           code: "PARSE_FAILED",
@@ -301,10 +319,15 @@ function classifyErrorCode(message: string): string {
   if (message.includes("timed out")) return "TIMEOUT";
   if (message.includes("No valid routes")) return "NO_ROUTES_FOUND";
   if (message.includes("host this workout") || message.includes("uninterrupted at that intensity")) return "NO_WORKOUT_MATCH";
-  if (message.includes("geocode") || message.includes("location") || message.includes("too far to ride")) return "GEOCODE_FAILED";
+  if (isGeocodeFailure(message)) return "GEOCODE_FAILED";
   if (message.includes("Failed to parse LLM response")) return "PARSE_FAILED";
   if (message.includes("Overpass")) return "OVERPASS_ERROR";
   return "INTERNAL_ERROR";
+}
+
+/** A place the rider named (start or destination) could not be found, or there is no start at all. */
+function isGeocodeFailure(message: string): boolean {
+  return message.includes("geocode") || message.includes("location") || message.includes("too far to ride") || /couldn't find/i.test(message);
 }
 
 /** Best-effort client IP extraction for rate limiting. Order matches Vercel's

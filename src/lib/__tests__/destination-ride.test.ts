@@ -48,7 +48,7 @@ describe("resolveDestination", () => {
   });
 
   it("declines a place it cannot find near the start (never elsewhere)", async () => {
-    await expect(resolveDestination("Narnia", dublin, "Ireland", noGeocode)).rejects.toThrow(/Couldn't find/);
+    await expect(resolveDestination("Narnia", dublin, "Ireland", noGeocode)).rejects.toThrow(/couldn.t find Narnia near/i);
   });
 
   it("uses the geocoder bounded around the start", async () => {

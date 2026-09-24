@@ -827,7 +827,7 @@ function InterpretedPanel({ interpreted }: { interpreted: Interpreted }) {
       <p className="text-xs mt-1.5" style={{ color: "var(--text-muted)" }}>
         Not quite right? Edit your request above and search again.
       </p>
-      <p className="text-[10px] mt-2" style={{ color: "var(--text-muted)", opacity: 0.8 }}>
+      <p className="text-[10px] mt-2" style={{ color: "var(--text-muted)" }}>
         Road data © OpenStreetMap contributors · Place data © GeoNames (CC BY 4.0)
       </p>
     </div>

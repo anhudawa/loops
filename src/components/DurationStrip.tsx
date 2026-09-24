@@ -65,8 +65,8 @@ export default function DurationStrip({
               <span
                 style={{
                   fontSize: "0.75rem",
+                  // Full muted colour: at 80 % opacity it failed contrast (3.7:1).
                   color: isSelected ? "var(--accent)" : "var(--text-muted)",
-                  opacity: 0.8,
                 }}
               >
                 ~{approxKm}km

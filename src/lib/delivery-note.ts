@@ -21,6 +21,8 @@ export interface DeliveryRequest {
 export interface DeliveryActual {
   distance_km: number;
   elevation_gain_m: number;
+  /** The card title ("Bray to Sally Gap and back" vs "Bray – Sally Gap – Bray · 64 km"). */
+  title?: string | null;
 }
 
 // Per-km elevation ceiling for each preference (mirrors route-intent.ts).
@@ -43,11 +45,13 @@ export function deliveryNote(
         ? `${Math.round(actual.distance_km)} km in all — the repeats of your efforts add road to the ${Math.round(reqKm)} km planned.`
         : `${Math.round(actual.distance_km)} km in all — shorter than the ${Math.round(reqKm)} km planned, to keep your efforts on their best stretch.`);
     } else if (Math.abs(diff) / reqKm > 0.12 && Math.abs(diff) >= 3 && req.destination) {
-      notes.push(`${req.destination} and back is ${Math.round(actual.distance_km)} km — ${diff < 0 ? "shorter" : "longer"} than the ${Math.round(reqKm)} km you asked for.`);
+      // A loop over the place is not "and back".
+      const what = actual.title && !/\band back\b/i.test(actual.title) ? `This loop over ${req.destination}` : `${req.destination} and back`;
+      notes.push(`${what} is ${Math.round(actual.distance_km)} km — ${diff < 0 ? "shorter" : "longer"} than the ${Math.round(reqKm)} km you asked for.`);
     } else if (Math.abs(diff) / reqKm > 0.12 && Math.abs(diff) >= 3) {
       notes.push(
         diff < 0
-          ? `Came out ${Math.round(-diff)} km shorter than the ${Math.round(reqKm)} km you asked for — the best loop we could route from here.`
+          ? `Came out ${Math.round(-diff)} km shorter than the ${Math.round(reqKm)} km you asked for.`
           : `Came out ${Math.round(diff)} km longer than the ${Math.round(reqKm)} km you asked for.`
       );
     }

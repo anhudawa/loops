@@ -653,14 +653,26 @@ function GenerateContent() {
             <p className="text-xs mt-2" style={{ color: "#ff6b6b" }}>{geo.error}</p>
           ) : null}
 
-          <div className="flex flex-wrap gap-2 mt-3">
+          {/* While planning, the progress card takes this place (it sat below the fold). */}
+          {!loading && <div className="flex flex-wrap gap-2 mt-3">
             {EXAMPLES.map((ex) => (
               <button
                 key={ex}
                 type="button"
                 onClick={() => {
-                  setPrompt(ex);
+                  // No start in the chip: without the rider's location the
+                  // ask needs a town — leave the cursor after "from " (every
+                  // chip used to fail on first submit: "we don't know where
+                  // to start").
+                  const text = useMyLocation && geo.coords ? ex : `${ex} from `;
+                  setPrompt(text);
                   if (error?.code === "TOO_SHORT") setError(null);
+                  if (!(useMyLocation && geo.coords)) {
+                    requestAnimationFrame(() => {
+                      const el = promptRef.current;
+                      if (el) { el.focus(); el.setSelectionRange(text.length, text.length); }
+                    });
+                  }
                 }}
                 disabled={loading}
                 className="inline-flex items-center min-h-[44px] text-xs px-3 py-1.5 rounded-full text-left"
@@ -673,7 +685,7 @@ function GenerateContent() {
                 {ex}
               </button>
             ))}
-          </div>
+          </div>}
 
           <p className="text-xs mt-3" style={{ color: "var(--text-muted)" }}>
             Prefer to draw it?{" "}
@@ -695,6 +707,7 @@ function GenerateContent() {
                 : undefined
             }
             loginHref={loginHrefFor(submittedPrompt)}
+            onRunAsk={(ask) => { setPrompt(ask); runGeneration(ask); }}
           />
           </div>
         )}
@@ -853,8 +866,11 @@ function ErrorPanel({
   onEdit,
   onRepeatOnOneStretch,
   loginHref,
+  onRunAsk,
 }: {
   error: { message: string; code?: string; notice?: string };
+  /** Run a ride the decline names ("Puerto de la Cruz to Tacoronte and back"). */
+  onRunAsk?: (ask: string) => void;
   onRetry?: () => void;
   /** Back to the request box (a decline the same words would only get again). */
   onEdit?: () => void;
@@ -901,6 +917,8 @@ function ErrorPanel({
   // Sending the same words again gets the same honest "no": these go back
   // to the request box instead.
   const editInstead = !!onEdit && (error.code === "GEOCODE_FAILED" || error.code === "NO_ROUTES_FOUND" || error.code === "NO_MAP_DATA");
+  // A decline that names a ride checked on the engine ("… to Tacoronte and back"): one tap runs it.
+  const suggestedAsk = error.code === "NO_ROUTES_FOUND" ? error.message.match(/"([^"]+ to [^"]+ and back)"/)?.[1] ?? null : null;
 
   return (
     <div
@@ -919,7 +937,8 @@ function ErrorPanel({
       >
         {error.message}
       </p>
-      {isDecline && (
+      {isDecline && error.code !== "GEOCODE_FAILED" && (
+        // A refusal on quality — not "we couldn't tell where you start".
         <p className="text-[11px] mt-1 font-semibold uppercase tracking-wider" style={{ color: "var(--accent)" }}>
           We won&apos;t serve a route we can&apos;t stand over
         </p>
@@ -933,6 +952,16 @@ function ErrorPanel({
         <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
           {hint}
         </p>
+      )}
+      {suggestedAsk && onRunAsk && (
+        <button
+          type="button"
+          onClick={() => onRunAsk(suggestedAsk)}
+          className="mt-3 mr-2 inline-flex items-center justify-center gap-2 min-h-[44px] px-5 rounded-xl text-sm font-bold"
+          style={{ background: "var(--accent)", color: "var(--bg)" }}
+        >
+          Plan this ride instead
+        </button>
       )}
       {onRepeatOnOneStretch && (
         <button
@@ -1137,16 +1166,21 @@ const LOADING_STAGES = [
   { at: 4500, label: "Plotting candidate loops…" },
   { at: 8000, label: "Checking road quality and safety…" },
   { at: 12000, label: "Scoring and ranking the best options…" },
+  // The long tail (up to ~45 s): say what is really happening, never stall.
+  { at: 20000, label: "Trying more directions from your start…" },
+  { at: 32000, label: "Checking the last candidates against the Road Standard…" },
 ];
 
 function LoadingStages() {
   const [stage, setStage] = useState(0);
+  const [seconds, setSeconds] = useState(0);
 
   useEffect(() => {
     const timers = LOADING_STAGES.map((s, i) =>
       setTimeout(() => setStage(i), s.at)
     );
-    return () => timers.forEach(clearTimeout);
+    const tick = setInterval(() => setSeconds((n) => n + 1), 1000);
+    return () => { timers.forEach(clearTimeout); clearInterval(tick); };
   }, []);
 
   // Big, unmissable progress card. Slow-path honesty (spec): public routing can
@@ -1165,9 +1199,14 @@ function LoadingStages() {
           style={{ borderColor: "var(--accent)", borderTopColor: "transparent" }}
           aria-hidden="true"
         />
-        <p className="text-base font-bold" style={{ color: "var(--text)" }}>
+        <p className="text-base font-bold flex-1" style={{ color: "var(--text)" }}>
           {LOADING_STAGES[stage].label}
         </p>
+        {seconds >= 5 && (
+          <span className="text-xs tabular-nums shrink-0" style={{ color: "var(--text-secondary)" }} aria-hidden="true">
+            {seconds}s
+          </span>
+        )}
       </div>
       <p className="text-sm mt-3" style={{ color: "var(--text-muted)" }}>
         This can take up to a minute on busy roads — we&apos;re checking real
@@ -1305,11 +1344,11 @@ function CandidateCard({
               <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
                 {isLibrary
                   ? candidate.from_home
-                    ? `${candidate.county} · new loop from your start, built on this ${candidate.proof ? "rider-proven" : "verified"} route`
-                    : `${candidate.county} · ${candidate.proof ? "rider-proven" : "verified"}`
+                    ? `${candidate.county} · new loop from your start, built on this ${candidate.proof ? "rider-proven" : "library"} route`
+                    : `${candidate.county} · ${candidate.proof ? "rider-proven" : "from the LOOPS library"}`
                   : edit
                   ? "Your edit · quality re-checked when you save"
-                  : candidate.ride_note ?? "Freshly generated"}
+                  : candidate.ride_note ?? (candidate.road_report?.standard_met ? "New loop · meets the Road Standard" : "New loop · road notes below")}
               </p>
               {isLibrary && candidate.proof && (
                 <p className="text-xs mt-0.5 font-semibold" style={{ color: "var(--accent)" }}>{candidate.proof}</p>

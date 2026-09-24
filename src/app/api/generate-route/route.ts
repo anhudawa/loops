@@ -171,6 +171,9 @@ export async function POST(request: NextRequest) {
     for (const c of result.candidates) {
       const g = c as { road_report?: { standard_met?: boolean } | null; quality_tier?: string };
       if (g.road_report?.standard_met === false && g.quality_tier === "excellent") g.quality_tier = "good";
+      // …nor on a loop flatter than a hilly ask (its own note says so).
+      const note = (c as { ride_note?: string | null }).ride_note ?? "";
+      if (/Flatter than you asked/.test(note) && g.quality_tier === "excellent") g.quality_tier = "good";
     }
 
     const librarySources = result.candidates.filter((r) => r.source === "library").length;

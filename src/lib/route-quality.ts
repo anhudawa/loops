@@ -47,6 +47,8 @@ export interface QualityScore {
   osm_cached: boolean;
   /** Paved/unpaved/unknown share of sampled points ("know before you go"). */
   surface_breakdown?: { paved_pct: number; unpaved_pct: number; unknown_pct: number };
+  /** false when the scenery lookup failed: its factors are unknown, not 0. */
+  scenery_assessed?: boolean;
   /** Road-class share (% of sampled points per OSM highway class). */
   road_class_breakdown?: Record<string, number>;
   /** Share (0–1) of the distance inside a dense city centre (road-segments CITY_CORES). */
@@ -1827,6 +1829,7 @@ async function scoreWithEdgeTags(
     },
     flags: [...new Set(allFlags)],
     surface_breakdown: roads.surface,
+    scenery_assessed: sceneryAssessed,
     road_class_breakdown: roads.road_classes,
     confidence: roads.confidence,
     confidence_level,

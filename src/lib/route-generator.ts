@@ -1899,6 +1899,20 @@ async function candidatesFromSpecInner(
   return generated.map((g) => ({ source: "generated" as const, ...g }));
 }
 
+/**
+ * The quality factors a card shows: scenery's three are left out when the
+ * lookup failed — "unknown", never a 0 % bar (unknown beats wrong).
+ */
+function shownBreakdown(q: { breakdown: unknown; scenery_assessed?: boolean }): Record<string, number> {
+  const b = { ...(q.breakdown as Record<string, number>) };
+  if (q.scenery_assessed === false) {
+    delete b.scenic_score;
+    delete b.scenic_diversity_score;
+    delete b.waypoint_interest_score;
+  }
+  return b;
+}
+
 /** Library loops within this share of the asked length can answer alone (with 2+ of them). */
 const LIBRARY_ALONE_OFF = 0.12;
 
@@ -2120,7 +2134,7 @@ async function destinationRide(
     quality_score: quality.total,
     // Never "excellent" on roads outside the Road Standard, named or not.
     quality_tier: roadReport && !roadReport.standard_met ? "good" : qualityTier(quality.total, quality.city_share, QUALITY_WORLD_CLASS),
-    quality_breakdown: quality.breakdown as unknown as Record<string, number>,
+    quality_breakdown: shownBreakdown(quality),
     highlights: extractHighlights(quality.flags),
     road_type_breakdown: quality.road_class_breakdown ?? computeRoadTypeBreakdown(path.coords),
     surface_breakdown: quality.surface_breakdown,
@@ -2744,7 +2758,7 @@ async function buildLoopAroundCorridor(
     elevation_loss_m: Math.round(loss),
     quality_score: quality.total,
     quality_tier: qualityTier(quality.total, quality.city_share, QUALITY_WORLD_CLASS),
-    quality_breakdown: quality.breakdown as unknown as Record<string, number>,
+    quality_breakdown: shownBreakdown(quality),
     highlights: extractHighlights(quality.flags),
     road_type_breakdown: quality.road_class_breakdown ?? computeRoadTypeBreakdown(coords),
     surface_breakdown: quality.surface_breakdown,
@@ -3104,12 +3118,8 @@ async function loopsOverDestination(spec: RouteSpec): Promise<GeneratedRoute[]> 
     .map((l) => ({
       ...l,
       title: `${startName} – ${dest.name} – ${startName} · ${Math.round(l.distance_km)} km`,
-      ride_note: (() => {
-        const diff = l.distance_km - spec.distance_km;
-        return Math.abs(diff) / spec.distance_km <= 0.1
-          ? `A loop over ${dest.name}, sized to the ${Math.round(spec.distance_km)} km you asked for.`
-          : `A loop over ${dest.name}: ${Math.round(l.distance_km)} km, ${Math.round(Math.abs(diff))} km ${diff > 0 ? "over" : "under"} the ${Math.round(spec.distance_km)} km you asked for.`;
-      })(),
+      // The length against the ask is said by the card's own note (deliveryNote).
+      ride_note: `A loop over ${dest.name}.`,
     }));
 }
 
@@ -3531,7 +3541,7 @@ async function generateFreshRoutes(
         elevation_loss_m: elevLoss,
         quality_score: quality.total,
         quality_tier: qualityTier(quality.total, quality.city_share, QUALITY_WORLD_CLASS),
-        quality_breakdown: quality.breakdown as unknown as Record<string, number>,
+        quality_breakdown: shownBreakdown(quality),
         highlights: extractHighlights(quality.flags),
         road_type_breakdown: quality.road_class_breakdown ?? computeRoadTypeBreakdown(path.coords),
         surface_breakdown: quality.surface_breakdown,
@@ -3730,21 +3740,13 @@ async function generateFreshRoutes(
   if (keepAll) return candidates;
   const served = pickByDistanceFit(candidates, spec.distance_km, wantsClimbing, 3, climbsAsAsked);
   for (const c of served) {
-    // Said, never silent: a loop well off the asked length, or flatter than
-    // a hilly ask, says so on its card.
-    const diff = c.distance_km - spec.distance_km;
-    if (Math.abs(diff) / spec.distance_km > DISTANCE_NOTE_OFF && !/than the .* km you asked for/.test(c.ride_note ?? "")) {
-      c.ride_note = [c.ride_note, `${Math.round(c.distance_km)} km — ${Math.round(Math.abs(diff))} km ${diff > 0 ? "longer" : "shorter"} than the ${Math.round(spec.distance_km)} km you asked for.`].filter(Boolean).join(" ");
-    }
+    // (A loop well off the asked length is said by the Generate card itself — deliveryNote.)
     if (wantsClimbing && !climbsAsAsked(c) && !/Flatter than you asked/.test(c.ride_note ?? "")) {
       c.ride_note = [c.ride_note, `Flatter than you asked: ${Math.round(c.elevation_gain_m)} m of climbing (${(c.elevation_gain_m / Math.max(1, c.distance_km)).toFixed(0)} m per km).`].filter(Boolean).join(" ");
     }
   }
   return served;
 }
-
-/** A served loop further off the asked length than this says so on its card. */
-const DISTANCE_NOTE_OFF = 0.15;
 
 /** Within this share of the asked length a loop fits; beyond FIT_WIDE it is a poor fit (CLT-12). */
 const FIT_CLOSE = 0.1;

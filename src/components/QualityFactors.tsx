@@ -30,6 +30,9 @@ export default function QualityFactors({ breakdown }: { breakdown: Record<string
           <span className="text-[10px] w-8 text-right" style={{ color: "var(--text-secondary)" }}>{r.pct}%</span>
         </div>
       ))}
+      {typeof breakdown.scenic_score !== "number" && typeof breakdown.safety_score === "number" && (
+        <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>Scenery not measured this time (the map lookup was busy) — the roads were.</p>
+      )}
     </div>
   );
 }

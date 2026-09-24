@@ -74,3 +74,10 @@ describe("deliveryNote without an asked distance", () => {
     expect(deliveryNote({ distance_km: 40, elevation_preference: "any", destination: "Glendalough", distance_asked: false }, { distance_km: 72, elevation_gain_m: 1200 })).toBeNull();
   });
 });
+
+describe("deliveryNote for an interval session", () => {
+  it("says the repeats add road instead of 'longer than you asked'", () => {
+    expect(deliveryNote({ distance_km: 46, elevation_preference: "any", is_workout: true }, { distance_km: 59, elevation_gain_m: 500 }))
+      .toBe("59 km in all — the repeats of your efforts add road to the 46 km planned.");
+  });
+});

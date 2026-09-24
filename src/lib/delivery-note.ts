@@ -14,6 +14,8 @@ export interface DeliveryRequest {
   destination?: string;
   /** false: the rider named no distance, so there is nothing to compare against. */
   distance_asked?: boolean;
+  /** An interval session: repeats and laps add road, and the ride's own note says how much. */
+  is_workout?: boolean;
 }
 
 export interface DeliveryActual {
@@ -36,7 +38,11 @@ export function deliveryNote(
   const reqKm = req.distance_km;
   if (reqKm > 0 && !(req.destination && req.distance_asked === false)) {
     const diff = actual.distance_km - reqKm;
-    if (Math.abs(diff) / reqKm > 0.12 && Math.abs(diff) >= 3 && req.destination) {
+    if (Math.abs(diff) / reqKm > 0.12 && Math.abs(diff) >= 3 && req.is_workout) {
+      notes.push(diff > 0
+        ? `${Math.round(actual.distance_km)} km in all — the repeats of your efforts add road to the ${Math.round(reqKm)} km planned.`
+        : `${Math.round(actual.distance_km)} km in all — shorter than the ${Math.round(reqKm)} km planned, to keep your efforts on their best stretch.`);
+    } else if (Math.abs(diff) / reqKm > 0.12 && Math.abs(diff) >= 3 && req.destination) {
       notes.push(`${req.destination} and back is ${Math.round(actual.distance_km)} km — ${diff < 0 ? "shorter" : "longer"} than the ${Math.round(reqKm)} km you asked for.`);
     } else if (Math.abs(diff) / reqKm > 0.12 && Math.abs(diff) >= 3) {
       notes.push(

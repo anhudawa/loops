@@ -1,3 +1,5 @@
+import { lookupKnownPlace } from "@/lib/places-known";
+import { findPlaceByName } from "@/lib/map-labels";
 import { recommendableNow } from "@/lib/recommendable";
 import { NextRequest, NextResponse } from "next/server";
 import { publicRoute, thinCoordinates } from "@/lib/public-route";
@@ -62,7 +64,27 @@ export async function GET(request: NextRequest) {
 
     const rows = await getRoutes(filters);
     const hasMore = rows.length > pageSize;
-    const routes = hasMore ? rows.slice(0, pageSize) : rows;
+    let routes = hasMore ? rows.slice(0, pageSize) : rows;
+    // A place searched for ("Howth") also finds the routes that ride THROUGH
+    // it, not only those named after it or starting there.
+    if (filters.search && page === 1 && routes.length < pageSize) {
+      const known = lookupKnownPlace(filters.search);
+      const town = known ? null : findPlaceByName(filters.search);
+      const at: [number, number] | null = known ? known.point : town ? [town.lat, town.lng] : null;
+      if (at) {
+        const near = await getRoutes({ ...filters, search: undefined, lat: at[0], lng: at[1], maxRadius: 40, limit: 100, offset: 0 }).catch(() => []);
+        const have = new Set(routes.map((r) => r.id));
+        const through = near.filter((r) => {
+          if (have.has(r.id)) return false;
+          try {
+            return (JSON.parse(r.coordinates) as number[][]).some((c) => Math.hypot((c[0] - at[0]) * 111.32, (c[1] - at[1]) * 111.32 * Math.cos((at[0] * Math.PI) / 180)) < 2);
+          } catch {
+            return false;
+          }
+        });
+        routes = [...routes, ...through].slice(0, pageSize);
+      }
+    }
     return NextResponse.json({
       // Broken stored tracks (a "loop" ridden twice, a gap) stay out of the feed.
       data: routes.filter((r) => recommendableNow(r as unknown as Record<string, unknown>)).map((r) => {

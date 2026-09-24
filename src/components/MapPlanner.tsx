@@ -1001,7 +1001,7 @@ export default function MapPlanner() {
       )}
 
       {/* Map */}
-      <div className="relative flex-1 min-h-0">
+      <div className="relative flex-1 min-h-[300px] md:min-h-[420px]">
         <MapContainer
           {...initialView}
           style={{ height: "100%", width: "100%" }}

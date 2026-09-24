@@ -136,3 +136,14 @@ export function placeNear(point: [number, number], maxKm = 5): string | null {
 export function placesNear(point: [number, number], radiusKm: number): MapLabel[] {
   return [...nearTrack([point], radiusKm).values()].map((c) => ({ name: c.row[0], lat: c.row[1] / 1e4, lng: c.row[2] / 1e4, pop: c.row[3], start: false }));
 }
+
+/** The largest bundled town with exactly this name (any country). */
+export function findPlaceByName(name: string): MapLabel | null {
+  const q = normName(name);
+  if (!q) return null;
+  let best: Row | null = null;
+  for (const r of (data as unknown as { p: Row[] }).p) {
+    if (normName(r[0]) === q && (!best || r[3] > best[3])) best = r;
+  }
+  return best ? { name: best[0], lat: best[1] / 1e4, lng: best[2] / 1e4, pop: best[3], start: false } : null;
+}

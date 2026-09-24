@@ -1755,7 +1755,17 @@ async function candidatesFromSpecInner(
 
   // ── Destination ride ("Pollença to Cap de Formentor and back") ───────────
   if (spec.destination) {
-    const rides = await generateDestinationRides(spec);
+    const rides = await generateDestinationRides(spec).catch((e) => { if (!spec.destination!.distance_asked) throw e; return [] as GeneratedRoute[]; });
+    // "Sally Gap loop from Rathfarnham, 90 km": the rider gave a length. When
+    // there-and-back falls well short (or long), also loops that go OVER the
+    // place, sized to the ask — first when they fit it better.
+    const off = (r: GeneratedRoute) => Math.abs(r.distance_km - spec.distance_km) / spec.distance_km;
+    if (spec.destination.distance_asked && (rides.length === 0 || rides.every((r) => off(r) > 0.2))) {
+      const loops = await loopsOverDestination(spec).catch(() => [] as GeneratedRoute[]);
+      const all = [...loops, ...rides].sort((a, b) => off(a) - off(b));
+      if (all.length) return all.slice(0, 3).map((g) => ({ source: "generated" as const, ...g }));
+      throw new Error(`No valid routes to ${spec.destination.name} that we would take a friend on.`);
+    }
     return rides.map((g) => ({ source: "generated" as const, ...g }));
   }
 
@@ -2987,6 +2997,35 @@ async function lollipopRides(spec: RouteSpec): Promise<GeneratedRoute[]> {
   }
   genDebug(`lollipop: ${anchors.length} inland anchor(s), ${out.length} ride(s)`);
   return out;
+}
+
+/**
+ * Loops that pass over a named place, sized to the rider's distance: the
+ * generator's own loops aimed at it with the place inserted, and via a town
+ * on the same side (hill-finder's loopsOverHill). Kept only when the ride
+ * really passes within 1 km of the place.
+ */
+async function loopsOverDestination(spec: RouteSpec): Promise<GeneratedRoute[]> {
+  const dest = spec.destination!;
+  const b = bearingDegFrom(spec.start_point, dest.point);
+  const aimed = await generateWaypointSets({ ...spec, destination: undefined }, {
+    directions: [b - 25, b + 25].map((d) => ({ name: `dest-${Math.round(d)}`, bearingDeg: (d + 360) % 360 })),
+    exactDirections: true,
+  });
+  const sets = [
+    ...aimed.map((ws) => withVia(ws, dest.point)),
+    ...loopsOverHill(spec.start_point, dest.point, spec.distance_km, placesNear).slice(0, 2),
+  ];
+  if (!sets.length) return [];
+  const loops = await generateFreshRoutes({ ...spec, destination: undefined }, null, sets, true, true).catch(() => [] as GeneratedRoute[]);
+  const startName = spec.region ?? "the start";
+  return loops
+    .filter((l) => l.coordinates.some((p) => haversineKm(p[0], p[1], dest.point[0], dest.point[1]) < 1))
+    .map((l) => ({
+      ...l,
+      title: `${startName} – ${dest.name} – ${startName} · ${Math.round(l.distance_km)} km`,
+      ride_note: `A loop over ${dest.name}, sized to the ${Math.round(spec.distance_km)} km you asked for.`,
+    }));
 }
 
 /** `via` inserted into a closed waypoint loop where it adds the least straight-line detour. */

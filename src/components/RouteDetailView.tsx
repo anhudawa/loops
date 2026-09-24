@@ -234,8 +234,14 @@ export default function RouteDetailView({ ride, initialRoute }: { ride?: RideInv
   // Quality + surface scoring — same engine the generator uses, surfaced
   // here for parity. Fire-and-forget: degrade silently if Overpass/the
   // API is down, the page works without it.
+  const qualityAsked = useRef<string | null>(null);
   useEffect(() => {
     if (!route?.id || !route.coordinates) return;
+    // Once per route (the quiet refetch replaces `route`), and not at all
+    // when the stored score is already showing.
+    if (qualityAsked.current === route.id) return;
+    qualityAsked.current = route.id;
+    if (typeof route.quality_score === "number" && route.quality_score > 0) return;
     let cancelled = false;
     fetch("/api/routes/quality", {
       method: "POST",

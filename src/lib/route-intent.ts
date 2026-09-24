@@ -827,6 +827,8 @@ const LENGTH_UNIT = "(?:hours?|hrs?|minutes?|mins?|km|kms|kilometres?|kilometers
  */
 export function normaliseLengths(text: string): string {
   let t = text.toLowerCase().replace(/[–—]/g, "-");
+  // "a 2-hour loop", "60-km ride", "90-minute spin": the hyphen is only style.
+  t = t.replace(/\b(\d+(?:\.\d+)?)-(hours?|hrs?|h|km|kms|k|mins?|minutes?|miles?|mi)\b/g, "$1 $2");
   // Spanish lengths ("vuelta de 3 horas desde Calpe", HV-10).
   t = t.replace(/\b(?:una\s+)?hora\s+y\s+media\b/g, "1.5 hours");
   t = t.replace(/\buna\s+hora\b/g, "1 hour");

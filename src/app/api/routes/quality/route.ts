@@ -2,92 +2,64 @@ import { NextRequest, NextResponse } from "next/server";
 import { scoreRoute, scoreRouteGpsOnly, type Discipline } from "@/lib/route-quality";
 import { getRoute, storeRouteQuality } from "@/lib/db";
 import { apiError, handleApiError } from "@/lib/api-utils";
-import { DISCIPLINES } from "@/config/constants";
 
 /**
  * POST /api/routes/quality
  *
- * Score a route's quality using OSM data via the Overpass API.
+ * Score a stored route's quality using OSM data via the Overpass API.
  *
- * Body (JSON):
- *   { routeId: string }                        – score an existing stored route
- *   { coordinates: [lat, lng, ele?][], discipline: string }  – score raw coordinates
+ * Body (JSON): { routeId: string, gpsOnly?: boolean }
+ * Response:    { data: QualityScore }
  *
- * Optional:
- *   { gpsOnly: true }  – skip Overpass, return GPS quality score only (fast)
- *   { sampleIntervalMeters: number }  – metres between OSM sample points (default 200)
- *
- * Response:
- *   { data: QualityScore }
+ * Stored routes only — raw coordinates are not accepted (this must not be a
+ * free Overpass proxy). A verified score is stored and served from the
+ * database for SCORE_TTL_DAYS; a failed attempt is not retried by this
+ * instance for RETRY_AFTER_MS, so page views never hammer Overpass.
  */
+const SCORE_TTL_DAYS = 30;
+const RETRY_AFTER_MS = 60 * 60 * 1000;
+const lastAttempt = new Map<string, number>();
+
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json() as {
-      routeId?: string;
-      coordinates?: [number, number, number?][];
-      discipline?: string;
-      gpsOnly?: boolean;
-      sampleIntervalMeters?: number;
-    };
-
-    let coordinates: [number, number, number?][];
-    let discipline: Discipline;
-
-    // ── Resolve input ──────────────────────────────────────────────────────────
-    if (body.routeId) {
-      const route = await getRoute(body.routeId);
-      if (!route) return apiError("Route not found", "NOT_FOUND", 404);
-
-      const raw = JSON.parse(route.coordinates as string) as number[][];
-      coordinates = raw.map((c) => (c[2] !== undefined ? [c[0], c[1], c[2]] : [c[0], c[1]]) as [number, number, number?]);
-      discipline = (route.discipline ?? "road") as Discipline;
-    } else if (body.coordinates) {
-      if (!Array.isArray(body.coordinates) || body.coordinates.length < 2) {
-        return apiError("coordinates must be an array of at least 2 points", "INVALID_INPUT", 400);
-      }
-      coordinates = body.coordinates;
-      discipline = DISCIPLINES.includes(body.discipline as Discipline)
-        ? (body.discipline as Discipline)
-        : "road";
-    } else {
-      return apiError("Provide either routeId or coordinates", "INVALID_INPUT", 400);
+    const body = (await request.json().catch(() => ({}))) as { routeId?: string; gpsOnly?: boolean };
+    if (!body.routeId || typeof body.routeId !== "string") {
+      return apiError("Provide routeId", "INVALID_INPUT", 400);
     }
+    const route = await getRoute(body.routeId);
+    if (!route) return apiError("Route not found", "NOT_FOUND", 404);
 
-    // ── Validate coordinate shape ──────────────────────────────────────────────
-    for (const pt of coordinates) {
-      if (!Array.isArray(pt) || pt.length < 2) {
-        return apiError("Each coordinate must be [lat, lng] or [lat, lng, ele]", "INVALID_INPUT", 400);
-      }
-      if (typeof pt[0] !== "number" || typeof pt[1] !== "number") {
-        return apiError("Coordinate values must be numbers", "INVALID_INPUT", 400);
-      }
-      if (pt[0] < -90 || pt[0] > 90 || pt[1] < -180 || pt[1] > 180) {
-        return apiError("Coordinate out of valid range", "INVALID_INPUT", 400);
-      }
+    const raw = JSON.parse(route.coordinates as string) as number[][];
+    const coordinates = raw.map((c) => (c[2] !== undefined ? [c[0], c[1], c[2]] : [c[0], c[1]]) as [number, number, number?]);
+    if (coordinates.length < 2) return apiError("Route has no track", "INVALID_INPUT", 400);
+    const discipline = (route.discipline ?? "road") as Discipline;
+
+    if (body.gpsOnly) return NextResponse.json({ data: scoreRouteGpsOnly(coordinates) });
+
+    // A fresh stored score: serve it, no Overpass.
+    const stored = route as unknown as { quality_score?: number | null; quality_breakdown?: unknown; quality_surface?: unknown; quality_scored_at?: string | Date | null };
+    const scoredAt = stored.quality_scored_at ? new Date(stored.quality_scored_at).getTime() : 0;
+    if (typeof stored.quality_score === "number" && stored.quality_score > 0 && Date.now() - scoredAt < SCORE_TTL_DAYS * 86_400_000) {
+      return NextResponse.json({
+        data: { total: stored.quality_score, breakdown: stored.quality_breakdown ?? {}, surface_breakdown: stored.quality_surface ?? undefined, confidence: 1, cached: true },
+      });
     }
+    const last = lastAttempt.get(route.id) ?? 0;
+    if (Date.now() - last < RETRY_AFTER_MS) return apiError("Scoring recently attempted", "RETRY_LATER", 429);
+    lastAttempt.set(route.id, Date.now());
 
-    // ── GPS-only fast path ─────────────────────────────────────────────────────
-    if (body.gpsOnly) {
-      const result = scoreRouteGpsOnly(coordinates);
-      return NextResponse.json({ data: result });
-    }
+    const result = await scoreRoute(coordinates, discipline);
 
-    // ── Full Overpass scoring ──────────────────────────────────────────────────
-    const result = await scoreRoute(coordinates, discipline, {
-      sampleIntervalMeters: body.sampleIntervalMeters,
-    });
-
-    // Self-heal: persist a genuinely-verified score on the stored route so the
-    // next view is instant and doesn't depend on Overpass. Never persist a
-    // "couldn't verify" 0 (that's what the detail page now hides).
-    if (body.routeId && result.total > 0 && (result.confidence ?? 0) > 0.3) {
-      void storeRouteQuality(body.routeId, {
+    // Persist a genuinely-verified score so the next view is instant. Never
+    // persist a "couldn't verify" 0 (the detail page hides those).
+    if (result.total > 0 && (result.confidence ?? 0) > 0.3) {
+      lastAttempt.delete(route.id);
+      await storeRouteQuality(route.id, {
         total: result.total,
         breakdown: result.breakdown as unknown as Record<string, number>,
         surface_breakdown: result.surface_breakdown,
-      });
+      }).catch(() => {});
     }
-
     return NextResponse.json({ data: result });
   } catch (err) {
     return handleApiError(err);

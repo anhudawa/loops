@@ -283,6 +283,8 @@ describe("HV-04: lengths the way riders say them", () => {
     ["a couple of hours from Bray", 120],
     ["an hour from Bray", 60],
     ["2h30 from Bray", 150],
+    ["A 2-hour road loop from Wicklow", 120],
+    ["a 90-minute spin from Howth", 90],
   ])("%s → %i min", (prompt, minutes) => {
     expect(parseBasicIntent(prompt)!.duration_minutes).toBe(minutes);
   });

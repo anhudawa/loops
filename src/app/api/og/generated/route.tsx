@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/error-boundaries -- satori renders this JSX to an image once; it is not a React tree, so try/catch around it is correct. */
 import { ImageResponse } from "next/og";
 import polyline from "@mapbox/polyline";
 

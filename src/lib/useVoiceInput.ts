@@ -58,6 +58,9 @@ export function useVoiceInput(lang = "en-IE"): VoiceInput {
   const baseTextRef = useRef("");
 
   useEffect(() => {
+    // Detected after mount on purpose: the server render must match the
+    // first client render (no speech API on the server).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSupported(getRecognitionCtor() !== null);
     return () => {
       recognitionRef.current?.abort();

@@ -148,8 +148,10 @@ export default function WeatherCard({ routeId, windOverlayEnabled, onWindToggle,
   }, [routeId, rideTime, attempt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) {
+    // Hold the loaded card's height (~360 px on a phone) so the page below
+    // does not jump when the forecast arrives.
     return (
-      <div className="rounded-2xl p-5 md:p-6" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+      <div className="rounded-2xl p-5 md:p-6 min-h-[340px] md:min-h-[300px]" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
         <div className="flex items-center justify-between gap-2 mb-4">
           <div className="h-3 rounded w-32 animate-pulse" style={{ background: "var(--border)" }} />
           {directionToggle}

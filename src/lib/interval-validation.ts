@@ -144,7 +144,7 @@ export async function validateSegments(
   const results = await Promise.all(
     segments.map(async (seg): Promise<ValidatedSegment> => {
       const bbox = segmentBbox(coords, seg.start_index, seg.end_index);
-      let issues: SegmentIssue[] = [];
+      const issues: SegmentIssue[] = [];
 
       try {
         const { signalNodes, restrictedWays } = await queryOverpassForSegment(bbox);

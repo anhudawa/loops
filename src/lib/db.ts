@@ -53,6 +53,7 @@ function publicRows<T extends Record<string, unknown>>(rows: T[]): T[] {
     if (typeof out.name === "string" && typeof out.coordinates === "string" && out.distance_km != null) {
       out = withAutoTitle(out as T & { name: string; coordinates: string; distance_km: number | string }) as typeof out;
     } else if (typeof out.name === "string" && tidyRouteName(out.name) !== out.name) out = { ...out, name: tidyRouteName(out.name) };
+    if (out.estimated_minutes != null && Number.isFinite(Number(out.estimated_minutes))) out = { ...out, estimated_minutes: Math.round(Number(out.estimated_minutes)) };
     if (typeof out.region !== "string") return out;
     // A route stored under the wide region ("Cataluña") but in a county that
     // is itself a LOOPS region page ("Girona") reads as the county, so the

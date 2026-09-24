@@ -72,6 +72,15 @@ export default function HeroSection({ onExplore }: { onExplore: () => void }) {
         }}
       />
 
+      {/* Returning riders: sign in without scrolling past the hero. */}
+      <Link
+        href="/login"
+        className="absolute top-3 right-3 z-20 min-h-[44px] px-4 inline-flex items-center rounded-lg text-xs font-bold"
+        style={{ color: "var(--text)", border: "1px solid var(--border)", background: "var(--bg-card)" }}
+      >
+        Log in
+      </Link>
+
       {/* Content */}
       <div className="relative z-10 text-center max-w-3xl mx-auto">
         {/* Logo */}

@@ -12,7 +12,9 @@ import {
 } from "@/lib/road-segments";
 import { findEffortStretch, findSpreadStretches, tooFastForEffort, LAP_MAX_RANGE_M } from "@/lib/effort-repeats";
 import { cityPenalty, qualityTier, CITY_TIER_CAP_SHARE } from "@/lib/route-quality";
-import { cityEdgeOf, legsCrossCore } from "@/lib/route-generator";
+import { cityEdgeOf, legsCrossCore, declineFromDrops, placeTitle, lossFromGain, longestUntaggedJumpKm } from "@/lib/route-generator";
+import { cafeNear } from "@/lib/route-quality";
+import { mergeOutAndBack } from "@/lib/road-segments";
 import type { WorkoutSpec } from "@/lib/route-intent";
 
 type P = [number, number];
@@ -113,15 +115,21 @@ function climbTrack(flatKm: number, climbKm: number, pct: number, tailKm = 5, wo
 
 describe("laps must be flat all along (CA-06)", () => {
   const thr: WorkoutSpec = { intervals: [{ count: 1, duration_minutes: 20, zone: "z4", recovery_minutes: 10 }], warmup_minutes: 15, cooldown_minutes: 10, total_minutes: 45 };
-  it("a road that rises and falls 25 m is not lapped as 'flat'", () => {
-    // Flat on average, but a 25 m hump every 1.2 km (Kinsale: 38 → 63 m).
-    const t = climbTrack(14, 0, 0, 0, (d) => 12.5 * (1 - Math.cos((2 * Math.PI * d) / 1.2)));
+  it("a road that rises and falls 20 m is not lapped as 'flat'", () => {
+    // Flat on average, but a 20 m swell every 3 km (Kinsale: 38 → 63 m).
+    const t = climbTrack(14, 0, 0, 0, (d) => 10 * (1 - Math.cos((2 * Math.PI * d) / 3)));
     expect(findEffortStretch(t.coords, t.ele, t.tags, [], thr, { laps: true, skipEndKm: 0.5 })).toBeNull();
     expect(LAP_MAX_RANGE_M).toBe(15);
+    // Allowed as a fallback, but then it is called rolling, with its range.
+    const rolling = findEffortStretch(t.coords, t.ele, t.tags, [], thr, { laps: true, skipEndKm: 0.5, allowRolling: true })!;
+    expect(rolling.rolling).toBe(true);
+    expect(rolling.range_m).toBeGreaterThan(15);
   });
   it("a truly flat road still holds laps", () => {
     const t = climbTrack(14, 0, 0, 0);
-    expect(findEffortStretch(t.coords, t.ele, t.tags, [], thr, { laps: true, skipEndKm: 0.5 })?.kind).toBe("laps");
+    const laps = findEffortStretch(t.coords, t.ele, t.tags, [], thr, { laps: true, skipEndKm: 0.5 })!;
+    expect(laps.kind).toBe("laps");
+    expect(laps.rolling).toBe(false);
   });
 });
 
@@ -161,5 +169,76 @@ describe("what joins an effort stretch (CA-05)", () => {
   it("a failed lookup is unknown, not 'no junctions'", async () => {
     const failing = (async () => { throw new Error("down"); }) as unknown as typeof fetch;
     expect(await stretchJunctions(stretch, failing)).toBeNull();
+  });
+});
+
+describe("honest declines (TRV-02/HV-09)", () => {
+  it("no map data is its own answer", () => {
+    const d = declineFromDrops({ "NO_PATH[http:400:datafile E10_N40.rd5 not found ]": 6 }, { distance_km: 69, region: "Lucca" });
+    expect(d.code).toBe("NO_MAP_DATA");
+    expect(d.message).toMatch(/don't have map data around Lucca/);
+    expect(d.message).toMatch(/^No valid routes/);
+  });
+  it("says why, from the drops, with one alternative", () => {
+    const d = declineFromDrops({ SPUR_UTURN: 2, DISTANCE_OFF: 1, ROAD_STANDARD: 1, _engine: 0 }, { distance_km: 69, region: "Sóller" });
+    expect(d.code).toBe("NO_ROUTES_FOUND");
+    expect(d.message).toMatch(/doubling back/);
+    expect(d.message).toMatch(/Sóller to … and back/);
+    const short = declineFromDrops({ DISTANCE_OFF: 4 }, { distance_km: 100, region: "Faro" });
+    expect(short.message).toMatch(/"60 km from Faro"/);
+    const alt = declineFromDrops({ SPUR_UTURN: 4 }, { distance_km: 58, region: "Galway", alternative: 'A ride that works from here: "Galway to Kinvarra and back" (about 79 km).' });
+    expect(alt.message).toMatch(/Galway to Kinvarra and back/);
+  });
+});
+
+describe("destination rides (HV-06/HV-07/TRV-04)", () => {
+  it("title-cases a lower-case place, keeps the rider's own capitals", () => {
+    expect(placeTitle("puerto de la cruz")).toBe("Puerto de la Cruz");
+    expect(placeTitle("teide")).toBe("Teide");
+    expect(placeTitle("Cap de Formentor")).toBe("Cap de Formentor");
+  });
+  it("the same road out and back is one compromise, ridden both ways", () => {
+    const out = between([28.3, -16.6], [28.3, -16.5]);
+    const coords = [...out, ...out.slice().reverse().slice(1)];
+    const n = out.length - 1;
+    const mk = (start: number, end: number, meters: number): Compromise => ({ kind: "main_road", start, end, meters, highway: "primary" });
+    const merged = mergeOutAndBack(coords, [mk(0, n, 9800), mk(n, 2 * n, 9800)]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].both_ways).toBe(true);
+    expect(describeCompromise({ ...merged[0], name: "TF-21" })).toMatch(/on the TF-21, ridden both ways/);
+    // Two different roads stay two.
+    const other = between([28.4, -16.6], [28.4, -16.5]);
+    const two = mergeOutAndBack([...out, ...other], [mk(0, n, 9800), mk(n + 1, 2 * n + 1, 9800)]);
+    expect(two).toHaveLength(2);
+  });
+  it("an untagged straight jump is a hole in the track; a tagged straight road is not", () => {
+    const coords: P[] = [[37.047356, -8.929231], [37.03119, -8.93585]];
+    expect(longestUntaggedJumpKm(coords, [null])).toBeGreaterThan(1.8);
+    expect(longestUntaggedJumpKm(coords, [{ highway: "primary" }])).toBe(0);
+  });
+});
+
+describe("café stop (CLT-08)", () => {
+  it("finds the café nearest halfway and names it", () => {
+    const coords = between([53.4, -6.2], [53.4, -6.0]); // ~13 km
+    const mid = coords[Math.floor(coords.length / 2)];
+    const els = [
+      { type: "node" as const, id: 1, lat: mid[0] + 0.001, lon: mid[1], tags: { amenity: "cafe", name: "Halfway Café" } },
+      { type: "node" as const, id: 2, lat: coords[5][0], lon: coords[5][1], tags: { amenity: "cafe", name: "Too Early" } },
+      { type: "node" as const, id: 3, lat: mid[0], lon: mid[1] + 0.002, tags: { amenity: "pub", name: "The Pub" } },
+    ];
+    const c = cafeNear(coords, els)!;
+    expect(c.name).toBe("Halfway Café");
+    expect(c.km).toBeGreaterThan(5);
+    expect(cafeNear(coords, [els[1]])).toBeNull();
+    expect(cafeNear(coords, null)).toBeNull();
+  });
+});
+
+describe("elevation loss by the gain's filter (DRAW-12)", () => {
+  it("loss = gain less the net rise", () => {
+    expect(lossFromGain(141, [40, 60, 30, 122])).toBe(59);
+    expect(lossFromGain(100, [50, 90, 50])).toBe(100);
+    expect(lossFromGain(10, [NaN, NaN])).toBeNull();
   });
 });

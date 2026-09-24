@@ -371,6 +371,8 @@ export interface Compromise {
   /** Midpoint of the stretch [lat, lng] — for the map marker (indices alone
    *  do not map onto a stored track when the report came from a trace). */
   at?: [number, number];
+  /** The same stretch ridden out and back (a destination ride): `meters` is one way. */
+  both_ways?: boolean;
 }
 
 export interface RoadReport {
@@ -572,6 +574,36 @@ function summarise(r: RoadReport, discipline: Discipline): string {
 }
 
 /**
+ * A destination ride retraces its road: the stretch out and the same
+ * stretch home are one compromise ("17.2 km on the TF-21, ridden both
+ * ways"), not two identical lines (HV-07). A stretch that lies (80 %+)
+ * along a bigger one of the same kind is that one ridden again.
+ */
+export function mergeOutAndBack(coords: [number, number][], compromises: Compromise[]): Compromise[] {
+  const pts = (c: Compromise) => {
+    const out: [number, number][] = [];
+    const hi = Math.min(c.end, coords.length - 1);
+    const step = Math.max(1, Math.floor((hi - c.start) / 20));
+    for (let i = c.start; i <= hi; i += step) out.push(coords[i]);
+    return out;
+  };
+  // Share of b's points within 150 m of a's stretch.
+  const covered = (b: Compromise, a: Compromise) => {
+    const bp = pts(b);
+    const ap = coords.slice(a.start, Math.min(a.end, coords.length - 1) + 1);
+    const hit = bp.filter((p) => ap.some((q) => haversineM(p, q) <= 150)).length;
+    return bp.length ? hit / bp.length : 0;
+  };
+  const kept: Compromise[] = [];
+  for (const b of [...compromises].sort((x, y) => y.meters - x.meters)) {
+    const a = kept.find((k) => k.kind === b.kind && covered(b, k) >= 0.8);
+    if (a) { a.both_ways = true; continue; }
+    kept.push({ ...b });
+  }
+  return kept;
+}
+
+/**
  * The two biggest compromises for a one-line summary, with every city-centre
  * pass counted as one ("9.3 km of city streets through Dublin city centre"),
  * and "(+N more)".
@@ -592,7 +624,7 @@ export function describeCompromise(c: Compromise): string {
   const dist = c.meters >= 1000 ? `${(c.meters / 1000).toFixed(1)} km` : `${c.meters} m`;
   if (c.kind === "city_streets") return `${dist} of city streets${c.name ? ` through ${c.name}` : ""} (traffic lights, buses)`;
   const where = c.name ? `on the ${c.name}` : `on a ${roadWord(c.highway)}`;
-  const near = c.near_start ? " near the start/finish" : "";
+  const near = (c.near_start ? " near the start/finish" : "") + (c.both_ways ? ", ridden both ways" : "");
   switch (c.kind) {
     case "main_road": return `${dist} ${where}${near} (main road)`;
     case "fast_road": return `${dist} ${where}${near} signed ${c.maxspeed ?? "80+"} km/h with no cycle track`;

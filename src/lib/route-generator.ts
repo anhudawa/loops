@@ -26,7 +26,7 @@ import {
   DIRECTIONS_WIDE,
 } from "./route-waypoint-generator";
 import { validateRouteRules, repairSpurs } from "./route-rules";
-import { scoreRoute, prefetchScenic, bboxOf, unionBbox, setSceneryStore, qualityTier } from "./route-quality";
+import { scoreRoute, prefetchScenic, bboxOf, unionBbox, setSceneryStore, qualityTier, cafeNear, type CafeStop } from "./route-quality";
 import { getSceneryCache, setSceneryCache } from "./db";
 
 // Persist scenery lookups in Postgres (server only; fail-soft without a DB).
@@ -42,6 +42,7 @@ import {
   nameCompromises,
   describeCompromise,
   summaryParts,
+  mergeOutAndBack,
   stretchJunctions,
   type StretchJunctions,
   EXIT_ZONE_KM,
@@ -220,14 +221,56 @@ const BROUTER_TIMEOUT_MS = 15000;
  * in production without log access.
  */
 export class NoValidRoutesError extends Error {
+  /** NO_MAP_DATA when the engine has no map there at all; else NO_ROUTES_FOUND. */
+  public readonly code: "NO_MAP_DATA" | "NO_ROUTES_FOUND";
   constructor(
     public readonly candidateCount: number,
     public readonly dropped: Record<string, number>,
-    public readonly spec: { distance_km: number; discipline: string; elevation_preference: string; region?: string | null }
+    public readonly spec: { distance_km: number; discipline: string; elevation_preference: string; region?: string | null; alternative?: string | null }
   ) {
-    super("No valid routes could be generated. Try adjusting distance, location, or route preferences.");
+    const d = declineFromDrops(dropped, spec);
+    super(d.message);
+    this.code = d.code;
     this.name = "NoValidRoutesError";
   }
+}
+
+/**
+ * The rider-facing decline, built from why every candidate was dropped
+ * (TRV-02/HV-09: "3 hours from Sóller" got the generic "try adjusting…").
+ * Starts with "No valid routes" so every existing caller still classifies it.
+ */
+export function declineFromDrops(
+  dropped: Record<string, number>,
+  spec: { distance_km: number; region?: string | null; alternative?: string | null },
+): { code: "NO_MAP_DATA" | "NO_ROUTES_FOUND"; message: string } {
+  const reasons = Object.entries(dropped).filter(([k, v]) => typeof v === "number" && v > 0 && !k.startsWith("_"));
+  const where = spec.region ? ` around ${spec.region}` : "";
+  if (reasons.length > 0 && reasons.every(([k]) => /^NO_PATH\[.*datafile .* not found/i.test(k))) {
+    return { code: "NO_MAP_DATA", message: `No valid routes: we don't have map data${where || " there"} yet, so LOOPS can't plan rides there for now.` };
+  }
+  const n = (re: RegExp) => reasons.filter(([k]) => re.test(k)).reduce((a, [, v]) => a + v, 0);
+  const why: Array<[number, string]> = [
+    [n(/^(SPUR_UTURN|ACCESS_RETRACE)/), "the roads keep doubling back on themselves (dead ends, not loops)"],
+    [n(/^ROAD_STANDARD/), "the only ways round use main or fast roads for too long"],
+    [n(/^DISTANCE_OFF/), `the loops the roads allow come out far off ${Math.round(spec.distance_km)} km`],
+    [n(/^QUALITY/), "the loops that exist aren't ones we'd recommend"],
+    [n(/^NO_PATH/), "some directions have no road that meets our standard"],
+  ];
+  const top = why.filter(([c]) => c > 0).sort((a, b) => b[0] - a[0]).slice(0, 2).map(([, t]) => t);
+  // A shorter loop only helps when length was the problem; a valley or a
+  // coast that forces dead ends needs a ride out to somewhere and back.
+  const lengthProblem = n(/^DISTANCE_OFF/) > n(/^(SPUR_UTURN|ACCESS_RETRACE|ROAD_STANDARD)/);
+  const shorter = Math.max(20, Math.round((spec.distance_km * 0.6) / 5) * 5);
+  const alt = spec.alternative
+    ? ` ${spec.alternative}`
+    : lengthProblem && shorter < spec.distance_km
+    ? ` Try a shorter ride ("${shorter} km${spec.region ? ` from ${spec.region}` : ""}").`
+    : ` Try a ride out to a named place and back ("${spec.region ?? "from here"} to … and back").`;
+  return {
+    code: "NO_ROUTES_FOUND",
+    message: `No valid routes${where} at ${Math.round(spec.distance_km)} km: ${top.length ? top.join(", and ") : "nothing we routed met our standard"}.${alt}`,
+  };
 }
 
 function pathDistanceKm(coords: [number, number][]): number {
@@ -1035,6 +1078,26 @@ export interface RerouteResult {
   warnings: string[];
   /** Road Standard report for this leg from the engine's road tags (trust rule). */
   road_report?: RoadReport;
+  /**
+   * This leg's length over the same leg on the relaxed profile (main roads
+   * allowed), when the Road Standard made it a long way round — the planner
+   * can say "33.8 km to stay off main roads; 18.3 km by the main road".
+   * Only measured when the leg is over DETOUR_CHECK_RATIO × the straight line.
+   */
+  detour_ratio?: number;
+  /** The relaxed-profile distance the ratio was measured against (km). */
+  direct_km?: number;
+}
+
+/** A leg over this × its straight-line length is checked against the relaxed profile. */
+const DETOUR_CHECK_RATIO = 1.5;
+
+/** Elevation loss consistent with the gain's filter: what goes up, less the net rise. */
+export function lossFromGain(gain: number, elevations: number[]): number | null {
+  const first = elevations.find((e) => Number.isFinite(e));
+  const last = [...elevations].reverse().find((e) => Number.isFinite(e));
+  if (first === undefined || last === undefined) return null;
+  return Math.max(0, Math.round(gain - (last - first)));
 }
 
 /**
@@ -1116,8 +1179,11 @@ function angleDiff(a: number, b: number): number {
 const UTURN_DEG = 125;
 /** Carry-on points tried beyond the pin, in the direction the rider arrived (km). */
 const THROUGH_KM = [0.8, 1.5, 2.5];
-/** Riding through may cost at most this much more than turning round. */
-const THROUGH_MAX_STRETCH = 1.4;
+/**
+ * Riding through may cost at most this much more than the direct leg
+ * (DRAW-03: Marino → Artane came out 5.1 km for 2.9 km direct at 1.4×).
+ */
+const THROUGH_MAX_STRETCH = 1.2;
 
 /**
  * Owner (2026-09-24): "Ashbourne is part of the ride, not a self-contained
@@ -1133,6 +1199,8 @@ async function carryOnThrough(
   arrive: [number, number][],
   profile: string,
   nogo: string,
+  /** The rest of the drawn route: riding through must not share more of it. */
+  avoid: [number, number][][] = [],
 ): Promise<RoutedPath | null> {
   const arriveRev = arrive.slice().reverse();
   const inBearing = bearingAlong(arriveRev, 0, 0.4);
@@ -1158,9 +1226,10 @@ async function carryOnThrough(
           elevation_gain_m: null,
         }
       : raw;
-    if (c.distance_km > path.distance_km * THROUGH_MAX_STRETCH + 1.5) continue;
+    if (c.distance_km > path.distance_km * THROUGH_MAX_STRETCH) continue;
     const start = bearingAlong(c.coords, 0, 0.5);
     if (start == null || angleDiff(heading, start) > 70) continue; // still turns round
+    if (avoid.length && sharedShare(c.coords, avoid) > sharedShare(path.coords, avoid) + 0.02) continue;
     if (!best || c.distance_km < best.distance_km) best = c;
   }
   if (best) genDebug(`reroute: rides on through the pin (+${(best.distance_km - path.distance_km).toFixed(1)} km instead of a U-turn)`);
@@ -1214,7 +1283,7 @@ export async function rerouteWaypoints(
       avoidPolylines(avoid, waypoints[0], waypoints[waypoints.length - 1]),
     ].map((q) => q.replace("&polylines=", "")).filter(Boolean);
     const throughNogo = parts.length ? `&polylines=${parts.join("|")}` : "";
-    const through = await carryOnThrough(path, waypoints, opts.arrive, profile, throughNogo);
+    const through = await carryOnThrough(path, waypoints, opts.arrive, profile, throughNogo, avoid);
     if (through) path = through;
   }
 
@@ -1232,6 +1301,9 @@ export async function rerouteWaypoints(
   } else if (elevGain === null) {
     elevGain = elevationGainFromSeries(elevations);
   }
+  // Loss by the same filter as the gain (DRAW-12: raw per-point loss
+  // counted every metre of noise the filtered gain ignores).
+  if (elevLoss === null) elevLoss = lossFromGain(elevGain ?? 0, elevations);
   if (elevLoss === null) {
     let loss = 0;
     for (let i = 1; i < elevations.length; i++) {
@@ -1242,6 +1314,18 @@ export async function rerouteWaypoints(
   }
 
   const distKm = path.distance_km;
+  // A long way round to keep to the Road Standard: measure the direct road
+  // (relaxed profile) so the planner can say what the detour costs.
+  let detour: { detour_ratio: number; direct_km: number } | null = null;
+  let straightKm = 0;
+  for (let i = 1; i < waypoints.length; i++) straightKm += haversineKm(waypoints[i - 1][0], waypoints[i - 1][1], waypoints[i][0], waypoints[i][1]);
+  const relaxedProfile = RELAXED_PROFILE[profile];
+  if (relaxedProfile && straightKm > 0.5 && distKm > straightKm * DETOUR_CHECK_RATIO) {
+    const relaxed = await routeViaBRouter(waypoints, relaxedProfile);
+    if (relaxed && relaxed.distance_km > 0) {
+      detour = { detour_ratio: Math.round((distKm / relaxed.distance_km) * 100) / 100, direct_km: Math.round(relaxed.distance_km * 10) / 10 };
+    }
+  }
   const rules = validateRouteRules(path.coords, discipline, null, {
     elevationGain: elevGain ?? 0,
     distanceKm: distKm,
@@ -1249,6 +1333,9 @@ export async function rerouteWaypoints(
   const warnings = rules.passed
     ? []
     : rules.violations.map((v) => v.message);
+  if (detour && detour.detour_ratio >= DETOUR_CHECK_RATIO) {
+    warnings.push(`${Math.round(distKm * 10) / 10} km to stay off main roads — ${detour.direct_km} km by the direct road.`);
+  }
 
   // Drawn legs get the same honesty as generated loops: the roads the
   // engine used, and any main/fast/unpaved stretch named. A rider drawing
@@ -1272,6 +1359,7 @@ export async function rerouteWaypoints(
     ),
     warnings,
     ...(roadReport ? { road_report: roadReport } : {}),
+    ...(detour ?? {}),
   };
 }
 
@@ -1733,6 +1821,8 @@ async function candidatesFromSpecInner(
       if (spreadRides.length > 0) return spreadRides.map((g) => ({ source: "generated" as const, ...g }));
       if (Date.now() - (currentTimingsStart || Date.now()) > 30_000) throw new Error(workoutDeclineMessage(spec.workout, spec.effort_layout, repeatTooLongKm));
     }
+    // Past ~25 s another search risks the request timing out: decline now.
+    if (Date.now() - (currentTimingsStart || Date.now()) > 25_000) throw new Error(workoutDeclineMessage(spec.workout, spec.effort_layout, repeatTooLongKm));
     const freshWorkout = await generateFreshWorkoutRoutes(spec, spec.workout);
     if (freshWorkout.length === 0) {
       throw new Error(workoutDeclineMessage(spec.workout, spec.effort_layout, repeatTooLongKm));
@@ -1800,10 +1890,36 @@ const SAME_ROAD_SHARE = 0.8;
  * Served: a different road home when one exists that is really different
  * and not an absurd detour, plus the same road back (the shortest ride).
  */
+/** "puerto de la cruz" → "Puerto de la Cruz" (the rider's own casing kept when they used capitals). */
+export function placeTitle(name: string): string {
+  if (/[A-ZÀ-Þ]/.test(name)) return name;
+  const small = new Set(["de", "del", "la", "las", "los", "el", "le", "les", "du", "des", "di", "da", "dos", "das", "of", "the", "and", "i", "y", "sa", "ses", "es", "en", "on", "upon"]);
+  return name
+    .split(/(\s+|-)/)
+    .map((w, i) => (i > 0 && small.has(w) ? w : w.charAt(0).toUpperCase() + w.slice(1)))
+    .join("");
+}
+
+/** A destination leg this much longer than the straight line is a detour worth explaining (Girona → Banyoles). */
+const DEST_DETOUR_RATIO = 1.8;
+/** An untagged straight jump longer than this is a hole in the track, not a road. */
+const TRACK_JUMP_KM = 0.5;
+
+/** Longest edge with no road tags (km) — a gap the engine bridged, not a road. */
+export function longestUntaggedJumpKm(coords: [number, number][], edgeTags: EdgeTags | null): number {
+  let worst = 0;
+  for (let i = 1; i < coords.length; i++) {
+    if (edgeTags?.[i - 1]) continue;
+    worst = Math.max(worst, haversineKm(coords[i - 1][0], coords[i - 1][1], coords[i][0], coords[i][1]));
+  }
+  return worst;
+}
+
 async function generateDestinationRides(spec: RouteSpec): Promise<GeneratedRoute[]> {
-  const dest = spec.destination!;
+  const dest = { ...spec.destination!, name: placeTitle(spec.destination!.name) };
+  spec = { ...spec, destination: dest };
   const profile = DISCIPLINE_PROFILE[spec.discipline];
-  const startName = spec.region ?? "your start";
+  const startName = spec.region ? placeTitle(spec.region) : "your start";
   currentRoutingDeadline = Date.now() + ROUTING_BUDGET_MS;
   // Scenery for the area, fetched while the engine routes (as for loops).
   const scenicFetch = prefetchScenic(bboxOf([spec.start_point, dest.point], 0.08));
@@ -1814,12 +1930,18 @@ async function generateDestinationRides(spec: RouteSpec): Promise<GeneratedRoute
       throw new Error(`No valid routes: we found no road from ${startName} to ${dest.name} that a road bike can ride.`);
     }
     // Home: the same road reversed (always possible), and — when the network
-    // has one — a different road, the way out penalised as a no-go.
+    // has one — a different road, the way out penalised as a no-go. When the
+    // Road Standard way there is a long detour (Girona → Banyoles: 46 km
+    // for 18 km as the crow flies), the direct road too, compromise named.
     const nogo = avoidPolylines([out.coords], dest.point, spec.start_point);
-    const [same, other] = await Promise.all([
+    const straightKm = haversineKm(spec.start_point[0], spec.start_point[1], dest.point[0], dest.point[1]);
+    const detour = out.distance_km > straightKm * DEST_DETOUR_RATIO && RELAXED_PROFILE[profile];
+    const [same, other, directRaw] = await Promise.all([
       routeWithFallback([dest.point, spec.start_point], profile),
       nogo ? routeViaBRouter([dest.point, spec.start_point], profile, false, nogo) : Promise.resolve(null),
+      detour ? routeViaBRouter([spec.start_point, dest.point], RELAXED_PROFILE[profile]) : Promise.resolve(null),
     ]);
+    const direct = directRaw && directRaw.distance_km < out.distance_km * 0.8 ? directRaw : null;
     markPhase("destination home");
     // Label each way home by what it MEASURES, not by how it was asked for:
     // the plain route back can itself be a different road (one-way systems,
@@ -1830,7 +1952,7 @@ async function generateDestinationRides(spec: RouteSpec): Promise<GeneratedRoute
       .map((home) => ({ home, shared: sharedShare(home.coords, [out.coords]) }));
     const different = homes.filter((h) => h.shared < DEST_MAX_SHARED_HOME);
     const sameRoad = homes.filter((h) => h.shared >= SAME_ROAD_SHARE);
-    const options: { home: RoutedPath; note: string }[] = [];
+    const options: { home: RoutedPath; note: string; direct?: boolean }[] = [];
     const bestDifferent = different.sort((a, b) => a.shared - b.shared || a.home.distance_km - b.home.distance_km)[0];
     if (bestDifferent) {
       options.push({
@@ -1841,12 +1963,30 @@ async function generateDestinationRides(spec: RouteSpec): Promise<GeneratedRoute
     // The same road back — always offered: it is the shortest, and for a cape
     // or a summit with one road in, it is the ride.
     const retrace = sameRoad[0]?.home ?? reversePath(out);
+    // "No other sensible road" only when the engine was asked for one and
+    // found none (or only a much longer one).
+    const tooLong = !bestDifferent && other && sharedShare(other.coords, [out.coords]) < DEST_MAX_SHARED_HOME ? other : null;
     options.push({
       home: retrace,
       note: bestDifferent
         ? `Out and back on the same road${retrace.distance_km <= bestDifferent.home.distance_km ? ` — the shortest way to ${dest.name} and home` : ""}.`
-        : `Out and back on the same road — there is no other sensible road to ${dest.name}.`,
+        : tooLong
+        ? `Out and back on the same road — the only other way home is ${Math.round(tooLong.distance_km - retrace.distance_km)} km longer.`
+        : other
+        ? `Out and back on the same road — there is no other sensible road to ${dest.name}.`
+        : `Out and back on the same road.`,
     });
+    const detourNote = direct
+      ? ` To stay off main roads the way there is ${Math.round(out.distance_km)} km; the direct road is ${Math.round(direct.distance_km)} km.`
+      : "";
+    if (detourNote) for (const o of options) o.note += detourNote;
+    if (direct) {
+      options.push({
+        home: reversePath(direct),
+        direct: true,
+        note: `The direct way, ${Math.round(direct.distance_km)} km each way — on roads outside the Road Standard, marked on the map.`,
+      } as { home: RoutedPath; note: string });
+    }
 
     const scenic = await Promise.race([
       scenicFetch,
@@ -1855,10 +1995,18 @@ async function generateDestinationRides(spec: RouteSpec): Promise<GeneratedRoute
     const rides: GeneratedRoute[] = [];
     let declined = "";
     for (const opt of options) {
-      const joined = joinPaths(out, opt.home);
+      const joined = joinPaths(opt.direct && direct ? direct : out, opt.home);
+      // A hole in the track (an untagged straight jump) is not a road to ride.
+      const jump = longestUntaggedJumpKm(joined.coords, joined.edgeTags);
+      if (jump > TRACK_JUMP_KM) {
+        genDebug(`destination ride dropped: ${jump.toFixed(2)} km untagged jump in the track`);
+        declined = `The route to ${dest.name} has a gap in the map data we could not ride through.`;
+        continue;
+      }
       // The engine's filtered ascend per leg beats re-summing a noisy series.
       const homeGain = opt.home.elevation_gain_m;
-      if (out.elevation_gain_m != null && homeGain != null) joined.elevation_gain_m = out.elevation_gain_m + homeGain;
+      const outGain = (opt.direct && direct ? direct : out).elevation_gain_m;
+      if (outGain != null && homeGain != null) joined.elevation_gain_m = outGain + homeGain;
       const ride = await destinationRide(joined, spec, startName, opt.note, scenic);
       if (typeof ride === "string") declined = ride;
       else rides.push(ride);
@@ -1919,12 +2067,16 @@ async function destinationRide(
       return `The only way to ${dest.name} from ${startName} uses ${hard.some((c) => c.kind === "unpaved") ? "unpaved road" : "a road you can't ride a bike on"} — not a road ride we would plan.`;
     }
     if (!roadReport.standard_met) {
+      // The same road out and back is one compromise, ridden both ways.
+      roadReport.compromises = mergeOutAndBack(path.coords, roadReport.compromises);
       await nameCompromises(path.coords, roadReport.compromises);
       roadReport.summary = summariseCompromises(roadReport.compromises);
     }
   }
 
-  const quality = await scoreRoute(path.coords, spec.discipline, { edgeTags: path.edgeTags, scenic: path.edgeTags ? scenic ?? undefined : undefined });
+  // The road the rider asked for is the ride: scored on its merits (its
+  // main-road stretches cost safety/traffic points) instead of zeroed (HV-06).
+  const quality = await scoreRoute(path.coords, spec.discipline, { edgeTags: path.edgeTags, scenic: path.edgeTags ? scenic ?? undefined : undefined, declaredRoads: true });
   const title = `${startName} to ${dest.name} and back`;
   const ride: GeneratedRoute = {
     coordinates: path.coords,
@@ -1933,7 +2085,8 @@ async function destinationRide(
     elevation_gain_m: gain,
     elevation_loss_m: Math.round(loss),
     quality_score: quality.total,
-    quality_tier: qualityTier(quality.total, quality.city_share, QUALITY_WORLD_CLASS),
+    // Never "excellent" on roads outside the Road Standard, named or not.
+    quality_tier: roadReport && !roadReport.standard_met ? "good" : qualityTier(quality.total, quality.city_share, QUALITY_WORLD_CLASS),
     quality_breakdown: quality.breakdown as unknown as Record<string, number>,
     highlights: extractHighlights(quality.flags),
     road_type_breakdown: quality.road_class_breakdown ?? computeRoadTypeBreakdown(path.coords),
@@ -2058,7 +2211,7 @@ async function generateRepeatWorkoutRoutes(spec: RouteSpec, workout: WorkoutSpec
       // Spread (the rider said no to repeating): each rep on its own stretch.
       const spreadStretches = spread && reps > 1 ? findSpreadStretches(loop.coordinates, loop.elevations, data.edgeTags, data.stops, workout, { avoid }) : null;
       const stretch = findEffortStretch(loop.coordinates, loop.elevations, data.edgeTags, data.stops, workout, { avoid, debug })
-        ?? (hill ? null : findEffortStretch(loop.coordinates, loop.elevations, data.edgeTags, data.stops, workout, { avoid, laps: true }));
+        ?? (hill ? null : findEffortStretch(loop.coordinates, loop.elevations, data.edgeTags, data.stops, workout, { avoid, laps: true, allowRolling: true }));
       genDebug(`repeat efforts: ${loop.distance_km} km (max ${Math.round(Math.max(...loop.elevations.filter(Number.isFinite)))} m) → ${stretch ? `${stretch.length_km} km at ${stretch.avg_gradient_pct}% ×${stretch.passes} (score ${stretch.score.toFixed(1)})` : `no stretch ${JSON.stringify(why)}`}`);
       if (spreadStretches) genDebug(`spread efforts: ${spreadStretches.length} stretches on the ${loop.distance_km} km loop`);
       if (stretch) hits.push({ loop, stretch, spreadStretches, data });
@@ -2217,7 +2370,7 @@ async function generateRepeatWorkoutRoutes(spec: RouteSpec, workout: WorkoutSpec
       note = `Each effort has its own stretch along the loop: ${at.join("; ")}. ${clean}${lengthMsg}`;
     } else {
       note = fallbackMsg + (stretch.kind === "laps"
-        ? `${reps > 1 ? allEfforts : "Your effort"} on ${where} (${lenText}, flat): ride it back and forth — ${stretch.passes} lengths per effort${reps > 1 ? ", one easy length between efforts" : ""} — then ride on home. ${clean}`
+        ? `${reps > 1 ? allEfforts : "Your effort"} on ${where} (${lenText}, ${stretch.rolling ? `rolling, not flat — ${stretch.range_m} m between its low and high point` : "flat"}): ride it back and forth — ${stretch.passes} lengths per effort${reps > 1 ? ", one easy length between efforts" : ""} — then ride on home. ${clean}`
         : reps > 1
         ? `${allEfforts} on ${where} (${shape}): go hard ${stretch.kind === "climb" ? "up" : "along it"}, spin back ${stretch.kind === "climb" ? "down" : "easy"}, repeat — then ride on home. ${clean}`
         : `Your effort goes on ${where} (${shape}). ${clean}`) + lengthMsg;
@@ -2761,6 +2914,39 @@ function withVia(ws: [number, number][], via: [number, number]): [number, number
   return [...ws.slice(0, best), via, ...ws.slice(best)];
 }
 
+/**
+ * A ride that works where no loop does: a town 12–45 % of the asked
+ * distance away (straight line), routed out on the Road Standard profile
+ * and within the serving policy. Phrased for the decline, or null.
+ */
+async function destinationAlternative(spec: RouteSpec): Promise<string | null> {
+  const d = spec.distance_km;
+  const start = spec.start_point;
+  const towns = placesNear(start, d * 0.45)
+    .map((p) => ({ ...p, km: haversineKm(start[0], start[1], p.lat, p.lng) }))
+    // Not a city or its suburbs: a ride out to a town, not to traffic.
+    .filter((p) => p.km >= d * 0.12 && p.pop >= 500 && !CITY_CORES.some((c) => haversineKm(p.lat, p.lng, c.center[0], c.center[1]) < c.radius_km + CITY_EDGE_KM))
+    // Closest to the ask first (roads run ~1.3× the straight line).
+    .sort((a, b) => Math.abs(a.km * 2.6 - d) - Math.abs(b.km * 2.6 - d))
+    .slice(0, 6);
+  genDebug(`decline alternative: trying ${towns.map((t) => `${t.name} ${t.km.toFixed(1)} km`).join(", ") || "no towns"}`);
+  if (!towns.length) return null;
+  const profile = DISCIPLINE_PROFILE[spec.discipline];
+  const tries = await Promise.all(towns.map(async (t) => {
+    const out = await routeStrict([start, [t.lat, t.lng]], profile);
+    if (!out?.edgeTags) return null;
+    const report = buildRoadReport(out.coords, out.edgeTags, spec.discipline);
+    if (!compromiseAcceptable(report, out.distance_km * 2)) return null;
+    const km = out.distance_km * 2;
+    genDebug(`decline alternative: ${t.name} and back ${Math.round(km)} km`);
+    if (Math.abs(km - d) > Math.max(8, d * 0.35)) return null;
+    return { name: t.name, km };
+  }));
+  const ok = tries.filter((x): x is { name: string; km: number } => !!x).sort((a, b) => Math.abs(a.km - d) - Math.abs(b.km - d))[0];
+  if (!ok) return null;
+  return `A ride that works from here: "${spec.region ?? "here"} to ${ok.name} and back" (about ${Math.round(ok.km)} km).`;
+}
+
 /** Climbing a "flat" loop may have per km (mirrors delivery-note's flat ceiling)… */
 const FLAT_M_PER_KM = 5;
 /** …and how far over it a loop may go before it is not flat any more. */
@@ -2852,6 +3038,8 @@ async function generateFreshRoutes(
 
   // Why candidates were dropped (surfaced on a full decline).
   const dropped: Record<string, number> = {};
+  // Loops dropped ONLY for too much main/fast road (see phase 3).
+  const overPolicyPool: GeneratedRoute[] = [];
   const drop = (reason: string) => { dropped[reason] = (dropped[reason] ?? 0) + 1; };
 
   // Optional geometry dump for spur/route triage (GENERATE_DUMP_DIR=/path).
@@ -2936,6 +3124,7 @@ async function generateFreshRoutes(
         genDebug(`candidate repaired: removed ${Math.round(repair.removedKm * 1000)} m of via-point spur`);
       }
 
+      if (elevLoss === null) elevLoss = lossFromGain(elevGain ?? 0, elevations);
       if (elevLoss === null) {
         let loss = 0;
         for (let i = 1; i < elevations.length; i++) {
@@ -3019,12 +3208,16 @@ async function generateFreshRoutes(
       // if short and unavoidable, served WITH the warning; anything longer
       // is not a route we'd take a friend on.
       let roadReport: RoadReport | undefined;
+      let overPolicy = false;
       if (edgeTags && edgeTags.length > 0) {
         roadReport = buildRoadReport(path.coords, edgeTags, spec.discipline);
         if (!compromiseAcceptable(roadReport, distKm)) {
           genDebug(`candidate dropped: road standard — ${roadReport.summary}`);
           drop("ROAD_STANDARD");
-          return null;
+          // Kept aside: when no loop meets the policy, the best of these is
+          // served with its compromise named (TRV-02) — never a road hazard.
+          if (!roadReport.compromises.some((c) => c.highway === "motorway" || c.highway === "motorway_link" || c.kind === "unsuitable" || c.kind === "unpaved")) overPolicy = true;
+          else return null;
         }
         if (!roadReport.standard_met) {
           // Name the stretch ("R755") so the rider knows exactly where it is.
@@ -3049,11 +3242,26 @@ async function generateFreshRoutes(
         throw err;
       }
 
+      // Café stop asked for: a real café near halfway, named and marked on
+      // the GPX — or said plainly that there is none (CLT-08).
+      let cafe: CafeStop | null = null;
+      let cafeNote: string | undefined;
+      if (spec.cafe_stop) {
+        if (!scenic) {
+          cafeNote = "Café stop: we couldn't check this loop for cafés just now.";
+        } else {
+          cafe = cafeNear(path.coords, scenic) ?? cafeNear(path.coords, scenic, 0.35, 0.65);
+          cafeNote = cafe
+            ? `Coffee stop: ${cafe.name ?? "a café"} at ${Math.round(cafe.km)} km${Math.abs(cafe.km - distKm / 2) <= distKm * 0.05 ? ", about halfway" : ""} (marked on the GPX).`
+            : "No café on the map near halfway on this loop — bring a snack.";
+        }
+      }
       const gpx = buildGpx(
         path.coords,
         elevations,
         `Generated ${spec.discipline} route — ${Math.round(distKm)}km`,
-        spec.discipline
+        spec.discipline,
+        cafe ? [{ lat: cafe.lat, lng: cafe.lng, name: "CAFE", desc: cafe.name ?? "Café stop" }] : [],
       );
 
       step("gpx");
@@ -3071,7 +3279,7 @@ async function generateFreshRoutes(
       // Café stop requested: prefer candidates whose quality scan found
       // cafés/restaurants along the way (a nudge, never a rescue).
       if (spec.cafe_stop) {
-        const hasCafe = quality.flags.some((f) => /caf|restaurant|pub/i.test(f));
+        const hasCafe = cafe !== null || (!scenic && quality.flags.some((f) => /caf|restaurant|pub/i.test(f)));
         matchScore = Math.min(100, Math.round(matchScore + (hasCafe ? 6 : -4)));
       }
 
@@ -3100,9 +3308,11 @@ async function generateFreshRoutes(
         waypoints_used: waypoints,
         match_score: matchScore,
         ...(roadReport ? { road_report: roadReport } : {}),
+        ...(cafeNote ? { ride_note: cafeNote } : {}),
       };
       // Engine data the repeat-efforts builder needs (not sent to the client).
       loopEngineData.set(result, { edgeTags, stops: path.stops ?? [] });
+      if (overPolicy) { overPolicyPool.push(result); return null; }
 
       return result;
     })
@@ -3164,6 +3374,26 @@ async function generateFreshRoutes(
     }
   }
 
+  // Nothing met the serving policy, but real loops exist whose only fault is
+  // main/fast road beyond the allowance (Sóller: every way out of the valley):
+  // serve the one with the least of it, the compromise named (TRV-02).
+  if (candidates.length === 0 && overPolicyPool.length > 0 && !presetWaypointSets) {
+    const mainM = (c: GeneratedRoute) => (c.road_report?.compromises ?? []).filter((x) => x.kind === "main_road" || x.kind === "fast_road").reduce((a, x) => a + x.meters, 0);
+    const best = [...overPolicyPool].sort((a, b) => mainM(a) - mainM(b) || b.quality_score - a.quality_score)[0];
+    const km = mainM(best) / 1000;
+    best.ride_note = [best.ride_note, `No loop from here stays within the Road Standard: this one has ${km.toFixed(1)} km on main or fast roads (marked on the map) — the least of any loop we found.`].filter(Boolean).join(" ");
+    best.quality_tier = "good";
+    genDebug(`no loop met the serving policy — serving the least-compromised (${km.toFixed(1)} km main/fast road)`);
+    candidates = [best];
+  }
+
+  // Before declining: one concrete ride that does work here — out to a
+  // town at about the right distance and back, checked on the engine.
+  let alternative: string | null = null;
+  if (candidates.length === 0 && !presetWaypointSets && !spec.workout && Date.now() - t0 < 30_000) {
+    alternative = await destinationAlternative(spec).catch(() => null);
+  }
+
   if (candidates.length === 0) {
     dropped["_engine"] = (() => { try { return new URL(BROUTER_URL).host; } catch { return "?"; } })() as unknown as number;
     if (libraryDiag) dropped["_library"] = libraryDiag as unknown as number;
@@ -3172,6 +3402,7 @@ async function generateFreshRoutes(
       discipline: spec.discipline,
       elevation_preference: spec.elevation_preference,
       region: spec.region ?? null,
+      alternative,
     });
   }
 

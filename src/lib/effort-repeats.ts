@@ -34,6 +34,10 @@ export interface EffortStretch {
   traffic_class: number | null;
   /** Laps: lengths of the stretch one effort takes (back and forth). 1 otherwise. */
   passes: number;
+  /** Laps on a stretch that is not flat all along (allowRolling): say "rolling", not "flat". */
+  rolling?: boolean;
+  /** Metres between the stretch's lowest and highest point. */
+  range_m?: number;
   score: number;
 }
 
@@ -135,6 +139,8 @@ export interface FindStretchOptions {
   laps?: boolean;
   /** Return the first stretch that qualifies (in ride order), not the best. */
   firstFit?: boolean;
+  /** Laps: accept a stretch that is flat on average but rolls (marked `rolling`). */
+  allowRolling?: boolean;
 }
 
 /** Shortest stretch worth lapping, and the most lengths one effort may take. */
@@ -263,7 +269,8 @@ export function findEffortStretch(
       if (Math.abs(avg) > LAP_MAX_ABS_PCT || sd > terrain.max_gradient_variance + 1) continue;
       let lo = Infinity, hi = -Infinity;
       for (let k = i; k <= j; k++) { lo = Math.min(lo, elev[k]); hi = Math.max(hi, elev[k]); }
-      if (hi - lo > LAP_MAX_RANGE_M || grads.some((g) => Math.abs(g) > LAP_MAX_100M_PCT)) {
+      const rolls = hi - lo > LAP_MAX_RANGE_M || grads.some((g) => Math.abs(g) > LAP_MAX_100M_PCT);
+      if (rolls && !opts.allowRolling) {
         opts.debug?.(`${cum[i].toFixed(2)}: rolling ${Math.round(hi - lo)} m`);
         continue;
       }
@@ -278,6 +285,13 @@ export function findEffortStretch(
       score = 10 - sd - Math.abs(avg - 1) * 0.3;
     }
     score -= sides * 0.5; // fewer side lanes, better place
+    let rangeM = 0;
+    if (opts.laps) {
+      let lo = Infinity, hi = -Infinity;
+      for (let k = i; k <= j; k++) { lo = Math.min(lo, elev[k]); hi = Math.max(hi, elev[k]); }
+      rangeM = hi - lo;
+      if (rangeM > LAP_MAX_RANGE_M || grads.some((g) => Math.abs(g) > LAP_MAX_100M_PCT)) score -= 3; // flat laps first
+    }
     if (!best || score > best.score) {
       let climb = 0;
       for (let k = i + 1; k <= j; k++) climb += Math.max(0, elev[k] - elev[k - 1]);
@@ -296,6 +310,7 @@ export function findEffortStretch(
           return m;
         })(),
         passes,
+        ...(opts.laps ? { range_m: Math.round(rangeM), rolling: rangeM > LAP_MAX_RANGE_M || grads.some((g) => Math.abs(g) > LAP_MAX_100M_PCT) } : {}),
         score,
       };
       if (opts.firstFit) return best;

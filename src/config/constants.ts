@@ -42,7 +42,7 @@ export const disciplineEnabled = (d: string | null | undefined): boolean =>
 export const STRAVA_IMPORT_ENABLED = false;
 
 /** Said when a rider asks for a discipline v1 does not plan. */
-export const DISCIPLINE_NOTICE = "LOOPS plans road rides for now — gravel and MTB are coming. Here are road loops instead.";
+export const DISCIPLINE_NOTICE = "LOOPS plans road rides — here are road loops on quiet, paved roads.";
 export const CONDITION_STATUSES = ["good", "fair", "poor", "closed"] as const;
 export const VALID_ROUTE_EXTENSIONS = [".gpx", ".fit", ".tcx"] as const;
 

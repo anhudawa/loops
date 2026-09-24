@@ -79,7 +79,7 @@ export const zone2: BlogPost = {
     },
     {
       type: "p",
-      text: "Terrain choice matters more than people think. The ideal Zone 2 route is rolling-to-flat with few stop signs, junctions or steep pitches that force you out of the zone. Long valley roads, coastal flats and quiet gravel are perfect; a hilly, technical loop full of climbs will repeatedly spike you into Zone 3 or 4.",
+      text: "Terrain choice matters more than people think. The ideal Zone 2 route is rolling-to-flat with few stop signs, junctions or steep pitches that force you out of the zone. Long valley roads, coastal flats and quiet back roads are perfect; a hilly, technical loop full of climbs will repeatedly spike you into Zone 3 or 4.",
     },
     {
       type: "cta",

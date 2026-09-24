@@ -112,7 +112,7 @@ export const mallorca: BlogPost = {
     {
       question: "Do I need a special bike for Mallorca?",
       answer:
-        "A standard road bike is ideal. Roads are smooth tarmac, so wide gravel tyres aren't needed. Because of the long climbs, fit a compact or sub-compact chainset and a wide-range cassette so you can spin comfortably on Puig Major and Sa Calobra.",
+        "A standard road bike is ideal. Roads are smooth tarmac, so 25–30 mm road tyres are all you need. Because of the long climbs, fit a compact or sub-compact chainset and a wide-range cassette so you can spin comfortably on Puig Major and Sa Calobra.",
     },
   ],
 };

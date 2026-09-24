@@ -661,7 +661,8 @@ export function describeCompromise(c: Compromise): string {
   switch (c.kind) {
     case "main_road": return `${dist} ${where}${near} (main road)`;
     case "fast_road": return `${dist} ${where}${near} signed ${c.maxspeed ?? "80+"} km/h with no cycle track`;
-    case "unpaved":   return `${dist} ${where}${near} that is ${c.surface ?? "unpaved"}`;
+    // Rider words, not OSM tags: gravel / fine_gravel / compacted all read "unpaved".
+    case "unpaved":   return `${dist} ${where}${near} that is ${c.surface && /^(dirt|grass|sand|mud)$/.test(c.surface) ? c.surface : "unpaved"}`;
     case "unsuitable": return `${dist} ${where}${near} ${UNSUITABLE_WORDS[c.why ?? ""] ?? "tagged unsuitable for bikes"}`;
     default: return `${dist} ${where}${near}`;
   }

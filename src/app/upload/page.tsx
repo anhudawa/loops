@@ -704,12 +704,8 @@ export default function UploadPage() {
                 className="w-full rounded-lg px-4 py-2.5 text-sm cursor-pointer"
                 style={inputStyle}
               >
-                <option value="gravel">Gravel</option>
-                <option value="mixed">Mixed</option>
-                <option value="trail">Trail</option>
+                {/* v1 is road only: paved road is the one surface we plan and list. */}
                 <option value="road">Road</option>
-                <option value="singletrack">Singletrack</option>
-                <option value="technical">Technical</option>
               </select>
             </div>
           </div>

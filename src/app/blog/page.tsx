@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     path: "/blog",
     title: "Cycling Guides & Training Blog — LOOPS",
     description:
-      "Destination guides and training science for road, gravel and endurance cyclists. Plus how to plan routes with AI.",
+      "Destination guides and training science for road cyclists. Plus how to plan routes with AI.",
   }),
 };
 

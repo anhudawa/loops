@@ -6,7 +6,7 @@ export const komootAlternative: BlogPost = {
   description:
     "Komoot now charges €59.99/yr just to sync routes to your Garmin. Here's what changed, what road cyclists actually need from a route planner, and how LOOPS compares.",
   excerpt:
-    "Device sync behind a paywall, region locks, and routes that surprise you with gravel. If you're shopping for a Komoot alternative, here's what to look for.",
+    "Device sync behind a paywall, region locks, and routes that surprise you with dirt tracks. If you're shopping for a Komoot alternative, here's what to look for.",
   date: "2026-06-10",
   category: "Product",
   author: "LOOPS",
@@ -27,9 +27,9 @@ export const komootAlternative: BlogPost = {
     { type: "h2", text: "What actually matters in a route planner" },
     {
       type: "p",
-      text: "Strip away the feature lists and road cyclists need five things: routes that never surprise you with gravel or a main road; a clean handoff to the head unit; honest information about surface and traffic before you commit; elevation you can trust; and no paywall between you and your own GPX file. Everything else is decoration.",
+      text: "Strip away the feature lists and road cyclists need five things: routes that never surprise you with a dirt track or a main road; a clean handoff to the head unit; honest information about surface and traffic before you commit; elevation you can trust; and no paywall between you and your own GPX file. Everything else is decoration.",
     },
-    { type: "h2", text: "The surprise-gravel problem" },
+    { type: "h2", text: "The surprise-dirt-track problem" },
     {
       type: "p",
       text: "The most common complaint about automatic route planners is being sent down a 'road' that turns out to be a rocky farm track 60 km from home on 25 mm tyres. It happens because map data mislabels surfaces and most planners don't check. The fix is to score every road on a route against real surface and traffic data — and to show you the paved/unpaved split up front, not bury it. If a planner can't tell you what percentage of a route is paved, it doesn't know either.",
@@ -71,7 +71,7 @@ export const komootAlternative: BlogPost = {
         "Every route exports as a standard GPX that loads into Garmin Connect, Wahoo, Hammerhead and any app that accepts GPX. Workout routes include effort markers that appear as alerts on the head unit. Direct one-tap sync to Garmin Connect is in development.",
     },
     {
-      question: "How does LOOPS avoid routing me onto gravel?",
+      question: "How does LOOPS avoid routing me onto unpaved roads?",
       answer:
         "Road-bike requests use a paved-only routing profile, every candidate is checked against live road-surface data, and each route displays its paved percentage so you can see the surface split before you ride.",
     },

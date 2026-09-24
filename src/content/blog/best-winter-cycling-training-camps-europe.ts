@@ -59,7 +59,7 @@ export const winterCamps: BlogPost = {
     { type: "h2", text: "Girona, Spain" },
     {
       type: "p",
-      text: "Girona is milder in winter than most assume — daytime highs of 12–16°C are common — and its quiet roads, gravel network and café culture make it a comfortable, flexible base. It's the best choice if you want variety and don't mind slightly cooler temperatures or the odd rainy day. Read our full [Girona guide](/blog/cycling-in-girona-complete-guide) for the climbs and logistics.",
+      text: "Girona is milder in winter than most assume — daytime highs of 12–16°C are common — and its quiet roads and café culture make it a comfortable, flexible base. It's the best choice if you want variety and don't mind slightly cooler temperatures or the odd rainy day. Read our full [Girona guide](/blog/cycling-in-girona-complete-guide) for the climbs and logistics.",
     },
     { type: "h2", text: "The Algarve, Portugal" },
     {

@@ -36,7 +36,7 @@ export const thresholdIntervals: BlogPost = {
         "**A steady climb of 3–6% is close to perfect.** The gradient holds your effort honest, removes the temptation to coast and minimises wind variability. You can't freewheel uphill, so power stays continuous.",
         "**Length matched to your intervals.** A 10-minute interval at climbing speed needs roughly 3–5 km of uninterrupted climb. Know the length before you start.",
         "**Minimal traffic and no junctions.** Every stop sign or busy intersection is a forced surge or a dangerous decision under fatigue. Pick roads where you won't have to brake.",
-        "**Good, predictable surface.** Smooth tarmac for road; firm, consistent hardpack for gravel. You shouldn't be dodging potholes while staring at your power meter.",
+        "**Good, predictable surface.** Smooth, even tarmac. You shouldn't be dodging potholes while staring at your power meter.",
         "**A safe turnaround or loop.** You need somewhere to recover and reset between reps without descending a dangerous road repeatedly.",
       ],
     },

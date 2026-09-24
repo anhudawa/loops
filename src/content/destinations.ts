@@ -45,7 +45,7 @@ export const destinations: Destination[] = [
     rainfall: "Driest months are June through August; spring can bring afternoon showers in the hills",
     riding: [
       "Girona is the unofficial cycling capital of Europe. A few hundred professional riders live here for a reason: within 30 minutes of the medieval old town you reach rolling farmland, coastal flats, volcanic terrain in the Garrotxa, and the first serious foothills of the Pyrenees. Traffic on the secondary roads to the north and west is almost non-existent.",
-      "The terrain suits every rider. If you want steady Zone 2 volume, the GI-554 corridor towards Banyoles and the lake loop is flat-to-rolling perfection. If you want to hurt, Rocacorba, Mare de Déu del Mont, and the Pyrenean cols around Camprodon are all within reach of a long day. Gravel riders can disappear into the volcanic tracks around Olot or head east to the coastal paths of the Costa Brava.",
+      "The terrain suits every rider. If you want steady Zone 2 volume, the GI-554 corridor towards Banyoles and the lake loop is flat-to-rolling perfection. If you want to hurt, Rocacorba, Mare de Déu del Mont, and the Pyrenean cols around Camprodon are all within reach of a long day. East, the quiet roads through the Empordà lead to the Costa Brava coast.",
       "Road surfaces are generally excellent. The Catalan government resurfaces cycling-popular roads regularly, and local drivers are accustomed to large groups. The cafe culture rounds it off: rides start and end at La Fabrica, Federal, or any of the bike-friendly stops along the Onyar.",
     ],
     climbs: [
@@ -59,7 +59,7 @@ export const destinations: Destination[] = [
       airport:
         "Barcelona El Prat (BCN) is 1h15 by car or 1h40 by direct train. Girona-Costa Brava airport (GRO) handles seasonal Ryanair flights and is 15 minutes from town.",
       bikeHire:
-        "Several shops in the old town rent high-end road and gravel bikes: Eat Sleep Cycle, Trek Travel, and La Bicicleta. Book frames in advance during March-May peak.",
+        "Several shops in the old town rent high-end road bikes: Eat Sleep Cycle, Trek Travel, and La Bicicleta. Book frames in advance during March-May peak.",
       accommodation:
         "The old town (Barri Vell) is the classic base — walkable to cafes and ride start points. Budget hostels to boutique hotels. For longer stays, apartments in the Eixample or Pedret neighborhoods are popular with visiting riders.",
     },
@@ -78,11 +78,6 @@ export const destinations: Destination[] = [
         question: "How do I get to Girona with a bike?",
         answer:
           "Fly into Barcelona El Prat and take the train or drive (1h15). Most airlines accept bike boxes as checked luggage. Girona-Costa Brava airport handles seasonal low-cost flights and is 15 minutes from the city centre. Several bike hire shops in Girona also offer airport transfers.",
-      },
-      {
-        question: "Can I ride gravel in Girona?",
-        answer:
-          "Yes. The volcanic zone around Olot and the Garrotxa natural park has excellent gravel tracks. The coastal paths along the Costa Brava and the forest tracks through the Gavarres massif are also popular. Many Girona-based pros train on gravel year-round. LOOPS plans road rides for now, so these tracks are not in our routes yet.",
       },
       {
         question: "What are the must-ride climbs near Girona?",
@@ -267,11 +262,6 @@ export const destinations: Destination[] = [
         answer:
           "Both are excellent. Mallorca is better for mixed groups and has more flat terrain options. Calpe has steeper, deeper climbing and is slightly warmer in winter. Mallorca has a more developed cycling tourism industry. Calpe is better value. Many serious riders prefer Calpe for focused training camps and Mallorca for group holidays.",
       },
-      {
-        question: "Can I ride gravel near Calpe?",
-        answer:
-          "There is some gravel in the mountains behind Calpe, particularly around the Sierra de Bernia and in the Jalon Valley. However, Calpe is primarily a road cycling destination. The gravel is rougher and less developed than Girona's or Mallorca's off-road options. LOOPS plans road rides for now, so these tracks are not in our routes yet.",
-      },
     ],
     collectionSlug: "calpe",
   },
@@ -290,7 +280,7 @@ export const destinations: Destination[] = [
     riding: [
       "The Wicklow Mountains are the closest real mountains to Dublin, and for Irish cyclists they are the default training ground. The landscape is raw: open moorland, deep glacial valleys, conifer plantations, and exposed mountain passes above 500 m. The roads are mostly single-carriageway R-roads with light traffic, and the views on a clear day reach from the Irish Sea to the midlands.",
       "The Military Road (R115) is the backbone. Built by the British army after the 1798 rebellion to access the mountain interior, it runs roughly north-south across the range, climbing over several passes including the Sally Gap (503 m) and the Wicklow Gap (470 m). These passes are not Alpine in gradient but they are long, exposed, and often windy. The climbing is steady rather than steep: 3-5% over 10-15 km stretches.",
-      "Beyond the main passes, Wicklow offers excellent quieter roads through the eastern valleys. The Glendalough valley, Glenmalure (the longest glacial valley in Ireland), and the Avoca valley all have scenic, low-traffic roads. Gravel and MTB riders can access forest tracks and fireroads throughout the Wicklow Mountains National Park. The terrain rewards riders who like long, steady efforts in quiet surroundings more than short, explosive climbs.",
+      "Beyond the main passes, Wicklow offers excellent quieter roads through the eastern valleys. The Glendalough valley, Glenmalure (the longest glacial valley in Ireland), and the Avoca valley all have scenic, low-traffic roads. The terrain rewards riders who like long, steady efforts in quiet surroundings more than short, explosive climbs.",
     ],
     climbs: [
       "Sally Gap via R115 from Dublin (15 km, avg 3.5%) — the classic mountain pass across open moorland",
@@ -322,11 +312,6 @@ export const destinations: Destination[] = [
         question: "How hard is the Sally Gap?",
         answer:
           "The Sally Gap is not steep (average 3.5%) but it is long (15 km from the Dublin side) and very exposed. Wind is the main difficulty - a headwind over the open moorland above 450 m can turn a moderate climb into a genuine effort. On a calm day, strong recreational riders complete it in 40-50 minutes.",
-      },
-      {
-        question: "Can I do gravel riding in Wicklow?",
-        answer:
-          "Yes. The Wicklow Mountains National Park has an extensive network of forest fireroads and tracks. The Ballinastoe MTB trails are purpose-built. For gravel bikes, the fireroads in Glendalough, Laragh, and the Devil's Glen offer long off-road loops. Surface quality varies from smooth gravel to rough forestry track. LOOPS plans road rides for now, so these tracks are not in our routes yet.",
       },
       {
         question: "What is the best cycling loop in Wicklow?",
@@ -655,7 +640,7 @@ export const destinations: Destination[] = [
     rainfall: "Spring and autumn bring occasional wet days; summer is dry and hot",
     riding: [
       "Lucca is Italian cycling distilled: a perfectly preserved walled city sitting between the flat Piana di Lucca — ideal for recovery spins and group work — and the mountains of the Garfagnana and Monte Pisano. Generations of professionals have based themselves here, and Monte Serra remains one of the sport's most famous test climbs, the road where Tuscan careers are measured.",
-      "Variety is the region's gift. South, Monte Serra offers four distinct ascents. North, the Garfagnana valley climbs into the Apuan Alps on quiet, dramatic roads beneath marble peaks. West lies the coast at Viareggio for flat tempo; east, rolling vineyard hills towards Montecarlo. A short transfer opens the strade bianche country south of Florence for gravel days.",
+      "Variety is the region's gift. South, Monte Serra offers four distinct ascents. North, the Garfagnana valley climbs into the Apuan Alps on quiet, dramatic roads beneath marble peaks. West lies the coast at Viareggio for flat tempo; east, rolling vineyard hills towards Montecarlo. A short transfer opens the Chianti hills south of Florence.",
       "Italian road culture is the quiet star — drivers wait, café stops are sacred, and every village has a fountain. Surfaces vary from billiard-smooth provincial roads to rougher mountain lanes; the riding rewards a 28 mm tyre.",
     ],
     climbs: [
@@ -688,11 +673,6 @@ export const destinations: Destination[] = [
         question: "When is the best time to cycle in Tuscany?",
         answer:
           "April to June and September to October are ideal: 18-27°C, green landscapes or harvest colours, and stable weather. July and August are hot but rideable with dawn starts. Winter is quiet and cool with occasional rain — many locals ride year-round.",
-      },
-      {
-        question: "Can I ride gravel near Lucca?",
-        answer:
-          "Yes. The hills around Lucca hide plenty of strade bianche-style white roads, and the famous gravel country of the Crete Senesi and Chianti is within a 1-2 hour transfer for a day trip. LOOPS plans road rides for now, so these tracks are not in our routes yet.",
       },
       {
         question: "How do I get to Lucca with a bike?",

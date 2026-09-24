@@ -2119,18 +2119,33 @@ const COLLECTION_SELECT = `
        ORDER BY cr.display_order ASC LIMIT 1) AS cover_route_id
   FROM collections c`;
 
+/**
+ * v1 is road only: stored collection copy loses any sentence about gravel,
+ * MTB, fire roads or towpaths (the Girona and Dublin texts promised them).
+ */
+function roadOnlyCopy(text: string | null | undefined): string | null {
+  if (!text) return text ?? null;
+  const off = /\b(gravel|mtb|mountain[- ]bik\w*|fire ?roads?|towpaths?|canals?|singletrack|off-road)\b/i;
+  const kept = text.split(/(?<=[.!?])\s+/).filter((sentence) => !off.test(sentence));
+  return kept.length ? kept.join(" ") : null;
+}
+
+function publicCollection<T extends { description?: string | null; seo_description?: string | null }>(c: T): T {
+  return { ...c, description: roadOnlyCopy(c.description), ...(c.seo_description !== undefined ? { seo_description: roadOnlyCopy(c.seo_description) } : {}) };
+}
+
 export async function getCollections(): Promise<Collection[]> {
   const { rows } = await sql.query(
     `${COLLECTION_SELECT} ORDER BY c.featured DESC, c.created_at DESC`
   );
-  return rows as Collection[];
+  return (rows as Collection[]).map(publicCollection);
 }
 
 export async function getFeaturedCollections(): Promise<Collection[]> {
   const { rows } = await sql.query(
     `${COLLECTION_SELECT} WHERE c.featured = TRUE ORDER BY c.created_at DESC LIMIT 6`
   );
-  return rows as Collection[];
+  return (rows as Collection[]).map(publicCollection);
 }
 
 export async function getCollectionBySlug(slug: string): Promise<CollectionWithRoutes | null> {
@@ -2156,7 +2171,7 @@ export async function getCollectionBySlug(slug: string): Promise<CollectionWithR
   // the seed scripts don't keep in sync) — otherwise the detail header reads
   // "routes" with no number.
   return {
-    ...collection,
+    ...publicCollection(collection),
     total_routes_count: routeRows.length,
     routes: publicRows(routeRows) as Route[],
   };

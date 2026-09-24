@@ -4,7 +4,7 @@ export const wicklow: BlogPost = {
   slug: "cycling-in-wicklow-dublins-mountain-playground",
   title: "Cycling in Wicklow: Dublin's Mountain Playground",
   description:
-    "The complete guide to cycling in the Wicklow Mountains: the best climbs like the Sally Gap and Wicklow Gap, classic loops from Dublin, gravel, weather and when to go.",
+    "The complete guide to cycling in the Wicklow Mountains: the best climbs like the Sally Gap and Wicklow Gap, classic loops from Dublin, weather and when to go.",
   excerpt:
     "Less than an hour from Dublin lies one of Europe's best-kept cycling secrets — empty mountain roads, big climbs and the Sally Gap. Here's how to ride it.",
   date: "2026-05-25",
@@ -67,11 +67,6 @@ export const wicklow: BlogPost = {
         "**The coastal-to-mountain mix:** Roll out along the coast through Bray and Greystones, then turn inland and climb — a gentler introduction to the range.",
       ],
     },
-    { type: "h2", text: "Gravel in Wicklow" },
-    {
-      type: "p",
-      text: "Wicklow has a growing gravel scene built on its forestry network. Coillte fire roads thread through the conifer plantations across the county, offering long, climbable gravel away from any traffic at all. The surface is typically firm forest road rather than technical singletrack, and the riding can be linked into big adventurous loops. A 40 mm+ tyre and a willingness to get muddy in the wetter months will open up a whole second county.",
-    },
     { type: "h2", text: "Weather and when to go" },
     {
       type: "p",
@@ -109,11 +104,6 @@ export const wicklow: BlogPost = {
       question: "When is the best time to cycle in Wicklow?",
       answer:
         "May to September offers the most settled weather and the longest days, with summer evenings great for spins into the hills. Spring and autumn are scenic but require layers and a rain jacket. Winter is rideable on milder days, but watch for ice and exposure on the high passes and carry warm kit.",
-    },
-    {
-      question: "Can you do gravel cycling in Wicklow?",
-      answer:
-        "Yes. Wicklow has a growing gravel scene based on the extensive Coillte forestry road network, offering long, climbable gravel completely away from traffic. The surface is mostly firm forest road rather than technical singletrack, so a 40 mm+ tyre works well, especially in the wetter months.",
     },
   ],
 };

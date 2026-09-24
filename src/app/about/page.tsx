@@ -27,7 +27,7 @@ export default function AboutPage() {
             and every generated route is scored against real road data with hard safety guardrails.
           </p>
           <p>
-            LOOPS is built for road riders first; gravel and mountain bike routes are coming later.
+            LOOPS is built for road riders: quiet, paved roads, measured and named.
             Download any route as a GPX file and load it into Strava, Komoot, Wahoo, Garmin, or any
             app that supports GPX.
           </p>

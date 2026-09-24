@@ -8,6 +8,7 @@ describe("v1 disciplines", () => {
     expect(disciplineEnabled(undefined)).toBe(true);
     expect(disciplineEnabled("gravel")).toBe(false);
     expect(disciplineEnabled("mtb")).toBe(false);
-    expect(DISCIPLINE_NOTICE).toMatch(/road rides for now/);
+    expect(DISCIPLINE_NOTICE).toMatch(/road rides/);
+    expect(DISCIPLINE_NOTICE).not.toMatch(/gravel|mtb/i);
   });
 });

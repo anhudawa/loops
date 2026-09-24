@@ -22,7 +22,7 @@ export const aiRoutePlanning: BlogPost = {
   body: [
     {
       type: "p",
-      text: "For years, planning a bike ride meant dragging waypoints around a map, second-guessing whether that road was busy, and exporting a GPX you hoped wasn't full of gravel you didn't want. AI route planning changes the workflow entirely: you describe the ride you want in plain language — where you are, how long you've got, what you're training for — and you get a route that actually fits. This guide explains how it works, how to get good results, and how to do it on LOOPS.",
+      text: "For years, planning a bike ride meant dragging waypoints around a map, second-guessing whether that road was busy, and exporting a GPX you hoped wasn't full of dirt tracks and main roads. AI route planning changes the workflow entirely: you describe the ride you want in plain language — where you are, how long you've got, what you're training for — and you get a route that actually fits. This guide explains how it works, how to get good results, and how to do it on LOOPS.",
     },
     { type: "h2", text: "How AI route planning works" },
     {
@@ -44,7 +44,7 @@ export const aiRoutePlanning: BlogPost = {
         "**Start location** — your address, a town, or a landmark.",
         "**Distance or duration** — '60 km' or 'about two hours'.",
         "**Climbing preference** — flat and fast, rolling, or as much elevation as possible.",
-        "**Surface and bike** — road, gravel, or mixed; this determines which roads and tracks are in play.",
+        "**Roads you want** — quiet lanes, main roads to avoid, climbs to include; this determines which roads are in play.",
         "**Loop or point-to-point** — and whether you want to finish back where you started.",
         "**Training intent** — and this is where it gets powerful (see below).",
       ],
@@ -77,7 +77,7 @@ export const aiRoutePlanning: BlogPost = {
       type: "ol",
       items: [
         "**Open the route planner** and enter where you're starting from.",
-        "**Describe the ride** — distance or time, how much climbing, road or gravel, loop or one-way.",
+        "**Describe the ride** — distance or time, how much climbing, loop or one-way.",
         "**Add training intent** if you have one — a Zone 2 spin, threshold intervals, a VO2 session, or just a scenic café ride.",
         "**Review the proposed route** — check the distance, elevation profile and surface breakdown.",
         "**Refine in plain language** — 'add more climbing', 'keep it flatter', 'avoid that main road' — and the route updates.",
@@ -103,7 +103,7 @@ export const aiRoutePlanning: BlogPost = {
     {
       question: "How do you plan a cycling route with AI?",
       answer:
-        "You describe the ride you want in plain language — your start location, distance or duration, how much climbing, road or gravel, and any training intent — and the AI builds a route that fits. On LOOPS you enter your start point, describe the ride, review the proposed route and elevation, refine it with natural language, then export the GPX to your head unit.",
+        "You describe the ride you want in plain language — your start location, distance or duration, how much climbing and any training intent — and the AI builds a route that fits. On LOOPS you enter your start point, describe the ride, review the proposed route and elevation, refine it with natural language, then export the GPX to your head unit.",
     },
     {
       question: "How is an AI route planner different from a normal route builder?",

@@ -240,6 +240,8 @@ export function maxspeedKmh(raw: string | undefined): number | null {
  * with no routable loop at all.
  */
 export function isFastRoad(t: WayTags): boolean {
+  // (A missing maxspeed on an Irish regional road is filled in with the
+  // 80 km/h default by irishDefaults() before the report asks this.)
   const kmh = maxspeedKmh(t.maxspeed);
   if (kmh === null || kmh < 80 || hasSegregatedTrack(t)) return false;
   if (kmh >= 100) return true;
@@ -254,6 +256,71 @@ export function isFastRoad(t: WayTags): boolean {
     return Number.isNaN(etc) || etc >= 4;
   }
   return !Number.isNaN(etc) && etc >= 4;
+}
+
+/** Ireland (and Northern Ireland): the island's bounding box. */
+export function inIreland(p: [number, number] | undefined): boolean {
+  return !!p && p[0] >= 51.3 && p[0] <= 55.45 && p[1] >= -10.7 && p[1] <= -5.4;
+}
+
+/**
+ * Irish regional roads (R-roads, OSM secondary) carry the 80 km/h rural
+ * default whether or not the map says so (CA-01: R-roads come through with
+ * no maxspeed). Fill it in so the Road Standard and the effort finder judge
+ * the road the rider will actually meet.
+ */
+export function irishDefaults(t: WayTags): WayTags {
+  if ((t.highway === "secondary" || t.highway === "secondary_link") && !t.maxspeed) return { ...t, maxspeed: "80" };
+  return t;
+}
+
+/** Signed (or, for Irish regional roads, default) speed limit in km/h; null when unknown. */
+export function effectiveMaxspeedKmh(t: WayTags, ireland: boolean): number | null {
+  return maxspeedKmh((ireland ? irishDefaults(t) : t).maxspeed);
+}
+
+// ── City centres ─────────────────────────────────────────────────────────────
+
+/**
+ * Dense city centres near our starts (CLT-04: "3 hours from Clontarf" was
+ * served through 10.6 km of central Dublin at quality 87). Streets there
+ * are lawful and paved, so no tag rule catches them — but lights every
+ * 200 m, buses and taxis are not a ride you'd take a friend on. A centre
+ * and a radius each; the radius covers the grid of lights, not the suburbs.
+ */
+export interface CityCore { name: string; center: [number, number]; radius_km: number }
+export const CITY_CORES: CityCore[] = [
+  { name: "Dublin", center: [53.3498, -6.2603], radius_km: 2.5 },
+  { name: "Cork", center: [51.8985, -8.4756], radius_km: 1.5 },
+  { name: "Galway", center: [53.2744, -9.049], radius_km: 1.2 },
+  { name: "Limerick", center: [52.6638, -8.6267], radius_km: 1.2 },
+  { name: "Belfast", center: [54.5973, -5.9301], radius_km: 2 },
+  { name: "Málaga", center: [36.7213, -4.4214], radius_km: 2 },
+  { name: "Palma", center: [39.5696, 2.6502], radius_km: 2 },
+  { name: "Girona", center: [41.9794, 2.8214], radius_km: 1 },
+  { name: "Nice", center: [43.7034, 7.2663], radius_km: 2 },
+  { name: "Las Palmas", center: [28.1235, -15.4363], radius_km: 2 },
+  { name: "Santa Cruz de Tenerife", center: [28.4636, -16.2518], radius_km: 1.5 },
+  { name: "Faro", center: [37.0194, -7.9304], radius_km: 1 },
+];
+
+/** The city centre this point lies in, or null. */
+export function cityCoreAt(p: [number, number]): CityCore | null {
+  for (const c of CITY_CORES) {
+    if (Math.abs(p[0] - c.center[0]) > 0.1 || Math.abs(p[1] - c.center[1]) > 0.15) continue;
+    if (haversineM(p, c.center) <= c.radius_km * 1000) return c;
+  }
+  return null;
+}
+
+/** Kilometres of the track inside a city centre (by edge midpoint). */
+export function cityCoreKm(coords: [number, number][]): number {
+  let m = 0;
+  for (let i = 0; i + 1 < coords.length; i++) {
+    const a = coords[i], b = coords[i + 1];
+    if (cityCoreAt([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2])) m += haversineM(a, b);
+  }
+  return m / 1000;
 }
 
 /** A physically separated cycle track alongside the road (a painted lane is not). */
@@ -282,7 +349,7 @@ export function isRestrictedForBikes(t: WayTags): boolean {
 
 // ── Road Standard compromise report ──────────────────────────────────────────
 
-export type CompromiseKind = "main_road" | "fast_road" | "unpaved" | "unsuitable";
+export type CompromiseKind = "main_road" | "fast_road" | "unpaved" | "unsuitable" | "city_streets";
 
 export interface Compromise {
   kind: CompromiseKind;
@@ -314,6 +381,8 @@ export interface RoadReport {
   surface: { paved_pct: number; unpaved_pct: number; unknown_pct: number };
   main_road_pct: number;
   fast_road_pct: number;
+  /** Share (0–100) of the distance inside a dense city centre (CITY_CORES). */
+  city_pct?: number;
   compromises: Compromise[];
   /** No compromises: every metre meets the Road Standard. */
   standard_met: boolean;
@@ -328,7 +397,7 @@ export interface RoadReport {
  * Bump when the classification rules change: stored reports with an older
  * (or missing) version are re-traced on next view (api/routes/[id]).
  */
-export const ROAD_RULES_VERSION = 6;
+export const ROAD_RULES_VERSION = 7;
 
 // "Unsuitable" by surface is discipline-aware: smoothness=bad is a hazard on
 // a road bike and the whole point of a gravel ride; class:bicycle −2 is
@@ -359,7 +428,10 @@ export const EXIT_ZONE_KM = 6;
 // Shorter than this = crossing the road at a junction or a roundabout, not
 // riding along it (Faro: 45–96 m traversals of the EN125/N2 ring that every
 // loop must cross). Surface/access hazards count from 40 m.
-const MIN_COMPROMISE_M: Record<CompromiseKind, number> = { main_road: 100, fast_road: 100, unpaved: 40, unsuitable: 40 };
+// City streets are named from 1.5 km: a shorter pass is crossing a town's edge.
+const MIN_COMPROMISE_M: Record<CompromiseKind, number> = { main_road: 100, fast_road: 100, unpaved: 40, unsuitable: 40, city_streets: 1500 };
+/** City-centre stretches this close together are one pass through the centre. */
+const CITY_MERGE_GAP_M = 1000;
 const MERGE_GAP_M = 60;        // same-kind stretches this close are one stretch
 
 function buildRoadReportInner(
@@ -374,17 +446,27 @@ function buildRoadReportInner(
 
   // Raw per-edge kinds, then run-length into stretches.
   const kinds: Array<CompromiseKind | null> = new Array(n).fill(null);
+  const ireland = inIreland(coords[0]);
+  // City centre per edge (its own kind: a road rule on the same edge wins).
+  const city: Array<CityCore | null> = new Array(n).fill(null);
+  let cityM = 0;
+  for (let i = 0; i < n; i++) {
+    const a = coords[i], b = coords[i + 1];
+    city[i] = cityCoreAt([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]);
+    if (city[i]) cityM += lens[i];
+  }
   for (let i = 0; i < n; i++) {
     const L = lens[i];
     total += L;
-    const t = edgeTags[i];
-    if (!t || !t.highway) { unknown += L; continue; }
+    const raw = edgeTags[i];
+    const t = raw && ireland ? irishDefaults(raw) : raw;
+    if (!t || !t.highway) { unknown += L; if (city[i]) kinds[i] = "city_streets"; continue; }
     known += L;
     classM[t.highway] = (classM[t.highway] ?? 0) + L;
     const p = isPaved(t);
     if (p === true) paved += L; else if (p === false) unpaved += L; else unknown += L;
     const kind = classifyEdge(t, discipline);
-    kinds[i] = kind;
+    kinds[i] = kind ?? (city[i] ? "city_streets" : null);
     if (kind === "main_road") main += L;
     if (kind === "fast_road") fast += L;
   }
@@ -400,7 +482,7 @@ function buildRoadReportInner(
       last.end = i + 1;
       last.meters += lens[i];
     } else {
-      runs.push({ kind: k, start: i, end: i + 1, meters: lens[i], tags: edgeTags[i]! });
+      runs.push({ kind: k, start: i, end: i + 1, meters: lens[i], tags: (ireland && edgeTags[i] ? irishDefaults(edgeTags[i]!) : edgeTags[i]) ?? {} });
     }
   }
   // Merge same-kind runs separated by a short gap (a junction, a bridge deck).
@@ -410,7 +492,7 @@ function buildRoadReportInner(
     if (last && last.kind === r.kind) {
       let gap = 0;
       for (let e = last.end; e < r.start; e++) gap += lens[e];
-      if (gap <= MERGE_GAP_M) {
+      if (gap <= (r.kind === "city_streets" ? CITY_MERGE_GAP_M : MERGE_GAP_M)) {
         last.end = r.end;
         last.meters += gap + r.meters;
         continue;
@@ -428,6 +510,18 @@ function buildRoadReportInner(
     .filter((r) => r.meters >= MIN_COMPROMISE_M[r.kind])
     .map((r) => {
       const nearStart = cumM[r.start] <= exitM || total - cumM[Math.min(r.end, n)] <= exitM;
+      if (r.kind === "city_streets") {
+        const core = city.slice(r.start, r.end).find((c) => c) ?? null;
+        return {
+          kind: r.kind,
+          start: r.start,
+          end: r.end,
+          meters: Math.round(r.meters),
+          at: coords[Math.min(coords.length - 1, Math.floor((r.start + r.end) / 2))],
+          highway: "residential",
+          ...(core ? { name: `${core.name} city centre` } : {}),
+        };
+      }
       return {
         kind: r.kind,
         start: r.start,
@@ -452,6 +546,7 @@ function buildRoadReportInner(
     surface: { paved_pct: pct(paved), unpaved_pct: pct(unpaved), unknown_pct: pct(unknown) },
     main_road_pct: pct(main),
     fast_road_pct: pct(fast),
+    city_pct: pct(cityM),
     compromises,
     standard_met: compromises.length === 0,
     summary: "",
@@ -473,13 +568,29 @@ function summarise(r: RoadReport, discipline: Discipline): string {
     const paved = discipline === "road" ? `, ${pavedOfKnown}% paved` : "";
     return `Meets the LOOPS Road Standard: no main roads, nothing over 80 km/h${paved}${measuredSuffix(r)}.`;
   }
-  const top = r.compromises.slice(0, 2).map(describeCompromise);
-  const more = r.compromises.length > 2 ? ` (+${r.compromises.length - 2} more)` : "";
-  return `Compromise: ${top.join("; ")}${more}${measuredSuffix(r)}.`;
+  return `Compromise: ${summaryParts(r.compromises)}${measuredSuffix(r)}.`;
+}
+
+/**
+ * The two biggest compromises for a one-line summary, with every city-centre
+ * pass counted as one ("9.3 km of city streets through Dublin city centre"),
+ * and "(+N more)".
+ */
+export function summaryParts(compromises: Compromise[]): string {
+  const city = compromises.filter((c) => c.kind === "city_streets");
+  const items: Compromise[] = compromises.filter((c) => c.kind !== "city_streets");
+  if (city.length) {
+    items.push({ ...city[0], meters: city.reduce((a, c) => a + c.meters, 0) });
+    items.sort((a, b) => b.meters - a.meters);
+  }
+  const top = items.slice(0, 2).map(describeCompromise);
+  const more = items.length > 2 ? ` (+${items.length - 2} more)` : "";
+  return `${top.join("; ")}${more}`;
 }
 
 export function describeCompromise(c: Compromise): string {
   const dist = c.meters >= 1000 ? `${(c.meters / 1000).toFixed(1)} km` : `${c.meters} m`;
+  if (c.kind === "city_streets") return `${dist} of city streets${c.name ? ` through ${c.name}` : ""} (traffic lights, buses)`;
   const where = c.name ? `on the ${c.name}` : `on a ${roadWord(c.highway)}`;
   const near = c.near_start ? " near the start/finish" : "";
   switch (c.kind) {
@@ -487,6 +598,7 @@ export function describeCompromise(c: Compromise): string {
     case "fast_road": return `${dist} ${where}${near} signed ${c.maxspeed ?? "80+"} km/h with no cycle track`;
     case "unpaved":   return `${dist} ${where}${near} that is ${c.surface ?? "unpaved"}`;
     case "unsuitable": return `${dist} ${where}${near} tagged unsuitable for bikes`;
+    default: return `${dist} ${where}${near}`;
   }
 }
 
@@ -881,7 +993,7 @@ export async function nameCompromises(
   const max = opts.max ?? NAME_MAX_PER_CALL;
   type Target = { c: Compromise; mid: [number, number]; key: string };
   const targets: Target[] = [];
-  for (const c of compromises.slice(0, max)) {
+  for (const c of compromises.filter((c) => !c.name && c.kind !== "city_streets").slice(0, max)) {
     const mid = c.at ?? coords[Math.min(coords.length - 1, Math.floor((c.start + c.end) / 2))];
     if (!mid) continue;
     const key = `${mid[0].toFixed(4)},${mid[1].toFixed(4)}:${c.highway}`;
@@ -927,6 +1039,89 @@ export async function nameCompromises(
     });
   } catch {
     /* fail-soft: leave unnamed */
+  }
+}
+
+/** Side ways that don't bring traffic onto an effort stretch. */
+const NOT_A_SIDE_ROAD = /^(service|footway|path|cycleway|steps|pedestrian|bridleway|corridor|elevator|construction|proposed|platform|bus_stop|rest_area)$/;
+
+export interface StretchJunctions {
+  /** Distinct places a road (anything but a driveway/service way or a footpath) joins the stretch. */
+  side_roads: number;
+  /** Stop / give-way / traffic-signal nodes on or next to the stretch. */
+  controls: number;
+  /** …of which traffic lights. */
+  signals: number;
+}
+
+/**
+ * What joins an effort stretch, from the map itself (CA-05: the engine's
+ * crossing marks missed a stop sign and the residential/track side roads on
+ * Kinsealy Lane, and the note claimed "no junctions"). One bounded lookup:
+ * every highway way within 12 m of the stretch that also leaves it (a node
+ * more than 25 m away) is a side road where it touches; junctions at the
+ * stretch's first/last 50 m (where the effort starts/ends) don't count.
+ * Null when the lookup fails — the caller then makes no junction claim.
+ */
+export async function stretchJunctions(
+  stretch: [number, number][],
+  fetchImpl: typeof fetch = fetch,
+  timeoutMs = 2500,
+): Promise<StretchJunctions | null> {
+  if (stretch.length < 2) return null;
+  // ~every 40 m, at most 80 points (keeps the query short).
+  const cum: number[] = [0];
+  for (let i = 1; i < stretch.length; i++) cum.push(cum[i - 1] + haversineM(stretch[i - 1], stretch[i]));
+  const total = cum[cum.length - 1];
+  const step = Math.max(40, total / 80);
+  const pts: [number, number][] = [];
+  let last = -Infinity;
+  stretch.forEach((p, i) => { if (cum[i] - last >= step || i === stretch.length - 1) { pts.push(p); last = cum[i]; } });
+  const line = pts.map((p) => `${p[0].toFixed(6)},${p[1].toFixed(6)}`).join(",");
+  const q = `[out:json][timeout:${Math.max(2, Math.ceil(timeoutMs / 1000))}];` +
+    `way(around:12,${line})["highway"];out tags geom;` +
+    `node(around:20,${line})["highway"~"^(stop|give_way|traffic_signals)$"];out;`;
+  const geom = stretch.map(([lat, lon]) => ({ lat, lon }));
+  // Interior of the stretch: its own start and end junctions are expected.
+  const interior = (p: [number, number]) => {
+    let best = -1, bestD = Infinity;
+    for (let i = 0; i < stretch.length; i++) { const d = haversineM(p, stretch[i]); if (d < bestD) { bestD = d; best = i; } }
+    return cum[best] > 50 && cum[best] < total - 50;
+  };
+  try {
+    const res = await fetchImpl(NAME_LOOKUP_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "loops.ie route generator (https://www.loops.ie)" },
+      body: `data=${encodeURIComponent(q)}`,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!res.ok) return null;
+    const json = (await res.json()) as { elements?: Array<{ type: string; lat?: number; lon?: number; tags?: WayTags; geometry?: Array<{ lat: number; lon: number }> }> };
+    const joins = new Set<string>();
+    let controls = 0, signals = 0;
+    for (const el of json.elements ?? []) {
+      if (el.type === "node" && el.lat != null && el.lon != null) {
+        if (!interior([el.lat, el.lon])) continue;
+        controls++;
+        if (el.tags?.highway === "traffic_signals") signals++;
+        continue;
+      }
+      if (el.type !== "way" || !el.geometry?.length) continue;
+      const hw = el.tags?.highway ?? "";
+      if (NOT_A_SIDE_ROAD.test(hw) || el.tags?.service === "driveway") continue;
+      const d = el.geometry.map((g) => distToWayM([g.lat, g.lon], geom));
+      if (!d.some((x) => x > 25)) continue; // the stretch's own road
+      const near = el.geometry.filter((_, k) => d[k] <= 10).map((g) => [g.lat, g.lon] as [number, number]);
+      if (!near.length) continue;
+      // Running along the stretch for more than 30 m: the stretch's own road
+      // (continuing past its ends), not a road joining it.
+      if (near.some((a) => near.some((b) => haversineM(a, b) > 30))) continue;
+      const at = near[0];
+      if (interior(at)) joins.add(`${at[0].toFixed(4)},${at[1].toFixed(4)}`);
+    }
+    return { side_roads: joins.size, controls, signals };
+  } catch {
+    return null;
   }
 }
 

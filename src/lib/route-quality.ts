@@ -18,7 +18,7 @@
  */
 
 import { validateRouteRules, RouteValidationOptions } from "./route-rules";
-import { scoreEdges, validateRoadEdges, type EdgeTags } from "./road-segments";
+import { scoreEdges, validateRoadEdges, cityCoreKm, type EdgeTags } from "./road-segments";
 
 export type Discipline = "road" | "gravel" | "mtb";
 
@@ -49,6 +49,24 @@ export interface QualityScore {
   surface_breakdown?: { paved_pct: number; unpaved_pct: number; unknown_pct: number };
   /** Road-class share (% of sampled points per OSM highway class). */
   road_class_breakdown?: Record<string, number>;
+  /** Share (0–1) of the distance inside a dense city centre (road-segments CITY_CORES). */
+  city_share?: number;
+}
+
+/** Above this city-centre share a loop is never "excellent" (CLT-04). */
+export const CITY_TIER_CAP_SHARE = 0.15;
+
+/**
+ * Points off for riding through a city centre: 0.8 per % of the ride,
+ * at most 30 — a rural loop outranks one through 10 km of lights.
+ */
+export function cityPenalty(share: number): number {
+  return Math.min(30, Math.round(Math.max(0, share) * 80));
+}
+
+/** Quality tier with the city cap applied. */
+export function qualityTier(total: number, cityShare: number | undefined, worldClass: number): "excellent" | "good" {
+  return total >= worldClass && (cityShare ?? 0) <= CITY_TIER_CAP_SHARE ? "excellent" : "good";
 }
 
 // ──── Types for OSM data ────────────────────────────────────────────────────
@@ -1725,7 +1743,13 @@ async function scoreWithEdgeTags(
     base.gps_quality_score + gradient.score +
     scenic_score + scenic_diversity_score + waypoint_interest_score;
   const denominator = sceneryAssessed ? MAX_RAW_SCORE : MAX_RAW_SCORE - SCENERY_RAW_MAX;
-  const total = Math.max(0, Math.min(100, Math.round((rawSum / denominator) * 100)));
+  // City centres: lawful, paved, and full of scenery "points of interest" —
+  // which is exactly why they scored high. Take it back.
+  const lenKm = totalDistanceKm(coordinates);
+  const cityKm = cityCoreKm(latLng);
+  const city_share = lenKm > 0 ? cityKm / lenKm : 0;
+  if (cityKm >= 1) allFlags.push(`${cityKm.toFixed(1)} km through a city centre`);
+  const total = Math.max(0, Math.min(100, Math.round((rawSum / denominator) * 100) - cityPenalty(city_share)));
 
   const { level: confidence_level, lowCoverageWarning: low_coverage_warning } =
     computeConfidenceLevel(roads.confidence);
@@ -1752,6 +1776,7 @@ async function scoreWithEdgeTags(
     confidence_level,
     low_coverage_warning,
     osm_cached,
+    city_share,
   };
 }
 

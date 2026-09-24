@@ -60,22 +60,22 @@ export default function ClimbCards({ climbs, onClimbSelect }: ClimbCardsProps) {
               key={i}
               onClick={() => onClimbSelect?.(climb)}
               className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all hover:scale-[1.01] active:scale-[0.99]"
+              // Neutral card with the category colour as an edge: text on a
+              // tinted fill failed contrast (axe, 25 nodes on the Rupit page).
               style={{
-                background: `${color}26`, // 15% opacity
-                border: `1px solid ${color}40`, // 25% opacity
+                background: "var(--bg-card)",
+                border: "1px solid var(--border)",
+                borderLeft: `4px solid ${color}`,
               }}
             >
-              {/* Category badge */}
+              {/* Category badge: dark text on the solid category colour */}
               <div
                 className="shrink-0 w-12 h-12 rounded-lg flex flex-col items-center justify-center"
-                style={{
-                  background: `${color}26`, // 15% opacity
-                  border: `1px solid ${color}40`, // 25% opacity
-                }}
+                style={{ background: color }}
               >
                 <span
                   className="text-[10px] font-extrabold uppercase tracking-wider leading-none"
-                  style={{ color }}
+                  style={{ color: "#0a0a0a" }}
                 >
                   {climb.category}
                 </span>
@@ -87,11 +87,11 @@ export default function ClimbCards({ climbs, onClimbSelect }: ClimbCardsProps) {
                   <span className="text-xs font-bold" style={{ color: "var(--text)" }}>
                     km {climb.startKm.toFixed(1)} → {climb.endKm.toFixed(1)}
                   </span>
-                  <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                  <span className="text-[10px]" style={{ color: "var(--text-secondary)" }}>
                     ({climb.distanceKm.toFixed(1)} km)
                   </span>
                 </div>
-                <div className="text-[10px] mt-0.5" style={{ color: "var(--text-muted)" }}>
+                <div className="text-[10px] mt-0.5" style={{ color: "var(--text-secondary)" }}>
                   {Math.round(climb.startElev)}m → {Math.round(climb.endElev)}m · +{Math.round(climb.gain)}m
                 </div>
               </div>
@@ -101,7 +101,7 @@ export default function ClimbCards({ climbs, onClimbSelect }: ClimbCardsProps) {
                 <div className="text-lg font-extrabold leading-none" style={{ color }}>
                   {climb.avgGradient.toFixed(1)}%
                 </div>
-                <div className="text-[9px] uppercase tracking-wider font-bold mt-0.5" style={{ color: "var(--text-muted)" }}>
+                <div className="text-[9px] uppercase tracking-wider font-bold mt-0.5" style={{ color: "var(--text-secondary)" }}>
                   avg
                 </div>
               </div>

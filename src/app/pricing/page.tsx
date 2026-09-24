@@ -209,7 +209,7 @@ export default function PricingPage() {
                 Claim a Founding spot
               </a>
             </div>
-            <p className="text-xs mt-4" style={{ color: "var(--text-muted)" }}>
+            <p className="text-xs mt-4" style={{ color: "var(--text-secondary)" }}>
               No payment is taken on this page. The button opens an email; we reply with the details.
               No mail app? Write to{" "}
               <span className="font-bold select-all" style={{ color: "var(--text)" }}>{CONTACT_EMAIL}</span>{" "}

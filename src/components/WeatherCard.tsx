@@ -287,7 +287,7 @@ export default function WeatherCard({ routeId, windOverlayEnabled, onWindToggle,
       )}
 
       {!noRideForecast && weather.hours && weather.hours.length > 1 && (
-        <div className="mt-3 -mx-1 flex gap-1.5 overflow-x-auto pb-1" data-testid="hour-strip">
+        <div className="mt-3 -mx-1 flex gap-1.5 overflow-x-auto pb-1" data-testid="hour-strip" tabIndex={0} role="region" aria-label="Hour-by-hour forecast for the ride">
           {weather.hours.map((h) => {
             const rainy = (h.precipitationProbability ?? 0) >= 20 || h.precipitation >= 0.2;
             return (

@@ -58,3 +58,21 @@ export function detourLegs(legs: { detour_ratio?: number | null }[]): number[] {
   });
   return out;
 }
+
+/**
+ * Why Save / GPX cannot run yet, in words — a phone never shows a disabled
+ * button's tooltip, so the tap says it. null = go ahead.
+ */
+export function exportBlockedReason(
+  s: { anchors: number; needsAuth: boolean; snapping: boolean; failed: number; allSnapped: boolean },
+  action: "save" | "export"
+): string | null {
+  if (s.allSnapped) return null;
+  const what = action === "save" ? "save it" : "download the GPX";
+  if (s.anchors === 0) return `Tap the map to draw your route, then ${what}.`;
+  if (s.anchors === 1) return `Drop a second point — a route needs two before you can ${what}.`;
+  if (s.needsAuth) return `Sign in to ${what} — legs snap to roads once you're signed in, and your drawing is kept while you sign in.`;
+  if (s.snapping) return `Still snapping to roads — ${what} in a moment.`;
+  if (s.failed > 0) return `${s.failed === 1 ? "A leg" : `${s.failed} legs`} couldn't snap to a road — tap Retry or move the pin, then ${what}.`;
+  return `Every leg must snap to a road before you can ${what}.`;
+}

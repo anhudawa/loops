@@ -84,6 +84,7 @@ import { findEffortCorridors, type EffortCorridor } from "./session-assembly";
 import { findEffortStretch, findSpreadStretches, spliceRepeats, lengthPlan, clearOfStops, lightTraffic, totalReps, isHillSession, repKm, hardestRep, type EffortStretch } from "./effort-repeats";
 import { placeNear, placesNear } from "./map-labels";
 import { autoTitle, nameAt } from "./route-title";
+import { renameGpx } from "./gpx-name";
 import { findHills, loopsOverHill, type Hill } from "./hill-finder";
 import { nearbyPlaces } from "./places";
 import { isClosedLoop, nearestIndex, rotateLoop } from "./loop-geometry";
@@ -1433,8 +1434,11 @@ export async function generateRouteCandidates(
     delete interpreted.duration_minutes;
   }
   // Every generated ride gets a rider's title: start – far point – end · km.
+  // The GPX carries the same name (what the Garmin shows), not "Generated road route — 49km".
   for (const c of candidates) {
-    if (c.source === "generated" && !c.title) c.title = autoTitle(c.coordinates, c.distance_km);
+    if (c.source !== "generated") continue;
+    if (!c.title) c.title = autoTitle(c.coordinates, c.distance_km);
+    if (c.gpx_data) c.gpx_data = renameGpx(c.gpx_data, c.title);
   }
   markPhase("total");
   const timings = currentTimings;

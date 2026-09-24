@@ -58,8 +58,9 @@ import LocationHelp from "@/components/LocationHelp";
 import { describeCompromise, type Compromise } from "@/lib/road-segments";
 import { useAuth } from "@/components/AuthProvider";
 import { KNOWN_PLACES, lookupKnownPlace } from "@/lib/places-known";
-import { readDraft, writeDraft, clearDraft } from "@/app/plan/plan-draft";
-import { planCompromises, detourLegs } from "@/app/plan/plan-checks";
+import { readDraft, writeDraft, clearDraft, type PlanSnapshot } from "@/app/plan/plan-draft";
+import { planCompromises, detourLegs, exportBlockedReason } from "@/app/plan/plan-checks";
+import { gpxFileName, titleWithKm } from "@/lib/gpx-name";
 import { retraceSummary } from "@/lib/track-shape";
 
 interface RerouteResult {
@@ -112,13 +113,8 @@ const handleIcon = hitIcon(
   `<div style="width:11px;height:11px;border-radius:50%;background:#0a0a0c;border:2px solid #c8ff00;opacity:0.85"></div>`
 );
 
-/** The drawing as it stood before an edit — what Undo puts back. */
-interface Snapshot {
-  anchors: LatLng[];
-  legs: PlanLeg[];
-  loopLeg: PlanLeg | null;
-  loopBack: boolean;
-}
+/** The drawing as it stood before an edit — what Undo puts back (kept with the draft). */
+type Snapshot = PlanSnapshot;
 const MAX_UNDO = 50;
 
 /**
@@ -282,7 +278,7 @@ export default function MapPlanner() {
     (ENABLED_DISCIPLINES as readonly string[]).includes(draft?.discipline ?? "") ? (draft!.discipline as Discipline) : "road"
   );
   const [loopBack, setLoopBack] = useState(draft?.loopBack ?? true);
-  const [undoStack, setUndoStack] = useState<Snapshot[]>([]);
+  const [undoStack, setUndoStack] = useState<Snapshot[]>(draft?.undo ?? []);
   const [error, setError] = useState<string | null>(null);
   const [needsAuth, setNeedsAuth] = useState(false);
   const [resnapNote, setResnapNote] = useState<string | null>(null);
@@ -291,6 +287,8 @@ export default function MapPlanner() {
   const [here, setHere] = useState<LatLng | null>(null);
   const [placeQuery, setPlaceQuery] = useState("");
   const [placeMiss, setPlaceMiss] = useState<string | null>(null);
+  /** Place search opened again mid-drawing (it folds to an icon once a pin is down). */
+  const [searchOpen, setSearchOpen] = useState(false);
   /** Save asks for a name first (prefilled); null = not naming. */
   const [naming, setNaming] = useState<string | null>(null);
   const [locBlocked, setLocBlocked] = useState(false);
@@ -303,6 +301,8 @@ export default function MapPlanner() {
   const [showProfile, setShowProfile] = useState(!compact);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  /** Why a tap on Save/GPX did nothing yet (cleared as soon as the drawing changes). */
+  const [blockedNote, setBlockedNote] = useState<string | null>(null);
 
   const router = useRouter();
   const { user, loading: authLoading, authError } = useAuth();
@@ -376,8 +376,10 @@ export default function MapPlanner() {
   useEffect(() => {
     if (!draft) return;
     const all = [...draft.legs, ...(draft.loopLeg ? [draft.loopLeg] : [])];
-    legIdRef.current = Math.max(legIdRef.current, ...all.map((l) => l.id));
-    seqRef.current = Math.max(seqRef.current, ...all.map((l) => l.seq));
+    // Legs only in the undo history still own their ids (Undo brings them back).
+    const kept = [...all, ...(draft.undo ?? []).flatMap((u) => [...u.legs, ...(u.loopLeg ? [u.loopLeg] : [])])];
+    legIdRef.current = Math.max(legIdRef.current, ...kept.map((l) => l.id));
+    seqRef.current = Math.max(seqRef.current, ...kept.map((l) => l.seq));
     for (const l of all) {
       if (l.status === "snapped") snappedCoordsRef.current.set(l.id, l.coords);
       else if (l.status === "pending" || l.status === "straight") void resnapLeg(l, l.from, l.to, discipline);
@@ -389,8 +391,8 @@ export default function MapPlanner() {
   useEffect(() => {
     if (savedRef.current) return;
     if (anchors.length === 0) clearDraft();
-    else writeDraft({ anchors, legs, loopLeg, loopBack, discipline });
-  }, [anchors, legs, loopLeg, loopBack, discipline]);
+    else writeDraft({ anchors, legs, loopLeg, loopBack, discipline, undo: undoStack });
+  }, [anchors, legs, loopLeg, loopBack, discipline, undoStack]);
 
   // Closing the tab with an unsaved drawing asks first.
   const hasDrawing = anchors.length > 0;
@@ -781,6 +783,8 @@ export default function MapPlanner() {
   const snapping = allLegs.some((l) => l.status === "pending");
   const failedCount = allLegs.filter((l) => l.status === "failed").length;
   const allSnapped = allLegs.length > 0 && allLegs.every((l) => l.status === "snapped");
+  // The reason a blocked tap gave is stale once the drawing moves on.
+  useEffect(() => { setBlockedNote(null); }, [allSnapped, anchors.length, needsAuth, failedCount]);
   // Road Standard across the drawn route (trust rule: a compromise is shown
   // while drawing, never discovered on the road).
   const standardKnown = allSnapped && allLegs.every((l) => l.standard_met !== undefined);
@@ -805,21 +809,22 @@ export default function MapPlanner() {
     () => profileCoords.length >= 2 && profileCoords.some((c) => c[2] !== 0),
     [profileCoords]
   );
+  /** The Road Standard is met, said in the elevation row (a strip of its own only when there is a compromise). */
+  const roadStandardClean = standardKnown && compromises.length === 0 && hasElevation;
 
-  function downloadGpx() {
-    if (!allSnapped) return;
+  async function downloadGpx() {
+    const blocked = exportBlockedReason({ anchors: anchors.length, needsAuth, snapping, failed: failedCount, allSnapped }, "export");
+    if (blocked) { setBlockedNote(blocked); return; }
     const { coords, elevations } = concatLegGeometry(allLegs);
-    const gpx = buildPlanGpx(
-      coords,
-      elevations,
-      `LOOPS planned ${discipline} route — ${totals.distance_km} km`,
-      discipline
-    );
+    // The same place name Save suggests (what the Garmin shows); the generic
+    // name only when the town list cannot answer.
+    const name = (await Promise.race([placeTitle(), new Promise<null>((r) => setTimeout(() => r(null), 2000))])) ?? suggestedName;
+    const gpx = buildPlanGpx(coords, elevations, name, discipline);
     const blob = new Blob([gpx], { type: "application/gpx+xml" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `loops-planned-${totals.distance_km}km.gpx`;
+    a.download = gpxFileName(name);
     a.click();
     URL.revokeObjectURL(url);
     // Funnel: a drawn route was exported (client-side GPX + draw milestone).
@@ -827,25 +832,50 @@ export default function MapPlanner() {
     track(ANALYTICS_EVENTS.PLAN_DRAWN, { via: "download", distance_km: totals.distance_km });
   }
 
-  const suggestedName = `Planned ${discipline} route — ${totals.distance_km} km`;
-  // Save asks for a name prefilled with a rider's title — "Clontarf –
-  // Ashbourne – Clontarf · 117 km" — from the server's town list; the generic
-  // name shows only until it answers (or if it can't).
-  function openNaming() {
-    setNaming(suggestedName);
+  const suggestedName = `Planned ${discipline} route — ${totals.distance_km.toFixed(1)} km`;
+  // The rider's title for the drawn route — "Clontarf – Raheny – Clontarf ·
+  // 10.7 km", the toolbar's distance — from the server's town list. Asked
+  // once per finished drawing and shared by Save and GPX; null when it
+  // cannot answer.
+  const titleKey = allSnapped
+    ? `${totals.distance_km}|${anchors.map((a) => a.join(",")).join(";")}|${loopLeg ? 1 : 0}`
+    : null;
+  const titleRef = useRef<{ key: string; title: Promise<string | null> } | null>(null);
+  function placeTitle(): Promise<string | null> {
+    if (!titleKey) return Promise.resolve(null);
+    if (titleRef.current?.key === titleKey) return titleRef.current.title;
     const coords = legGeometryForChart(allLegs).map((p) => [p[0], p[1]] as LatLng);
-    if (coords.length < 2) return;
-    fetch("/api/route-title", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ coordinates: coords, distance_km: totals.distance_km }),
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j) => {
-        const title = j?.data?.title;
-        if (typeof title === "string") setNaming((cur) => (cur === suggestedName ? title : cur));
-      })
-      .catch(() => {});
+    const km = totals.distance_km.toFixed(1);
+    const title: Promise<string | null> = coords.length < 2
+      ? Promise.resolve(null)
+      : fetch("/api/route-title", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ coordinates: coords, distance_km: totals.distance_km }),
+        })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((j) => (typeof j?.data?.title === "string" ? titleWithKm(j.data.title, km) : null))
+          .catch(() => null);
+    titleRef.current = { key: titleKey, title };
+    return title;
+  }
+  // Ready before the rider taps GPX (a download started long after the tap
+  // can be blocked on a phone).
+  useEffect(() => {
+    if (titleKey) void placeTitle();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [titleKey]);
+
+  // Save asks for a name prefilled with that title; the generic name shows
+  // only until it answers (or if it can't).
+  function openNaming() {
+    const blocked = exportBlockedReason({ anchors: anchors.length, needsAuth, snapping, failed: failedCount, allSnapped }, "save");
+    if (blocked) { setBlockedNote(blocked); return; }
+    setSaveError(null);
+    setNaming(suggestedName);
+    void placeTitle().then((title) => {
+      if (title) setNaming((cur) => (cur === suggestedName ? title : cur));
+    });
   }
 
   /** Save the drawn route to the rider's library, then open its detail page.
@@ -911,6 +941,7 @@ export default function MapPlanner() {
     if (hit) {
       setGeoCenter([hit.point[0], hit.point[1]]);
       setPlaceQuery("");
+      setSearchOpen(false);
       setPlaceMiss(null);
     } else {
       setPlaceMiss(`We don't know "${q}" yet — pan the map there, or pick a place from the list.`);
@@ -961,17 +992,24 @@ export default function MapPlanner() {
 
       {/* Banners */}
       {needsAuth && (
-        <p className="px-4 py-2 text-xs z-20" style={{ background: "rgba(200,255,0,0.08)", color: "var(--text-secondary)" }}>
-          <span className="font-bold" style={{ color: "var(--accent)" }}>Sign in to snap to roads.</span>{" "}
-          You can keep drawing — distances are straight-line until then.{" "}
+        // One slim row beside the Log in link: on a phone every line here is map lost.
+        <p className="px-4 py-0.5 text-xs z-20 flex items-center gap-2" style={{ background: "rgba(200,255,0,0.08)", color: "var(--text-secondary)" }}>
+          <span className="flex-1 min-w-0">
+            <span className="font-bold" style={{ color: "var(--accent)" }}>Sign in to snap to roads</span>
+            {" "}— straight lines until then; your drawing is kept.
+          </span>
           <Link
             href="/login?redirect=/plan"
-            className="inline-flex items-center min-h-[44px] px-1 font-bold underline"
+            className="inline-flex items-center min-h-[44px] px-1 font-bold underline shrink-0"
             style={{ color: "var(--accent)" }}
           >
             Log in →
           </Link>
-          <span className="block" style={{ color: "var(--text-muted)" }}>Your drawing is kept while you sign in.</span>
+        </p>
+      )}
+      {blockedNote && (
+        <p className="px-4 py-2 text-xs z-20" style={{ background: "rgba(245,165,36,0.1)", color: "#f5a524" }} role="status" data-testid="plan-blocked">
+          {blockedNote}
         </p>
       )}
       {failedCount > 0 && (
@@ -1006,6 +1044,9 @@ export default function MapPlanner() {
           {...initialView}
           style={{ height: "100%", width: "100%" }}
           scrollWheelZoom
+          // Every tap is a pin: two quick taps are two points, not a zoom
+          // (zoom stays on +/−, pinch and the wheel).
+          doubleClickZoom={false}
         >
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
@@ -1015,7 +1056,7 @@ export default function MapPlanner() {
           <PopupWatch onChange={setPopupOpen} />
           {/* Hidden while a pin's popup is open: on a phone the chip (z 1000)
               sat over "Remove this point". */}
-          {allLegs.length > 0 && !popupOpen && (
+          {allLegs.length > 0 && !popupOpen && !searchOpen && (
             // Live distance where the eyes are while plotting: every tap
             // updates it (straight-line until a leg snaps, marked "~").
             <div className="leaflet-top w-full flex justify-center pointer-events-none" style={{ zIndex: 1000 }}>
@@ -1136,8 +1177,23 @@ export default function MapPlanner() {
 
         {/* Go to a place — riders abroad need not pan from Dublin. Out of the
             way while the location help is open (on a phone its Go button sat
-            over the help's Close). */}
-        {anchors.length === 0 && !locBlocked && (
+            over the help's Close). Mid-drawing it folds to an icon so the
+            route keeps the map, and one tap opens it again. */}
+        {anchors.length > 0 && !searchOpen && !locBlocked && (
+          <button
+            type="button"
+            onClick={() => setSearchOpen(true)}
+            className="absolute top-3 right-3 z-[500] min-w-[44px] min-h-[44px] rounded-lg shadow flex items-center justify-center"
+            style={{ background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
+            aria-label="Go to a place"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+              <circle cx="11" cy="11" r="7" />
+              <path strokeLinecap="round" d="M20 20l-3.5-3.5" />
+            </svg>
+          </button>
+        )}
+        {(anchors.length === 0 || searchOpen) && !locBlocked && (
           <form
             onSubmit={goToPlace}
             className="absolute top-3 right-3 z-[500] flex flex-col items-end gap-1"
@@ -1163,6 +1219,17 @@ export default function MapPlanner() {
               >
                 Go
               </button>
+              {anchors.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => { setSearchOpen(false); setPlaceMiss(null); }}
+                  className="min-h-[44px] min-w-[44px] text-xs"
+                  style={{ background: "var(--bg-raised)", color: "var(--text-muted)" }}
+                  aria-label="Close place search"
+                >
+                  ✕
+                </button>
+              )}
             </div>
             <datalist id="plan-places">
               {KNOWN_PLACES.map((p) => <option key={p.name} value={p.name} />)}
@@ -1223,6 +1290,13 @@ export default function MapPlanner() {
             <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
               Elevation · +{totals.gain_m} m / -{totals.loss_m} m
             </span>
+            {/* A clean verdict rides in this row (one strip less on a phone);
+                compromises keep their own strip below. */}
+            {roadStandardClean && (
+              <span className="text-[11px] ml-auto mr-3" style={{ color: "var(--text-muted)" }} data-testid="plan-road-standard" title="Every leg meets the Loops road standard.">
+                <span aria-hidden="true">✓ </span>Road standard<span className="sr-only">: every leg meets the Loops road standard.</span>
+              </span>
+            )}
             <span className="text-xs" style={{ color: "var(--text-muted)" }}>
               {showProfile ? "Hide ▾" : "Show ▸"}
             </span>
@@ -1237,7 +1311,7 @@ export default function MapPlanner() {
 
       {/* Road Standard verdict for the drawn route — from the engine's own
           road tags on every snapped leg. */}
-      {standardKnown && (
+      {standardKnown && !roadStandardClean && (
         <div
           className="px-3 py-1.5 border-t text-xs flex items-start gap-1.5 z-20"
           style={{
@@ -1403,9 +1477,11 @@ export default function MapPlanner() {
           <button
             type="button"
             onClick={() => openNaming()}
-            disabled={!allSnapped || saving}
-            title={allSnapped ? undefined : "Every leg must be snapped to a road before saving"}
-            className="px-3 sm:px-4 rounded-xl text-xs font-bold uppercase tracking-wider disabled:opacity-40"
+            // Tappable while blocked: the tap says why (a phone never shows a tooltip).
+            disabled={saving}
+            aria-disabled={!allSnapped}
+            title={exportBlockedReason({ anchors: anchors.length, needsAuth, snapping, failed: failedCount, allSnapped }, "save") ?? undefined}
+            className="px-3 sm:px-4 rounded-xl text-xs font-bold uppercase tracking-wider disabled:opacity-40 aria-disabled:opacity-40"
             style={{ minHeight: 44, border: "1px solid var(--accent)", background: "var(--bg-card)", color: "var(--accent)" }}
           >
             Save<span className="hidden sm:inline"> route</span>
@@ -1414,10 +1490,10 @@ export default function MapPlanner() {
 
           <button
             type="button"
-            onClick={downloadGpx}
-            disabled={!allSnapped}
-            title={allSnapped ? undefined : "Every leg must be snapped to a road before export"}
-            className="px-3 sm:px-4 rounded-xl text-xs font-bold uppercase tracking-wider disabled:opacity-40"
+            onClick={() => void downloadGpx()}
+            aria-disabled={!allSnapped}
+            title={exportBlockedReason({ anchors: anchors.length, needsAuth, snapping, failed: failedCount, allSnapped }, "export") ?? undefined}
+            className="px-3 sm:px-4 rounded-xl text-xs font-bold uppercase tracking-wider aria-disabled:opacity-40"
             style={{ minHeight: 44, background: "var(--accent)", color: "var(--bg)" }}
             aria-label="Download GPX"
           >

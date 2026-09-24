@@ -29,6 +29,8 @@ import { useVoiceInput } from "@/lib/useVoiceInput";
 import { describeCompromise, type Compromise } from "@/lib/road-segments";
 import { useGeolocation } from "@/lib/useGeolocation";
 import LocationHelp from "@/components/LocationHelp";
+import { renameGpx, gpxFileName, titleWithKm } from "@/lib/gpx-name";
+import { asksRepeatEfforts } from "@/lib/session-words";
 import { track } from "@/lib/track";
 import { ANALYTICS_EVENTS } from "@/lib/metrics";
 import { deliveryNote } from "@/lib/delivery-note";
@@ -140,10 +142,8 @@ interface GenerateResponse {
   candidates: Candidate[];
 }
 
-/** The prompt describes structured efforts (mirrors the server's parser). */
-function looksLikeSession(text: string): boolean {
-  return /\d\s*[x×]\s*\d|\binterval|\bthreshold\b|\bftp\b|\btempo\b|\bvo2|sweet\s*spot|\banaerobic\b|\bsprints?\b|\bzone\s*[3-7]\b|\bz[3-7]\b/i.test(text);
-}
+/** The prompt describes repeatable efforts (the server's parser reads the same words: session-words.ts). */
+const looksLikeSession = asksRepeatEfforts;
 
 const EXAMPLES = [
   "2 hour ride with a few rolling hills on quiet lanes",
@@ -1191,6 +1191,8 @@ const ACTION_CLASS =
 function applyEdit(c: GeneratedCandidate, e: EditedRoute): GeneratedCandidate {
   return {
     ...c,
+    // The title's distance follows the edited line ("… · 49 km" → "… · 53 km").
+    title: c.title ? titleWithKm(c.title, String(Math.round(e.distance_km))) : c.title,
     coordinates: e.coordinates,
     elevations: e.elevations,
     distance_km: e.distance_km,
@@ -1514,8 +1516,9 @@ function CandidateCard({
                   <button
                     type="button"
                     onClick={() => {
-                      const filename = `loops-${candidate.name.slice(0, 30).replace(/[^a-z0-9]+/gi, "-")}-from-start.gpx`;
-                      downloadGpx(candidate.gpx_data!, filename);
+                      // The name Save gives it (saveGeneratedRoute).
+                      const name = `${candidate.name} from ${interpreted?.region ?? "your start"}`.slice(0, 80);
+                      downloadGpx(renameGpx(candidate.gpx_data!, name), gpxFileName(name));
                     }}
                     className={ACTION_CLASS}
                     style={{ background: "transparent", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
@@ -1553,8 +1556,8 @@ function CandidateCard({
                 <button
                   type="button"
                   onClick={() => {
-                    const filename = `loops-${submittedPrompt.slice(0, 30).replace(/[^a-z0-9]+/gi, "-")}${edit ? "-edited" : ""}.gpx`;
-                    downloadGpx(candidate.gpx_data, filename);
+                    // Named as the card is: the GPX (what the Garmin shows) and the file.
+                    downloadGpx(renameGpx(candidate.gpx_data, title), gpxFileName(title, edit ? "-edited" : ""));
                   }}
                   className={ACTION_CLASS}
                   style={{
@@ -1566,7 +1569,7 @@ function CandidateCard({
                   Download GPX
                 </button>
                 <SendToGarmin
-                  name={submittedPrompt.slice(0, 80) || `LOOPS ${candidate.distance_km} km`}
+                  name={title.slice(0, 80)}
                   coordinates={candidate.coordinates}
                   elevations={candidate.elevations}
                   distance_km={candidate.distance_km}

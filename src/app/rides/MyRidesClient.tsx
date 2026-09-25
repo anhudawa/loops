@@ -20,7 +20,7 @@ interface MyRide {
   maybe_count: number;
 }
 
-const MINE: Record<string, string> = { yes: "You're in", maybe: "You: maybe", no: "You can't make it" };
+const MINE: Record<string, string> = { yes: "You're in", maybe: "Maybe", no: "Can't make it" };
 
 /** Rides the rider shared or answered — open one to see the roll call, re-share it, or forward it. */
 export default function MyRidesClient() {
@@ -40,28 +40,40 @@ export default function MyRidesClient() {
       .catch(() => setFailed(true));
   }, [user, loading]);
 
-  // Wall-clock comparison, like the ride links themselves (YYYY-MM-DDTHH:MM).
-  const now = (() => {
+  // A ride stays "coming up" all of its day (as on the ride page), by the
+  // wall-clock date in the link.
+  const today = (() => {
     const d = new Date();
     const p = (n: number) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
   })();
-  const upcoming = (rides ?? []).filter((r) => r.starts_at >= now).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
-  const past = (rides ?? []).filter((r) => r.starts_at < now);
+  const upcoming = (rides ?? []).filter((r) => r.starts_at.slice(0, 10) >= today).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+  const past = (rides ?? []).filter((r) => r.starts_at.slice(0, 10) < today);
 
-  const card = (r: MyRide) => {
+  const card = (r: MyRide, isPast: boolean) => {
     const href = `/ride/${r.route_id}?${new URLSearchParams({ t: r.starts_at, ...(r.meet ? { m: r.meet } : {}) }).toString()}`;
+    const chip = r.my_status ? MINE[r.my_status] : r.is_creator ? "You shared it" : null;
+    const chipOn = r.my_status === "yes";
     return (
       <li key={r.id}>
-        <Link href={href} className="block rounded-2xl p-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-          <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--accent)" }}>
-            {formatRideWhen(r.starts_at) ?? r.starts_at}{r.meet ? ` · ${r.meet}` : ""}
-          </p>
+        <Link href={href} className="block rounded-2xl p-4 transition-colors hover:brightness-110" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: isPast ? "var(--text-muted)" : "var(--accent)" }}>
+              {formatRideWhen(r.starts_at) ?? r.starts_at}{r.meet ? ` · ${r.meet}` : ""}
+            </p>
+            {chip && (
+              <span
+                className="shrink-0 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
+                style={chipOn ? { background: "var(--accent)", color: "#0a0a0a" } : { border: "1px solid var(--border)", color: "var(--text-secondary)" }}
+              >
+                {chip}
+              </span>
+            )}
+          </div>
           <p className="text-base font-extrabold mt-1" style={{ color: "var(--text)" }}>{r.route_name}</p>
           <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>
             {Math.round(Number(r.distance_km) * 10) / 10} km · +{Math.round(Number(r.elevation_gain_m))} m
-            {" · "}{r.yes_count} going{r.maybe_count ? ` · ${r.maybe_count} maybe` : ""}
-            {r.my_status ? ` · ${MINE[r.my_status]}` : r.is_creator ? " · You shared it" : ""}
+            {" · "}<strong style={{ color: "var(--text)" }}>{r.yes_count} {isPast ? "said they were in" : "going"}</strong>{r.maybe_count ? ` · ${r.maybe_count} maybe` : ""}
           </p>
         </Link>
       </li>
@@ -77,22 +89,32 @@ export default function MyRidesClient() {
           Rides you&apos;ve shared or answered. Open one to see who&apos;s in, forward it, or share it to your Instagram Story.
         </p>
         {failed && <p className="text-sm mt-6" style={{ color: "#ff6b6b" }}>Couldn&apos;t load your rides — refresh to try again.</p>}
-        {rides === null && !failed && <p className="text-sm mt-6" style={{ color: "var(--text-muted)" }}>Loading…</p>}
+        {rides === null && !failed && (
+          <ul className="grid gap-3 mt-6" aria-label="Loading your rides">
+            {[0, 1].map((i) => <li key={i} className="h-[92px] rounded-2xl animate-pulse" style={{ background: "var(--bg-card)" }} />)}
+          </ul>
+        )}
         {rides && rides.length === 0 && (
-          <p className="text-sm mt-6" style={{ color: "var(--text-secondary)" }}>
-            No rides yet. Open a route, tap <strong>Invite friends to ride</strong>, pick the day and meeting point and share it — it lands here.
-          </p>
+          <div className="mt-6 rounded-2xl p-5" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+            <p className="text-sm font-bold" style={{ color: "var(--text)" }}>No rides yet</p>
+            <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
+              Open a route, tap <strong>Invite friends to ride</strong>, pick the day and meeting point and share it — it lands here, with its roll call.
+            </p>
+            <Link href="/routes" className="inline-flex items-center mt-4 px-4 min-h-[44px] rounded-xl text-sm font-bold" style={{ background: "var(--accent)", color: "#0a0a0a" }}>
+              Find a route
+            </Link>
+          </div>
         )}
         {upcoming.length > 0 && (
           <>
             <h2 className="text-xs font-bold uppercase tracking-wider mt-6 mb-2" style={{ color: "var(--text-secondary)" }}>Coming up</h2>
-            <ul className="grid gap-3">{upcoming.map(card)}</ul>
+            <ul className="grid gap-3">{upcoming.map((r) => card(r, false))}</ul>
           </>
         )}
         {past.length > 0 && (
           <>
-            <h2 className="text-xs font-bold uppercase tracking-wider mt-8 mb-2" style={{ color: "var(--text-secondary)" }}>Ridden</h2>
-            <ul className="grid gap-3 opacity-80">{past.map(card)}</ul>
+            <h2 className="text-xs font-bold uppercase tracking-wider mt-8 mb-2" style={{ color: "var(--text-secondary)" }}>Past rides</h2>
+            <ul className="grid gap-3 opacity-80">{past.map((r) => card(r, true))}</ul>
           </>
         )}
       </main>

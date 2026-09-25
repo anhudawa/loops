@@ -140,6 +140,15 @@ test.describe("group-ride link", () => {
     await expect(page.getByRole("heading", { name: "Sign up to confirm your attendance" })).toBeVisible();
   });
 
+  test("ride calendar entry: floating 9:00 with the meeting point", async ({ page }) => {
+    const res = await page.request.get(`/api/rides/calendar?route=${RIDE_ID}&t=2026-09-26T09:00&m=Clontarf%20Rd`);
+    expect(res.status()).toBe(200);
+    expect(res.headers()["content-type"]).toContain("text/calendar");
+    const ics = await res.text();
+    expect(ics).toContain("DTSTART:20260926T090000\r\n");
+    expect(ics).toContain("LOCATION:Clontarf Rd");
+  });
+
   test("Instagram story card renders 1080×1920", async ({ page }) => {
     const res = await page.request.get(`/api/og/${RIDE_ID}/story?t=2026-09-26T09:00&m=Clontarf%20Rd`);
     expect(res.status()).toBe(200);

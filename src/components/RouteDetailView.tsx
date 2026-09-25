@@ -493,7 +493,7 @@ export default function RouteDetailView({ ride, initialRoute }: { ride?: RideInv
           </p>
           {/* Who's riding: in / maybe / can't (owner 2026-09-25) — right under
               the stats, so a rider arriving from a shared link sees it first. */}
-          {ride.t && <RollCall routeId={route.id} t={ride.t} meet={ride.meet ?? null} />}
+          {ride.t && <RollCall routeId={route.id} t={ride.t} meet={ride.meet ?? null} when={ride.when} passed={ridePassed} />}
           {/* Always the route's first point: a typed meeting point can't be
               geocoded reliably, so the label says what the button does. */}
           <a

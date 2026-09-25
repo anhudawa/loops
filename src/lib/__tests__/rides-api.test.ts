@@ -7,6 +7,7 @@ const rsvps = new Map<string, { ride_id: string; user_id: string; status: "yes" 
 const users: Record<string, { id: string; name: string }> = { s1: { id: "u1", name: "Anthony Walsh" }, s2: { id: "u2", name: "Conor" } };
 vi.mock("@/lib/db", () => ({
   getUserBySession: async (t: string) => users[t] ?? null,
+  getUserById: async (id: string) => Object.values(users).find((u) => u.id === id),
   upsertGroupRide: async (route_id: string, starts_at: string, meet: string, creator_id: string | null) => {
     const k = `${route_id}|${starts_at}|${meet}`;
     const r = rides.get(k) ?? { id: `r${rides.size + 1}`, route_id, starts_at, meet, creator_id: null };
@@ -43,8 +44,10 @@ describe("rides API", () => {
     expect(anon.data.counts).toEqual({ yes: 1, maybe: 1, no: 0 });
     expect(anon.data.names).toBeUndefined();
     const signed = await (await GET(req("GET", "s2", undefined, q))).json();
-    expect(signed.data.names.yes).toEqual(["Conor"]);
+    expect(signed.data.names.yes).toEqual(["You"]); // the viewer reads as "You"
     expect(signed.data.names.maybe).toEqual(["Anthony"]);
+    expect(signed.data.organiser).toBe("Anthony");
+    expect(anon.data.organiser).toBeUndefined();
   });
   it("signed out cannot answer; bad input is refused", async () => {
     expect((await POST(req("POST", undefined, { route_id: ROUTE, t: "2026-09-26T09:00", status: "yes" }))).status).toBe(401);

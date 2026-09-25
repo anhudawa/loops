@@ -33,10 +33,15 @@ function NavLinks({ pathname, signedIn = false }: { pathname: string; signedIn?:
             key={item.href}
             href={item.href}
             aria-current={active ? "page" : undefined}
-            className="text-xs font-bold uppercase tracking-wider max-[360px]:tracking-wide px-3 max-[360px]:px-2 min-h-[44px] inline-flex items-center rounded-lg whitespace-nowrap hover:opacity-80 transition-opacity"
+            className={`text-xs font-bold uppercase min-h-[44px] inline-flex items-center rounded-lg whitespace-nowrap hover:opacity-80 transition-opacity ${
+              // Five links (signed in) still fit one phone row: tighter spacing.
+              signedIn
+                ? "tracking-wide px-2 max-[400px]:tracking-normal max-[400px]:px-[7px] max-[360px]:px-1 md:tracking-wider md:px-3"
+                : "tracking-wider max-[360px]:tracking-wide px-3 max-[360px]:px-2"
+            }`}
             style={{ color: active ? "var(--accent)" : "var(--text-secondary)" }}
           >
-            {item.label}
+            {item.href === "/rides" ? <><span className="max-[370px]:hidden">My&nbsp;</span>rides</> : item.label}
           </Link>
         );
       })}
@@ -215,7 +220,7 @@ export default function AppHeader({ sticky = true }: { sticky?: boolean }) {
         {(!compact || menuOpen) && (
           <nav
             id="compact-nav"
-            className="md:hidden flex items-center gap-1 overflow-x-auto -mx-1 px-1 [scrollbar-width:none]"
+            className="md:hidden flex items-center gap-1 max-[400px]:gap-0.5 overflow-x-auto -mx-1 px-1 [scrollbar-width:none]"
             aria-label="Primary"
             onClick={() => setMenuOpen(false)}
           >

@@ -181,7 +181,7 @@ export default function RollCall({ routeId, t, meet, when, passed = false }: { r
               );
             })}
           </div>
-          {confirmation && (
+          {confirmation && busy === null && (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2" role="status" aria-live="polite">
               <p className="text-xs font-semibold" style={{ color: "var(--text)" }}>{justAnswered || roll?.mine !== "yes" ? confirmation : "You're in."}</p>
               {roll?.mine === "yes" && (

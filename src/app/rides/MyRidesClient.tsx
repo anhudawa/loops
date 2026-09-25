@@ -21,6 +21,7 @@ interface MyRide {
 }
 
 const MINE: Record<string, string> = { yes: "You're in", maybe: "Maybe", no: "Can't make it" };
+const PAST: Record<string, string> = { yes: "You were in", maybe: "Maybe", no: "Couldn't make it" };
 
 /** Rides the rider shared or answered — open one to see the roll call, re-share it, or forward it. */
 export default function MyRidesClient() {
@@ -52,7 +53,7 @@ export default function MyRidesClient() {
 
   const card = (r: MyRide, isPast: boolean) => {
     const href = `/ride/${r.route_id}?${new URLSearchParams({ t: r.starts_at, ...(r.meet ? { m: r.meet } : {}) }).toString()}`;
-    const chip = r.my_status ? MINE[r.my_status] : r.is_creator ? "You shared it" : null;
+    const chip = r.my_status ? (isPast ? PAST : MINE)[r.my_status] : r.is_creator ? "You shared it" : null;
     const chipOn = r.my_status === "yes";
     return (
       <li key={r.id}>

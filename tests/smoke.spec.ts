@@ -157,7 +157,7 @@ test("route page: title strip, invite and GPX call to action", async ({ page }) 
   await expect(strip).toBeVisible();
   await expect(strip).toContainText(name);
 
-  await expect(page.getByRole("button", { name: "Invite a Friend to Ride" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Invite friends to ride" })).toBeVisible();
   // Signed out: either the free download or the sign-up route to it (GPX_ACCESS).
   await expect(page.getByRole("link", { name: /download gpx/i }).first()).toBeVisible();
 });

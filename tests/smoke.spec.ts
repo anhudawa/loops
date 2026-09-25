@@ -127,6 +127,13 @@ test.describe("group-ride link", () => {
     await expect(sheetTitle).toBeHidden();
   });
 
+  test("roll call: three answers, counts for everyone", async ({ page }) => {
+    await openRoute(page, RIDE_PATH);
+    const roll = page.getByTestId("roll-call");
+    await expect(roll).toBeVisible({ timeout: 20_000 });
+    for (const name of [/I'm in/, /Maybe/, /Can't make it/]) await expect(roll.getByRole("button", { name })).toBeVisible();
+  });
+
   test("Instagram story card renders 1080×1920", async ({ page }) => {
     const res = await page.request.get(`/api/og/${RIDE_ID}/story?t=2026-09-26T09:00&m=Clontarf%20Rd`);
     expect(res.status()).toBe(200);

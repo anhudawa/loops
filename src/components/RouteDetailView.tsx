@@ -17,6 +17,7 @@ import RideDisclaimer from "@/components/RideDisclaimer";
 import ShareRide from "@/components/ShareRide";
 import { describeCompromise, type Compromise } from "@/lib/road-segments";
 import WeatherCard from "@/components/WeatherCard";
+import RollCall from "@/components/RollCall";
 import { useAuth } from "@/components/AuthProvider";
 import { estimateRideMinutes, formatRideTime } from "@/lib/ride-time";
 import { useToast } from "@/components/Toast";
@@ -501,6 +502,8 @@ export default function RouteDetailView({ ride, initialRoute }: { ride?: RideInv
           >
             Directions to the route start ↗
           </a>
+          {/* Who's riding: in / maybe / can't (owner 2026-09-25). */}
+          {ride.t && <RollCall routeId={route.id} t={ride.t} meet={ride.meet ?? null} />}
         </div>
       )}
 

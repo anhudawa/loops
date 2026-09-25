@@ -349,6 +349,15 @@ node scripts/import-routes.mjs scripts/hub-data/girona-eat-sleep-cycle.json --dr
 - Shipping: scratchpad ship.sh runs tsc, eslint, vitest and next build by
   exit code and only then commits/pushes (a grep-filtered build once let a
   broken build through; Vercel kept the previous deploy).
+- Group rides (owner 2026-09-25): a ride = route + t (YYYY-MM-DDTHH:MM) +
+  cleaned meet — what a /ride link carries, so old links find their ride.
+  Tables group_rides (UNIQUE route/t/meet, creator_id) + ride_rsvps
+  (yes/maybe/no), lazily created (ensureGroupRideTables). Sharing from the
+  invite sheet (WhatsApp, Instagram story, share sheet, copy) saves the ride
+  as its creator (POST /api/rides); the ride page's RollCall answers (POST
+  with status) and shows counts to all, first names to signed-in riders.
+  /rides = "My rides" (header nav when signed in). Invite button is neutral
+  ("Invite friends to ride"); Instagram story card at /api/og/<id>/story.
 - No CSRF tokens; cookie-only sessions; locale hardcoded en-IE
 
 ## Conventions

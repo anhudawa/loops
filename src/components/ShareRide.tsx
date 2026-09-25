@@ -46,6 +46,14 @@ function forwardTime(t: string | null | undefined): string | null {
   return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}T${pad(p.h)}:${pad(p.mi)}`;
 }
 
+const PEOPLE_ICON = (
+  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="9" cy="8" r="3.5" />
+    <path d="M2.5 20c.6-3.5 3.3-5.5 6.5-5.5s5.9 2 6.5 5.5" />
+    <path d="M16 4.8a3.3 3.3 0 0 1 0 6.4M18 14.8c2 .7 3.2 2.5 3.5 5.2" />
+  </svg>
+);
+
 const IG_ICON = (
   <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
     <rect x="3" y="3" width="18" height="18" rx="5" />
@@ -136,8 +144,21 @@ export default function ShareRide({ route, ride }: ShareRideProps) {
     rideUrl(origin, route.id, startTime, meetingPoint), // last line → WhatsApp shows the ride preview card
   ].join("\n");
 
+  // Sharing a ride saves it to the rider's rides ("My rides"), signed in
+  // or not (a signed-out share just is not saved). Fire and forget.
+  const saveRide = () => {
+    if (!when) return;
+    fetch("/api/rides", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ route_id: route.id, t: startTime, m: meetingPoint }),
+      keepalive: true,
+    }).catch(() => {});
+  };
+
   const handleShare = () => {
     if (!when) return; // guarded in the UI too — never send "Invalid Date"
+    saveRide();
     const waUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
     window.open(waUrl, "_blank");
     closeSheet();
@@ -147,6 +168,7 @@ export default function ShareRide({ route, ride }: ShareRideProps) {
   // Telegram, Signal…) or a plain copy of the same message.
   const copyMessage = async () => {
     if (!when) return;
+    saveRide();
     try {
       await navigator.clipboard.writeText(message);
       setCopied(true);
@@ -159,6 +181,7 @@ export default function ShareRide({ route, ride }: ShareRideProps) {
   const [linkCopied, setLinkCopied] = useState(false);
   const copyLink = async () => {
     if (!when) return;
+    saveRide();
     const link = rideUrl(origin, route.id, startTime, meetingPoint);
     try {
       await navigator.clipboard.writeText(link);
@@ -197,6 +220,7 @@ export default function ShareRide({ route, ride }: ShareRideProps) {
 
   const shareStory = async () => {
     if (!when) return;
+    saveRide();
     const link = rideUrl(origin, route.id, startTime, meetingPoint);
     navigator.clipboard?.writeText(link).catch(() => {});
     setStoryBusy(true);
@@ -230,6 +254,7 @@ export default function ShareRide({ route, ride }: ShareRideProps) {
 
   const nativeShare = async () => {
     if (!when) return;
+    saveRide();
     if (typeof navigator.share === "function") {
       try {
         await navigator.share({ text: message });
@@ -256,14 +281,11 @@ export default function ShareRide({ route, ride }: ShareRideProps) {
       <button
         onClick={openSheet}
         className="w-full flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-xl font-bold text-sm uppercase tracking-wider transition-all hover:brightness-110"
-        style={{
-          background: "linear-gradient(135deg, #25D366, #128C7E)",
-          color: "#0a0a0a",
-          boxShadow: "0 4px 20px rgba(37, 211, 102, 0.25)",
-        }}
+        // Neutral: the sheet offers WhatsApp, Instagram and the rest.
+        style={{ background: "#f5f5f5", color: "#0a0a0a", boxShadow: "0 4px 20px rgba(0, 0, 0, 0.25)" }}
       >
-        {WA_ICON}
-        {forwarding ? "Forward this ride" : "Invite a Friend to Ride"}
+        {PEOPLE_ICON}
+        {forwarding ? "Forward this ride" : "Invite friends to ride"}
       </button>
 
       {/* Modal */}

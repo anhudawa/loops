@@ -2580,3 +2580,121 @@ export async function getUnmeasuredRoutes(limit = 200): Promise<Array<{ id: stri
 export async function setAdminRole(id: string, admin: boolean): Promise<void> {
   await sql`UPDATE users SET role = ${admin ? "admin" : "user"} WHERE id = ${id} AND role != 'banned'`;
 }
+
+// ──── Group rides: saved rides + roll call (owner 2026-09-25) ────
+// A ride is a route at a day/time from a meeting point — the same three
+// things a /ride/<route>?t=…&m=… link carries, so links shared before rides
+// were stored still find their ride (and its roll call).
+
+export type RsvpStatus = "yes" | "maybe" | "no";
+
+export interface GroupRide {
+  id: string;
+  route_id: string;
+  starts_at: string; // YYYY-MM-DDTHH:MM (local, as in the link)
+  meet: string;      // cleaned meeting point, "" when none
+  creator_id: string | null;
+  created_at: string;
+}
+
+let groupRideTablesReady: Promise<void> | null = null;
+function ensureGroupRideTables(): Promise<void> {
+  if (!groupRideTablesReady) {
+    groupRideTablesReady = (async () => {
+      await sql`
+        CREATE TABLE IF NOT EXISTS group_rides (
+          id TEXT PRIMARY KEY,
+          route_id TEXT NOT NULL REFERENCES routes(id) ON DELETE CASCADE,
+          starts_at TEXT NOT NULL,
+          meet TEXT NOT NULL DEFAULT '',
+          creator_id TEXT REFERENCES users(id),
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          UNIQUE (route_id, starts_at, meet)
+        )
+      `;
+      await sql`
+        CREATE TABLE IF NOT EXISTS ride_rsvps (
+          ride_id TEXT NOT NULL REFERENCES group_rides(id) ON DELETE CASCADE,
+          user_id TEXT NOT NULL REFERENCES users(id),
+          status TEXT NOT NULL CHECK (status IN ('yes','maybe','no')),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          PRIMARY KEY (ride_id, user_id)
+        )
+      `;
+      await sql`CREATE INDEX IF NOT EXISTS idx_group_rides_creator ON group_rides(creator_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_ride_rsvps_user ON ride_rsvps(user_id)`;
+    })().catch((err) => {
+      groupRideTablesReady = null;
+      throw err;
+    });
+  }
+  return groupRideTablesReady;
+}
+
+/** The ride for this route/time/meeting point, created if new; `creatorId` claims it when it has no creator yet. */
+export async function upsertGroupRide(routeId: string, startsAt: string, meet: string, creatorId: string | null): Promise<GroupRide> {
+  await ensureGroupRideTables();
+  const id = uuidv4();
+  const { rows } = await sql`
+    INSERT INTO group_rides (id, route_id, starts_at, meet, creator_id)
+    VALUES (${id}, ${routeId}, ${startsAt}, ${meet}, ${creatorId})
+    ON CONFLICT (route_id, starts_at, meet)
+    DO UPDATE SET creator_id = COALESCE(group_rides.creator_id, EXCLUDED.creator_id)
+    RETURNING *
+  `;
+  return rows[0] as GroupRide;
+}
+
+export async function findGroupRide(routeId: string, startsAt: string, meet: string): Promise<GroupRide | null> {
+  await ensureGroupRideTables();
+  const { rows } = await sql`SELECT * FROM group_rides WHERE route_id = ${routeId} AND starts_at = ${startsAt} AND meet = ${meet} LIMIT 1`;
+  return (rows[0] as GroupRide) ?? null;
+}
+
+export async function setRideRsvp(rideId: string, userId: string, status: RsvpStatus): Promise<void> {
+  await ensureGroupRideTables();
+  await sql`
+    INSERT INTO ride_rsvps (ride_id, user_id, status) VALUES (${rideId}, ${userId}, ${status})
+    ON CONFLICT (ride_id, user_id) DO UPDATE SET status = EXCLUDED.status, updated_at = NOW()
+  `;
+}
+
+export interface RollCallEntry { user_id: string; name: string | null; avatar_url: string | null; status: RsvpStatus }
+
+export async function getRollCall(rideId: string): Promise<RollCallEntry[]> {
+  await ensureGroupRideTables();
+  const { rows } = await sql`
+    SELECT r.user_id, u.name, u.avatar_url, r.status
+    FROM ride_rsvps r JOIN users u ON u.id = r.user_id
+    WHERE r.ride_id = ${rideId}
+    ORDER BY r.updated_at ASC
+  `;
+  return rows as RollCallEntry[];
+}
+
+export interface MyRide extends GroupRide {
+  route_name: string;
+  distance_km: number;
+  elevation_gain_m: number;
+  my_status: RsvpStatus | null;
+  is_creator: boolean;
+  yes_count: number;
+  maybe_count: number;
+}
+
+/** Rides this rider created (shared) or answered, newest start first. */
+export async function getMyRides(userId: string): Promise<MyRide[]> {
+  await ensureGroupRideTables();
+  const { rows } = await sql`
+    SELECT g.*, rt.name AS route_name, rt.distance_km, rt.elevation_gain_m,
+      (SELECT status FROM ride_rsvps WHERE ride_id = g.id AND user_id = ${userId}) AS my_status,
+      (g.creator_id = ${userId}) AS is_creator,
+      (SELECT COUNT(*)::int FROM ride_rsvps WHERE ride_id = g.id AND status = 'yes') AS yes_count,
+      (SELECT COUNT(*)::int FROM ride_rsvps WHERE ride_id = g.id AND status = 'maybe') AS maybe_count
+    FROM group_rides g JOIN routes rt ON rt.id = g.route_id
+    WHERE g.creator_id = ${userId} OR EXISTS (SELECT 1 FROM ride_rsvps WHERE ride_id = g.id AND user_id = ${userId})
+    ORDER BY g.starts_at DESC
+    LIMIT 100
+  `;
+  return rows as MyRide[];
+}

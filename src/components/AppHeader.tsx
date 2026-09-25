@@ -20,10 +20,12 @@ const NAV = [
   { href: "/cycling", label: "Destinations" },
 ] as const;
 
-function NavLinks({ pathname }: { pathname: string }) {
+function NavLinks({ pathname, signedIn = false }: { pathname: string; signedIn?: boolean }) {
+  // "My rides" for signed-in riders: the rides they shared or answered.
+  const items = signedIn ? [...NAV, { href: "/rides", label: "My rides" } as const] : NAV;
   return (
     <>
-      {NAV.map((item) => {
+      {items.map((item) => {
         const active =
           item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
         return (
@@ -88,7 +90,7 @@ export default function AppHeader({ sticky = true }: { sticky?: boolean }) {
             </Link>
             {/* Desktop nav — inline beside the logo */}
             <nav className="hidden md:flex items-center gap-1" aria-label="Primary">
-              <NavLinks pathname={pathname} />
+              <NavLinks pathname={pathname} signedIn={!!user} />
             </nav>
           </div>
 
@@ -217,7 +219,7 @@ export default function AppHeader({ sticky = true }: { sticky?: boolean }) {
             aria-label="Primary"
             onClick={() => setMenuOpen(false)}
           >
-            <NavLinks pathname={pathname} />
+            <NavLinks pathname={pathname} signedIn={!!user} />
           </nav>
         )}
       </div>

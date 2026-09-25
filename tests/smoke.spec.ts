@@ -120,6 +120,8 @@ test.describe("group-ride link", () => {
     // The ride's own day and time are pre-filled, so sending is possible at once.
     await expect(page.getByRole("button", { name: /send on whatsapp/i })).toBeEnabled();
     await expect(page.getByTestId("share-story")).toBeEnabled();
+    // The ride link on its own, one tap to copy (the story's Link sticker).
+    await expect(page.getByTestId("copy-ride-link")).toContainText("loops.ie/ride/");
 
     await page.keyboard.press("Escape");
     await expect(sheetTitle).toBeHidden();

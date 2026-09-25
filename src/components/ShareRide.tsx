@@ -155,6 +155,20 @@ export default function ShareRide({ route, ride }: ShareRideProps) {
       window.prompt("Copy this message:", message);
     }
   };
+  // The ride link on its own (the Instagram story's Link sticker, a bio, a DM).
+  const [linkCopied, setLinkCopied] = useState(false);
+  const copyLink = async () => {
+    if (!when) return;
+    const link = rideUrl(origin, route.id, startTime, meetingPoint);
+    try {
+      await navigator.clipboard.writeText(link);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2500);
+    } catch {
+      window.prompt("Copy the ride link:", link);
+    }
+  };
+
   // ── Instagram story: a 1080×1920 card ("Are you riding or are you
   // hiding?") shared as an image; the ride link is copied for the story's
   // Link sticker (Instagram lets only the rider add links). The image is
@@ -196,7 +210,7 @@ export default function ShareRide({ route, ride }: ShareRideProps) {
       if (typeof navigator.canShare === "function" && navigator.canShare({ files: [file] })) {
         try {
           await navigator.share({ files: [file] });
-          setStoryNote("Ride link copied — in Instagram, add the Link sticker and paste it.");
+          setStoryNote("Ride link copied — in Instagram, add the Link sticker and paste it. (Copy it again below if needed.)");
           return;
         } catch (e) {
           if ((e as Error)?.name === "AbortError") return;
@@ -360,6 +374,26 @@ export default function ShareRide({ route, ride }: ShareRideProps) {
               {storyNote && (
                 <p className="text-xs mt-2 text-center" style={{ color: "var(--text-secondary)" }} role="status">{storyNote}</p>
               )}
+              {/* The ride link, visible and one tap to copy — for the story's
+                  Link sticker (or anywhere else). */}
+              <button
+                onClick={copyLink}
+                disabled={!when}
+                className="w-full mt-2 min-h-[48px] px-3 rounded-xl flex items-center gap-2 text-left disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{
+                  background: linkCopied ? "var(--accent-glow)" : "var(--bg)",
+                  border: linkCopied ? "1px solid var(--accent)" : "1px solid var(--border)",
+                }}
+                aria-label="Copy ride link"
+                data-testid="copy-ride-link"
+              >
+                <span className="flex-1 min-w-0 truncate text-xs" style={{ color: "var(--text-secondary)" }}>
+                  {rideUrl(origin, route.id, startTime, meetingPoint).replace(/^https:\/\//, "")}
+                </span>
+                <span className="shrink-0 text-xs font-bold uppercase tracking-wider" style={{ color: "var(--accent)" }}>
+                  {linkCopied ? "Copied ✓" : "Copy ride link"}
+                </span>
+              </button>
               <div className="grid grid-cols-2 gap-2 mt-2">
                 <button
                   onClick={nativeShare}

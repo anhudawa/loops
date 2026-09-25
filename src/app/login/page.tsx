@@ -57,7 +57,13 @@ function LoginPage() {
   // Heading: what the rider is logging in for (the GPX, planning a ride, or
   // just logging in). The same button also creates an account, said below.
   const gated = returnTo ? gateHeading(returnTo) : null;
-  const heading = wantsGpx ? "Log in to get the GPX" : isSignup ? "Create your free account" : gated ?? "Log in to LOOPS";
+  // From a group-ride link: they came to say they're riding (roll call).
+  const forRide = returnKind === "ride";
+  const heading = wantsGpx
+    ? "Log in to get the GPX"
+    : forRide
+      ? `${isSignup ? "Sign up" : "Log in"} to confirm your attendance`
+      : isSignup ? "Create your free account" : gated ?? "Log in to LOOPS";
   // A way back for any same-site page, unless it is a private one (that
   // would only bounce the rider straight back here).
   const showBack = !!backHref && !isPrivatePath(backHref) && !returnRouteId;

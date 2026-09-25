@@ -127,11 +127,17 @@ test.describe("group-ride link", () => {
     await expect(sheetTitle).toBeHidden();
   });
 
-  test("roll call: three answers, counts for everyone", async ({ page }) => {
+  test("roll call: signed out, sign up / log in to confirm attendance", async ({ page }) => {
     await openRoute(page, RIDE_PATH);
     const roll = page.getByTestId("roll-call");
     await expect(roll).toBeVisible({ timeout: 20_000 });
-    for (const name of [/I'm in/, /Maybe/, /Can't make it/]) await expect(roll.getByRole("button", { name })).toBeVisible();
+    await expect(roll.getByText("Are you riding? Confirm your attendance")).toBeVisible();
+    const signup = roll.getByTestId("roll-call-signup");
+    await expect(signup).toBeVisible();
+    // Both buttons come back to this exact ride (day, time, meet).
+    await signup.click();
+    await expect(page).toHaveURL(/\/login\?mode=signup&redirect=%2Fride%2F/);
+    await expect(page.getByRole("heading", { name: "Sign up to confirm your attendance" })).toBeVisible();
   });
 
   test("Instagram story card renders 1080×1920", async ({ page }) => {

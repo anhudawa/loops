@@ -72,11 +72,49 @@ export default function RollCall({ routeId, t, meet }: { routeId: string; t: str
   };
 
   const counts = roll?.counts ?? { yes: 0, maybe: 0, no: 0 };
+  const answered = counts.yes + counts.maybe + counts.no;
+  const here = () => (typeof window === "undefined" ? "" : encodeURIComponent(window.location.pathname + window.location.search));
   return (
     <section className="mt-3" aria-labelledby="roll-call-title" data-testid="roll-call">
       <h2 id="roll-call-title" className="text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
         Roll call{counts.yes ? ` · ${counts.yes} going` : ""}
       </h2>
+      {loading ? (
+        // Sign-in state not known yet: hold the space so nothing jumps.
+        <div className="mt-2 h-[112px] rounded-xl" style={{ background: "var(--bg-card)" }} aria-hidden="true" />
+      ) : !user ? (
+        // Arriving from a shared link, signed out (owner 2026-09-25): the
+        // first thing to do is say you're coming — make that the loud part.
+        <div className="mt-2 rounded-xl p-3" style={{ background: "var(--bg-card)", border: "1px solid var(--accent)" }} data-testid="roll-call-signin">
+          <p className="text-base font-extrabold leading-tight" style={{ color: "var(--text)" }}>Are you riding? Confirm your attendance</p>
+          <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>
+            {answered
+              ? `${counts.yes} in · ${counts.maybe} maybe · ${counts.no} can't make it. `
+              : "Be the first to say you're in. "}
+            Sign up or log in to answer and see who&apos;s riding.
+          </p>
+          <div className="grid grid-cols-2 gap-2 mt-3">
+            <a
+              href={`/login?mode=signup&redirect=${here()}`}
+              onClick={(e) => { e.currentTarget.href = `/login?mode=signup&redirect=${here()}`; }}
+              className="min-h-[48px] rounded-xl text-sm font-extrabold flex items-center justify-center text-center px-2"
+              style={{ background: "var(--accent)", color: "#0a0a0a" }}
+              data-testid="roll-call-signup"
+            >
+              Sign up to confirm
+            </a>
+            <a
+              href={`/login?redirect=${here()}`}
+              onClick={(e) => { e.currentTarget.href = `/login?redirect=${here()}`; }}
+              className="min-h-[48px] rounded-xl text-sm font-bold flex items-center justify-center text-center px-2"
+              style={{ background: "transparent", color: "var(--text)", border: "1px solid var(--border)" }}
+              data-testid="roll-call-login"
+            >
+              Log in
+            </a>
+          </div>
+        </div>
+      ) : (
       <div className="grid grid-cols-3 gap-2 mt-2" role="group" aria-label="Are you riding?">
         {CHOICES.map((c) => {
           const on = roll?.mine === c.status;
@@ -100,7 +138,8 @@ export default function RollCall({ routeId, t, meet }: { routeId: string; t: str
           );
         })}
       </div>
-      {roll?.names && (counts.yes + counts.maybe + counts.no > 0) && (
+      )}
+      {user && roll?.names && answered > 0 && (
         <ul className="mt-2 space-y-1 text-xs" style={{ color: "var(--text-secondary)" }}>
           {CHOICES.map((c) => (roll.names![c.status].length ? (
             <li key={c.status}>
@@ -108,9 +147,6 @@ export default function RollCall({ routeId, t, meet }: { routeId: string; t: str
             </li>
           ) : null))}
         </ul>
-      )}
-      {!user && !loading && (
-        <p className="text-[11px] mt-2" style={{ color: "var(--text-muted)" }}>Sign in to answer and see who&apos;s riding.</p>
       )}
       {error && <p className="text-xs mt-2" style={{ color: "#ff6b6b" }} role="status">{error}</p>}
     </section>

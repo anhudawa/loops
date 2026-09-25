@@ -119,9 +119,20 @@ test.describe("group-ride link", () => {
     }).toPass({ timeout: 20_000 });
     // The ride's own day and time are pre-filled, so sending is possible at once.
     await expect(page.getByRole("button", { name: /send on whatsapp/i })).toBeEnabled();
+    await expect(page.getByTestId("share-story")).toBeEnabled();
 
     await page.keyboard.press("Escape");
     await expect(sheetTitle).toBeHidden();
+  });
+
+  test("Instagram story card renders 1080×1920", async ({ page }) => {
+    const res = await page.request.get(`/api/og/${RIDE_ID}/story?t=2026-09-26T09:00&m=Clontarf%20Rd`);
+    expect(res.status()).toBe(200);
+    expect(res.headers()["content-type"]).toContain("image/png");
+    const png = await res.body();
+    // PNG header: width and height are big-endian at bytes 16–23.
+    expect(png.readUInt32BE(16)).toBe(1080);
+    expect(png.readUInt32BE(20)).toBe(1920);
   });
 });
 

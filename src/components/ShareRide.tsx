@@ -46,6 +46,14 @@ function forwardTime(t: string | null | undefined): string | null {
   return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}T${pad(p.h)}:${pad(p.mi)}`;
 }
 
+const IG_ICON = (
+  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+    <rect x="3" y="3" width="18" height="18" rx="5" />
+    <circle cx="12" cy="12" r="4" />
+    <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
+  </svg>
+);
+
 const WA_ICON = (
   <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
     <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
@@ -147,6 +155,65 @@ export default function ShareRide({ route, ride }: ShareRideProps) {
       window.prompt("Copy this message:", message);
     }
   };
+  // ── Instagram story: a 1080×1920 card ("Are you riding or are you
+  // hiding?") shared as an image; the ride link is copied for the story's
+  // Link sticker (Instagram lets only the rider add links). The image is
+  // fetched ahead: iOS Safari refuses share() once a tap has waited on the
+  // network.
+  const storyUrl = (() => {
+    const q = new URLSearchParams({ t: startTime });
+    const m = cleanMeet(meetingPoint);
+    if (m) q.set("m", m);
+    return `/api/og/${route.id}/story?${q.toString()}`;
+  })();
+  const storyFile = useRef<{ url: string; file: File } | null>(null);
+  const [storyNote, setStoryNote] = useState<string | null>(null);
+  const [storyBusy, setStoryBusy] = useState(false);
+  useEffect(() => {
+    if (!open || !when) return;
+    let gone = false;
+    const t = setTimeout(() => {
+      fetch(storyUrl)
+        .then((r) => (r.ok ? r.blob() : null))
+        .then((b) => { if (b && !gone) storyFile.current = { url: storyUrl, file: new File([b], "loops-ride-story.png", { type: "image/png" }) }; })
+        .catch(() => {});
+    }, 400);
+    return () => { gone = true; clearTimeout(t); };
+  }, [open, when, storyUrl]);
+
+  const shareStory = async () => {
+    if (!when) return;
+    const link = rideUrl(origin, route.id, startTime, meetingPoint);
+    navigator.clipboard?.writeText(link).catch(() => {});
+    setStoryBusy(true);
+    try {
+      let file = storyFile.current?.url === storyUrl ? storyFile.current.file : null;
+      if (!file) {
+        const b = await fetch(storyUrl).then((r) => (r.ok ? r.blob() : null)).catch(() => null);
+        if (!b) { setStoryNote("Couldn't make the story image — try again in a moment."); return; }
+        file = new File([b], "loops-ride-story.png", { type: "image/png" });
+      }
+      if (typeof navigator.canShare === "function" && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file] });
+          setStoryNote("Ride link copied — in Instagram, add the Link sticker and paste it.");
+          return;
+        } catch (e) {
+          if ((e as Error)?.name === "AbortError") return;
+          /* share refused — save the image instead */
+        }
+      }
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(file);
+      a.download = file.name;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      setStoryNote("Story image saved and ride link copied — post the image to your Instagram Story and paste the link into a Link sticker.");
+    } finally {
+      setStoryBusy(false);
+    }
+  };
+
   const nativeShare = async () => {
     if (!when) return;
     if (typeof navigator.share === "function") {
@@ -280,6 +347,19 @@ export default function ShareRide({ route, ride }: ShareRideProps) {
                 {WA_ICON}
                 Send on WhatsApp
               </button>
+              <button
+                onClick={shareStory}
+                disabled={!when || storyBusy}
+                className="w-full mt-2 min-h-[48px] rounded-xl font-bold text-sm uppercase tracking-wider flex items-center justify-center gap-2.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ background: "linear-gradient(135deg, #c13584, #833ab4)", color: "#ffffff" }}
+                data-testid="share-story"
+              >
+                {IG_ICON}
+                {storyBusy ? "Making your story…" : "Share to Instagram Story"}
+              </button>
+              {storyNote && (
+                <p className="text-xs mt-2 text-center" style={{ color: "var(--text-secondary)" }} role="status">{storyNote}</p>
+              )}
               <div className="grid grid-cols-2 gap-2 mt-2">
                 <button
                   onClick={nativeShare}

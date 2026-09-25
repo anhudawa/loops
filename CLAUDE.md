@@ -358,6 +358,12 @@ node scripts/import-routes.mjs scripts/hub-data/girona-eat-sleep-cycle.json --dr
   with status) and shows counts to all, first names to signed-in riders.
   /rides = "My rides" (header nav when signed in). Invite button is neutral
   ("Invite friends to ride"); Instagram story card at /api/og/<id>/story.
+  Signed out, the ride banner leads with "Are you riding? Confirm your
+  attendance" → Sign up / Log in; both return with rsvp=yes, which answers
+  "I'm in" once and is dropped from the address. Answered "in" → "Add to
+  calendar" (GET /api/rides/calendar, floating-time .ics). Signed-in riders
+  see who shared it and first names ("You" for themselves); a ride whose day
+  has gone shows its roll call read-only.
 - No CSRF tokens; cookie-only sessions; locale hardcoded en-IE
 
 ## Conventions

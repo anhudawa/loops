@@ -579,6 +579,155 @@ export async function getUsageMetrics(
   }
 }
 
+// ──── Visitor analytics (page views) ────
+// Cookie-free, first-party: see src/lib/traffic.ts for what is stored and why.
+
+let pageViewsReady: Promise<void> | null = null;
+function ensurePageViewsTable(): Promise<void> {
+  if (!pageViewsReady) {
+    pageViewsReady = (async () => {
+      await sql`
+        CREATE TABLE IF NOT EXISTS page_views (
+          id BIGSERIAL PRIMARY KEY,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          path TEXT NOT NULL,
+          visitor TEXT NOT NULL,
+          user_id TEXT,
+          source TEXT,
+          device TEXT,
+          country TEXT,
+          city TEXT
+        )
+      `;
+      await sql`CREATE INDEX IF NOT EXISTS idx_page_views_created ON page_views(created_at)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_page_views_visitor ON page_views(visitor)`;
+    })().catch((err) => {
+      pageViewsReady = null;
+      throw err;
+    });
+  }
+  return pageViewsReady;
+}
+
+export async function recordPageView(v: {
+  path: string; visitor: string; userId: string | null; source: string | null;
+  device: string; country: string | null; city: string | null;
+}): Promise<void> {
+  try {
+    await ensurePageViewsTable();
+    await sql`
+      INSERT INTO page_views (path, visitor, user_id, source, device, country, city)
+      VALUES (${v.path}, ${v.visitor}, ${v.userId}, ${v.source}, ${v.device}, ${v.country}, ${v.city})
+    `;
+    // Keep ~13 months; the odd request tidies up (cheap with the index).
+    if (Math.random() < 0.002) await sql`DELETE FROM page_views WHERE created_at < NOW() - INTERVAL '400 days'`;
+  } catch {
+    // Analytics must never break the page.
+  }
+}
+
+export interface TrafficReport {
+  days: number;
+  since: string | null;
+  totals: { visitors: number; views: number; signups: number; rideVisitors: number; signedInVisitors: number };
+  previous: { visitors: number; views: number; signups: number };
+  today: { visitors: number; views: number };
+  liveNow: number;
+  daily: { day: string; visitors: number; views: number; signups: number }[];
+  pages: { path: string; name: string | null; views: number; visitors: number }[];
+  sources: { source: string; visitors: number }[];
+  places: { country: string; city: string | null; visitors: number }[];
+  devices: { device: string; visitors: number }[];
+}
+
+/**
+ * Visitor report for /admin over the last `days` days (Irish calendar days),
+ * with the window before it for comparison. Admins' own visits — and any
+ * visit from a phone an admin signed in on that month — are left out.
+ */
+export async function getTrafficReport(days: number): Promise<TrafficReport> {
+  await ensurePageViewsTable();
+  const d = Math.max(1, Math.min(365, Math.round(days)));
+  // Views in scope: not an admin's device. $1 = days.
+  const scope = `
+    pv AS (
+      SELECT p.*, (p.created_at AT TIME ZONE 'Europe/Dublin')::date AS day
+      FROM page_views p
+      WHERE p.created_at >= (date_trunc('day', NOW() AT TIME ZONE 'Europe/Dublin') - make_interval(days => $1::int * 2 - 1)) AT TIME ZONE 'Europe/Dublin'
+        AND p.visitor NOT IN (
+          SELECT DISTINCT a.visitor FROM page_views a JOIN users u ON u.id = a.user_id
+          WHERE u.role = 'admin' AND a.created_at >= NOW() - INTERVAL '400 days'
+        )
+    ),
+    bounds AS (
+      SELECT (NOW() AT TIME ZONE 'Europe/Dublin')::date AS today,
+             (NOW() AT TIME ZONE 'Europe/Dublin')::date - ($1::int - 1) AS start
+    ),
+    cur AS (SELECT pv.* FROM pv, bounds b WHERE pv.day >= b.start),
+    prev AS (SELECT pv.* FROM pv, bounds b WHERE pv.day < b.start)`;
+  const q = async <T,>(body: string) => (await sql.query(`WITH ${scope} ${body}`, [d])).rows as T[];
+
+  const [totals] = await q<{ visitors: number; views: number; ride_visitors: number; signed_in: number; p_visitors: number; p_views: number; t_visitors: number; t_views: number; live: number }>(`
+    SELECT
+      (SELECT COUNT(DISTINCT visitor)::int FROM cur) AS visitors,
+      (SELECT COUNT(*)::int FROM cur) AS views,
+      (SELECT COUNT(DISTINCT visitor)::int FROM cur WHERE path LIKE '/ride/%') AS ride_visitors,
+      (SELECT COUNT(DISTINCT user_id)::int FROM cur WHERE user_id IS NOT NULL) AS signed_in,
+      (SELECT COUNT(DISTINCT visitor)::int FROM prev) AS p_visitors,
+      (SELECT COUNT(*)::int FROM prev) AS p_views,
+      (SELECT COUNT(DISTINCT visitor)::int FROM cur, bounds b WHERE cur.day = b.today) AS t_visitors,
+      (SELECT COUNT(*)::int FROM cur, bounds b WHERE cur.day = b.today) AS t_views,
+      (SELECT COUNT(DISTINCT visitor)::int FROM cur WHERE created_at >= NOW() - INTERVAL '30 minutes') AS live
+  `);
+  const daily = await q<{ day: string; visitors: number; views: number; signups: number }>(`
+    , days AS (SELECT generate_series(b.start, b.today, '1 day')::date AS day FROM bounds b)
+    SELECT to_char(days.day, 'YYYY-MM-DD') AS day,
+      (SELECT COUNT(DISTINCT visitor)::int FROM cur WHERE cur.day = days.day) AS visitors,
+      (SELECT COUNT(*)::int FROM cur WHERE cur.day = days.day) AS views,
+      (SELECT COUNT(*)::int FROM users u WHERE (u.created_at AT TIME ZONE 'Europe/Dublin')::date = days.day) AS signups
+    FROM days ORDER BY days.day
+  `);
+  const pages = await q<{ path: string; name: string | null; views: number; visitors: number }>(`
+    SELECT cur.path, MAX(r.name) AS name, COUNT(*)::int AS views, COUNT(DISTINCT cur.visitor)::int AS visitors
+    FROM cur LEFT JOIN routes r ON r.id = substring(cur.path from '^/(?:routes|ride)/([0-9a-f-]{36})$')
+    GROUP BY cur.path ORDER BY visitors DESC, views DESC LIMIT 25
+  `);
+  const sources = await q<{ source: string; visitors: number }>(`
+    SELECT source, COUNT(DISTINCT visitor)::int AS visitors FROM cur
+    WHERE source IS NOT NULL GROUP BY source ORDER BY visitors DESC LIMIT 15
+  `);
+  const places = await q<{ country: string; city: string | null; visitors: number }>(`
+    SELECT COALESCE(country, '??') AS country, city, COUNT(DISTINCT visitor)::int AS visitors FROM cur
+    GROUP BY 1, 2 ORDER BY visitors DESC LIMIT 15
+  `);
+  const devices = await q<{ device: string; visitors: number }>(`
+    SELECT COALESCE(device, 'unknown') AS device, COUNT(DISTINCT visitor)::int AS visitors FROM cur
+    GROUP BY 1 ORDER BY visitors DESC
+  `);
+  const { rows: signupRows } = await sql.query(
+    `SELECT
+       COUNT(*) FILTER (WHERE (created_at AT TIME ZONE 'Europe/Dublin')::date >= (NOW() AT TIME ZONE 'Europe/Dublin')::date - ($1::int - 1))::int AS cur,
+       COUNT(*) FILTER (WHERE (created_at AT TIME ZONE 'Europe/Dublin')::date <  (NOW() AT TIME ZONE 'Europe/Dublin')::date - ($1::int - 1)
+                          AND (created_at AT TIME ZONE 'Europe/Dublin')::date >= (NOW() AT TIME ZONE 'Europe/Dublin')::date - ($1::int * 2 - 1))::int AS prev
+     FROM users`,
+    [d],
+  );
+  const { rows: sinceRows } = await sql`SELECT MIN(created_at) AS since FROM page_views`;
+  return {
+    days: d,
+    since: sinceRows[0]?.since ? new Date(sinceRows[0].since).toISOString() : null,
+    totals: { visitors: totals.visitors, views: totals.views, signups: Number(signupRows[0]?.cur ?? 0), rideVisitors: totals.ride_visitors, signedInVisitors: totals.signed_in },
+    previous: { visitors: totals.p_visitors, views: totals.p_views, signups: Number(signupRows[0]?.prev ?? 0) },
+    today: { visitors: totals.t_visitors, views: totals.t_views },
+    liveNow: totals.live,
+    daily,
+    pages: pages.map((p) => ({ ...p, name: p.name ? tidyRouteName(p.name) : null })),
+    sources,
+    places,
+    devices,
+  };
+}
+
 // ──── Types ────
 export interface Route {
   id: string;

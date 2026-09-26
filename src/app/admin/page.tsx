@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import Link from "next/link";
+import TrafficPanel from "@/components/admin/TrafficPanel";
 
 interface Stats {
   totalUsers: number;
@@ -364,6 +365,9 @@ export default function AdminPage() {
       </header>
 
       <div className="max-w-6xl mx-auto px-4 md:px-6 py-6">
+        {/* Visitors: how many people, from where, reading what */}
+        <TrafficPanel />
+
         {/* Stats */}
         {stats && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">

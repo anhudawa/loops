@@ -364,6 +364,15 @@ node scripts/import-routes.mjs scripts/hub-data/girona-eat-sleep-cycle.json --dr
   calendar" (GET /api/rides/calendar, floating-time .ics). Signed-in riders
   see who shared it and first names ("You" for themselves); a ride whose day
   has gone shows its roll call read-only.
+- Visitor analytics (owner 2026-09-26): /admin → Traffic (TrafficPanel,
+  GET /api/admin/traffic?days=1|7|30|90). PageViewTracker (root layout) beacons
+  POST /api/pv per page; table page_views (lazy, ~400-day retention). Cookie-free:
+  visitor = monthly hash(salt + IP + UA) — IP never stored (src/lib/traffic.ts;
+  salt ANALYTICS_SALT, falls back to POSTGRES_URL). Source only on a visit's first
+  page (utm_source > referrer > in-app browser UA > direct); country/city from
+  Vercel headers. Bots, link previews and navigator.webdriver (smoke runs) are
+  not counted; admins' devices are excluded from the report. Days are Irish
+  calendar days. The older weekly "Usage" events panel stays below it.
 - No CSRF tokens; cookie-only sessions; locale hardcoded en-IE
 
 ## Conventions

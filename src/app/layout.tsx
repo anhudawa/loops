@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Outfit } from "next/font/google";
 import { AuthProvider } from "@/components/AuthProvider";
+import PageViewTracker from "@/components/PageViewTracker";
 import { ToastProvider } from "@/components/Toast";
 import { CapacitorProvider } from "@/components/CapacitorProvider";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -81,6 +82,7 @@ export default function RootLayout({
                 </HideOnPaths>
                 <InstallPrompt />
                 <RideCheckCard />
+                <PageViewTracker />
               </AuthProvider>
             </CapacitorProvider>
           </ToastProvider>

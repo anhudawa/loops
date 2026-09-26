@@ -75,6 +75,12 @@ export default function PrivacyPage() {
                 podcast or a search engine). No third-party analytics or advertising cookies.
               </li>
               <li>
+                <strong>Visit counts.</strong> We count visits ourselves, without cookies: the page
+                opened, the site that sent you, your device type and the country and city your
+                connection comes from. People are counted with a scrambled code that changes every
+                month; your IP address is never stored.
+              </li>
+              <li>
                 <strong>Location, if you allow it.</strong> Your browser can share your position so
                 the map and route planner start where you are. We don&apos;t keep a location history.
               </li>
